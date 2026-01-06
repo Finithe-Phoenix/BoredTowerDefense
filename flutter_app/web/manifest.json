@@ -1,0 +1,12 @@
+{
+  "name": "Bored Games",
+  "short_name": "BoredGames",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#0ff0ff",
+  "description": "Neon Tron Tower Defense built with Flutter and Flame.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": []
+}

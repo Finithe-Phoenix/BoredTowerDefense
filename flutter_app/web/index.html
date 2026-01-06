@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="Bored Games - Neon Tron TD">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Bored Games">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="manifest" href="manifest.json">
+  <title>Bored Games</title>
+</head>
+<body>
+  <script>
+    // Flutter bootstrap for web-server; this assumes main.dart is compiled to main.dart.js
+    window.addEventListener('load', function() {
+      const script = document.createElement('script');
+      script.src = 'main.dart.js';
+      document.body.appendChild(script);
+    });
+  </script>
+</body>
+</html>
