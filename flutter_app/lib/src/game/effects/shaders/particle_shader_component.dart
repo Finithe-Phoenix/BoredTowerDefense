@@ -24,7 +24,7 @@ class ParticleShaderComponent extends PositionComponent with HasGameRef<BoredGam
 
     await ShaderManager.instance.loadShaderFromAsset(
       name: 'particle_trails',
-      assetPath: 'assets/shaders/particle_trail_shader.sksl',
+      assetPath: 'assets/shaders/particle_trail_shader.frag',
     );
     _program = ShaderManager.instance.program('particle_trails');
   }

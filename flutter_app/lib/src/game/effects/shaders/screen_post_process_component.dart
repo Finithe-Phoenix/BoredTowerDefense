@@ -25,7 +25,7 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
 
     await ShaderManager.instance.loadShaderFromAsset(
       name: 'post_process',
-      assetPath: 'assets/shaders/post_process_master.sksl',
+      assetPath: 'assets/shaders/post_process_master.frag',
     );
     _program = ShaderManager.instance.program('post_process');
   }

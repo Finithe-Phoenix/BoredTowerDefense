@@ -24,7 +24,7 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
 
     await ShaderManager.instance.loadShaderFromAsset(
       name: 'world_uber',
-      assetPath: 'assets/shaders/world_uber_shader.sksl',
+      assetPath: 'assets/shaders/world_uber_shader.frag',
     );
     _program = ShaderManager.instance.program('world_uber');
   }
