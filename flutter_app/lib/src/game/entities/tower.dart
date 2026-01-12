@@ -16,7 +16,7 @@ enum TowerType {
     name: 'Pulse Archer',
     damage: 15,
     fireRate: 2.0, // shots per second
-    range: 120,
+    range: 160,
     cost: 50,
     color: Color(0xFF00FFFF), // Cyan
     projectileSpeed: 400,
@@ -28,7 +28,7 @@ enum TowerType {
     name: 'Circuit Cannon',
     damage: 50,
     fireRate: 0.5,
-    range: 100,
+    range: 140,
     cost: 100,
     color: Color(0xFFFF00FF), // Magenta
     projectileSpeed: 250,
@@ -40,7 +40,7 @@ enum TowerType {
     name: 'Phase Mage',
     damage: 25,
     fireRate: 1.2,
-    range: 150,
+    range: 200,
     cost: 80,
     color: Color(0xFF9C27B0), // Purple
     projectileSpeed: 350,
@@ -52,7 +52,7 @@ enum TowerType {
     name: 'Glimmer Field',
     damage: 8,
     fireRate: 4.0, // Very fast
-    range: 80,
+    range: 120,
     cost: 120,
     color: Color(0xFFFFEB3B), // Yellow
     projectileSpeed: 500,

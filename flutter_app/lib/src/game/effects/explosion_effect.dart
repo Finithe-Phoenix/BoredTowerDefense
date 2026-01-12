@@ -5,35 +5,65 @@ import 'package:flutter/material.dart';
 
 /// Epic explosion effect with particles, shockwave, and energy discharge
 class ExplosionEffect extends PositionComponent {
-  ExplosionEffect({
+  ExplosionEffect._internal({
     required Vector2 position,
-    required this.color,
-    this.explosionSize = 40.0,
-    this.duration = 0.6,
-  }) : _particles = [],
-       _energyArcs = [],
-       _debris = [],
-       _smokePuffs = [],
-       _time = 0,
-       _random = math.Random() {
-    this.position = position;
-    anchor = Anchor.center;
-    _initializeParticles();
-    _initializeEnergyArcs();
-    _initializeDebris();
-    _initializeSmoke();
+    required Color color,
+    required double explosionSize,
+    required double duration,
+  }) : _random = math.Random() {
+    _reset(
+      position: position,
+      color: color,
+      explosionSize: explosionSize,
+      duration: duration,
+    );
   }
 
-  final Color color;
-  final double explosionSize;
-  final double duration;
+  static const int maxPool = 24;
+  static const int maxActive = 18;
+  static final List<ExplosionEffect> _pool = [];
+  static int _activeCount = 0;
 
-  final List<_ExplosionParticle> _particles;
-  final List<_EnergyArc> _energyArcs;
-  final List<_DebrisChunk> _debris;
-  final List<_SmokePuff> _smokePuffs;
-  double _time;
+  static ExplosionEffect? spawn({
+    required Vector2 position,
+    required Color color,
+    double explosionSize = 40.0,
+    double duration = 0.6,
+  }) {
+    if (_activeCount >= maxActive) return null;
+    ExplosionEffect effect;
+    if (_pool.isNotEmpty) {
+      effect = _pool.removeLast();
+      effect._reset(
+        position: position,
+        color: color,
+        explosionSize: explosionSize,
+        duration: duration,
+      );
+    } else {
+      effect = ExplosionEffect._internal(
+        position: position,
+        color: color,
+        explosionSize: explosionSize,
+        duration: duration,
+      );
+    }
+    effect._markActive();
+    return effect;
+  }
+
+  Color color = Colors.white;
+  double explosionSize = 40.0;
+  double duration = 0.6;
+
+  final List<_ExplosionParticle> _particles = [];
+  final List<_EnergyArc> _energyArcs = [];
+  final List<_DebrisChunk> _debris = [];
+  final List<_SmokePuff> _smokePuffs = [];
+  double _time = 0;
   final math.Random _random;
+  bool _counted = false;
+  bool _inPool = false;
 
   // Shockwave properties
   double _shockwaveRadius = 0;
@@ -48,6 +78,38 @@ class ExplosionEffect extends PositionComponent {
 
   // Screen shake intensity (can be read by parent)
   double get shakeIntensity => _coreFlashIntensity * 0.8;
+
+  void _markActive() {
+    if (_counted) return;
+    _counted = true;
+    _inPool = false;
+    _activeCount++;
+  }
+
+  void _reset({
+    required Vector2 position,
+    required Color color,
+    required double explosionSize,
+    required double duration,
+  }) {
+    this.position = position.clone();
+    anchor = Anchor.center;
+    this.color = color;
+    this.explosionSize = explosionSize;
+    this.duration = duration;
+    _time = 0;
+    _shockwaveRadius = 0;
+    _shockwaveAlpha = 1.0;
+    _coreFlashIntensity = 1.0;
+    _particles.clear();
+    _energyArcs.clear();
+    _debris.clear();
+    _smokePuffs.clear();
+    _initializeParticles();
+    _initializeEnergyArcs();
+    _initializeDebris();
+    _initializeSmoke();
+  }
 
   void _initializeParticles() {
     const particleCount = 24;
@@ -148,7 +210,7 @@ class ExplosionEffect extends PositionComponent {
     final progress = _time / duration;
 
     if (progress >= 1.0) {
-      removeFromParent();
+      _recycle();
       return;
     }
 
@@ -542,6 +604,34 @@ class ExplosionEffect extends PositionComponent {
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
       );
     }
+  }
+
+  void _recycle() {
+    if (_counted) {
+      if (_activeCount > 0) {
+        _activeCount -= 1;
+      }
+      _counted = false;
+    }
+    if (parent != null) {
+      removeFromParent();
+    }
+    if (_inPool) return;
+    if (_pool.length < maxPool) {
+      _inPool = true;
+      _pool.add(this);
+    }
+  }
+
+  @override
+  void onRemove() {
+    if (_counted) {
+      if (_activeCount > 0) {
+        _activeCount -= 1;
+      }
+      _counted = false;
+    }
+    super.onRemove();
   }
 }
 

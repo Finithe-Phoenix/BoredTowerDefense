@@ -137,12 +137,15 @@ class NeonMine extends PositionComponent {
     }
 
     // Spawn explosion effect
-    parent?.add(ExplosionEffect(
+    final effect = ExplosionEffect.spawn(
       position: position.clone(),
       color: _primaryColor,
       explosionSize: explosionRadius,
       duration: 0.7,
-    ));
+    );
+    if (effect != null) {
+      parent?.add(effect);
+    }
 
     // Notify callback and remove
     onExplode(this);

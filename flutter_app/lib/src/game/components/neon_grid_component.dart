@@ -12,6 +12,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     required this.gridSize,
     required this.lineColor,
     required this.glowColor,
+    this.reducedFx = false,
   }) {
     priority = -10; // render behind other components
   }
@@ -19,6 +20,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   final double gridSize;
   final Color lineColor;
   final Color glowColor;
+  final bool reducedFx;
 
   double _time = 0;
   final math.Random _random = math.Random(42);
@@ -144,26 +146,28 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     // Pulse waves
     _drawPulseWaves(canvas);
 
-    // Multiple scanning lines
-    _drawScanLines(canvas);
+    if (!reducedFx) {
+      // Multiple scanning lines
+      _drawScanLines(canvas);
 
-    // Data rain effect (subtle)
-    _drawDataRain(canvas);
+      // Data rain effect (subtle)
+      _drawDataRain(canvas);
 
-    // Hex pattern overlay
-    _drawHexPattern(canvas);
+      // Hex pattern overlay
+      _drawHexPattern(canvas);
 
-    // Corner HUD frames
-    _drawCornerFrames(canvas);
+      // Corner HUD frames
+      _drawCornerFrames(canvas);
 
-    // Edge glow effects
-    _drawEdgeGlows(canvas);
+      // Edge glow effects
+      _drawEdgeGlows(canvas);
 
-    // Vignette effect
-    _drawVignette(canvas);
+      // Vignette effect
+      _drawVignette(canvas);
 
-    // Ambient flicker
-    _drawAmbientFlicker(canvas);
+      // Ambient flicker
+      _drawAmbientFlicker(canvas);
+    }
   }
 
   void _drawBackground(Canvas canvas) {

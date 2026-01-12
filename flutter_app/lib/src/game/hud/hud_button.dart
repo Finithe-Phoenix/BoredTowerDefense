@@ -14,6 +14,7 @@ class HudButton extends PositionComponent with TapCallbacks {
     Vector2? size,
     this.color = const Color(0xFF00FFFF),
     this.isSelected = false,
+    this.reduceFlicker = false,
     bool enabled = true,
   })  : buttonSize = size ?? Vector2(110, 44),
         isEnabled = enabled {
@@ -28,6 +29,7 @@ class HudButton extends PositionComponent with TapCallbacks {
   final Color color;
   bool isSelected;
   bool isEnabled;
+  final bool reduceFlicker;
 
   bool get enabled => isEnabled;
   set enabled(bool value) => isEnabled = value;
@@ -137,26 +139,28 @@ class HudButton extends PositionComponent with TapCallbacks {
   void _drawAnimatedEffects(Canvas canvas, Rect rect) {
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(6));
 
-    // Scanning line effect
-    final scanProgress = (_time * 0.8) % 1.0;
-    final scanY = scanProgress * buttonSize.y;
+    if (!reduceFlicker) {
+      // Scanning line effect
+      final scanProgress = (_time * 0.8) % 1.0;
+      final scanY = scanProgress * buttonSize.y;
 
-    final scanGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        color.withOpacity(0.08 + _hoverScale * 0.1),
-        color.withOpacity(0.15 + _hoverScale * 0.15),
-        color.withOpacity(0.08 + _hoverScale * 0.1),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(0, scanY - 10, buttonSize.x, 20));
+      final scanGradient = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          color.withOpacity(0.08 + _hoverScale * 0.1),
+          color.withOpacity(0.15 + _hoverScale * 0.15),
+          color.withOpacity(0.08 + _hoverScale * 0.1),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, scanY - 10, buttonSize.x, 20));
 
-    canvas.save();
-    canvas.clipRRect(rrect);
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 10, buttonSize.x, 20), Paint()..shader = scanGradient);
-    canvas.restore();
+      canvas.save();
+      canvas.clipRRect(rrect);
+      canvas.drawRect(Rect.fromLTWH(0, scanY - 10, buttonSize.x, 20), Paint()..shader = scanGradient);
+      canvas.restore();
+    }
 
     // Data particles effect when selected
     if (isSelected) {
@@ -184,7 +188,8 @@ class HudButton extends PositionComponent with TapCallbacks {
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(6));
 
     // Outer frame
-    final borderAlpha = 0.4 + _hoverScale * 0.3 + math.sin(_time * 3) * 0.05;
+    final borderPulse = reduceFlicker ? 0.0 : math.sin(_time * 3) * 0.05;
+    final borderAlpha = 0.4 + _hoverScale * 0.3 + borderPulse;
     final borderPaint = Paint()
       ..color = color.withOpacity(borderAlpha.clamp(0.0, 1.0))
       ..style = PaintingStyle.stroke
@@ -272,7 +277,7 @@ class HudButton extends PositionComponent with TapCallbacks {
 
   void _drawSelectionEffects(Canvas canvas, Rect rect) {
     // Pulsing side indicators
-    final pulseAlpha = 0.5 + math.sin(_time * 4) * 0.3;
+    final pulseAlpha = reduceFlicker ? 0.55 : 0.5 + math.sin(_time * 4) * 0.3;
     final indicatorPaint = Paint()
       ..color = color.withOpacity(pulseAlpha)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
@@ -296,7 +301,7 @@ class HudButton extends PositionComponent with TapCallbacks {
     );
 
     // Bottom highlight bar
-    final barWidth = 40 + math.sin(_time * 3) * 5;
+    final barWidth = reduceFlicker ? 40.0 : 40 + math.sin(_time * 3) * 5;
     final barGradient = LinearGradient(
       colors: [
         Colors.transparent,

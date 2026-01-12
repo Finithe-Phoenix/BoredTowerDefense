@@ -2,32 +2,95 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
+import 'package:flutter/material.dart';
 
 import '../entities/tower.dart';
 
 /// Visual effect spawned when a projectile hits an enemy
 class ImpactEffect extends PositionComponent {
-  ImpactEffect({
+  ImpactEffect._internal({
     required Vector2 position,
-    required this.color,
-    required this.towerType,
-    this.duration = 0.3,
-  }) : _timer = 0,
-       _random = math.Random() {
-    this.position = position;
-    anchor = Anchor.center;
-    _initializeParticles();
+    required Color color,
+    required TowerType towerType,
+    required double duration,
+  }) : _random = math.Random() {
+    _reset(
+      position: position,
+      color: color,
+      towerType: towerType,
+      duration: duration,
+    );
   }
 
-  final Color color;
-  final TowerType towerType;
-  final double duration;
+  static const int maxPool = 60;
+  static const int maxActive = 80;
+  static final List<ImpactEffect> _pool = [];
+  static int _activeCount = 0;
+
+  static ImpactEffect? spawn({
+    required Vector2 position,
+    required Color color,
+    required TowerType towerType,
+    double duration = 0.3,
+  }) {
+    if (_activeCount >= maxActive) return null;
+    ImpactEffect effect;
+    if (_pool.isNotEmpty) {
+      effect = _pool.removeLast();
+      effect._reset(
+        position: position,
+        color: color,
+        towerType: towerType,
+        duration: duration,
+      );
+    } else {
+      effect = ImpactEffect._internal(
+        position: position,
+        color: color,
+        towerType: towerType,
+        duration: duration,
+      );
+    }
+    effect._markActive();
+    return effect;
+  }
+
+  Color color = Colors.white;
+  TowerType towerType = TowerType.pulseArcher;
+  double duration = 0.3;
   final math.Random _random;
 
-  double _timer;
+  double _timer = 0;
+  bool _counted = false;
+  bool _inPool = false;
   final List<_ImpactParticle> _particles = [];
   final List<_ImpactRing> _rings = [];
   final List<_Spark> _sparks = [];
+
+  void _markActive() {
+    if (_counted) return;
+    _counted = true;
+    _inPool = false;
+    _activeCount++;
+  }
+
+  void _reset({
+    required Vector2 position,
+    required Color color,
+    required TowerType towerType,
+    required double duration,
+  }) {
+    this.position = position.clone();
+    anchor = Anchor.center;
+    this.color = color;
+    this.towerType = towerType;
+    this.duration = duration;
+    _timer = 0;
+    _particles.clear();
+    _rings.clear();
+    _sparks.clear();
+    _initializeParticles();
+  }
 
   void _initializeParticles() {
     switch (towerType) {
@@ -142,7 +205,7 @@ class ImpactEffect extends PositionComponent {
 
     // Remove when done
     if (_timer >= duration) {
-      removeFromParent();
+      _recycle();
     }
   }
 
@@ -296,17 +359,7 @@ class ImpactEffect extends PositionComponent {
       }
     }
 
-    // Central flash
-    if (progress < 0.3) {
-      final flashIntensity = 1 - progress / 0.3;
-      canvas.drawCircle(
-        Offset.zero,
-        10 * flashIntensity,
-        Paint()
-          ..color = const Color(0xFFFFFFFF).withOpacity(flashIntensity * 0.8)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-      );
-    }
+    // Central flash removed to reduce hit strobing.
   }
 
   void _drawStar(Canvas canvas, Offset center, double radius, Color starColor) {
@@ -334,6 +387,34 @@ class ImpactEffect extends PositionComponent {
         ..color = starColor
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
     );
+  }
+
+  void _recycle() {
+    if (_counted) {
+      if (_activeCount > 0) {
+        _activeCount -= 1;
+      }
+      _counted = false;
+    }
+    if (parent != null) {
+      removeFromParent();
+    }
+    if (_inPool) return;
+    if (_pool.length < maxPool) {
+      _inPool = true;
+      _pool.add(this);
+    }
+  }
+
+  @override
+  void onRemove() {
+    if (_counted) {
+      if (_activeCount > 0) {
+        _activeCount -= 1;
+      }
+      _counted = false;
+    }
+    super.onRemove();
   }
 }
 

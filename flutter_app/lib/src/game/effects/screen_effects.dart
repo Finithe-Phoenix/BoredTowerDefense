@@ -11,12 +11,14 @@ class ScreenEffects extends PositionComponent {
     this.enableCRT = true,
     this.enableVignette = true,
     this.enableScanlines = true,
+    this.enableFlash = true,
   }) : _random = math.Random();
 
   final Vector2 gameSize;
   final bool enableCRT;
   final bool enableVignette;
   final bool enableScanlines;
+  final bool enableFlash;
   final math.Random _random;
 
   // Screen shake
@@ -79,6 +81,7 @@ class ScreenEffects extends PositionComponent {
     double intensity = 0.5,
     double duration = 0.1,
   }) {
+    if (!enableFlash) return;
     _flashColor = color;
     _flashIntensity = intensity;
     _flashTimer = duration;
@@ -155,7 +158,7 @@ class ScreenEffects extends PositionComponent {
     }
 
     // Draw flash
-    if (_flashTimer > 0) {
+    if (_flashTimer > 0 && enableFlash) {
       _renderFlash(canvas, screenRect);
     }
 

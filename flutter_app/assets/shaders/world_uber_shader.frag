@@ -6,8 +6,7 @@ uniform vec2 uPointer;
 uniform float uWaveIntensity;
 uniform float uTowerCount;
 uniform float uEnemyCount;
-uniform float uTowerPositions[20];
-uniform float uEnemyPositions[20];
+uniform sampler2D uEntityPositions;
 
 out vec4 fragColor;
 
@@ -16,14 +15,21 @@ float smoothMin(float a, float b, float k) {
   return mix(b, a, h) - k * h * (1.0 - h);
 }
 
-float entityField(vec2 fragCoord) {
+vec2 sampleEntityPosition(int index, float row, vec2 resolution) {
+  float u = (float(index) + 0.5) / 10.0;
+  float v = (row + 0.5) / 2.0;
+  vec4 data = texture(uEntityPositions, vec2(u, v));
+  return data.rg * resolution;
+}
+
+float entityField(vec2 fragCoord, vec2 resolution) {
   float fieldValue = 1e5;
   for (int i = 0; i < 10; i++) {
     float towerMask = step(float(i) + 0.5, uTowerCount);
     float enemyMask = step(float(i) + 0.5, uEnemyCount);
 
-    vec2 towerPos = vec2(uTowerPositions[i * 2], uTowerPositions[i * 2 + 1]);
-    vec2 enemyPos = vec2(uEnemyPositions[i * 2], uEnemyPositions[i * 2 + 1]);
+    vec2 towerPos = sampleEntityPosition(i, 0.0, resolution);
+    vec2 enemyPos = sampleEntityPosition(i, 1.0, resolution);
 
     float towerRadius = 60.0 * towerMask;
     float enemyRadius = 48.0 * enemyMask;
@@ -69,9 +75,6 @@ void main() {
       pulse * (0.6 + uWaveIntensity * waveBoost) +
       lineGlow;
 
-  float eField = entityField(fragCoord);
-  float entityGlow = smoothstep(0.0, 1.0, 1.0 - eField * 0.02);
-
   vec3 palette =
       mix(vec3(0.02, 0.04, 0.08), vec3(0.0, 0.8, 0.9), uv.y + uWaveIntensity * 0.1);
   vec3 baseColor = clamp(palette + vec3(
@@ -80,6 +83,8 @@ void main() {
     glow
   ), vec3(0.0), vec3(1.0));
 
+  float eField = entityField(fragCoord, uResolution);
+  float entityGlow = smoothstep(0.0, 1.0, 1.0 - eField * 0.02);
   vec3 entityColor = mix(vec3(0.0, 0.4, 0.8), vec3(0.9, 0.2, 0.9), entityGlow);
 
   float chroma = entityGlow * chromaScale;

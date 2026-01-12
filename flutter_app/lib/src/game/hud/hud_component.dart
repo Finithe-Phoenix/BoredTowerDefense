@@ -20,12 +20,26 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   late HudButton waveButton;
 
   double _time = 0;
+  final Map<String, _TextCache> _textCache = {};
+  TextPainter? _instructionPainter;
+  TowerType? _lastSelected;
+  TextPainter? _selectionNamePainter;
+  TextPainter? _selectionStatsPainter;
+  TextPainter? _towerInfoNamePainter;
+  TextPainter? _towerInfoStatsPainter;
+  int _lastGold = -1;
+  int _lastLives = -1;
+  int _lastScore = -1;
+  int _lastWave = -1;
+  int _lastEnemies = -1;
+  int _lastTowers = -1;
 
   // Layout constants
   static const double topBarHeight = 60.0;
   static const double bottomBarHeight = 100.0;
   static const double buttonHeight = 44.0;
   static const double buttonSpacing = 12.0;
+  static const bool reduceFlicker = true;
 
   @override
   Future<void> onLoad() async {
@@ -60,6 +74,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       size: Vector2(buttonWidth, buttonHeight),
       color: TowerType.pulseArcher.color,
       isSelected: true,
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.pulseArcher),
     );
 
@@ -68,6 +83,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(startX + buttonWidth + buttonSpacing, bottomY),
       size: Vector2(buttonWidth, buttonHeight),
       color: TowerType.circuitCannon.color,
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.circuitCannon),
     );
 
@@ -76,6 +92,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(startX + 2 * (buttonWidth + buttonSpacing), bottomY),
       size: Vector2(buttonWidth, buttonHeight),
       color: TowerType.phaseMage.color,
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.phaseMage),
     );
 
@@ -84,6 +101,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(startX + 3 * (buttonWidth + buttonSpacing), bottomY),
       size: Vector2(buttonWidth, buttonHeight),
       color: TowerType.glimmerField.color,
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.glimmerField),
     );
 
@@ -92,6 +110,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(startX + 4 * (buttonWidth + buttonSpacing), bottomY),
       size: Vector2(abilityWidth, buttonHeight),
       color: const Color(0xFF00FFFF),
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.activateNeonPulse(),
     );
 
@@ -100,6 +119,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(startX + 4 * (buttonWidth + buttonSpacing) + abilityWidth + buttonSpacing, bottomY),
       size: Vector2(mineWidth, buttonHeight),
       color: const Color(0xFFFF0066),
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.deployMine(),
     );
 
@@ -108,6 +128,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(startX + 4 * (buttonWidth + buttonSpacing) + abilityWidth + mineWidth + 2 * buttonSpacing, bottomY),
       size: Vector2(waveWidth, buttonHeight),
       color: const Color(0xFF00FF88),
+      reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.startWave(count: 6),
       enabled: !gameRef.enemyManager.spawning,
     );
@@ -135,6 +156,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     glimmerFieldBtn.isSelected = selected == TowerType.glimmerField;
 
     waveButton.enabled = !gameRef.enemyManager.spawning;
+    _updateSelectionCache(selected);
+    _updateResourceCache();
   }
 
   @override
@@ -150,19 +173,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _drawSelectionInfo(canvas, screenWidth);
 
     // Instruction prompt
-    final instructionPainter = TextPainter(
-      text: const TextSpan(
-        text: 'Select a tower and drag to place it',
-        style: TextStyle(
-          color: Colors.white70,
-          fontSize: 11,
-          fontFamily: 'monospace',
-          letterSpacing: 0.8,
-        ),
+    _instructionPainter ??= _buildPainter(
+      'Select a tower and drag to place it',
+      const TextStyle(
+        color: Colors.white70,
+        fontSize: 11,
+        fontFamily: 'monospace',
+        letterSpacing: 0.8,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    instructionPainter.paint(
+    );
+    _instructionPainter!.paint(
       canvas,
       Offset(24, screenHeight - bottomBarHeight - 26),
     );
@@ -195,33 +215,30 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         ..strokeWidth = 1.5,
     );
 
-    final labelPainter = TextPainter(
-      text: TextSpan(
-        text: selected.name.toUpperCase(),
-        style: TextStyle(
-          color: selected.color,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final labelPainter = _selectionNamePainter ??
+        _buildPainter(
+          selected.name.toUpperCase(),
+          TextStyle(
+            color: selected.color,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
+        );
 
     labelPainter.paint(canvas, Offset(panelX + 12, panelY + 10));
 
-    final statsText = 'DMG ${selected.damage.toInt()}    RNG ${selected.range.toInt()}    SPD ${selected.fireRate.toStringAsFixed(1)}';
-    final statsPainter = TextPainter(
-      text: TextSpan(
-        text: statsText,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.6),
-          fontSize: 12,
-          letterSpacing: 0.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final statsText =
+        'DMG ${selected.damage.toInt()}    RNG ${selected.range.toInt()}    SPD ${selected.fireRate.toStringAsFixed(1)}';
+    final statsPainter = _selectionStatsPainter ??
+        _buildPainter(
+          statsText,
+          TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 12,
+            letterSpacing: 0.5,
+          ),
+        );
 
     statsPainter.paint(canvas, Offset(panelX + 12, panelY + 32));
   }
@@ -245,18 +262,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     canvas.drawRect(panelRect, Paint()..shader = bgGradient);
 
-    // Horizontal scan line effect
-    final scanX = ((_time * 200) % (screenWidth + 400)) - 200;
-    final scanGradient = LinearGradient(
-      colors: [
-        Colors.transparent,
-        const Color(0xFF00FFFF).withOpacity(0.03),
-        const Color(0xFF00FFFF).withOpacity(0.08),
-        const Color(0xFF00FFFF).withOpacity(0.03),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(scanX, 0, 400, topBarHeight));
-    canvas.drawRect(Rect.fromLTWH(scanX, 0, 400, topBarHeight), Paint()..shader = scanGradient);
+    if (!reduceFlicker) {
+      // Horizontal scan line effect
+      final scanX = ((_time * 200) % (screenWidth + 400)) - 200;
+      final scanGradient = LinearGradient(
+        colors: [
+          Colors.transparent,
+          const Color(0xFF00FFFF).withOpacity(0.03),
+          const Color(0xFF00FFFF).withOpacity(0.08),
+          const Color(0xFF00FFFF).withOpacity(0.03),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(scanX, 0, 400, topBarHeight));
+      canvas.drawRect(Rect.fromLTWH(scanX, 0, 400, topBarHeight), Paint()..shader = scanGradient);
+    }
 
     // Bottom edge - glowing line
     _drawGlowingLine(canvas, 0, topBarHeight - 2, screenWidth, topBarHeight - 2, const Color(0xFF00FFFF), 0.6);
@@ -307,7 +326,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawRRect(rrect, Paint()..shader = cardGradient);
 
     // Animated border
-    final borderAlpha = 0.3 + math.sin(_time * 2 + index * 0.5) * 0.1;
+    final borderAlpha = reduceFlicker
+        ? 0.35
+        : 0.3 + math.sin(_time * 2 + index * 0.5) * 0.1;
     final borderPaint = Paint()
       ..color = color.withOpacity(borderAlpha)
       ..style = PaintingStyle.stroke
@@ -337,38 +358,33 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawCircle(Offset(x + 14, y + cardHeight / 2), 3, dotCore);
 
     // Label
-    final labelPainter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: color.withOpacity(0.7),
-          fontSize: 9,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.w500,
-          letterSpacing: 1.5,
-        ),
+    final labelPainter = _getPainter(
+      'label-$label',
+      label,
+      TextStyle(
+        color: color.withOpacity(0.7),
+        fontSize: 9,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.w500,
+        letterSpacing: 1.5,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    );
     labelPainter.paint(canvas, Offset(x + 26, y + 6));
 
-    // Value with glow
-    final valuePainter = TextPainter(
-      text: TextSpan(
-        text: value,
-        style: TextStyle(
-          color: color,
-          fontSize: 18,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-          shadows: [
-            Shadow(color: color.withOpacity(0.8), blurRadius: 8),
-          ],
-        ),
+    final valuePainter = _getPainter(
+      'value-$label',
+      value,
+      TextStyle(
+        color: color,
+        fontSize: 18,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
+        shadows: [
+          Shadow(color: color.withOpacity(0.8), blurRadius: 8),
+        ],
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    );
     valuePainter.paint(canvas, Offset(x + 26, y + 20));
   }
 
@@ -414,8 +430,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (modifier.isEmpty) return;
 
     final alertX = screenWidth / 2;
-    final pulseAlpha = 0.8 + math.sin(_time * 8) * 0.2;
-    final pulseScale = 1.0 + math.sin(_time * 6) * 0.02;
+    final pulseAlpha = reduceFlicker ? 0.8 : 0.8 + math.sin(_time * 8) * 0.2;
+    final pulseScale = reduceFlicker ? 1.0 : 1.0 + math.sin(_time * 6) * 0.02;
 
     // Alert background
     final alertBg = Paint()
@@ -431,7 +447,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     final alertPainter = TextPainter(
       text: TextSpan(
-        text: '⚠ $modifier',
+        text: 'ALERT $modifier',
         style: TextStyle(
           color: const Color(0xFFFF0066).withOpacity(pulseAlpha),
           fontSize: 12,
@@ -512,36 +528,33 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
 
     // Tower name
-    final namePainter = TextPainter(
-      text: TextSpan(
-        text: '▶ ${selected.name.toUpperCase()}',
-        style: TextStyle(
-          color: selected.color,
-          fontSize: 11,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-          shadows: [Shadow(color: selected.color.withOpacity(0.6), blurRadius: 6)],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final namePainter = _towerInfoNamePainter ??
+        _buildPainter(
+          '>> ${selected.name.toUpperCase()}',
+          TextStyle(
+            color: selected.color,
+            fontSize: 11,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+            shadows: [Shadow(color: selected.color.withOpacity(0.6), blurRadius: 6)],
+          ),
+        );
     namePainter.paint(canvas, Offset(22, panelY + 6));
 
     // Stats
-    final statsText = 'DMG:${selected.damage.toInt()} RNG:${selected.range.toInt()} SPD:${selected.fireRate.toStringAsFixed(1)}';
-    final statsPainter = TextPainter(
-      text: TextSpan(
-        text: statsText,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.6),
-          fontSize: 8,
-          fontFamily: 'monospace',
-          letterSpacing: 0.5,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final statsText =
+        'DMG:${selected.damage.toInt()} RNG:${selected.range.toInt()} SPD:${selected.fireRate.toStringAsFixed(1)}';
+    final statsPainter = _towerInfoStatsPainter ??
+        _buildPainter(
+          statsText,
+          TextStyle(
+            color: Colors.white.withOpacity(0.6),
+            fontSize: 8,
+            fontFamily: 'monospace',
+            letterSpacing: 0.5,
+          ),
+        );
     statsPainter.paint(canvas, Offset(100, panelY + 8));
   }
 
@@ -625,7 +638,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       canvas.drawRRect(progressRect, Paint()..color = progressColor.withOpacity(0.8));
 
       // Animated highlight
-      if (ready) {
+      if (ready && !reduceFlicker) {
         final highlightX = x + 2 + ((_time * 80) % width);
         final highlightGradient = LinearGradient(
           colors: [
@@ -654,22 +667,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         ? '$label $count'
         : (ready ? '$label $hotkey' : '${(progress * 100).toInt()}%');
 
-    final labelPainter = TextPainter(
-      text: TextSpan(
-        text: displayText,
-        style: TextStyle(
-          color: ready ? Colors.white : Colors.white.withOpacity(0.5),
-          fontSize: 8,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.5,
-          shadows: ready
-              ? [Shadow(color: color, blurRadius: 6)]
-              : null,
-        ),
+    final labelPainter = _getPainter(
+      'cooldown-$label',
+      displayText,
+      TextStyle(
+        color: ready ? Colors.white : Colors.white.withOpacity(0.5),
+        fontSize: 8,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.5,
+        shadows: ready
+            ? [Shadow(color: color, blurRadius: 6)]
+            : null,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    );
 
     labelPainter.paint(
       canvas,
@@ -697,21 +708,23 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final x = startX + i * (buttonWidth + buttonSpacing) + buttonWidth / 2;
       final canAfford = gameRef.gold >= costs[i].$1;
 
-      final costPainter = TextPainter(
-        text: TextSpan(
-          text: '${costs[i].$1}g',
-          style: TextStyle(
-            color: canAfford ? costs[i].$2.withOpacity(0.9) : const Color(0xFFFF4444).withOpacity(0.7),
-            fontSize: 10,
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.bold,
-            shadows: canAfford
-                ? [Shadow(color: costs[i].$2.withOpacity(0.5), blurRadius: 4)]
-                : null,
-          ),
+      final costColor = canAfford
+          ? costs[i].$2.withOpacity(0.9)
+          : const Color(0xFFFF4444).withOpacity(0.7);
+      final costKey = 'cost-${costs[i].$1}-${costColor.value}';
+      final costPainter = _getPainter(
+        costKey,
+        '${costs[i].$1}g',
+        TextStyle(
+          color: costColor,
+          fontSize: 10,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+          shadows: canAfford
+              ? [Shadow(color: costs[i].$2.withOpacity(0.5), blurRadius: 4)]
+              : null,
         ),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      );
 
       costPainter.paint(canvas, Offset(x - costPainter.width / 2, bottomY - 14));
     }
@@ -719,35 +732,39 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Pulse cost
     final pulseX = startX + 4 * (buttonWidth + buttonSpacing) + abilityWidth / 2;
     final canAffordPulse = gameRef.gold >= BoredGamesGame.pulseCost && gameRef.pulseReady;
-    final pulseCostPainter = TextPainter(
-      text: TextSpan(
-        text: '${BoredGamesGame.pulseCost}g',
-        style: TextStyle(
-          color: canAffordPulse ? const Color(0xFF00FFFF).withOpacity(0.9) : const Color(0xFFFF4444).withOpacity(0.7),
-          fontSize: 10,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-        ),
+    final pulseColor = canAffordPulse
+        ? const Color(0xFF00FFFF).withOpacity(0.9)
+        : const Color(0xFFFF4444).withOpacity(0.7);
+    final pulseKey = 'cost-pulse-${pulseColor.value}';
+    final pulseCostPainter = _getPainter(
+      pulseKey,
+      '${BoredGamesGame.pulseCost}g',
+      TextStyle(
+        color: pulseColor,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    );
     pulseCostPainter.paint(canvas, Offset(pulseX - pulseCostPainter.width / 2, bottomY - 14));
 
     // Mine cost
     final mineX = startX + 4 * (buttonWidth + buttonSpacing) + abilityWidth + buttonSpacing + mineWidth / 2;
     final canAffordMine = gameRef.gold >= BoredGamesGame.mineCost && gameRef.mineReady;
-    final mineCostPainter = TextPainter(
-      text: TextSpan(
-        text: '${BoredGamesGame.mineCost}g',
-        style: TextStyle(
-          color: canAffordMine ? const Color(0xFFFF0066).withOpacity(0.9) : const Color(0xFFFF4444).withOpacity(0.7),
-          fontSize: 10,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-        ),
+    final mineColor = canAffordMine
+        ? const Color(0xFFFF0066).withOpacity(0.9)
+        : const Color(0xFFFF4444).withOpacity(0.7);
+    final mineKey = 'cost-mine-${mineColor.value}';
+    final mineCostPainter = _getPainter(
+      mineKey,
+      '${BoredGamesGame.mineCost}g',
+      TextStyle(
+        color: mineColor,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    );
     mineCostPainter.paint(canvas, Offset(mineX - mineCostPainter.width / 2, bottomY - 14));
   }
 
@@ -805,4 +822,126 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     path.close();
     canvas.drawPath(path, paint);
   }
+
+  void _updateSelectionCache(TowerType selected) {
+    if (_lastSelected == selected &&
+        _selectionNamePainter != null &&
+        _selectionStatsPainter != null &&
+        _towerInfoNamePainter != null &&
+        _towerInfoStatsPainter != null) {
+      return;
+    }
+
+    _lastSelected = selected;
+    _selectionNamePainter = _buildPainter(
+      selected.name.toUpperCase(),
+      TextStyle(
+        color: selected.color,
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.5,
+      ),
+    );
+    _selectionStatsPainter = _buildPainter(
+      'DMG ${selected.damage.toInt()}    RNG ${selected.range.toInt()}    SPD ${selected.fireRate.toStringAsFixed(1)}',
+      TextStyle(
+        color: Colors.white.withOpacity(0.6),
+        fontSize: 12,
+        letterSpacing: 0.5,
+      ),
+    );
+    _towerInfoNamePainter = _buildPainter(
+      '>> ${selected.name.toUpperCase()}',
+      TextStyle(
+        color: selected.color,
+        fontSize: 11,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
+        shadows: [Shadow(color: selected.color.withOpacity(0.6), blurRadius: 6)],
+      ),
+    );
+    _towerInfoStatsPainter = _buildPainter(
+      'DMG:${selected.damage.toInt()} RNG:${selected.range.toInt()} SPD:${selected.fireRate.toStringAsFixed(1)}',
+      TextStyle(
+        color: Colors.white.withOpacity(0.6),
+        fontSize: 8,
+        fontFamily: 'monospace',
+        letterSpacing: 0.5,
+      ),
+    );
+  }
+
+  void _updateResourceCache() {
+    final gold = gameRef.gold;
+    final lives = gameRef.lives;
+    final score = gameRef.score;
+    final wave = gameRef.enemyManager.currentWave;
+    final enemies = gameRef.enemyManager.aliveCount;
+    final towers = gameRef.towerManager.towers.length;
+
+    if (gold != _lastGold) {
+      _getPainter('value-GOLD', '$gold', _resourceValueStyle(const Color(0xFFFFD700)));
+      _lastGold = gold;
+    }
+    if (lives != _lastLives) {
+      _getPainter('value-LIVES', '$lives', _resourceValueStyle(const Color(0xFFFF4466)));
+      _lastLives = lives;
+    }
+    if (score != _lastScore) {
+      _getPainter('value-SCORE', '$score', _resourceValueStyle(const Color(0xFF00FF88)));
+      _lastScore = score;
+    }
+    if (wave != _lastWave) {
+      _getPainter('value-WAVE', '$wave', _resourceValueStyle(const Color(0xFFFF00FF)));
+      _lastWave = wave;
+    }
+    if (enemies != _lastEnemies) {
+      _getPainter('value-ENEMIES', '$enemies', _resourceValueStyle(const Color(0xFFFF6644)));
+      _lastEnemies = enemies;
+    }
+    if (towers != _lastTowers) {
+      _getPainter('value-TOWERS', '$towers', _resourceValueStyle(const Color(0xFF44AAFF)));
+      _lastTowers = towers;
+    }
+  }
+
+  TextStyle _resourceValueStyle(Color color) {
+    return TextStyle(
+      color: color,
+      fontSize: 18,
+      fontFamily: 'monospace',
+      fontWeight: FontWeight.bold,
+      letterSpacing: 1,
+      shadows: [
+        Shadow(color: color.withOpacity(0.8), blurRadius: 8),
+      ],
+    );
+  }
+
+  TextPainter _getPainter(String key, String text, TextStyle style) {
+    final cached = _textCache[key];
+    if (cached != null && cached.text == text) {
+      return cached.painter;
+    }
+    final painter = _buildPainter(text, style);
+    _textCache[key] = _TextCache(text, painter);
+    return painter;
+  }
+
+  TextPainter _buildPainter(String text, TextStyle style) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter;
+  }
 }
+
+class _TextCache {
+  _TextCache(this.text, this.painter);
+
+  final String text;
+  final TextPainter painter;
+}
+

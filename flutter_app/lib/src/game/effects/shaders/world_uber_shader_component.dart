@@ -50,23 +50,34 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
       return;
     }
 
+    final controller = gameRef.shaderUniformController;
+    final texture = controller.entityTexture;
+    if (texture == null) {
+      canvas.drawRect(rect, ui.Paint()..color = const ui.Color(0xFF02030F));
+      return;
+    }
+
     final shader = _program!.fragmentShader();
-    final uniforms = _buildUniforms();
+    final uniforms = _buildUniforms(
+      towerCount: controller.towerCount,
+      enemyCount: controller.enemyCount,
+    );
     for (var i = 0; i < uniforms.length; i++) {
       shader.setFloat(i, uniforms[i]);
     }
+    shader.setImageSampler(0, texture);
 
     final paint = ui.Paint()..shader = shader;
     canvas.drawRect(rect, paint);
     shader.dispose();
   }
 
-  ShaderUniformController get _uniformController => gameRef.shaderUniformController;
-
-  Float32List _buildUniforms() {
+  Float32List _buildUniforms({
+    required int towerCount,
+    required int enemyCount,
+  }) {
     final pointer = gameRef.lastPointer ?? Vector2.zero();
     final waveIntensity = gameRef.enemyManager.waveIntensity;
-    final controller = _uniformController;
     return Float32List.fromList([
       size.x,
       size.y,
@@ -74,10 +85,8 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
       pointer.x,
       pointer.y,
       waveIntensity,
-      controller.towerCount.toDouble(),
-      controller.enemyCount.toDouble(),
-      ...controller.towerPositionBuffer,
-      ...controller.enemyPositionBuffer,
+      towerCount.toDouble(),
+      enemyCount.toDouble(),
     ]);
   }
 }

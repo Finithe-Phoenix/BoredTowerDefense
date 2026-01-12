@@ -43,21 +43,35 @@ class BulletManager extends Component {
     double slowDuration = 0,
     TowerType towerType = TowerType.pulseArcher,
   }) {
-    // Create new projectile with all parameters
-    // (Pool reuse is limited since final fields can't be changed)
-    final projectile = Projectile(
-      startPosition: from,
-      targetPosition: to,
-      speed: speed,
-      damage: damage,
-      color: color,
-      target: target,
-      slowAmount: slowAmount,
-      slowDuration: slowDuration,
-      towerType: towerType,
-    );
+    Projectile projectile;
+    if (_pool.isNotEmpty) {
+      projectile = _pool.removeLast();
+      projectile.reset(
+        startPosition: from,
+        targetPosition: to,
+        speed: speed,
+        damage: damage,
+        color: color,
+        target: target,
+        slowAmount: slowAmount,
+        slowDuration: slowDuration,
+        towerType: towerType,
+      );
+    } else {
+      projectile = Projectile(
+        startPosition: from,
+        targetPosition: to,
+        speed: speed,
+        damage: damage,
+        color: color,
+        target: target,
+        slowAmount: slowAmount,
+        slowDuration: slowDuration,
+        towerType: towerType,
+      );
+      add(projectile);
+    }
 
-    add(projectile);
     _active.add(projectile);
   }
 
@@ -66,10 +80,16 @@ class BulletManager extends Component {
     super.update(dt);
 
     // Clean up inactive projectiles
-    final inactive = _active.where((p) => !p.isActive).toList();
-    for (final p in inactive) {
-      p.removeFromParent();
-      _active.remove(p);
+    for (int i = _active.length - 1; i >= 0; i--) {
+      final projectile = _active[i];
+      if (projectile.isActive) continue;
+      _active.removeAt(i);
+      if (_pool.length < poolSize) {
+        projectile.deactivate();
+        _pool.add(projectile);
+      } else {
+        projectile.removeFromParent();
+      }
     }
   }
 
@@ -78,9 +98,15 @@ class BulletManager extends Component {
 
   /// Clear all projectiles
   void clearAll() {
-    for (final p in _active) {
-      p.removeFromParent();
+    for (int i = _active.length - 1; i >= 0; i--) {
+      final projectile = _active[i];
+      projectile.deactivate();
+      _active.removeAt(i);
+      if (_pool.length < poolSize) {
+        _pool.add(projectile);
+      } else {
+        projectile.removeFromParent();
+      }
     }
-    _active.clear();
   }
 }

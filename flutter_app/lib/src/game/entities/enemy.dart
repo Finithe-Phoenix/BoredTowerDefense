@@ -30,6 +30,8 @@ enum EnemyType {
 }
 
 class Enemy extends PositionComponent {
+  static bool lowFx = false;
+
   Enemy({
     required this.path,
     double speed = 80,
@@ -80,7 +82,7 @@ class Enemy extends PositionComponent {
 
   // Hit flash effect
   double _hitFlashTimer = 0;
-  static const double _hitFlashDuration = 0.1;
+  static const double _hitFlashDuration = 0.06;
 
   // Pulse animation
   double _pulseScale = 1.0;
@@ -191,6 +193,8 @@ class Enemy extends PositionComponent {
   void render(Canvas canvas) {
     super.render(canvas);
 
+    final reduceFx = Enemy.lowFx;
+
     // Calculate opacity for phantom (invisible when not revealed)
     double phantomOpacity = 1.0;
     if (isPhantom && !_isRevealed) {
@@ -201,11 +205,13 @@ class Enemy extends PositionComponent {
       phantomOpacity = (_revealTimer / _revealDuration).clamp(0.4, 1.0);
     }
 
-    // Render trail first (behind enemy)
-    _renderTrail(canvas, phantomOpacity);
+    if (!reduceFx) {
+      // Render trail first (behind enemy)
+      _renderTrail(canvas, phantomOpacity);
 
-    // Render damage particles
-    _renderDamageParticles(canvas);
+      // Render damage particles
+      _renderDamageParticles(canvas);
+    }
 
     // Apply walking bob transformation
     canvas.save();
@@ -216,7 +222,7 @@ class Enemy extends PositionComponent {
     final radius = (size.x / 2) * animScale;
 
     // Speed-based motion blur when moving fast
-    if (_speedIndicator > 0.3) {
+    if (!reduceFx && _speedIndicator > 0.3) {
       _renderMotionBlur(canvas, radius, phantomOpacity);
     }
 
@@ -246,21 +252,23 @@ class Enemy extends PositionComponent {
       ..color = Colors.white.withOpacity(0.3 * phantomOpacity);
     canvas.drawCircle(highlightOffset, radius * 0.3, highlightPaint);
 
-    // Walking legs/tentacles effect (type-specific)
-    _renderWalkingEffect(canvas, radius, phantomOpacity);
+    if (!reduceFx) {
+      // Walking legs/tentacles effect (type-specific)
+      _renderWalkingEffect(canvas, radius, phantomOpacity);
 
-    // Type-specific effects
-    _renderTypeEffects(canvas, radius, phantomOpacity);
+      // Type-specific effects
+      _renderTypeEffects(canvas, radius, phantomOpacity);
+    }
 
     canvas.restore();
 
     // Hit flash overlay (outside canvas transform)
-    if (_hitFlashTimer > 0) {
+    if (!reduceFx && _hitFlashTimer > 0) {
       _renderHitFlash(canvas, radius, phantomOpacity);
     }
 
     // Slow indicator (ice crystal effect)
-    if (isSlowed) {
+    if (!reduceFx && isSlowed) {
       _renderSlowEffect(canvas, radius);
     }
 
@@ -401,22 +409,22 @@ class Enemy extends PositionComponent {
     // Flash overlay
     canvas.drawCircle(
       Offset.zero,
-      radius * 1.2,
+      radius * 1.15,
       Paint()
-        ..color = Colors.white.withOpacity(flashProgress * 0.8 * opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        ..color = Colors.white.withOpacity(flashProgress * 0.35 * opacity)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
 
     // Expanding ring
-    final ringRadius = radius * (1.2 + (1 - flashProgress) * 0.5);
+    final ringRadius = radius * (1.1 + (1 - flashProgress) * 0.35);
     canvas.drawCircle(
       Offset.zero,
       ringRadius,
       Paint()
-        ..color = const Color(0xFFFF0066).withOpacity(flashProgress * 0.6 * opacity)
+        ..color = const Color(0xFFFF0066).withOpacity(flashProgress * 0.35 * opacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..strokeWidth = 1.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
     );
 
     // Directional damage sparks
@@ -428,9 +436,9 @@ class Enemy extends PositionComponent {
 
       canvas.drawCircle(
         Offset(sparkX, sparkY),
-        2 * flashProgress,
+        1.5 * flashProgress,
         Paint()
-          ..color = Colors.white.withOpacity(flashProgress * opacity)
+          ..color = Colors.white.withOpacity(flashProgress * 0.5 * opacity)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
       );
     }

@@ -16,31 +16,95 @@ enum FloatingTextType {
 
 /// Floating text that rises and fades out
 class FloatingText extends PositionComponent {
-  FloatingText({
+  FloatingText._internal({
     required Vector2 position,
-    required this.text,
-    this.type = FloatingTextType.damage,
-    this.customColor,
-    this.fontSize = 14,
-    this.duration = 0.8,
-    this.riseSpeed = 40,
-  }) : _timer = 0,
-       _random = math.Random() {
-    this.position = position;
-    anchor = Anchor.center;
-    _wobbleOffset = (_random.nextDouble() - 0.5) * 20;
+    required String text,
+    FloatingTextType type = FloatingTextType.damage,
+    Color? customColor,
+    double fontSize = 14,
+    double duration = 0.8,
+    double riseSpeed = 40,
+  }) : _random = math.Random() {
+    _reset(
+      position: position,
+      text: text,
+      type: type,
+      customColor: customColor,
+      fontSize: fontSize,
+      duration: duration,
+      riseSpeed: riseSpeed,
+    );
   }
 
-  final String text;
-  final FloatingTextType type;
-  final Color? customColor;
-  final double fontSize;
-  final double duration;
-  final double riseSpeed;
+  factory FloatingText({
+    required Vector2 position,
+    required String text,
+    FloatingTextType type = FloatingTextType.damage,
+    Color? customColor,
+    double fontSize = 14,
+    double duration = 0.8,
+    double riseSpeed = 40,
+  }) {
+    if (_pool.isNotEmpty) {
+      final instance = _pool.removeLast();
+      instance._reset(
+        position: position,
+        text: text,
+        type: type,
+        customColor: customColor,
+        fontSize: fontSize,
+        duration: duration,
+        riseSpeed: riseSpeed,
+      );
+      return instance;
+    }
+    return FloatingText._internal(
+      position: position,
+      text: text,
+      type: type,
+      customColor: customColor,
+      fontSize: fontSize,
+      duration: duration,
+      riseSpeed: riseSpeed,
+    );
+  }
 
-  double _timer;
+  static const int maxPool = 60;
+  static final List<FloatingText> _pool = [];
+
+  String text = '';
+  FloatingTextType type = FloatingTextType.damage;
+  Color? customColor;
+  double fontSize = 14;
+  double duration = 0.8;
+  double riseSpeed = 40;
+
+  double _timer = 0;
   final math.Random _random;
   late double _wobbleOffset;
+  bool _inPool = false;
+
+  void _reset({
+    required Vector2 position,
+    required String text,
+    required FloatingTextType type,
+    required Color? customColor,
+    required double fontSize,
+    required double duration,
+    required double riseSpeed,
+  }) {
+    this.position = position.clone();
+    anchor = Anchor.center;
+    this.text = text;
+    this.type = type;
+    this.customColor = customColor;
+    this.fontSize = fontSize;
+    this.duration = duration;
+    this.riseSpeed = riseSpeed;
+    _timer = 0;
+    _wobbleOffset = (_random.nextDouble() - 0.5) * 20;
+    _inPool = false;
+  }
 
   Color get _color => customColor ?? _getTypeColor();
 
@@ -84,13 +148,24 @@ class FloatingText extends PositionComponent {
     _timer += dt;
 
     if (_timer >= duration) {
-      removeFromParent();
+      _recycle();
       return;
     }
 
     // Rise upward with slight horizontal drift
     position.y -= riseSpeed * dt;
     position.x += math.sin(_timer * 5) * dt * 10;
+  }
+
+  void _recycle() {
+    if (parent != null) {
+      removeFromParent();
+    }
+    if (_inPool) return;
+    if (_pool.length < maxPool) {
+      _inPool = true;
+      _pool.add(this);
+    }
   }
 
   @override

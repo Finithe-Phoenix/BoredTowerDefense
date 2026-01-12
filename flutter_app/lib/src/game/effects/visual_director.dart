@@ -3,6 +3,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
 import '../../ui/theme/neon_theme.dart';
+import '../bored_games_game.dart';
 import '../entities/enemy.dart';
 import '../effects/floating_text.dart';
 import '../effects/particle_system.dart';
@@ -55,7 +56,7 @@ class VisualDirector {
     GameParticles.instance.sparks(enemy.position, enemy.type.color, count: 18);
 
     game.add(FloatingText(
-      position: enemy.position.clone(),
+      position: _toScreen(enemy.position.clone()),
       text: '+$goldReward',
       type: FloatingTextType.gold,
       fontSize: 16,
@@ -85,7 +86,7 @@ class VisualDirector {
     GameParticles.instance.sparks(enemy.position, NeonColors.red, count: 12);
 
     game.add(FloatingText(
-      position: enemy.position.clone(),
+      position: _toScreen(enemy.position.clone()),
       text: 'LEAK',
       type: FloatingTextType.damage,
       customColor: NeonColors.red,
@@ -139,7 +140,7 @@ class VisualDirector {
     GameParticles.instance.magic(center, NeonColors.cyan, count: 10);
 
     game.add(FloatingText(
-      position: center.clone(),
+      position: _toScreen(center.clone()),
       text: 'SLOW FIELD',
       type: FloatingTextType.combo,
       customColor: NeonColors.cyan,
@@ -175,6 +176,13 @@ class VisualDirector {
       duration: 1.0,
       riseSpeed: 30,
     ));
+  }
+
+  Vector2 _toScreen(Vector2 worldPosition) {
+    if (game is BoredGamesGame) {
+      return (game as BoredGamesGame).worldToScreen(worldPosition);
+    }
+    return worldPosition;
   }
 
   void resetKillStreak() {

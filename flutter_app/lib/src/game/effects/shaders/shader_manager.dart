@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart';
+
 import 'noise_texture.dart';
 
 /// Singleton that compiles Flutter fragment shaders once and keeps them available
@@ -13,6 +15,7 @@ class ShaderManager {
 
   final Map<String, ui.FragmentProgram> _cache = {};
   final Map<String, ShaderDescriptor> _descriptors = {};
+  final Set<String> _failed = {};
 
   /// Loads a named shader from assets and caches its compiled [FragmentProgram].
   Future<void> loadShader({
@@ -20,13 +23,17 @@ class ShaderManager {
     required String assetPath,
     ShaderDescriptor? descriptor,
   }) async {
-    if (_cache.containsKey(name)) return;
+    if (_cache.containsKey(name) || _failed.contains(name)) return;
 
-    final program = await ui.FragmentProgram.fromAsset(assetPath);
-
-    _cache[name] = program;
-    if (descriptor != null) {
-      _descriptors[name] = descriptor;
+    try {
+      final program = await ui.FragmentProgram.fromAsset(assetPath);
+      _cache[name] = program;
+      if (descriptor != null) {
+        _descriptors[name] = descriptor;
+      }
+    } catch (error) {
+      _failed.add(name);
+      debugPrint('[ShaderManager] Disabled shader "$name": $error');
     }
   }
 

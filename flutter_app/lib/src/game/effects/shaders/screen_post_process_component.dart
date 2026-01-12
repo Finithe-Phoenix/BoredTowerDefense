@@ -8,17 +8,22 @@ import 'shader_manager.dart';
 
 /// Full-screen post-process shader overlay (vignette + chromatic pulse).
 class ScreenPostProcessComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
-  ScreenPostProcessComponent({this.opacity = 0.6}) {
+  ScreenPostProcessComponent({
+    this.opacity = 0.35,
+    this.enabled = true,
+  }) {
     priority = 1200;
   }
 
   final double opacity;
+  final bool enabled;
   ui.FragmentProgram? _program;
   double _time = 0;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    if (!enabled) return;
     size = gameRef.size;
     anchor = Anchor.topLeft;
     position = Vector2.zero();
@@ -33,18 +38,21 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
   @override
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
+    if (!enabled) return;
     size = gameSize;
   }
 
   @override
   void update(double dt) {
     super.update(dt);
+    if (!enabled) return;
     _time += dt;
   }
 
   @override
   void render(ui.Canvas canvas) {
     super.render(canvas);
+    if (!enabled) return;
     if (_program == null) return;
     final rect = ui.Rect.fromLTWH(0, 0, size.x, size.y);
     final shader = _program!.fragmentShader();

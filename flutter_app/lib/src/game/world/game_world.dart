@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame_tiled/flame_tiled.dart';
@@ -6,9 +7,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 class GameWorld extends Component {
-  GameWorld({required this.tileSize});
+  GameWorld({
+    required this.tileSize,
+    required this.mapFile,
+  });
 
   final double tileSize;
+  final String mapFile;
 
   List<Vector2> waypoints = [];
   List<List<bool>> isBuildable = [];
@@ -28,8 +33,7 @@ class GameWorld extends Component {
   }
 
   Future<void> _loadMap() async {
-    const mapPath = 'maps/level1.tmx';
-    final tiled = await TiledComponent.load(mapPath, Vector2.all(tileSize));
+    final tiled = await TiledComponent.load(mapFile, Vector2.all(tileSize));
     // Don't add the tiled component - we render our own visuals
 
     final map = tiled.tileMap.map;
@@ -159,6 +163,14 @@ class _WorldRenderer extends PositionComponent {
 
   final GameWorld world;
   double _time = 0;
+  ui.Picture? _staticTiles;
+  bool _cacheReady = false;
+
+  @override
+  Future<void> onLoad() async {
+    await super.onLoad();
+    _buildStaticCache();
+  }
 
   @override
   void update(double dt) {
@@ -169,10 +181,43 @@ class _WorldRenderer extends PositionComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (!_cacheReady) {
+      _buildStaticCache();
+    }
+    if (_staticTiles != null) {
+      canvas.drawPicture(_staticTiles!);
+    } else {
+      _renderTiles(canvas);
+    }
 
+    // Draw path line overlay
+    _drawPathOverlay(canvas);
+
+    // Draw start and end markers
+    _drawStartEndMarkers(canvas);
+  }
+
+  @override
+  void onRemove() {
+    _staticTiles?.dispose();
+    super.onRemove();
+  }
+
+  void _buildStaticCache() {
+    if (_cacheReady || world.mapWidth == 0 || world.mapHeight == 0) return;
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final previousTime = _time;
+    _time = 0;
+    _renderTiles(canvas);
+    _time = previousTime;
+    _staticTiles?.dispose();
+    _staticTiles = recorder.endRecording();
+    _cacheReady = true;
+  }
+
+  void _renderTiles(Canvas canvas) {
     final tileSize = world.tileSize;
-
-    // Draw tiles
     for (int y = 0; y < world.mapHeight; y++) {
       for (int x = 0; x < world.mapWidth; x++) {
         final rect = Rect.fromLTWH(
@@ -185,23 +230,14 @@ class _WorldRenderer extends PositionComponent {
         final tileType = world.tileTypes[y][x];
 
         if (tileType == 1) {
-          // Blocked tile - dark cyberpunk structure
           _drawBlockedTile(canvas, rect, x, y);
         } else if (tileType == 2) {
-          // Path tile
           _drawPathTile(canvas, rect, x, y);
         } else {
-          // Buildable tile
           _drawBuildableTile(canvas, rect, x, y);
         }
       }
     }
-
-    // Draw path line overlay
-    _drawPathOverlay(canvas);
-
-    // Draw start and end markers
-    _drawStartEndMarkers(canvas);
   }
 
   void _drawBlockedTile(Canvas canvas, Rect rect, int x, int y) {

@@ -46,6 +46,7 @@ class EnemyManager extends Component {
   WaveModifier _currentModifier = WaveModifier.normal;
   int _spawnIndex = 0;
   int _waveTotalEnemies = 0;
+  final List<Enemy> _activeEnemies = [];
 
   /// Base stats for wave scaling
   static const double baseHealth = 100;
@@ -76,12 +77,12 @@ class EnemyManager extends Component {
   double get waveIntensity => spawning ? waveProgress : 0.0;
 
   /// Get all active enemies
-  List<Enemy> get activeEnemies =>
-      children.whereType<Enemy>().where((e) => e.isAlive).toList();
+  List<Enemy> get activeEnemies => _activeEnemies;
 
   @override
   void update(double dt) {
     super.update(dt);
+    Enemy.lowFx = _aliveCount > 18;
     if (!spawning || world.waypoints.isEmpty || remaining <= 0) return;
 
     _timer += dt;
@@ -137,19 +138,24 @@ class EnemyManager extends Component {
     _aliveCount++;
     _spawnIndex++;
     add(enemy);
+    _activeEnemies.add(enemy);
   }
 
   void _onEnemyDeath(Enemy enemy) {
     _aliveCount--;
+    _activeEnemies.remove(enemy);
 
     // Spawn epic explosion effect at enemy position
     final expSize = 30.0 + (enemy.type.sizeMult * 20);
-    add(ExplosionEffect(
+    final effect = ExplosionEffect.spawn(
       position: enemy.position.clone(),
       color: enemy.type.color,
       explosionSize: expSize,
       duration: 0.5 + (enemy.type == EnemyType.juggernaut ? 0.2 : 0),
-    ));
+    );
+    if (effect != null) {
+      add(effect);
+    }
 
     // Play explosion sound
     AudioService.instance.playExplosion();
@@ -160,6 +166,7 @@ class EnemyManager extends Component {
 
   void _onEnemyReachBase(Enemy enemy) {
     _aliveCount--;
+    _activeEnemies.remove(enemy);
     onEnemyLeaked?.call(enemy);
     _checkWaveComplete();
   }
@@ -221,6 +228,7 @@ class EnemyManager extends Component {
     _aliveCount = 0;
     _currentModifier = WaveModifier.normal;
     _spawnIndex = 0;
+    _activeEnemies.clear();
 
     // Remove all existing enemies
     for (final enemy in children.whereType<Enemy>().toList()) {

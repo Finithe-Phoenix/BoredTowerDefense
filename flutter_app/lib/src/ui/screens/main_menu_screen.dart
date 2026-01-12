@@ -33,12 +33,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
     // Staggered button animations
     _buttonAnimations = List.generate(5, (index) {
+      final start = (0.2 + index * 0.15).clamp(0.0, 1.0) as double;
+      final end = (0.5 + index * 0.15).clamp(0.0, 1.0) as double;
+      final begin = start <= end ? start : end;
       return Tween<double>(begin: 0.0, end: 1.0).animate(
         CurvedAnimation(
           parent: _slideController,
           curve: Interval(
-            0.2 + index * 0.15,
-            0.5 + index * 0.15,
+            begin,
+            end,
             curve: Curves.easeOutCubic,
           ),
         ),

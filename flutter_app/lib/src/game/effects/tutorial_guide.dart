@@ -12,8 +12,8 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   static const List<String> _messages = [
     'Select a tower type to begin.',
     'Drag onto a green tile to place the tower.',
-    'Press START WAVE once you have coverage.',
-    'That is it—the Grid is yours!',
+    'Waves start automatically once you place a tower.',
+    'That is it - the Grid is yours!',
   ];
 
   int _step = 0;
@@ -80,3 +80,4 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
     textPainter.paint(canvas, Offset(x + 16, y + (height - textPainter.height) / 2));
   }
 }
+

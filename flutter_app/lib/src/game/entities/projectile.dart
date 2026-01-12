@@ -25,17 +25,17 @@ class Projectile extends PositionComponent {
     position = startPosition.clone();
     size = Vector2.all(6);
     anchor = Anchor.center;
-    _initializeTrail();
     _initializeTypeEffects();
+    _initializeTrail();
   }
 
   final Vector2 targetPosition;
-  final double speed;
-  final double damage;
-  final Color color;
-  final double slowAmount;
-  final double slowDuration;
-  final TowerType towerType;
+  double speed;
+  double damage;
+  Color color;
+  double slowAmount;
+  double slowDuration;
+  TowerType towerType;
   Enemy? target;
 
   bool _active;
@@ -65,17 +65,19 @@ class Projectile extends PositionComponent {
   bool get appliesSlow => slowAmount > 0 && slowDuration > 0;
 
   void _initializeTypeEffects() {
+    _maxTrailLength = 12;
+    _particleCount = 8;
+    _wobbleAmount = 0;
+    _electricSegments = [];
     switch (towerType) {
       case TowerType.pulseArcher:
         _maxTrailLength = 10;
         _particleCount = 6;
-        _wobbleAmount = 0;
         break;
       case TowerType.circuitCannon:
         _maxTrailLength = 6;
         _particleCount = 4;
         size = Vector2.all(10); // Larger projectile
-        _wobbleAmount = 0;
         break;
       case TowerType.phaseMage:
         _maxTrailLength = 16;
@@ -129,12 +131,27 @@ class Projectile extends PositionComponent {
     required double damage,
     Color? color,
     Enemy? target,
+    double slowAmount = 0,
+    double slowDuration = 0,
+    TowerType towerType = TowerType.pulseArcher,
   }) {
     position = startPosition.clone();
     this.targetPosition.setFrom(targetPosition);
-    _active = true;
+    this.speed = speed;
+    this.damage = damage;
+    this.color = color ?? this.color;
+    this.slowAmount = slowAmount;
+    this.slowDuration = slowDuration;
+    this.towerType = towerType;
     this.target = target;
+    _active = true;
     _time = 0;
+    _rotationAngle = 0;
+    _spiralPhase = 0;
+    _pulsePhase = 0;
+    size = Vector2.all(6);
+    _electricSegments = [];
+    _initializeTypeEffects();
     _initializeTrail();
   }
 
@@ -208,11 +225,14 @@ class Projectile extends PositionComponent {
   }
 
   void _spawnImpactEffect() {
-    parent?.add(ImpactEffect(
+    final effect = ImpactEffect.spawn(
       position: position.clone(),
       color: color,
       towerType: towerType,
-    ));
+    );
+    if (effect != null) {
+      parent?.add(effect);
+    }
   }
 
   void _updateTrail() {

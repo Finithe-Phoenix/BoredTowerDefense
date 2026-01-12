@@ -130,47 +130,49 @@ class _GameScreenState extends State<GameScreen> {
         }
       },
       child: Scaffold(
-        body: Stack(
-          children: [
-            GameWidget(
-              game: _game,
-              overlayBuilderMap: {
-                'pause': (context, game) => PauseMenuOverlay(
-                      onResume: _resumeGame,
-                      onRestart: _restartLevel,
-                      onQuit: _quitToMenu,
-                    ),
-                'gameOver': (context, game) => GameOverOverlay(
-                      score: _game.score,
-                      wavesCleared: _game.enemyManager.currentWave,
-                      onRestart: _restartLevel,
-                      onQuit: _quitToMenu,
-                    ),
-                'victory': (context, game) => VictoryOverlay(
-                      score: _game.score,
-                      livesRemaining: _game.lives,
-                      maxLives: _levelConfig.startingLives,
-                      onNextLevel: _nextLevel,
-                      onRestart: _restartLevel,
-                      onQuit: _quitToMenu,
-                    ),
-              },
-            ),
-
-            // Pause button
-            Positioned(
-              top: 10,
-              right: 10,
-              child: IconButton(
-                icon: Icon(
-                  _isPaused ? Icons.play_arrow : Icons.pause,
-                  color: Colors.white.withOpacity(0.7),
-                  size: 32,
-                ),
-                onPressed: _togglePause,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              GameWidget(
+                game: _game,
+                overlayBuilderMap: {
+                  'pause': (context, game) => PauseMenuOverlay(
+                        onResume: _resumeGame,
+                        onRestart: _restartLevel,
+                        onQuit: _quitToMenu,
+                      ),
+                  'gameOver': (context, game) => GameOverOverlay(
+                        score: _game.score,
+                        wavesCleared: _game.enemyManager.currentWave,
+                        onRestart: _restartLevel,
+                        onQuit: _quitToMenu,
+                      ),
+                  'victory': (context, game) => VictoryOverlay(
+                        score: _game.score,
+                        livesRemaining: _game.lives,
+                        maxLives: _levelConfig.startingLives,
+                        onNextLevel: _nextLevel,
+                        onRestart: _restartLevel,
+                        onQuit: _quitToMenu,
+                      ),
+                },
               ),
-            ),
-          ],
+
+              // Pause button
+              Positioned(
+                top: 10,
+                right: 10,
+                child: IconButton(
+                  icon: Icon(
+                    _isPaused ? Icons.play_arrow : Icons.pause,
+                    color: Colors.white.withOpacity(0.7),
+                    size: 32,
+                  ),
+                  onPressed: _togglePause,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
