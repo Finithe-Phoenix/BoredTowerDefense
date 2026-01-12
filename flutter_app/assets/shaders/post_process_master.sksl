@@ -1,0 +1,26 @@
+uniform float2 uResolution;
+uniform float uTime;
+uniform float uTrauma;
+uniform float uWaveIntensity;
+uniform float uOpacity;
+
+half4 main(float2 fragCoord) {
+  float2 uv = fragCoord / uResolution;
+  float2 center = float2(0.5, 0.5);
+  float dist = distance(uv, center);
+  float vignette = smoothstep(0.9, 0.4, dist);
+
+  float scan = sin((uv.y * 800.0) + uTime * 40.0) * 0.04;
+  float traumaPulse = uTrauma * (0.6 + 0.4 * sin(uTime * 8.0));
+  float wavePulse = uWaveIntensity * (0.3 + 0.2 * sin(uTime * 2.0));
+
+  float3 color = float3(0.02, 0.04, 0.06);
+  color += float3(0.0, 0.3, 0.6) * scan;
+  color += float3(0.8, 0.1, 0.6) * traumaPulse;
+  color += float3(0.1, 0.6, 0.9) * wavePulse;
+
+  float alpha = (vignette * 0.2 + scan * 0.1 + traumaPulse * 0.4 + wavePulse * 0.2) * uOpacity;
+  alpha = clamp(alpha, 0.0, uOpacity);
+
+  return half4(color, alpha);
+}

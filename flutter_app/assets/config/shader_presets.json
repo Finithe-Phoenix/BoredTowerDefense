@@ -1,0 +1,25 @@
+{
+  "presets": {
+    "Ultra": {
+      "gridIterations": 3,
+      "glowIntensity": 1.0,
+      "scanlineFrequency": 1.0,
+      "particleIntensity": 1.0,
+      "chromaIntensity": 1.0
+    },
+    "Balanced": {
+      "gridIterations": 2,
+      "glowIntensity": 0.7,
+      "scanlineFrequency": 0.7,
+      "particleIntensity": 0.7,
+      "chromaIntensity": 0.6
+    },
+    "Eco": {
+      "gridIterations": 1,
+      "glowIntensity": 0.4,
+      "scanlineFrequency": 0.4,
+      "particleIntensity": 0.3,
+      "chromaIntensity": 0.3
+    }
+  }
+}

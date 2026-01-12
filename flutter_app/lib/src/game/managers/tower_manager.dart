@@ -1,15 +1,259 @@
-import 'package:flame/components.dart';
+import 'dart:math' as math;
+import 'dart:ui';
 
-class TowerManager extends Component {
-  TowerManager({required this.tileSize});
+import 'package:flame/components.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
+import '../world/game_world.dart';
+import '../utils/coords.dart';
+import '../utils/path_check.dart';
+import '../entities/tower.dart';
+import '../entities/enemy.dart';
+import '../effects/floating_text.dart';
+import '../bored_games_game.dart';
+import '../../ui/theme/neon_theme.dart';
+import 'bullet_manager.dart';
+import 'enemy_manager.dart';
+import '../../services/audio_service.dart';
+
+class TowerManager extends Component with HasGameRef<BoredGamesGame> {
+  TowerManager({
+    required this.tileSize,
+    required this.world,
+    this.bulletManager,
+    this.enemyManager,
+  });
 
   final double tileSize;
+  final GameWorld world;
+  BulletManager? bulletManager;
+  EnemyManager? enemyManager;
 
-  // TODO: manage tower grid, placement validation, and ghost previews.
+  bool showHeatmap = true;
+  Vector2? ghostPosition;
+  final Set<math.Point<int>> occupied = {};
+  bool blockRejected = false;
+  double _ghostPulse = 0;
+
+  /// Currently selected tower type for placement
+  TowerType selectedTowerType = TowerType.pulseArcher;
+
+  void updateGhost(Vector2? position) {
+    ghostPosition = position;
+  }
+
+  /// Get all placed towers
+  List<Tower> get towers => children.whereType<Tower>().toList();
+
+  void placeTower(Vector2 worldPos) {
+    final cell = screenToGrid(worldPos, tileSize);
+    if (!_isCellWithin(cell)) return;
+    if (!world.isBuildable[cell.y][cell.x]) {
+      _showPlacementFeedback('Forbidden tile', cell);
+      return;
+    }
+    if (occupied.contains(cell)) {
+      _showPlacementFeedback('Already occupied', cell);
+      return;
+    }
+
+    // Validate that placing here does not block the path from start to end.
+    if (world.startCell != null &&
+        world.endCell != null &&
+        !_wouldKeepPathOpen(cell)) {
+      blockRejected = true;
+      _showPlacementFeedback('Build would block path', cell);
+      return;
+    }
+    blockRejected = false;
+
+    if (!world.isBuildable[cell.y][cell.x]) {
+      _showPlacementFeedback('Tile locked', cell);
+      return;
+    }
+
+    final pos = gridToWorld(cell, tileSize);
+    final tower = Tower(
+      position: pos,
+      size: tileSize,
+      type: selectedTowerType,
+      onFire: _onTowerFire,
+    );
+    add(tower);
+    occupied.add(cell);
+
+    // Play build sound
+    AudioService.instance.playBuild();
+
+    gameRef.notifyTutorialTowerPlaced();
+
+    gameRef.add(FloatingText(
+      position: pos + Vector2(tileSize / 2, -tileSize / 2),
+      text: '${selectedTowerType.name} deployed',
+      type: FloatingTextType.levelUp,
+      customColor: selectedTowerType.color,
+      fontSize: 14,
+      duration: 1.2,
+      riseSpeed: 20,
+    ));
+}
+
+  void _onTowerFire(Tower tower, Enemy target, Vector2 targetPos) {
+    bulletManager?.fire(
+      from: tower.centerPosition,
+      to: targetPos,
+      speed: tower.type.projectileSpeed,
+      damage: tower.damage,
+      color: tower.color,
+      target: target,
+      slowAmount: tower.type.slowAmount,
+      slowDuration: tower.type.slowDuration,
+      towerType: tower.type,
+    );
+
+    // Play shoot sound
+    AudioService.instance.playShoot();
+  }
+
+  void _showPlacementFeedback(String message, math.Point<int> cell) {
+    final position = gridToWorld(cell, tileSize) + Vector2(tileSize / 2, tileSize / 2);
+    final text = FloatingText(
+      position: position,
+      text: message,
+      type: FloatingTextType.damage,
+      customColor: NeonColors.yellow,
+      fontSize: 12,
+      duration: 1.1,
+      riseSpeed: 22,
+    );
+    gameRef.add(text);
+    debugPrint('[TowerManager] $message at $position (cell $cell)');
+  }
+
+  void setSelectedTowerType(TowerType type) {
+    if (selectedTowerType == type) return;
+    selectedTowerType = type;
+    _showSelectionHint(type);
+    gameRef.notifyTutorialTowerSelected();
+  }
+
+  void _showSelectionHint(TowerType type) {
+    final center = Vector2(gameRef.size.x / 2, gameRef.size.y - 40);
+    final text = FloatingText(
+      position: center,
+      text: 'Drag to deploy ${type.name}',
+      type: FloatingTextType.combo,
+      customColor: type.color,
+      fontSize: 14,
+      duration: 1.3,
+      riseSpeed: 16,
+    );
+    gameRef.add(text);
+  }
+
+  bool _isCellWithin(math.Point<int> cell) {
+    return cell.y >= 0 &&
+        cell.y < world.isBuildable.length &&
+        cell.x >= 0 &&
+        cell.x < world.isBuildable[cell.y].length;
+  }
 
   @override
   void update(double dt) {
     super.update(dt);
-    // Future: handle targeting logic coordination with BulletManager.
+
+    // Update tower targeting
+    final enemies = enemyManager?.activeEnemies ?? [];
+    for (final tower in towers) {
+      tower.updateTargeting(enemies, dt);
+    }
+
+    _ghostPulse += dt * 3;
+    if (_ghostPulse > math.pi * 2) {
+      _ghostPulse -= math.pi * 2;
+    }
+  }
+
+  @override
+  void render(Canvas canvas) {
+    super.render(canvas);
+    if (world.isBuildable.isEmpty) return;
+
+    final rows = world.isBuildable;
+    final paintAllowed = Paint()..color = const Color(0x3300FF00);
+    final paintBlocked = Paint()..color = const Color(0x33FF0000);
+    final paintGhost = Paint()..color = selectedTowerType.color.withOpacity(0.4);
+    final paintGhostBlocked = Paint()..color = const Color(0x66FF0066);
+    final paintWarning = Paint()..color = const Color(0x44FF6600);
+
+    if (showHeatmap) {
+      for (int y = 0; y < rows.length; y++) {
+        for (int x = 0; x < rows[y].length; x++) {
+          final rect = Rect.fromLTWH(
+            x * tileSize,
+            y * tileSize,
+            tileSize,
+            tileSize,
+          );
+          canvas.drawRect(rect, rows[y][x] ? paintAllowed : paintBlocked);
+        }
+      }
+    }
+
+    if (ghostPosition != null) {
+      final cell = screenToGrid(ghostPosition!, tileSize);
+        if (_isCellWithin(cell)) {
+          final topLeft = gridToWorld(cell, tileSize);
+          final rect = Rect.fromLTWH(
+            topLeft.x,
+            topLeft.y,
+            tileSize,
+            tileSize,
+          );
+          final canBuild =
+              rows[cell.y][cell.x] && !occupied.contains(cell);
+          canvas.drawRect(rect, canBuild ? paintGhost : paintGhostBlocked);
+          if (!canBuild && blockRejected) {
+            canvas.drawRect(rect, paintWarning);
+          }
+
+          // Draw range preview for ghost
+          if (canBuild) {
+            final rangePaint = Paint()
+              ..color = selectedTowerType.color.withOpacity(0.15)
+              ..style = PaintingStyle.stroke
+              ..strokeWidth = 2;
+            canvas.drawCircle(
+              Offset(topLeft.x + tileSize / 2, topLeft.y + tileSize / 2),
+              selectedTowerType.range,
+              rangePaint,
+            );
+
+            final explosionRadius = tileSize * 0.35 + math.sin(_ghostPulse) * 6;
+            canvas.drawCircle(
+              Offset(topLeft.x + tileSize / 2, topLeft.y + tileSize / 2),
+              explosionRadius,
+              Paint()
+                ..color = selectedTowerType.color.withOpacity(0.25)
+                ..style = PaintingStyle.stroke
+                ..strokeWidth = 1.5,
+            );
+          }
+        }
+      }
+  }
+
+  bool _wouldKeepPathOpen(math.Point<int> candidate) {
+    // Temporarily mark blocked and check path.
+    final original = world.isBuildable[candidate.y][candidate.x];
+    world.isBuildable[candidate.y][candidate.x] = false;
+    final open = isPathOpen(
+      buildableMask: world.isBuildable,
+      startCell: world.startCell!,
+      endCell: world.endCell!,
+    );
+    world.isBuildable[candidate.y][candidate.x] = original;
+    return open;
   }
 }
