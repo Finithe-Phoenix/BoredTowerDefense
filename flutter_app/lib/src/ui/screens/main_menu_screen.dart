@@ -32,7 +32,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
     );
 
     // Staggered button animations
-    _buttonAnimations = List.generate(5, (index) {
+    _buttonAnimations = List.generate(6, (index) {
       final start = (0.2 + index * 0.15).clamp(0.0, 1.0) as double;
       final end = (0.5 + index * 0.15).clamp(0.0, 1.0) as double;
       final begin = start <= end ? start : end;
@@ -127,6 +127,17 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 _buildAnimatedButton(
                   animation: _buttonAnimations[2],
                   child: EpicNeonButton(
+                    text: 'UPGRADES',
+                    icon: Icons.auto_awesome_rounded,
+                    onPressed: () => Navigator.pushNamed(context, '/upgrades'),
+                    color: NeonColors.cyan,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                _buildAnimatedButton(
+                  animation: _buttonAnimations[3],
+                  child: EpicNeonButton(
                     text: 'QUICK PLAY',
                     icon: Icons.bolt_rounded,
                     onPressed: () => Navigator.pushNamed(context, '/game', arguments: 1),
@@ -136,7 +147,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 const SizedBox(height: 16),
 
                 _buildAnimatedButton(
-                  animation: _buttonAnimations[3],
+                  animation: _buttonAnimations[4],
                   child: EpicNeonButton(
                     text: 'SETTINGS',
                     icon: Icons.tune_rounded,
@@ -147,7 +158,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                 const SizedBox(height: 16),
 
                 _buildAnimatedButton(
-                  animation: _buttonAnimations[4],
+                  animation: _buttonAnimations[5],
                   child: EpicNeonButton(
                     text: 'CREDITS',
                     icon: Icons.auto_awesome_rounded,

@@ -10,28 +10,50 @@ class StorageService {
 
   SharedPreferences? _prefs;
   bool _initialized = false;
+  @visibleForTesting
+  static bool forceInitFailure = false;
+  @visibleForTesting
+  static bool includeLevelOneAlways = true;
 
   // Keys for storage
   static const String _keyLevelProgress = 'level_progress_';
   static const String _keySettings = 'game_settings';
+  static const String _keyQualitySettings = 'quality_settings';
   static const String _keyStats = 'game_stats';
   static const String _keyUnlockedLevels = 'unlocked_levels';
+  static const String _keyMetaCurrency = 'meta_currency';
+  static const String _keyUpgradeLevels = 'upgrade_levels';
 
   /// Initialize storage - must be called before using any other methods
   Future<void> initialize() async {
     if (_initialized) return;
 
     try {
+      if (forceInitFailure) {
+        throw Exception('Forced initialization failure');
+      }
       _prefs = await SharedPreferences.getInstance();
       _initialized = true;
-      debugPrint('[StorageService] Initialized successfully');
+      _log('[StorageService] Initialized successfully');
     } catch (e) {
-      debugPrint('[StorageService] Failed to initialize: $e');
+      _log('[StorageService] Failed to initialize: $e');
     }
+  }
+
+  @visibleForTesting
+  void resetForTesting() {
+    _prefs = null;
+    _initialized = false;
   }
 
   /// Check if storage is ready
   bool get isReady => _initialized && _prefs != null;
+
+  void _log(String message) {
+    if (kDebugMode) {
+      debugPrint(message);
+    }
+  }
 
   /// Save level progress
   Future<void> saveLevelProgress({
@@ -42,7 +64,7 @@ class StorageService {
     required int bestWave,
   }) async {
     if (!isReady) {
-      debugPrint('[StorageService] Not initialized, skipping save');
+      _log('[StorageService] Not initialized, skipping save');
       return;
     }
 
@@ -56,7 +78,7 @@ class StorageService {
 
     final key = '$_keyLevelProgress$levelId';
     await _prefs!.setString(key, jsonEncode(data));
-    debugPrint('[StorageService] Saved progress for level $levelId: stars=$stars, score=$highScore');
+    _log('[StorageService] Saved progress for level $levelId: stars=$stars, score=$highScore');
   }
 
   /// Load level progress
@@ -71,7 +93,7 @@ class StorageService {
     try {
       return jsonDecode(jsonStr) as Map<String, dynamic>;
     } catch (e) {
-      debugPrint('[StorageService] Failed to parse level progress: $e');
+      _log('[StorageService] Failed to parse level progress: $e');
       return null;
     }
   }
@@ -96,7 +118,7 @@ class StorageService {
       }
     }
 
-    debugPrint('[StorageService] Loaded ${result.length} level progress entries');
+    _log('[StorageService] Loaded ${result.length} level progress entries');
     return result;
   }
 
@@ -106,7 +128,7 @@ class StorageService {
 
     final list = levelIds.toList()..sort();
     await _prefs!.setString(_keyUnlockedLevels, jsonEncode(list));
-    debugPrint('[StorageService] Saved ${list.length} unlocked levels');
+    _log('[StorageService] Saved ${list.length} unlocked levels');
   }
 
   /// Load unlocked levels list
@@ -119,10 +141,12 @@ class StorageService {
     try {
       final list = jsonDecode(jsonStr) as List;
       final result = list.map((e) => e as int).toSet();
-      result.add(1); // Always include level 1
+      if (includeLevelOneAlways) {
+        result.add(1); // Always include level 1
+      }
       return result;
     } catch (e) {
-      debugPrint('[StorageService] Failed to parse unlocked levels: $e');
+      _log('[StorageService] Failed to parse unlocked levels: $e');
       return {1};
     }
   }
@@ -148,7 +172,23 @@ class StorageService {
     };
 
     await _prefs!.setString(_keySettings, jsonEncode(data));
-    debugPrint('[StorageService] Saved settings');
+    _log('[StorageService] Saved settings');
+  }
+
+  /// Save quality settings
+  Future<void> saveQualitySettings({
+    required String preset,
+    required bool autoQuality,
+  }) async {
+    if (!isReady) return;
+
+    final data = {
+      'preset': preset,
+      'autoQuality': autoQuality,
+    };
+
+    await _prefs!.setString(_keyQualitySettings, jsonEncode(data));
+    _log('[StorageService] Saved quality settings');
   }
 
   /// Load settings
@@ -161,8 +201,59 @@ class StorageService {
     try {
       return jsonDecode(jsonStr) as Map<String, dynamic>;
     } catch (e) {
-      debugPrint('[StorageService] Failed to parse settings: $e');
+      _log('[StorageService] Failed to parse settings: $e');
       return null;
+    }
+  }
+
+  /// Load quality settings
+  Map<String, dynamic>? loadQualitySettings() {
+    if (!isReady) return null;
+
+    final jsonStr = _prefs!.getString(_keyQualitySettings);
+    if (jsonStr == null) return null;
+
+    try {
+      return jsonDecode(jsonStr) as Map<String, dynamic>;
+    } catch (e) {
+      _log('[StorageService] Failed to parse quality settings: $e');
+      return null;
+    }
+  }
+
+  /// Save meta currency
+  Future<void> saveMetaCurrency(int value) async {
+    if (!isReady) return;
+    await _prefs!.setInt(_keyMetaCurrency, value);
+    _log('[StorageService] Saved meta currency: $value');
+  }
+
+  /// Load meta currency
+  int loadMetaCurrency() {
+    if (!isReady) return 0;
+    return _prefs!.getInt(_keyMetaCurrency) ?? 0;
+  }
+
+  /// Save upgrade levels
+  Future<void> saveUpgradeLevels(Map<String, int> levels) async {
+    if (!isReady) return;
+    final data = jsonEncode(levels);
+    await _prefs!.setString(_keyUpgradeLevels, data);
+    _log('[StorageService] Saved upgrade levels');
+  }
+
+  /// Load upgrade levels
+  Map<String, int> loadUpgradeLevels() {
+    if (!isReady) return {};
+    final jsonStr = _prefs!.getString(_keyUpgradeLevels);
+    if (jsonStr == null) return {};
+
+    try {
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      return map.map((key, value) => MapEntry(key, value as int));
+    } catch (e) {
+      _log('[StorageService] Failed to parse upgrade levels: $e');
+      return {};
     }
   }
 
@@ -189,7 +280,7 @@ class StorageService {
     };
 
     await _prefs!.setString(_keyStats, jsonEncode(data));
-    debugPrint('[StorageService] Saved stats');
+    _log('[StorageService] Saved stats');
   }
 
   /// Load stats
@@ -202,7 +293,7 @@ class StorageService {
     try {
       return jsonDecode(jsonStr) as Map<String, dynamic>;
     } catch (e) {
-      debugPrint('[StorageService] Failed to parse stats: $e');
+      _log('[StorageService] Failed to parse stats: $e');
       return null;
     }
   }
@@ -212,7 +303,7 @@ class StorageService {
     if (!isReady) return;
 
     await _prefs!.clear();
-    debugPrint('[StorageService] Cleared all data');
+    _log('[StorageService] Cleared all data');
   }
 
   /// Clear only level progress (keep settings)
@@ -225,7 +316,7 @@ class StorageService {
         await _prefs!.remove(key);
       }
     }
-    debugPrint('[StorageService] Cleared progress data');
+    _log('[StorageService] Cleared progress data');
   }
 
   /// Export all data as JSON (for debugging/backup)
@@ -261,10 +352,10 @@ class StorageService {
         }
       }
 
-      debugPrint('[StorageService] Imported data successfully');
+      _log('[StorageService] Imported data successfully');
       return true;
     } catch (e) {
-      debugPrint('[StorageService] Failed to import data: $e');
+      _log('[StorageService] Failed to import data: $e');
       return false;
     }
   }

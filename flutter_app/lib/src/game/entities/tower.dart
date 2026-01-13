@@ -5,7 +5,9 @@ import 'package:flame/components.dart';
 import 'package:flutter/painting.dart' show RadialGradient;
 
 import 'enemy.dart';
+import '../managers/enemy_manager.dart';
 import '../../ui/theme/neon_theme.dart';
+import '../../models/upgrade_data.dart';
 
 /// Targeting modes for towers
 enum TargetMode { first, last, strongest, weakest, closest }
@@ -94,15 +96,27 @@ typedef TowerFireCallback = void Function(
     Tower tower, Enemy target, Vector2 targetPos);
 
 class Tower extends PositionComponent {
+  static bool lowFx = false;
+
   Tower({
     required Vector2 position,
     required double size,
     this.type = TowerType.pulseArcher,
     this.targetMode = TargetMode.first,
     this.onFire,
+    double damageMultiplier = 1.0,
+    double rangeMultiplier = 1.0,
+    double fireRateMultiplier = 1.0,
+    double projectileSpeedMultiplier = 1.0,
+    double slowMultiplier = 1.0,
   }) : _fireCooldown = 0,
        _animationPhase = math.Random().nextDouble() * math.pi * 2,
-       _random = math.Random() {
+       _random = math.Random(),
+       _damageMultiplier = damageMultiplier,
+       _rangeMultiplier = rangeMultiplier,
+       _fireRateMultiplier = fireRateMultiplier,
+       _projectileSpeedMultiplier = projectileSpeedMultiplier,
+       _slowMultiplier = slowMultiplier {
     anchor = Anchor.topLeft;
     this.position = position;
     this.size = Vector2.all(size);
@@ -113,8 +127,15 @@ class Tower extends PositionComponent {
   TargetMode targetMode;
   TowerFireCallback? onFire;
   final math.Random _random;
+  double _damageMultiplier;
+  double _rangeMultiplier;
+  double _fireRateMultiplier;
+  double _projectileSpeedMultiplier;
+  double _slowMultiplier;
 
   Enemy? _currentTarget;
+  Enemy? _manualTarget;
+  bool _manualTargeting = false;
   double _fireCooldown;
   double _animationPhase;
   double _pulseAnimation = 0;
@@ -122,6 +143,7 @@ class Tower extends PositionComponent {
   double _chargeLevel = 0;
   bool _isFiring = false;
   double _fireFlashTimer = 0;
+  final List<Enemy> _candidateEnemies = [];
 
   // Idle animation particles (orbiting energy)
   final List<_TowerParticle> _orbitParticles = [];
@@ -163,14 +185,41 @@ class Tower extends PositionComponent {
   Vector2 get centerPosition => position + size / 2;
 
   /// Get tower stats from type
-  double get damage => type.damage;
-  double get fireRate => type.fireRate;
-  double get range => type.range;
+  double get damage => type.damage * _damageMultiplier;
+  double get fireRate => type.fireRate * _fireRateMultiplier;
+  double get range => type.range * _rangeMultiplier;
   Color get color => type.color;
+  double get projectileSpeed => type.projectileSpeed * _projectileSpeedMultiplier;
+  double get slowAmount => type.slowAmount * _slowMultiplier;
+  double get slowDuration => type.slowDuration;
 
-  /// Update targeting and shooting
-  void updateTargeting(List<Enemy> enemies, double dt) {
-    // Reduce cooldown
+  void applyUpgradeStats(UpgradeStats stats) {
+    _damageMultiplier = stats.towerDamageMult;
+    _rangeMultiplier = stats.towerRangeMult;
+    _fireRateMultiplier = stats.towerFireRateMult;
+    _projectileSpeedMultiplier = stats.projectileSpeedMult;
+    _slowMultiplier = stats.slowMult;
+  }
+
+  bool get manualTargeting => _manualTargeting;
+
+  Enemy? get manualTarget => _manualTarget;
+
+  void setManualMode(bool enabled) {
+    _manualTargeting = enabled;
+    if (!enabled) {
+      _manualTarget = null;
+    }
+  }
+
+  void setManualTarget(Enemy? target) {
+    _manualTarget = target;
+  }
+
+  @override
+  void update(double dt) {
+    super.update(dt);
+
     _fireCooldown -= dt;
 
     // Animation updates
@@ -205,16 +254,35 @@ class Tower extends PositionComponent {
       _chargeLevel = (_chargeLevel + dt * 3).clamp(0, 1);
     }
 
-    // Find target
-    _currentTarget = _findTarget(enemies);
-
     // Rotate towards target
     if (_currentTarget != null) {
-      final direction = _currentTarget!.position - centerPosition;
-      final targetAngle = math.atan2(direction.y, direction.x);
-      // Smooth rotation
-      final angleDiff = _normalizeAngle(targetAngle - _rotationAngle);
-      _rotationAngle += angleDiff * dt * 8;
+      if (!_isTargetValid(_currentTarget!)) {
+        _currentTarget = null;
+      } else {
+        final direction = _currentTarget!.position - centerPosition;
+        final targetAngle = math.atan2(direction.y, direction.x);
+        // Smooth rotation
+        final angleDiff = _normalizeAngle(targetAngle - _rotationAngle);
+        _rotationAngle += angleDiff * dt * 8;
+      }
+    }
+  }
+
+  /// Update targeting and shooting
+  void updateTargeting(EnemyManager enemyManager) {
+    final center = centerPosition;
+    _currentTarget = null;
+    if (_manualTargeting && _manualTarget != null) {
+      if (_isTargetValid(_manualTarget!)) {
+        _currentTarget = _manualTarget;
+      } else {
+        _manualTarget = null;
+      }
+    }
+
+    if (_currentTarget == null) {
+      enemyManager.queryEnemiesInRange(center, range, _candidateEnemies);
+      _currentTarget = _findTarget(_candidateEnemies, center);
     }
 
     // Fire if ready and has target
@@ -262,51 +330,88 @@ class Tower extends PositionComponent {
     return angle;
   }
 
-  Enemy? _findTarget(List<Enemy> enemies) {
-    // Filter enemies in range
-    final inRange = enemies.where((e) {
-      final dist = (e.position - centerPosition).length;
-      if (dist > range || !e.isAlive) return false;
-
-      // Check phantom visibility - can only target if:
-      // 1. Not a phantom
-      // 2. Is a phantom but is revealed
-      // 3. This tower can detect phantoms (will reveal them)
-      if (e.isPhantom && !e.isVisible && !type.canDetectPhantom) {
+  bool _canTarget(Enemy enemy) {
+    if (!enemy.isAlive) return false;
+    if (enemy.isPhantom) {
+      if (type.canDetectPhantom) {
+        enemy.reveal();
+      } else if (!enemy.isVisible) {
         return false;
       }
-
-      return true;
-    }).toList();
-
-    if (inRange.isEmpty) return null;
-
-    // If this tower can detect phantoms, reveal any in range
-    if (type.canDetectPhantom) {
-      for (final enemy in inRange) {
-        if (enemy.isPhantom) {
-          enemy.reveal();
-        }
-      }
     }
+    return true;
+  }
 
+  bool _isTargetValid(Enemy enemy) {
+    if (!_canTarget(enemy)) return false;
+    final center = centerPosition;
+    final dx = enemy.position.x - center.x;
+    final dy = enemy.position.y - center.y;
+    return (dx * dx + dy * dy) <= range * range;
+  }
+
+  Enemy? _findTarget(List<Enemy> enemies, Vector2 center) {
+    if (enemies.isEmpty) return null;
+
+    Enemy? selected;
     switch (targetMode) {
       case TargetMode.first:
-        // Enemy closest to end of path (highest progress)
-        return inRange.first; // Assumes enemies are ordered by spawn time
+        var bestIndex = 1 << 30;
+        for (final enemy in enemies) {
+          if (!_canTarget(enemy)) continue;
+          if (enemy.spawnIndex < bestIndex) {
+            bestIndex = enemy.spawnIndex;
+            selected = enemy;
+          }
+        }
+        break;
       case TargetMode.last:
-        return inRange.last;
+        var bestIndex = -1;
+        for (final enemy in enemies) {
+          if (!_canTarget(enemy)) continue;
+          if (enemy.spawnIndex > bestIndex) {
+            bestIndex = enemy.spawnIndex;
+            selected = enemy;
+          }
+        }
+        break;
       case TargetMode.strongest:
-        return inRange.reduce((a, b) => a.health > b.health ? a : b);
+        var bestHealth = -1.0;
+        for (final enemy in enemies) {
+          if (!_canTarget(enemy)) continue;
+          if (enemy.health > bestHealth) {
+            bestHealth = enemy.health;
+            selected = enemy;
+          }
+        }
+        break;
       case TargetMode.weakest:
-        return inRange.reduce((a, b) => a.health < b.health ? a : b);
+        var bestHealth = double.infinity;
+        for (final enemy in enemies) {
+          if (!_canTarget(enemy)) continue;
+          if (enemy.health < bestHealth) {
+            bestHealth = enemy.health;
+            selected = enemy;
+          }
+        }
+        break;
       case TargetMode.closest:
-        return inRange.reduce((a, b) {
-          final distA = (a.position - centerPosition).length;
-          final distB = (b.position - centerPosition).length;
-          return distA < distB ? a : b;
-        });
+        var bestDistSq = double.infinity;
+        final centerX = center.x;
+        final centerY = center.y;
+        for (final enemy in enemies) {
+          if (!_canTarget(enemy)) continue;
+          final dx = enemy.position.x - centerX;
+          final dy = enemy.position.y - centerY;
+          final distSq = (dx * dx) + (dy * dy);
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            selected = enemy;
+          }
+        }
+        break;
     }
+    return selected;
   }
 
   void _fire(Enemy target) {
@@ -318,7 +423,7 @@ class Tower extends PositionComponent {
   Vector2 _calculateLeadPosition(Enemy target) {
     // Simple leading: predict where enemy will be
     final distance = (target.position - centerPosition).length;
-    final flightTime = distance / type.projectileSpeed;
+    final flightTime = distance / projectileSpeed;
     final direction = target.position - centerPosition;
     if (direction.length > 0) {
       direction.normalize();
@@ -331,19 +436,26 @@ class Tower extends PositionComponent {
   void render(Canvas canvas) {
     super.render(canvas);
 
+    final reduceFx = Tower.lowFx;
     final center = Offset(size.x / 2, size.y / 2);
 
     // Type-specific idle effects
-    _renderIdleEffects(canvas, center);
+    if (!reduceFx) {
+      _renderIdleEffects(canvas, center);
+    }
 
     // Outer glow ring (pulsing) - color varies by type
-    final outerGlowPaint = Paint()
-      ..color = color.withOpacity(0.15 + _pulseAnimation * 0.1)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawCircle(center, size.x * 0.7, outerGlowPaint);
+    if (!reduceFx) {
+      final outerGlowPaint = Paint()
+        ..color = color.withOpacity(0.15 + _pulseAnimation * 0.1)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      canvas.drawCircle(center, size.x * 0.7, outerGlowPaint);
+    }
 
     // Orbiting energy particles
-    _renderOrbitParticles(canvas, center);
+    if (!reduceFx) {
+      _renderOrbitParticles(canvas, center);
+    }
 
     // Base hexagon shape with gradient
     final hexPath = NeonEffects.createHexagonPath(center, size.x * 0.45);
@@ -359,12 +471,14 @@ class Tower extends PositionComponent {
     canvas.drawPath(hexPath, basePaint);
 
     // Hexagon border with glow
-    final borderGlow = Paint()
-      ..color = color.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawPath(hexPath, borderGlow);
+    if (!reduceFx) {
+      final borderGlow = Paint()
+        ..color = color.withOpacity(0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      canvas.drawPath(hexPath, borderGlow);
+    }
 
     final borderPaint = Paint()
       ..color = color.withOpacity(0.6 + _pulseAnimation * 0.4)
@@ -396,7 +510,7 @@ class Tower extends PositionComponent {
     }
 
     // Muzzle flash and particles
-    if (_isFiring) {
+    if (!reduceFx && _isFiring) {
       _renderMuzzleFlash(canvas, center);
     }
 
@@ -655,13 +769,15 @@ class Tower extends PositionComponent {
     final coreSize = size.x * 0.2 + (_chargeLevel * size.x * 0.05);
 
     // Outer glow
-    canvas.drawCircle(
-      Offset.zero,
-      coreSize * 1.5,
-      Paint()
-        ..color = color.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-    );
+    if (!Tower.lowFx) {
+      canvas.drawCircle(
+        Offset.zero,
+        coreSize * 1.5,
+        Paint()
+          ..color = color.withOpacity(0.3)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
 
     // Core gradient
     final coreGradient = RadialGradient(
@@ -755,17 +871,19 @@ class Tower extends PositionComponent {
       final arcAlpha = _chargeLevel * (0.8 - i * 0.3);
 
       // Glow
-      canvas.drawArc(
-        Rect.fromCircle(center: center, radius: arcRadius),
-        -math.pi / 2,
-        math.pi * 2 * _chargeLevel,
-        false,
-        Paint()
-          ..color = color.withOpacity(arcAlpha * 0.4)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-      );
+      if (!Tower.lowFx) {
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: arcRadius),
+          -math.pi / 2,
+          math.pi * 2 * _chargeLevel,
+          false,
+          Paint()
+            ..color = color.withOpacity(arcAlpha * 0.4)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 4
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        );
+      }
 
       // Core
       canvas.drawArc(
@@ -782,13 +900,15 @@ class Tower extends PositionComponent {
 
     // Charge complete indicator
     if (_chargeLevel >= 0.95) {
-      canvas.drawCircle(
-        center,
-        size.x * 0.42,
-        Paint()
-          ..color = color.withOpacity(0.3 + math.sin(_animationPhase * 10) * 0.2)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
+      if (!Tower.lowFx) {
+        canvas.drawCircle(
+          center,
+          size.x * 0.42,
+          Paint()
+            ..color = color.withOpacity(0.3 + math.sin(_animationPhase * 10) * 0.2)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        );
+      }
     }
   }
 

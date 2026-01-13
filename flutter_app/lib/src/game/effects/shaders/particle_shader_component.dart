@@ -14,6 +14,7 @@ class ParticleShaderComponent extends PositionComponent with HasGameRef<BoredGam
 
   ui.FragmentProgram? _program;
   double _time = 0;
+  bool enabled = true;
 
   @override
   Future<void> onLoad() async {
@@ -44,19 +45,28 @@ class ParticleShaderComponent extends PositionComponent with HasGameRef<BoredGam
   @override
   void render(ui.Canvas canvas) {
     super.render(canvas);
+    if (!enabled) return;
     if (_program == null) return;
-    final rect = ui.Rect.fromLTWH(0, 0, size.x, size.y);
+    final scale = gameRef.shaderScale;
+    final renderWidth = size.x * scale;
+    final renderHeight = size.y * scale;
+    final rect = ui.Rect.fromLTWH(0, 0, renderWidth, renderHeight);
     final shader = _program!.fragmentShader();
     final uniforms = Float32List.fromList([
-      size.x,
-      size.y,
+      renderWidth,
+      renderHeight,
       _time,
     ]);
     for (var i = 0; i < uniforms.length; i++) {
       shader.setFloat(i, uniforms[i]);
     }
     final paint = ui.Paint()..shader = shader;
+    canvas.save();
+    if (scale != 1.0) {
+      canvas.scale(1 / scale);
+    }
     canvas.drawRect(rect, paint);
+    canvas.restore();
     shader.dispose();
   }
 }

@@ -30,7 +30,20 @@ enum EnemyType {
 }
 
 class Enemy extends PositionComponent {
+  static const String _appEnv =
+      String.fromEnvironment('APP_ENV', defaultValue: 'prod');
+  static const bool disablePhantomStealth =
+      bool.fromEnvironment('DISABLE_PHANTOM_STEALTH', defaultValue: false) ||
+      _appEnv == 'dev';
   static bool lowFx = false;
+  static bool forceLowFx = false;
+  static bool allowBlur = true;
+  static bool throttleOffscreen = false;
+  static Vector2 screenOffset = Vector2.zero();
+  static Vector2 screenSize = Vector2.zero();
+  static double screenScale = 1.0;
+  static const double offscreenPadding = 60.0;
+  static const double offscreenUpdateInterval = 0.12;
 
   Enemy({
     required this.path,
@@ -38,6 +51,7 @@ class Enemy extends PositionComponent {
     double maxHealth = 100,
     this.goldReward = 10,
     this.type = EnemyType.runner,
+    this.spawnIndex = 0,
     Vector2? startPosition,
     this.onDeath,
     this.onReachBase,
@@ -63,6 +77,7 @@ class Enemy extends PositionComponent {
   final double _baseMaxHealth;
   final int goldReward;
   final EnemyType type;
+  final int spawnIndex;
 
   int _currentTargetIndex;
   late double _health;
@@ -93,6 +108,7 @@ class Enemy extends PositionComponent {
   double _verticalBob = 0;
   Vector2 _lastPosition = Vector2.zero();
   double _speedIndicator = 0;
+  double _offscreenAccumulator = 0;
 
   // Damage particles
   final List<_DamageParticle> _damageParticles = [];
@@ -132,7 +148,7 @@ class Enemy extends PositionComponent {
   static const double _revealDuration = 3.0; // Stays visible for 3 seconds after detection
 
   /// Whether the phantom is currently visible
-  bool get isVisible => !isPhantom || _isRevealed;
+  bool get isVisible => !isPhantom || _isRevealed || disablePhantomStealth;
 
   /// Reveal the phantom temporarily
   void reveal() {
@@ -170,6 +186,7 @@ class Enemy extends PositionComponent {
   }
 
   void _spawnDamageParticles() {
+    if (Enemy.lowFx || Enemy.forceLowFx) return;
     final random = math.Random();
     final particleCount = 4 + random.nextInt(4);
 
@@ -193,24 +210,30 @@ class Enemy extends PositionComponent {
   void render(Canvas canvas) {
     super.render(canvas);
 
-    final reduceFx = Enemy.lowFx;
+    final reduceFx = Enemy.lowFx || Enemy.forceLowFx;
+    final allowBlur = Enemy.allowBlur;
 
     // Calculate opacity for phantom (invisible when not revealed)
     double phantomOpacity = 1.0;
-    if (isPhantom && !_isRevealed) {
-      // Barely visible shimmer effect when invisible
-      phantomOpacity = 0.08 + math.sin(_animationPhase * 4) * 0.04;
-    } else if (isPhantom && _isRevealed) {
-      // Fade out as reveal timer expires
-      phantomOpacity = (_revealTimer / _revealDuration).clamp(0.4, 1.0);
+    if (isPhantom && !disablePhantomStealth) {
+      if (!_isRevealed) {
+        // Barely visible shimmer effect when invisible
+        phantomOpacity = 0.08 + math.sin(_animationPhase * 4) * 0.04;
+      } else {
+        // Fade out as reveal timer expires
+        phantomOpacity = (_revealTimer / _revealDuration).clamp(0.4, 1.0);
+      }
+    } else if (isPhantom && disablePhantomStealth) {
+      // Keep phantoms visible in dev/testing builds.
+      phantomOpacity = 0.6 + math.sin(_animationPhase * 3) * 0.08;
     }
 
     if (!reduceFx) {
       // Render trail first (behind enemy)
-      _renderTrail(canvas, phantomOpacity);
+      _renderTrail(canvas, phantomOpacity, allowBlur);
 
       // Render damage particles
-      _renderDamageParticles(canvas);
+      _renderDamageParticles(canvas, allowBlur);
     }
 
     // Apply walking bob transformation
@@ -223,20 +246,20 @@ class Enemy extends PositionComponent {
 
     // Speed-based motion blur when moving fast
     if (!reduceFx && _speedIndicator > 0.3) {
-      _renderMotionBlur(canvas, radius, phantomOpacity);
+      _renderMotionBlur(canvas, radius, phantomOpacity, allowBlur);
     }
 
     // Outer glow (pulsing intensity based on walk phase)
     final glowPulse = 0.2 + math.sin(_walkPhase) * 0.05;
     final outerGlowPaint = Paint()
       ..color = type.color.withOpacity(glowPulse * phantomOpacity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+      ..maskFilter = _blur(allowBlur, 12);
     canvas.drawCircle(Offset.zero, radius * 1.3, outerGlowPaint);
 
     // Main body glow
     final bodyGlowPaint = Paint()
       ..color = type.color.withOpacity(0.5 * phantomOpacity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+      ..maskFilter = _blur(allowBlur, 5);
     canvas.drawCircle(Offset.zero, radius, bodyGlowPaint);
 
     // Enemy body - solid core
@@ -254,31 +277,31 @@ class Enemy extends PositionComponent {
 
     if (!reduceFx) {
       // Walking legs/tentacles effect (type-specific)
-      _renderWalkingEffect(canvas, radius, phantomOpacity);
+      _renderWalkingEffect(canvas, radius, phantomOpacity, allowBlur);
 
       // Type-specific effects
-      _renderTypeEffects(canvas, radius, phantomOpacity);
+      _renderTypeEffects(canvas, radius, phantomOpacity, allowBlur);
     }
 
     canvas.restore();
 
     // Hit flash overlay (outside canvas transform)
     if (!reduceFx && _hitFlashTimer > 0) {
-      _renderHitFlash(canvas, radius, phantomOpacity);
+      _renderHitFlash(canvas, radius, phantomOpacity, allowBlur);
     }
 
     // Slow indicator (ice crystal effect)
     if (!reduceFx && isSlowed) {
-      _renderSlowEffect(canvas, radius);
+      _renderSlowEffect(canvas, radius, allowBlur);
     }
 
-    // Health bar (only show if damaged and visible)
-    if (healthPercent < 1.0 && phantomOpacity > 0.3) {
-      _renderHealthBar(canvas);
+    // Health bar (always show while visible enough)
+    if (phantomOpacity > 0.2) {
+      _renderHealthBar(canvas, visibility: phantomOpacity);
     }
   }
 
-  void _renderMotionBlur(Canvas canvas, double radius, double opacity) {
+  void _renderMotionBlur(Canvas canvas, double radius, double opacity, bool allowBlur) {
     // Create motion blur effect based on movement direction
     final direction = position - _lastPosition;
     if (direction.length < 0.5) return;
@@ -294,12 +317,12 @@ class Enemy extends PositionComponent {
         radius * 0.8,
         Paint()
           ..color = type.color.withOpacity(blurAlpha)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 + i * 2.0),
+          ..maskFilter = _blur(allowBlur, 4.0 + i * 2.0),
       );
     }
   }
 
-  void _renderWalkingEffect(Canvas canvas, double radius, double opacity) {
+  void _renderWalkingEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
     switch (type) {
       case EnemyType.runner:
         // Fast running legs
@@ -318,7 +341,7 @@ class Enemy extends PositionComponent {
               ..color = type.color.withOpacity(0.6 * opacity)
               ..strokeWidth = 2
               ..strokeCap = StrokeCap.round
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+              ..maskFilter = _blur(allowBlur, 2),
           );
         }
         break;
@@ -339,7 +362,7 @@ class Enemy extends PositionComponent {
               ..color = Colors.white.withOpacity(0.4 * opacity)
               ..strokeWidth = 1.5
               ..strokeCap = StrokeCap.round
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+              ..maskFilter = _blur(allowBlur, 3),
           );
         }
         break;
@@ -359,10 +382,10 @@ class Enemy extends PositionComponent {
             canvas.drawCircle(
               Offset(footX, footY + 2),
               4,
-              Paint()
-                ..color = type.color.withOpacity(0.3 * opacity)
-                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-            );
+            Paint()
+              ..color = type.color.withOpacity(0.3 * opacity)
+              ..maskFilter = _blur(allowBlur, 6),
+          );
           }
 
           canvas.drawCircle(
@@ -393,9 +416,9 @@ class Enemy extends PositionComponent {
               Offset(wispX - math.cos(wispAngle) * trailOffset,
                      wispY - math.sin(wispAngle) * trailOffset),
               2 - j * 0.5,
-              Paint()
-                ..color = type.color.withOpacity(trailAlpha)
-                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+            Paint()
+              ..color = type.color.withOpacity(trailAlpha)
+              ..maskFilter = _blur(allowBlur, 2),
             );
           }
         }
@@ -403,7 +426,7 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderHitFlash(Canvas canvas, double radius, double opacity) {
+  void _renderHitFlash(Canvas canvas, double radius, double opacity, bool allowBlur) {
     final flashProgress = _hitFlashTimer / _hitFlashDuration;
 
     // Flash overlay
@@ -412,7 +435,7 @@ class Enemy extends PositionComponent {
       radius * 1.15,
       Paint()
         ..color = Colors.white.withOpacity(flashProgress * 0.35 * opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..maskFilter = _blur(allowBlur, 3),
     );
 
     // Expanding ring
@@ -424,7 +447,7 @@ class Enemy extends PositionComponent {
         ..color = const Color(0xFFFF0066).withOpacity(flashProgress * 0.35 * opacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        ..maskFilter = _blur(allowBlur, 2),
     );
 
     // Directional damage sparks
@@ -439,12 +462,12 @@ class Enemy extends PositionComponent {
         1.5 * flashProgress,
         Paint()
           ..color = Colors.white.withOpacity(flashProgress * 0.5 * opacity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+          ..maskFilter = _blur(allowBlur, 2),
       );
     }
   }
 
-  void _renderDamageParticles(Canvas canvas) {
+  void _renderDamageParticles(Canvas canvas, bool allowBlur) {
     for (final particle in _damageParticles) {
       if (!particle.isActive) continue;
 
@@ -458,7 +481,7 @@ class Enemy extends PositionComponent {
         particle.size * 1.5,
         Paint()
           ..color = type.color.withOpacity(alpha * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+          ..maskFilter = _blur(allowBlur, 3),
       );
 
       canvas.drawCircle(
@@ -469,7 +492,7 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderTrail(Canvas canvas, [double opacity = 1.0]) {
+  void _renderTrail(Canvas canvas, double opacity, bool allowBlur) {
     for (int i = 0; i < _trailPositions.length; i++) {
       final t = i / _trailPositions.length;
       final alpha = (1 - t) * 0.4 * opacity;
@@ -480,7 +503,7 @@ class Enemy extends PositionComponent {
 
       final trailPaint = Paint()
         ..color = type.color.withOpacity(alpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+        ..maskFilter = _blur(allowBlur, 3);
 
       canvas.drawCircle(
         Offset(offset.x, offset.y),
@@ -490,14 +513,14 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderTypeEffects(Canvas canvas, double radius, [double opacity = 1.0]) {
+  void _renderTypeEffects(Canvas canvas, double radius, double opacity, bool allowBlur) {
     switch (type) {
       case EnemyType.runner:
         // Motion lines
         final motionPaint = Paint()
           ..color = type.color.withOpacity(0.4 * opacity)
           ..strokeWidth = 2
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+          ..maskFilter = _blur(allowBlur, 2);
         canvas.drawLine(
           Offset(-radius * 1.5, 0),
           Offset(-radius * 0.8, 0),
@@ -510,7 +533,7 @@ class Enemy extends PositionComponent {
         final coreRadius = radius * 0.4 * (1 + math.sin(_animationPhase * 3) * 0.3);
         final corePaint = Paint()
           ..color = Colors.white.withOpacity(0.8 * opacity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+          ..maskFilter = _blur(allowBlur, 4);
         canvas.drawCircle(Offset.zero, coreRadius, corePaint);
 
         // Energy sparks
@@ -519,7 +542,7 @@ class Enemy extends PositionComponent {
           final sparkDist = radius * 0.6;
           final sparkPaint = Paint()
             ..color = Colors.white.withOpacity(0.6 * opacity)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+            ..maskFilter = _blur(allowBlur, 2);
           canvas.drawCircle(
             Offset(math.cos(sparkAngle) * sparkDist, math.sin(sparkAngle) * sparkDist),
             2,
@@ -539,7 +562,7 @@ class Enemy extends PositionComponent {
         // Shield glow
         final shieldPaint = Paint()
           ..color = Colors.white.withOpacity(0.15 * opacity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+          ..maskFilter = _blur(allowBlur, 6);
         canvas.drawCircle(Offset.zero, radius * 1.1, shieldPaint);
         break;
 
@@ -570,7 +593,7 @@ class Enemy extends PositionComponent {
           if (math.sin(_animationPhase * 10 + i * 3) > 0) {
             final noisePaint = Paint()
               ..color = type.color.withOpacity(0.7 * opacity)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+              ..maskFilter = _blur(allowBlur, 2);
             canvas.drawRect(
               Rect.fromCenter(
                 center: Offset(
@@ -591,26 +614,26 @@ class Enemy extends PositionComponent {
           ..color = type.color.withOpacity(ringOpacity)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+          ..maskFilter = _blur(allowBlur, 4);
         canvas.drawCircle(Offset.zero, radius * 1.2, ringPaint);
 
         // Inner data core (when revealed)
         if (_isRevealed) {
           final corePaint = Paint()
             ..color = Colors.white.withOpacity(0.6 * opacity)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+            ..maskFilter = _blur(allowBlur, 3);
           canvas.drawCircle(Offset.zero, radius * 0.3, corePaint);
         }
         break;
     }
   }
 
-  void _renderSlowEffect(Canvas canvas, double radius) {
+  void _renderSlowEffect(Canvas canvas, double radius, bool allowBlur) {
     final slowPaint = Paint()
       ..color = const Color(0xFF00FFFF).withOpacity(0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      ..maskFilter = _blur(allowBlur, 3);
 
     // Rotating ice crystals
     for (int i = 0; i < 6; i++) {
@@ -625,14 +648,23 @@ class Enemy extends PositionComponent {
     // Cold aura
     final auraPaint = Paint()
       ..color = const Color(0xFF00FFFF).withOpacity(0.15)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      ..maskFilter = _blur(allowBlur, 8);
     canvas.drawCircle(Offset.zero, radius * 1.4, auraPaint);
   }
 
-  void _renderHealthBar(Canvas canvas) {
-    final barWidth = 32.0 * type.sizeMult;
-    const barHeight = 5.0;
-    final barY = -22.0 * type.sizeMult;
+  MaskFilter? _blur(bool allowBlur, double sigma) {
+    if (!allowBlur) return null;
+    return MaskFilter.blur(BlurStyle.normal, sigma);
+  }
+
+  void _renderHealthBar(Canvas canvas, {double visibility = 1.0}) {
+    final allowBlur = Enemy.allowBlur;
+    final barWidth = 34.0 * type.sizeMult;
+    const barHeight = 6.0;
+    final barY = -24.0 * type.sizeMult;
+    final visibilityClamp = visibility.clamp(0.4, 1.0);
+    final baseOpacity =
+        (healthPercent >= 1.0 ? 0.45 : 0.9) * visibilityClamp;
 
     // Background with glow
     final bgRect = Rect.fromCenter(
@@ -640,18 +672,26 @@ class Enemy extends PositionComponent {
       width: barWidth + 2,
       height: barHeight + 2,
     );
+    if (allowBlur) {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(bgRect.inflate(1.5), const Radius.circular(3)),
+        Paint()
+          ..color = Colors.black.withOpacity(0.35 * baseOpacity)
+          ..maskFilter = _blur(allowBlur, 6),
+      );
+    }
     canvas.drawRRect(
       RRect.fromRectAndRadius(bgRect, const Radius.circular(2)),
-      Paint()..color = const Color(0xFF000000).withOpacity(0.6),
+      Paint()..color = const Color(0xFF000000).withOpacity(0.65 * baseOpacity),
     );
 
     // Border
     canvas.drawRRect(
       RRect.fromRectAndRadius(bgRect, const Radius.circular(2)),
       Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(0.4)
+        ..color = const Color(0xFF00FFFF).withOpacity(0.6 * baseOpacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+        ..strokeWidth = 1.2,
     );
 
     // Health fill with gradient
@@ -666,8 +706,8 @@ class Enemy extends PositionComponent {
     // Gradient fill
     final gradient = LinearGradient(
       colors: [
-        healthColor,
-        healthColor.withOpacity(0.7),
+        healthColor.withOpacity(0.95 * baseOpacity),
+        healthColor.withOpacity(0.6 * baseOpacity),
       ],
     ).createShader(fillRect.outerRect);
 
@@ -677,8 +717,8 @@ class Enemy extends PositionComponent {
     canvas.drawRRect(
       fillRect,
       Paint()
-        ..color = healthColor.withOpacity(0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..color = healthColor.withOpacity(0.55 * baseOpacity)
+        ..maskFilter = _blur(allowBlur, 3),
     );
   }
 
@@ -692,13 +732,39 @@ class Enemy extends PositionComponent {
     }
   }
 
+  double _resolveUpdateStep(double dt) {
+    if (!Enemy.throttleOffscreen || Enemy.screenSize.isZero()) {
+      return dt;
+    }
+    final screenX = position.x * Enemy.screenScale + Enemy.screenOffset.x;
+    final screenY = position.y * Enemy.screenScale + Enemy.screenOffset.y;
+    final visible = screenX >= -offscreenPadding &&
+        screenX <= Enemy.screenSize.x + offscreenPadding &&
+        screenY >= -offscreenPadding &&
+        screenY <= Enemy.screenSize.y + offscreenPadding;
+    if (visible) {
+      _offscreenAccumulator = 0;
+      return dt;
+    }
+    _offscreenAccumulator += dt;
+    if (_offscreenAccumulator < offscreenUpdateInterval) {
+      return 0;
+    }
+    final step = _offscreenAccumulator;
+    _offscreenAccumulator = 0;
+    return step;
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
     if (!isAlive) return;
 
+    final stepDt = _resolveUpdateStep(dt);
+    if (stepDt <= 0) return;
+
     // Animation updates
-    _animationPhase += dt * 4;
+    _animationPhase += stepDt * 4;
 
     // Walk animation based on speed
     final walkSpeed = switch (type) {
@@ -707,10 +773,10 @@ class Enemy extends PositionComponent {
       EnemyType.juggernaut => 8.0,
       EnemyType.phantom => 12.0,
     };
-    _walkPhase += dt * walkSpeed;
+    _walkPhase += stepDt * walkSpeed;
 
     // Calculate speed indicator for motion effects
-    final currentSpeed = (position - _lastPosition).length / dt;
+    final currentSpeed = (position - _lastPosition).length / stepDt;
     _speedIndicator = (currentSpeed / (_baseSpeed * 2)).clamp(0.0, 1.0);
 
     // Walking bob effect - different per type
@@ -729,23 +795,32 @@ class Enemy extends PositionComponent {
 
     // Pulse scale decay
     if (_pulseScale > 1.0) {
-      _pulseScale = math.max(1.0, _pulseScale - dt * 2);
+      _pulseScale = math.max(1.0, _pulseScale - stepDt * 2);
     }
 
     // Hit flash decay
     if (_hitFlashTimer > 0) {
-      _hitFlashTimer -= dt;
+      _hitFlashTimer -= stepDt;
     }
 
     // Update damage particles
-    _damageParticles.removeWhere((p) => !p.isActive);
-    for (final particle in _damageParticles) {
-      particle.update(dt);
+    if (Enemy.lowFx || Enemy.forceLowFx) {
+      if (_damageParticles.isNotEmpty) {
+        _damageParticles.clear();
+      }
+    } else {
+      _damageParticles.removeWhere((p) => !p.isActive);
+      for (final particle in _damageParticles) {
+        particle.update(stepDt);
+      }
     }
 
     // Update trail
-    _trailUpdateTimer += dt;
-    if (_trailUpdateTimer >= _trailUpdateInterval) {
+    _trailUpdateTimer += stepDt;
+    final trailInterval = (Enemy.lowFx || Enemy.forceLowFx)
+        ? _trailUpdateInterval * 3
+        : _trailUpdateInterval;
+    if (_trailUpdateTimer >= trailInterval) {
       _trailUpdateTimer = 0;
       // Shift trail positions
       for (int i = _trailPositions.length - 1; i > 0; i--) {
@@ -756,7 +831,7 @@ class Enemy extends PositionComponent {
 
     // Update slow effect
     if (_slowDuration > 0) {
-      _slowDuration -= dt;
+      _slowDuration -= stepDt;
       if (_slowDuration <= 0) {
         _slowFactor = 1.0;
         _slowDuration = 0;
@@ -765,7 +840,7 @@ class Enemy extends PositionComponent {
 
     // Update phantom reveal timer
     if (isPhantom && _isRevealed && _revealTimer > 0) {
-      _revealTimer -= dt;
+      _revealTimer -= stepDt;
       if (_revealTimer <= 0) {
         _isRevealed = false;
         _revealTimer = 0;
@@ -788,7 +863,7 @@ class Enemy extends PositionComponent {
       return;
     }
 
-    final step = direction.normalized() * speed * dt;
+    final step = direction.normalized() * speed * stepDt;
     if (step.length >= distance) {
       position = target;
       _currentTargetIndex++;

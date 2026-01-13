@@ -5,8 +5,8 @@ import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/painting.dart' show RadialGradient, LinearGradient, Alignment;
 
-/// Overlay component that adds ambient cyberpunk effects
-/// The actual tile rendering is done by GameWorld
+/// Overlay component that adds ambient cyberpunk effects.
+/// The actual tile rendering is done by GameWorld.
 class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   NeonGridComponent({
     required this.gridSize,
@@ -25,9 +25,6 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   double _time = 0;
   final math.Random _random = math.Random(42);
 
-  // Pre-computed random positions for floating particles
-  late List<_FloatingParticle> _floatingParticles;
-
   // Pulse waves triggered by game events
   final List<_PulseWave> _pulseWaves = [];
 
@@ -44,31 +41,27 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     anchor = Anchor.topLeft;
     position = Vector2.zero();
 
-    // Initialize floating particles
-    _floatingParticles = List.generate(40, (i) => _FloatingParticle(
-      x: _random.nextDouble(),
-      y: _random.nextDouble(),
-      speed: 0.02 + _random.nextDouble() * 0.03,
-      size: 1.0 + _random.nextDouble() * 2.5,
-      phase: _random.nextDouble() * math.pi * 2,
-      color: i % 3 == 0 ? const Color(0xFFFF0066) : glowColor,
-    ));
-
     // Initialize energy lines
-    _energyLines = List.generate(6, (i) => _EnergyLine(
-      startX: _random.nextDouble(),
-      startY: _random.nextDouble(),
-      endX: _random.nextDouble(),
-      endY: _random.nextDouble(),
-      speed: 0.3 + _random.nextDouble() * 0.4,
-      phase: _random.nextDouble() * math.pi * 2,
-    ));
+    _energyLines = reducedFx
+        ? []
+        : List.generate(6, (i) => _EnergyLine(
+              startX: _random.nextDouble(),
+              startY: _random.nextDouble(),
+              endX: _random.nextDouble(),
+              endY: _random.nextDouble(),
+              speed: 0.3 + _random.nextDouble() * 0.4,
+              phase: _random.nextDouble() * math.pi * 2,
+            ));
 
     // Initialize grid nodes at major intersections
     _initializeGridNodes();
   }
 
   void _initializeGridNodes() {
+    if (reducedFx) {
+      _gridNodes = [];
+      return;
+    }
     _gridNodes = [];
     final nodeSpacing = gridSize * 3;
     final cols = (size.x / nodeSpacing).ceil();
@@ -128,20 +121,19 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
     if (size.isZero()) return;
 
-    // Dark background base with subtle gradient
+    // Dark background base
     _drawBackground(canvas);
 
     // Perspective grid effect
     _drawPerspectiveGrid(canvas);
 
-    // Grid nodes (pulsing points at intersections)
-    _drawGridNodes(canvas);
+    if (!reducedFx) {
+      // Grid nodes (pulsing points at intersections)
+      _drawGridNodes(canvas);
 
-    // Energy lines connecting points
-    _drawEnergyLines(canvas);
-
-    // Ambient floating particles
-    _drawFloatingParticles(canvas);
+      // Energy lines connecting points
+      _drawEnergyLines(canvas);
+    }
 
     // Pulse waves
     _drawPulseWaves(canvas);
@@ -171,33 +163,8 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   }
 
   void _drawBackground(Canvas canvas) {
-    // Multi-layer gradient background
-    final bgPaint = Paint()..color = const Color(0xFF030308);
+    final bgPaint = Paint()..color = const Color(0xFF000000);
     canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), bgPaint);
-
-    // Subtle radial gradient in center
-    final centerGlow = Paint()
-      ..shader = RadialGradient(
-        center: Alignment.center,
-        radius: 0.8,
-        colors: [
-          const Color(0xFF0a0a18),
-          const Color(0xFF050508),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.x, size.y));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), centerGlow);
-
-    // Secondary accent glow (magenta)
-    final accentGlow = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.5, 0.8),
-        radius: 0.6,
-        colors: [
-          const Color(0x08FF0066),
-          const Color(0x00000000),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.x, size.y));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), accentGlow);
   }
 
   void _drawPerspectiveGrid(Canvas canvas) {
@@ -330,33 +297,6 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
         Offset(pulseX, pulseY),
         2,
         Paint()..color = glowColor.withOpacity(0.8),
-      );
-    }
-  }
-
-  void _drawFloatingParticles(Canvas canvas) {
-    for (final particle in _floatingParticles) {
-      final x = (particle.x * size.x + _time * particle.speed * 100) % size.x;
-      final y = (particle.y * size.y + math.sin(_time + particle.phase) * 30) % size.y;
-
-      final alpha = 0.2 + math.sin(_time * 2 + particle.phase) * 0.15;
-
-      // Outer glow
-      final glowPaint = Paint()
-        ..color = particle.color.withOpacity(alpha * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(Offset(x, y), particle.size + 2, glowPaint);
-
-      // Core
-      final particlePaint = Paint()
-        ..color = particle.color.withOpacity(alpha.clamp(0.0, 1.0));
-      canvas.drawCircle(Offset(x, y), particle.size, particlePaint);
-
-      // Bright center
-      canvas.drawCircle(
-        Offset(x, y),
-        particle.size * 0.4,
-        Paint()..color = const Color(0xFFFFFFFF).withOpacity(alpha * 0.6),
       );
     }
   }
@@ -661,24 +601,6 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), flashPaint);
     }
   }
-}
-
-class _FloatingParticle {
-  final double x;
-  final double y;
-  final double speed;
-  final double size;
-  final double phase;
-  final Color color;
-
-  _FloatingParticle({
-    required this.x,
-    required this.y,
-    required this.speed,
-    required this.size,
-    required this.phase,
-    required this.color,
-  });
 }
 
 class _PulseWave {

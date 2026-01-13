@@ -33,7 +33,9 @@ class ShaderManager {
       }
     } catch (error) {
       _failed.add(name);
-      debugPrint('[ShaderManager] Disabled shader "$name": $error');
+      if (kDebugMode) {
+        debugPrint('[ShaderManager] Disabled shader "$name": $error');
+      }
     }
   }
 

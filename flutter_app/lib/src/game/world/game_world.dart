@@ -14,6 +14,7 @@ class GameWorld extends Component {
 
   final double tileSize;
   final String mapFile;
+  static const int pathWidthTiles = 2;
 
   List<Vector2> waypoints = [];
   List<List<bool>> isBuildable = [];
@@ -22,6 +23,9 @@ class GameWorld extends Component {
   math.Point<int>? endCell;
   int mapWidth = 0;
   int mapHeight = 0;
+  bool reduceFx = false;
+  bool allowBlur = true;
+  late final _WorldRenderer _renderer;
 
   @override
   Future<void> onLoad() async {
@@ -29,7 +33,17 @@ class GameWorld extends Component {
     await _loadMap();
 
     // Add visual renderer after map is loaded
-    add(_WorldRenderer(world: this));
+    _renderer = _WorldRenderer(world: this);
+    add(_renderer);
+  }
+
+  void setQuality({required bool reduceFx, required bool allowBlur}) {
+    this.reduceFx = reduceFx;
+    this.allowBlur = allowBlur;
+  }
+
+  void invalidateCache() {
+    _renderer.invalidateCache();
   }
 
   Future<void> _loadMap() async {
@@ -93,6 +107,7 @@ class GameWorld extends Component {
   }
 
   void _markPathCells() {
+    if (waypoints.isEmpty) return;
     for (int i = 0; i < waypoints.length - 1; i++) {
       final start = waypoints[i];
       final end = waypoints[i + 1];
@@ -106,34 +121,42 @@ class GameWorld extends Component {
       // Simple line marking
       final dx = (endX - startX).sign;
       final dy = (endY - startY).sign;
+      final horizontal = (endX - startX).abs() >= (endY - startY).abs();
 
       var x = startX;
       var y = startY;
 
-      while (x != endX || y != endY) {
-        if (y >= 0 && y < mapHeight && x >= 0 && x < mapWidth) {
-          isBuildable[y][x] = false;
-          tileTypes[y][x] = 2;
+      while (true) {
+        _markPathCell(x, y, horizontal: horizontal);
 
-          // Mark adjacent cells too for wider path
-          for (int ox = -1; ox <= 1; ox++) {
-            for (int oy = -1; oy <= 1; oy++) {
-              final nx = x + ox;
-              final ny = y + oy;
-              if (ny >= 0 && ny < mapHeight && nx >= 0 && nx < mapWidth) {
-                if (tileTypes[ny][nx] == 0) {
-                  isBuildable[ny][nx] = false;
-                  tileTypes[ny][nx] = 2;
-                }
-              }
-            }
-          }
+        if (x == endX && y == endY) {
+          break;
         }
 
         if (x != endX) x += dx;
         if (y != endY) y += dy;
       }
     }
+  }
+
+  void _markPathCell(int x, int y, {required bool horizontal}) {
+    final halfWidth = pathWidthTiles ~/ 2;
+    final extra = pathWidthTiles % 2;
+    if (horizontal) {
+      for (int oy = -halfWidth; oy < halfWidth + extra; oy++) {
+        _setPathCell(x, y + oy);
+      }
+    } else {
+      for (int ox = -halfWidth; ox < halfWidth + extra; ox++) {
+        _setPathCell(x + ox, y);
+      }
+    }
+  }
+
+  void _setPathCell(int x, int y) {
+    if (y < 0 || y >= mapHeight || x < 0 || x >= mapWidth) return;
+    isBuildable[y][x] = false;
+    tileTypes[y][x] = 2;
   }
 
   void _ensureStartingBuildZone() {
@@ -154,7 +177,9 @@ class GameWorld extends Component {
       }
     }
 
-    debugPrint('[GameWorld] Ensured starting build zone around $startCell ($safeCells)');
+    if (kDebugMode) {
+      debugPrint('[GameWorld] Ensured starting build zone around $startCell ($safeCells)');
+    }
   }
 }
 
@@ -165,11 +190,16 @@ class _WorldRenderer extends PositionComponent {
   double _time = 0;
   ui.Picture? _staticTiles;
   bool _cacheReady = false;
+  Path? _pathOverlay;
+  double _pathLength = 0;
+  final List<double> _segmentLengths = [];
+  int _cachedWaypointCount = -1;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
     _buildStaticCache();
+    _rebuildPathCache();
   }
 
   @override
@@ -201,6 +231,38 @@ class _WorldRenderer extends PositionComponent {
   void onRemove() {
     _staticTiles?.dispose();
     super.onRemove();
+  }
+
+  void invalidateCache() {
+    _cacheReady = false;
+    _staticTiles?.dispose();
+    _staticTiles = null;
+    _rebuildPathCache();
+  }
+
+  void _ensurePathCache() {
+    if (_cachedWaypointCount != world.waypoints.length) {
+      _rebuildPathCache();
+    }
+  }
+
+  void _rebuildPathCache() {
+    _cachedWaypointCount = world.waypoints.length;
+    _pathOverlay = null;
+    _pathLength = 0;
+    _segmentLengths.clear();
+
+    if (world.waypoints.length < 2) return;
+
+    final path = Path();
+    path.moveTo(world.waypoints.first.x, world.waypoints.first.y);
+    for (int i = 1; i < world.waypoints.length; i++) {
+      path.lineTo(world.waypoints[i].x, world.waypoints[i].y);
+      final segmentLength = (world.waypoints[i] - world.waypoints[i - 1]).length;
+      _segmentLengths.add(segmentLength);
+      _pathLength += segmentLength;
+    }
+    _pathOverlay = path;
   }
 
   void _buildStaticCache() {
@@ -806,13 +868,10 @@ class _WorldRenderer extends PositionComponent {
 
   void _drawPathOverlay(Canvas canvas) {
     if (world.waypoints.length < 2) return;
+    _ensurePathCache();
+    if (_pathOverlay == null) return;
 
-    // Multiple layered path effects for depth
-    final path = Path();
-    path.moveTo(world.waypoints.first.x, world.waypoints.first.y);
-    for (int i = 1; i < world.waypoints.length; i++) {
-      path.lineTo(world.waypoints[i].x, world.waypoints[i].y);
-    }
+    final path = _pathOverlay!;
 
     // Outer glow - wide and diffuse
     final outerGlow = Paint()
@@ -821,8 +880,10 @@ class _WorldRenderer extends PositionComponent {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawPath(path, outerGlow);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 10) : null;
+    if (!world.reduceFx) {
+      canvas.drawPath(path, outerGlow);
+    }
 
     // Middle glow
     final middleGlow = Paint()
@@ -831,7 +892,7 @@ class _WorldRenderer extends PositionComponent {
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
     canvas.drawPath(path, middleGlow);
 
     // Core line - bright
@@ -859,8 +920,10 @@ class _WorldRenderer extends PositionComponent {
         // Corner node - junction point
         final nodeGlow = Paint()
           ..color = const Color(0xFFFF0066).withOpacity(0.6)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-        canvas.drawCircle(Offset(pos.x, pos.y), 8, nodeGlow);
+          ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 6) : null;
+        if (!world.reduceFx) {
+          canvas.drawCircle(Offset(pos.x, pos.y), 8, nodeGlow);
+        }
 
         final nodeRing = Paint()
           ..color = const Color(0xFFFF4488).withOpacity(0.8)
@@ -875,34 +938,35 @@ class _WorldRenderer extends PositionComponent {
   }
 
   void _drawEnergyPulses(Canvas canvas) {
-    double totalLength = 0;
-    for (int i = 0; i < world.waypoints.length - 1; i++) {
-      totalLength += (world.waypoints[i + 1] - world.waypoints[i]).length;
-    }
-    if (totalLength == 0) return;
+    if (_pathLength <= 0) return;
 
     // Multiple energy pulses with trails
-    const pulseCount = 8;
+    final pulseCount = world.reduceFx ? 4 : 8;
+    final trailCount = world.reduceFx ? 3 : 5;
+    final pulseSpeed = world.reduceFx ? 55.0 : 80.0;
     for (int p = 0; p < pulseCount; p++) {
-      final baseProgress = ((_time * 80 + p * totalLength / pulseCount) % totalLength) / totalLength;
+      final baseProgress =
+          ((_time * pulseSpeed + p * _pathLength / pulseCount) % _pathLength) / _pathLength;
 
       // Draw pulse with trail
-      for (int t = 0; t < 5; t++) {
+      for (int t = 0; t < trailCount; t++) {
         final trailProgress = baseProgress - (t * 0.01);
         if (trailProgress < 0) continue;
 
         final pos = _getPositionOnPath(trailProgress);
         if (pos == null) continue;
 
-        final trailAlpha = 1.0 - (t / 5.0);
+        final trailAlpha = 1.0 - (t / trailCount);
         final trailSize = 4.0 - (t * 0.6);
 
         if (t == 0) {
           // Leading pulse - brightest
           final pulseGlow = Paint()
             ..color = const Color(0xFFFF0066).withOpacity(0.9)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-          canvas.drawCircle(Offset(pos.x, pos.y), 6, pulseGlow);
+            ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 8) : null;
+          if (!world.reduceFx) {
+            canvas.drawCircle(Offset(pos.x, pos.y), 6, pulseGlow);
+          }
 
           final pulseCore = Paint()..color = Colors.white;
           canvas.drawCircle(Offset(pos.x, pos.y), 3, pulseCore);
@@ -910,7 +974,7 @@ class _WorldRenderer extends PositionComponent {
           // Trail particles
           final trailPaint = Paint()
             ..color = const Color(0xFFFF4488).withOpacity(trailAlpha * 0.6)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+            ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
           canvas.drawCircle(Offset(pos.x, pos.y), trailSize, trailPaint);
         }
       }
@@ -918,24 +982,20 @@ class _WorldRenderer extends PositionComponent {
   }
 
   Vector2? _getPositionOnPath(double progress) {
-    double totalLength = 0;
-    for (int i = 0; i < world.waypoints.length - 1; i++) {
-      totalLength += (world.waypoints[i + 1] - world.waypoints[i]).length;
-    }
-
-    double targetDist = progress * totalLength;
+    if (_pathLength <= 0) return null;
+    double targetDist = progress * _pathLength;
     double accDist = 0;
 
-    for (int i = 0; i < world.waypoints.length - 1; i++) {
-      final segmentLength = (world.waypoints[i + 1] - world.waypoints[i]).length;
-
+    for (int i = 0; i < _segmentLengths.length; i++) {
+      final segmentLength = _segmentLengths[i];
       if (accDist + segmentLength >= targetDist) {
         final segmentProgress = (targetDist - accDist) / segmentLength;
-        return world.waypoints[i] + (world.waypoints[i + 1] - world.waypoints[i]) * segmentProgress;
+        return world.waypoints[i] +
+            (world.waypoints[i + 1] - world.waypoints[i]) * segmentProgress;
       }
       accDist += segmentLength;
     }
-    return null;
+    return world.waypoints.isNotEmpty ? world.waypoints.last : null;
   }
 
   void _drawStartEndMarkers(Canvas canvas) {
@@ -962,7 +1022,7 @@ class _WorldRenderer extends PositionComponent {
       ..color = const Color(0xFF00FF88).withOpacity(0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
 
     canvas.save();
     canvas.translate(cx, cy);
@@ -982,8 +1042,10 @@ class _WorldRenderer extends PositionComponent {
     // Inner portal glow
     final portalGlow = Paint()
       ..color = const Color(0xFF00FF88).withOpacity(0.5 + math.sin(_time * 4) * 0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
-    canvas.drawCircle(Offset(cx, cy), tileSize * 0.4, portalGlow);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 12) : null;
+    if (!world.reduceFx) {
+      canvas.drawCircle(Offset(cx, cy), tileSize * 0.4, portalGlow);
+    }
 
     // Portal core
     final portalCore = Paint()
@@ -1008,7 +1070,7 @@ class _WorldRenderer extends PositionComponent {
     // "SPAWN" label glow
     final labelPaint = Paint()
       ..color = const Color(0xFF00FF88).withOpacity(0.6)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
     canvas.drawRect(
       Rect.fromCenter(center: Offset(cx, cy - tileSize * 0.8), width: 40, height: 12),
       labelPaint,
@@ -1023,8 +1085,10 @@ class _WorldRenderer extends PositionComponent {
     final pulseRadius = tileSize * (0.7 + math.sin(_time * 3) * 0.1);
     final dangerZone = Paint()
       ..color = const Color(0xFFFF0066).withOpacity(0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-    canvas.drawCircle(Offset(cx, cy), pulseRadius, dangerZone);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 15) : null;
+    if (!world.reduceFx) {
+      canvas.drawCircle(Offset(cx, cy), pulseRadius, dangerZone);
+    }
 
     // Rotating warning triangles
     canvas.save();
@@ -1067,8 +1131,10 @@ class _WorldRenderer extends PositionComponent {
     // Core center - pulsing
     final coreGlow = Paint()
       ..color = const Color(0xFFFF0066).withOpacity(0.8)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawCircle(Offset(cx, cy), tileSize * 0.2, coreGlow);
+      ..maskFilter = world.allowBlur ? const MaskFilter.blur(BlurStyle.normal, 8) : null;
+    if (!world.reduceFx) {
+      canvas.drawCircle(Offset(cx, cy), tileSize * 0.2, coreGlow);
+    }
 
     final coreCenter = Paint()..color = const Color(0xFFFF4488);
     canvas.drawCircle(Offset(cx, cy), tileSize * 0.12, coreCenter);

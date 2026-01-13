@@ -19,4 +19,13 @@ void main() {
     expect(FlagPacker.unpack(packed, 31), isTrue);
     expect(FlagPacker.unpack(packed, 32), isFalse);
   });
+
+  test('createReader returns a reusable unpacker', () {
+    final flags = [true, false, true, false];
+    final packed = FlagPacker.pack(flags);
+    final reader = FlagPacker.createReader(packed);
+    expect(reader(0), isTrue);
+    expect(reader(1), isFalse);
+    expect(reader(2), isTrue);
+  });
 }

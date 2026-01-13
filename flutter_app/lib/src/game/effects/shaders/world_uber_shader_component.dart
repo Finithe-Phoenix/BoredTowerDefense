@@ -14,6 +14,7 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
 
   ui.FragmentProgram? _program;
   double _time = 0;
+  bool enabled = true;
 
   @override
   Future<void> onLoad() async {
@@ -44,21 +45,37 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
   @override
   void render(ui.Canvas canvas) {
     super.render(canvas);
-    final rect = ui.Rect.fromLTWH(0, 0, size.x, size.y);
+    if (!enabled) return;
+    final scale = gameRef.shaderScale;
+    final renderWidth = size.x * scale;
+    final renderHeight = size.y * scale;
+    final rect = ui.Rect.fromLTWH(0, 0, renderWidth, renderHeight);
     if (_program == null) {
+      canvas.save();
+      if (scale != 1.0) {
+        canvas.scale(1 / scale);
+      }
       canvas.drawRect(rect, ui.Paint()..color = const ui.Color(0xFF02030F));
+      canvas.restore();
       return;
     }
 
     final controller = gameRef.shaderUniformController;
     final texture = controller.entityTexture;
     if (texture == null) {
+      canvas.save();
+      if (scale != 1.0) {
+        canvas.scale(1 / scale);
+      }
       canvas.drawRect(rect, ui.Paint()..color = const ui.Color(0xFF02030F));
+      canvas.restore();
       return;
     }
 
     final shader = _program!.fragmentShader();
     final uniforms = _buildUniforms(
+      renderSize: Vector2(renderWidth, renderHeight),
+      scale: scale,
       towerCount: controller.towerCount,
       enemyCount: controller.enemyCount,
     );
@@ -68,19 +85,26 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
     shader.setImageSampler(0, texture);
 
     final paint = ui.Paint()..shader = shader;
+    canvas.save();
+    if (scale != 1.0) {
+      canvas.scale(1 / scale);
+    }
     canvas.drawRect(rect, paint);
+    canvas.restore();
     shader.dispose();
   }
 
   Float32List _buildUniforms({
+    required Vector2 renderSize,
+    required double scale,
     required int towerCount,
     required int enemyCount,
   }) {
-    final pointer = gameRef.lastPointer ?? Vector2.zero();
+    final pointer = (gameRef.lastPointer ?? Vector2.zero()) * scale;
     final waveIntensity = gameRef.enemyManager.waveIntensity;
     return Float32List.fromList([
-      size.x,
-      size.y,
+      renderSize.x,
+      renderSize.y,
       _time,
       pointer.x,
       pointer.y,

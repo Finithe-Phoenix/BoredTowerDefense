@@ -27,7 +27,9 @@ class AudioService {
   Future<void> initialize() async {
     if (_initialized) return;
     _initialized = true;
-    debugPrint('AudioService initialized (procedural synth mode)');
+    if (kDebugMode) {
+      debugPrint('AudioService initialized (procedural synth mode)');
+    }
   }
 
   /// Enable/disable all audio
@@ -248,6 +250,25 @@ class AudioService {
 
   /// Generate PCM waveform data
   /// This can be used with audioplayers or platform channels for actual playback
+  @visibleForTesting
+  Float32List generateWaveformForTesting({
+    required double frequency,
+    required double duration,
+    required WaveType type,
+    double frequencySlide = 0,
+    double volume = 0.8,
+  }) {
+    return _generateWaveform(
+      frequency: frequency,
+      duration: duration,
+      type: type,
+      frequencySlide: frequencySlide,
+      volume: volume,
+    );
+  }
+
+  /// Generate PCM waveform data
+  /// This can be used with audioplayers or platform channels for actual playback
   Float32List _generateWaveform({
     required double frequency,
     required double duration,
@@ -269,17 +290,16 @@ class AudioService {
       double sample;
       switch (type) {
         case WaveType.sine:
-          sample = math.sin(2 * math.pi * freq * t);
+          sample = _sineSample(freq, t);
           break;
         case WaveType.square:
           sample = math.sin(2 * math.pi * freq * t) > 0 ? 1.0 : -1.0;
           break;
         case WaveType.triangle:
-          final phase = (freq * t) % 1.0;
-          sample = 4.0 * (phase < 0.5 ? phase : 1.0 - phase) - 1.0;
+          sample = _triangleSample(freq, t);
           break;
         case WaveType.sawtooth:
-          sample = 2.0 * ((freq * t) % 1.0) - 1.0;
+          sample = _sawtoothSample(freq, t);
           break;
         case WaveType.noise:
           sample = _random.nextDouble() * 2.0 - 1.0;
@@ -297,6 +317,19 @@ class AudioService {
     }
 
     return data;
+  }
+
+  double _sineSample(double freq, double t) {
+    return math.sin(2 * math.pi * freq * t);
+  }
+
+  double _triangleSample(double freq, double t) {
+    final phase = (freq * t) % 1.0;
+    return 4.0 * (phase < 0.5 ? phase : 1.0 - phase) - 1.0;
+  }
+
+  double _sawtoothSample(double freq, double t) {
+    return 2.0 * ((freq * t) % 1.0) - 1.0;
   }
 
   /// Calculate ADSR-like envelope

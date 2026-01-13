@@ -27,12 +27,57 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   TextPainter? _selectionStatsPainter;
   TextPainter? _towerInfoNamePainter;
   TextPainter? _towerInfoStatsPainter;
+  int _selectionCacheKey = 0;
   int _lastGold = -1;
   int _lastLives = -1;
   int _lastScore = -1;
   int _lastWave = -1;
   int _lastEnemies = -1;
   int _lastTowers = -1;
+  Rect? _topPanelRect;
+  Shader? _topPanelShader;
+  Rect? _bottomPanelRect;
+  Shader? _bottomPanelShader;
+  Rect? _towerInfoRect;
+  TowerType? _towerInfoType;
+  Shader? _towerInfoShader;
+  final Map<int, _CardShaderCache> _resourceCardShaders = {};
+  Path? _hexagonPath;
+  double _hexagonRadius = 0;
+  final Paint _panelPaint = Paint();
+  final Paint _towerInfoPanelPaint = Paint();
+  final Paint _resourceCardPaint = Paint();
+  final Paint _resourceCardBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _towerInfoBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _resourceCardAccentPaint = Paint()
+    ..strokeWidth = 2;
+  final Paint _resourceCardDotGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  final Paint _resourceCardDotCorePaint = Paint();
+  final Paint _selectionGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  final Paint _selectionBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  final Paint _progressBarBackPaint = Paint()..color = const Color(0xFF0a0a18);
+  final Paint _progressBarBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _progressBarFillPaint = Paint();
+  final Paint _progressBarGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  final Paint _glowLineOuterPaint = Paint()
+    ..strokeWidth = 6
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  final Paint _glowLineCorePaint = Paint()
+    ..strokeWidth = 1;
+  final Paint _hexPatternPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
 
   // Layout constants
   static const double topBarHeight = 60.0;
@@ -50,6 +95,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    _invalidateLayoutCaches();
     _repositionButtons();
   }
 
@@ -144,6 +190,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     ]);
   }
 
+  void _invalidateLayoutCaches() {
+    _topPanelRect = null;
+    _topPanelShader = null;
+    _bottomPanelRect = null;
+    _bottomPanelShader = null;
+    _towerInfoRect = null;
+    _towerInfoShader = null;
+    _resourceCardShaders.clear();
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
@@ -200,20 +256,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       const Radius.circular(12),
     );
 
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = selected.color.withOpacity(0.08)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
+    _selectionGlowPaint.color = selected.color.withOpacity(0.08);
+    canvas.drawRRect(rrect, _selectionGlowPaint);
 
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = NeonColors.gridLine.withOpacity(0.4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
+    _selectionBorderPaint.color = NeonColors.gridLine.withOpacity(0.4);
+    canvas.drawRRect(rrect, _selectionBorderPaint);
 
     final labelPainter = _selectionNamePainter ??
         _buildPainter(
@@ -228,8 +275,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     labelPainter.paint(canvas, Offset(panelX + 12, panelY + 10));
 
+    final damage = gameRef.towerDamage(selected).round();
+    final range = gameRef.towerRange(selected).round();
+    final fireRate = gameRef.towerFireRate(selected);
     final statsText =
-        'DMG ${selected.damage.toInt()}    RNG ${selected.range.toInt()}    SPD ${selected.fireRate.toStringAsFixed(1)}';
+        'DMG $damage    RNG $range    SPD ${fireRate.toStringAsFixed(1)}';
     final statsPainter = _selectionStatsPainter ??
         _buildPainter(
           statsText,
@@ -248,19 +298,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final panelRect = Rect.fromLTWH(0, 0, screenWidth, topBarHeight);
 
     // Multi-layer background
-    final bgGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFF0a0a14),
-        const Color(0xFF080810),
-        const Color(0xFF060608).withOpacity(0.95),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.5, 0.85, 1.0],
-    ).createShader(panelRect);
-
-    canvas.drawRect(panelRect, Paint()..shader = bgGradient);
+    _panelPaint.shader = _getTopPanelShader(panelRect);
+    canvas.drawRect(panelRect, _panelPaint);
 
     if (!reduceFlicker) {
       // Horizontal scan line effect
@@ -290,6 +329,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Center title/logo area
     _drawCenterLogo(canvas, screenWidth);
 
+    // Progress bars
+    _drawProgressBars(canvas, screenWidth);
+
     // Wave alert (if active)
     _drawWaveAlert(canvas, screenWidth);
   }
@@ -311,51 +353,34 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     const cardHeight = 42.0;
     final cardRect = Rect.fromLTWH(x, y, cardWidth, cardHeight);
 
-    // Card background with subtle gradient
-    final cardGradient = LinearGradient(
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-      colors: [
-        color.withOpacity(0.08),
-        const Color(0xFF0a0a14).withOpacity(0.9),
-        color.withOpacity(0.05),
-      ],
-    ).createShader(cardRect);
-
     final rrect = RRect.fromRectAndRadius(cardRect, const Radius.circular(4));
-    canvas.drawRRect(rrect, Paint()..shader = cardGradient);
+    _resourceCardPaint.shader = _getResourceCardShader(cardRect, color);
+    canvas.drawRRect(rrect, _resourceCardPaint);
 
     // Animated border
     final borderAlpha = reduceFlicker
         ? 0.35
         : 0.3 + math.sin(_time * 2 + index * 0.5) * 0.1;
-    final borderPaint = Paint()
-      ..color = color.withOpacity(borderAlpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawRRect(rrect, borderPaint);
+    _resourceCardBorderPaint.color = color.withOpacity(borderAlpha);
+    canvas.drawRRect(rrect, _resourceCardBorderPaint);
 
     // Corner accents
-    final accentPaint = Paint()
-      ..color = color.withOpacity(0.7)
-      ..strokeWidth = 2;
+    _resourceCardAccentPaint.color = color.withOpacity(0.7);
 
     // Top-left corner
-    canvas.drawLine(Offset(x, y + 8), Offset(x, y), accentPaint);
-    canvas.drawLine(Offset(x, y), Offset(x + 8, y), accentPaint);
+    canvas.drawLine(Offset(x, y + 8), Offset(x, y), _resourceCardAccentPaint);
+    canvas.drawLine(Offset(x, y), Offset(x + 8, y), _resourceCardAccentPaint);
 
     // Bottom-right corner
-    canvas.drawLine(Offset(x + cardWidth - 8, y + cardHeight), Offset(x + cardWidth, y + cardHeight), accentPaint);
-    canvas.drawLine(Offset(x + cardWidth, y + cardHeight - 8), Offset(x + cardWidth, y + cardHeight), accentPaint);
+    canvas.drawLine(Offset(x + cardWidth - 8, y + cardHeight), Offset(x + cardWidth, y + cardHeight), _resourceCardAccentPaint);
+    canvas.drawLine(Offset(x + cardWidth, y + cardHeight - 8), Offset(x + cardWidth, y + cardHeight), _resourceCardAccentPaint);
 
     // Icon indicator (glowing dot)
-    final dotPaint = Paint()
-      ..color = color.withOpacity(0.8)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawCircle(Offset(x + 14, y + cardHeight / 2), 5, dotPaint);
+    _resourceCardDotGlowPaint.color = color.withOpacity(0.8);
+    canvas.drawCircle(Offset(x + 14, y + cardHeight / 2), 5, _resourceCardDotGlowPaint);
 
-    final dotCore = Paint()..color = color;
-    canvas.drawCircle(Offset(x + 14, y + cardHeight / 2), 3, dotCore);
+    _resourceCardDotCorePaint.color = color;
+    canvas.drawCircle(Offset(x + 14, y + cardHeight / 2), 3, _resourceCardDotCorePaint);
 
     // Label
     final labelPainter = _getPainter(
@@ -425,6 +450,135 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawPath(innerDiamond, Paint()..color = const Color(0xFF00FFFF).withOpacity(0.3));
   }
 
+  void _drawProgressBars(Canvas canvas, double screenWidth) {
+    final leftEdge = 340.0;
+    final rightEdge = screenWidth - 340.0;
+    final available = rightEdge - leftEdge;
+    if (available < 160) return;
+
+    final barWidth = math.min(260.0, available - 20);
+    final startX = (screenWidth - barWidth) / 2;
+    const barHeight = 8.0;
+    const spacing = 6.0;
+    const labelGap = 6.0;
+
+    final totalWaves = gameRef.totalWaves <= 0 ? 1 : gameRef.totalWaves;
+    final currentWave = gameRef.enemyManager.currentWave;
+    final waveProgress = gameRef.enemyManager.waveProgress.clamp(0.0, 1.0);
+    final waveActive = gameRef.enemyManager.spawning || gameRef.enemyManager.aliveCount > 0;
+    double levelProgress = 0.0;
+    if (currentWave > 0) {
+      final completed = waveActive ? (currentWave - 1 + waveProgress) : currentWave.toDouble();
+      levelProgress = (completed / totalWaves).clamp(0.0, 1.0);
+    }
+
+    final levelLabel = _getPainter(
+      'progress-level-label',
+      'LEVEL',
+      TextStyle(
+        color: Colors.white.withOpacity(0.6),
+        fontSize: 9,
+        fontFamily: 'monospace',
+        letterSpacing: 1.2,
+      ),
+    );
+    final levelValue = _getPainter(
+      'progress-level-value-$currentWave-$totalWaves',
+      '$currentWave/$totalWaves',
+      TextStyle(
+        color: const Color(0xFF00FFFF),
+        fontSize: 9,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
+      ),
+    );
+
+    final waveLabel = _getPainter(
+      'progress-wave-label',
+      'WAVE',
+      TextStyle(
+        color: Colors.white.withOpacity(0.6),
+        fontSize: 9,
+        fontFamily: 'monospace',
+        letterSpacing: 1.2,
+      ),
+    );
+    final wavePercent = (waveProgress * 100).round();
+    final waveValue = _getPainter(
+      'progress-wave-value-$wavePercent',
+      '$wavePercent%',
+      TextStyle(
+        color: const Color(0xFFFF00FF),
+        fontSize: 9,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
+      ),
+    );
+
+    final levelY = 10.0;
+    final waveY = levelY + barHeight + spacing + 12;
+
+    _drawProgressBar(
+      canvas,
+      x: startX,
+      y: levelY,
+      width: barWidth,
+      height: barHeight,
+      progress: levelProgress,
+      color: const Color(0xFF00FFFF),
+    );
+
+    _drawProgressBar(
+      canvas,
+      x: startX,
+      y: waveY,
+      width: barWidth,
+      height: barHeight,
+      progress: waveProgress,
+      color: const Color(0xFFFF00FF),
+    );
+
+    // Labels
+    levelLabel.paint(canvas, Offset(startX - levelLabel.width - labelGap, levelY - 3));
+    levelValue.paint(canvas, Offset(startX + barWidth + labelGap, levelY - 3));
+    waveLabel.paint(canvas, Offset(startX - waveLabel.width - labelGap, waveY - 3));
+    waveValue.paint(canvas, Offset(startX + barWidth + labelGap, waveY - 3));
+  }
+
+  void _drawProgressBar(
+    Canvas canvas, {
+    required double x,
+    required double y,
+    required double width,
+    required double height,
+    required double progress,
+    required Color color,
+  }) {
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, width, height),
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(rect, _progressBarBackPaint);
+
+    if (progress > 0) {
+      final fillWidth = (width - 2) * progress;
+      final fillRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x + 1, y + 1, fillWidth, height - 2),
+        const Radius.circular(3),
+      );
+      _progressBarGlowPaint.color = color.withOpacity(0.35);
+      canvas.drawRRect(fillRect, _progressBarGlowPaint);
+
+      _progressBarFillPaint.color = color.withOpacity(0.7);
+      canvas.drawRRect(fillRect, _progressBarFillPaint);
+    }
+
+    _progressBarBorderPaint.color = color.withOpacity(0.5);
+    canvas.drawRRect(rect, _progressBarBorderPaint);
+  }
+
   void _drawWaveAlert(Canvas canvas, double screenWidth) {
     final modifier = gameRef.enemyManager.waveDescription;
     if (modifier.isEmpty) return;
@@ -469,19 +623,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final panelRect = Rect.fromLTWH(0, screenHeight - bottomBarHeight, screenWidth, bottomBarHeight);
 
     // Multi-layer background
-    final bgGradient = LinearGradient(
-      begin: Alignment.bottomCenter,
-      end: Alignment.topCenter,
-      colors: [
-        const Color(0xFF0a0a14),
-        const Color(0xFF080810),
-        const Color(0xFF060608).withOpacity(0.95),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.4, 0.85, 1.0],
-    ).createShader(panelRect);
-
-    canvas.drawRect(panelRect, Paint()..shader = bgGradient);
+    _panelPaint.shader = _getBottomPanelShader(panelRect);
+    canvas.drawRect(panelRect, _panelPaint);
 
     // Top edge glow
     _drawGlowingLine(canvas, 0, screenHeight - bottomBarHeight + 2, screenWidth, screenHeight - bottomBarHeight + 2, const Color(0xFF00FFFF), 0.5);
@@ -506,25 +649,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Panel background
     final panelRect = Rect.fromLTWH(15, panelY, 180, 25);
-    final panelGradient = LinearGradient(
-      colors: [
-        selected.color.withOpacity(0.1),
-        const Color(0xFF0a0a14).withOpacity(0.8),
-      ],
-    ).createShader(panelRect);
-
+    _towerInfoPanelPaint.shader = _getTowerInfoShader(panelRect, selected);
     canvas.drawRRect(
       RRect.fromRectAndRadius(panelRect, const Radius.circular(3)),
-      Paint()..shader = panelGradient,
+      _towerInfoPanelPaint,
     );
 
     // Border
     canvas.drawRRect(
       RRect.fromRectAndRadius(panelRect, const Radius.circular(3)),
-      Paint()
-        ..color = selected.color.withOpacity(0.4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+      _towerInfoBorderPaint..color = selected.color.withOpacity(0.4),
     );
 
     // Tower name
@@ -543,8 +677,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     namePainter.paint(canvas, Offset(22, panelY + 6));
 
     // Stats
+    final damage = gameRef.towerDamage(selected).round();
+    final range = gameRef.towerRange(selected).round();
+    final fireRate = gameRef.towerFireRate(selected);
     final statsText =
-        'DMG:${selected.damage.toInt()} RNG:${selected.range.toInt()} SPD:${selected.fireRate.toStringAsFixed(1)}';
+        'DMG:$damage RNG:$range SPD:${fireRate.toStringAsFixed(1)}';
     final statsPainter = _towerInfoStatsPainter ??
         _buildPainter(
           statsText,
@@ -590,7 +727,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       color: const Color(0xFFFF0066),
       label: 'MINE',
       hotkey: '[M]',
-      count: '${gameRef.activeMineCount}/${BoredGamesGame.maxActiveMines}',
+      count: '${gameRef.activeMineCount}/${gameRef.maxActiveMines}',
     );
   }
 
@@ -698,10 +835,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final startX = (screenWidth - totalWidth) / 2;
 
     final costs = [
-      (TowerType.pulseArcher.cost, TowerType.pulseArcher.color),
-      (TowerType.circuitCannon.cost, TowerType.circuitCannon.color),
-      (TowerType.phaseMage.cost, TowerType.phaseMage.color),
-      (TowerType.glimmerField.cost, TowerType.glimmerField.color),
+      (gameRef.towerCost(TowerType.pulseArcher), TowerType.pulseArcher.color),
+      (gameRef.towerCost(TowerType.circuitCannon), TowerType.circuitCannon.color),
+      (gameRef.towerCost(TowerType.phaseMage), TowerType.phaseMage.color),
+      (gameRef.towerCost(TowerType.glimmerField), TowerType.glimmerField.color),
     ];
 
     for (int i = 0; i < costs.length; i++) {
@@ -731,14 +868,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Pulse cost
     final pulseX = startX + 4 * (buttonWidth + buttonSpacing) + abilityWidth / 2;
-    final canAffordPulse = gameRef.gold >= BoredGamesGame.pulseCost && gameRef.pulseReady;
+    final canAffordPulse = gameRef.gold >= gameRef.pulseCost && gameRef.pulseReady;
     final pulseColor = canAffordPulse
         ? const Color(0xFF00FFFF).withOpacity(0.9)
         : const Color(0xFFFF4444).withOpacity(0.7);
     final pulseKey = 'cost-pulse-${pulseColor.value}';
     final pulseCostPainter = _getPainter(
       pulseKey,
-      '${BoredGamesGame.pulseCost}g',
+      '${gameRef.pulseCost}g',
       TextStyle(
         color: pulseColor,
         fontSize: 10,
@@ -750,14 +887,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Mine cost
     final mineX = startX + 4 * (buttonWidth + buttonSpacing) + abilityWidth + buttonSpacing + mineWidth / 2;
-    final canAffordMine = gameRef.gold >= BoredGamesGame.mineCost && gameRef.mineReady;
+    final canAffordMine = gameRef.gold >= gameRef.mineCost && gameRef.mineReady;
     final mineColor = canAffordMine
         ? const Color(0xFFFF0066).withOpacity(0.9)
         : const Color(0xFFFF4444).withOpacity(0.7);
     final mineKey = 'cost-mine-${mineColor.value}';
     final mineCostPainter = _getPainter(
       mineKey,
-      '${BoredGamesGame.mineCost}g',
+      '${gameRef.mineCost}g',
       TextStyle(
         color: mineColor,
         fontSize: 10,
@@ -770,48 +907,120 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _drawGlowingLine(Canvas canvas, double x1, double y1, double x2, double y2, Color color, double intensity) {
     // Outer glow
-    canvas.drawLine(
-      Offset(x1, y1),
-      Offset(x2, y2),
-      Paint()
-        ..color = color.withOpacity(intensity * 0.3)
-        ..strokeWidth = 6
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
+    _glowLineOuterPaint.color = color.withOpacity(intensity * 0.3);
+    canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _glowLineOuterPaint);
 
     // Core line
-    canvas.drawLine(
-      Offset(x1, y1),
-      Offset(x2, y2),
-      Paint()
-        ..color = color.withOpacity(intensity)
-        ..strokeWidth = 1,
-    );
+    _glowLineCorePaint.color = color.withOpacity(intensity);
+    canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _glowLineCorePaint);
   }
 
   void _drawHexPattern(Canvas canvas, double x, double y, int count, double alpha) {
-    final hexPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
+    _hexPatternPaint.color = const Color(0xFF00FFFF).withOpacity(alpha);
 
     const hexSize = 8.0;
     for (int i = 0; i < count; i++) {
       for (int j = 0; j < 2; j++) {
         final offsetX = x + i * hexSize * 1.5;
         final offsetY = y + j * hexSize * 0.866 + (i % 2) * hexSize * 0.433;
-        _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.4, hexPaint);
+        _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.4, _hexPatternPaint);
       }
     }
   }
 
   void _drawHexagon(Canvas canvas, Offset center, double radius, Paint paint) {
+    final path = _getHexagonPath(radius);
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.drawPath(path, paint);
+    canvas.restore();
+  }
+
+  Shader _getTopPanelShader(Rect rect) {
+    if (_topPanelRect == rect && _topPanelShader != null) {
+      return _topPanelShader!;
+    }
+    final shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        const Color(0xFF0a0a14),
+        const Color(0xFF080810),
+        const Color(0xFF060608).withOpacity(0.95),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.5, 0.85, 1.0],
+    ).createShader(rect);
+    _topPanelRect = rect;
+    _topPanelShader = shader;
+    return shader;
+  }
+
+  Shader _getBottomPanelShader(Rect rect) {
+    if (_bottomPanelRect == rect && _bottomPanelShader != null) {
+      return _bottomPanelShader!;
+    }
+    final shader = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [
+        const Color(0xFF0a0a14),
+        const Color(0xFF080810),
+        const Color(0xFF060608).withOpacity(0.95),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.4, 0.85, 1.0],
+    ).createShader(rect);
+    _bottomPanelRect = rect;
+    _bottomPanelShader = shader;
+    return shader;
+  }
+
+  Shader _getTowerInfoShader(Rect rect, TowerType type) {
+    if (_towerInfoRect == rect && _towerInfoShader != null && _towerInfoType == type) {
+      return _towerInfoShader!;
+    }
+    final shader = LinearGradient(
+      colors: [
+        type.color.withOpacity(0.1),
+        const Color(0xFF0a0a14).withOpacity(0.8),
+      ],
+    ).createShader(rect);
+    _towerInfoRect = rect;
+    _towerInfoType = type;
+    _towerInfoShader = shader;
+    return shader;
+  }
+
+  Shader _getResourceCardShader(Rect rect, Color color) {
+    final key = Object.hash(rect.left, rect.top, rect.width, rect.height, color.value);
+    final cached = _resourceCardShaders[key];
+    if (cached != null && cached.rect == rect && cached.color == color) {
+      return cached.shader;
+    }
+    final shader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        color.withOpacity(0.08),
+        const Color(0xFF0a0a14).withOpacity(0.9),
+        color.withOpacity(0.05),
+      ],
+    ).createShader(rect);
+    _resourceCardShaders[key] = _CardShaderCache(rect, color, shader);
+    return shader;
+  }
+
+  Path _getHexagonPath(double radius) {
+    if (_hexagonPath != null && _hexagonRadius == radius) {
+      return _hexagonPath!;
+    }
     final path = Path();
     for (int i = 0; i < 6; i++) {
       final angle = i * math.pi / 3 - math.pi / 6;
       final point = Offset(
-        center.dx + radius * math.cos(angle),
-        center.dy + radius * math.sin(angle),
+        radius * math.cos(angle),
+        radius * math.sin(angle),
       );
       if (i == 0) {
         path.moveTo(point.dx, point.dy);
@@ -820,11 +1029,18 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       }
     }
     path.close();
-    canvas.drawPath(path, paint);
+    _hexagonPath = path;
+    _hexagonRadius = radius;
+    return path;
   }
 
   void _updateSelectionCache(TowerType selected) {
+    final damage = gameRef.towerDamage(selected).round();
+    final range = gameRef.towerRange(selected).round();
+    final fireRate = gameRef.towerFireRate(selected).toStringAsFixed(1);
+    final cacheKey = Object.hash(selected, damage, range, fireRate);
     if (_lastSelected == selected &&
+        _selectionCacheKey == cacheKey &&
         _selectionNamePainter != null &&
         _selectionStatsPainter != null &&
         _towerInfoNamePainter != null &&
@@ -833,6 +1049,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     _lastSelected = selected;
+    _selectionCacheKey = cacheKey;
     _selectionNamePainter = _buildPainter(
       selected.name.toUpperCase(),
       TextStyle(
@@ -843,7 +1060,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       ),
     );
     _selectionStatsPainter = _buildPainter(
-      'DMG ${selected.damage.toInt()}    RNG ${selected.range.toInt()}    SPD ${selected.fireRate.toStringAsFixed(1)}',
+      'DMG $damage    RNG $range    SPD $fireRate',
       TextStyle(
         color: Colors.white.withOpacity(0.6),
         fontSize: 12,
@@ -862,7 +1079,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       ),
     );
     _towerInfoStatsPainter = _buildPainter(
-      'DMG:${selected.damage.toInt()} RNG:${selected.range.toInt()} SPD:${selected.fireRate.toStringAsFixed(1)}',
+      'DMG:$damage RNG:$range SPD:$fireRate',
       TextStyle(
         color: Colors.white.withOpacity(0.6),
         fontSize: 8,
@@ -943,5 +1160,13 @@ class _TextCache {
 
   final String text;
   final TextPainter painter;
+}
+
+class _CardShaderCache {
+  _CardShaderCache(this.rect, this.color, this.shader);
+
+  final Rect rect;
+  final Color color;
+  final Shader shader;
 }
 

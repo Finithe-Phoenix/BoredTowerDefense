@@ -2,11 +2,16 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
 
-/// Epic cyberpunk grid background with perspective, floating particles, and energy waves
+/// Epic cyberpunk grid background with perspective and energy waves.
 class CyberGridBackground extends StatefulWidget {
-  const CyberGridBackground({super.key, this.child});
+  const CyberGridBackground({
+    super.key,
+    this.child,
+    this.backgroundColor = NeonColors.deepBlack,
+  });
 
   final Widget? child;
+  final Color backgroundColor;
 
   @override
   State<CyberGridBackground> createState() => _CyberGridBackgroundState();
@@ -15,7 +20,6 @@ class CyberGridBackground extends StatefulWidget {
 class _CyberGridBackgroundState extends State<CyberGridBackground>
     with TickerProviderStateMixin {
   late AnimationController _gridController;
-  late AnimationController _particleController;
   late AnimationController _pulseController;
 
   @override
@@ -24,11 +28,6 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
 
     _gridController = AnimationController(
       duration: const Duration(seconds: 20),
-      vsync: this,
-    )..repeat();
-
-    _particleController = AnimationController(
-      duration: const Duration(seconds: 30),
       vsync: this,
     )..repeat();
 
@@ -41,7 +40,6 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
   @override
   void dispose() {
     _gridController.dispose();
-    _particleController.dispose();
     _pulseController.dispose();
     super.dispose();
   }
@@ -49,18 +47,16 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: NeonColors.darkBg,
+      color: widget.backgroundColor,
       child: AnimatedBuilder(
         animation: Listenable.merge([
           _gridController,
-          _particleController,
           _pulseController,
         ]),
         builder: (context, child) {
           return CustomPaint(
             painter: _CyberGridPainter(
               gridAnimation: _gridController.value,
-              particleAnimation: _particleController.value,
               pulseAnimation: _pulseController.value,
             ),
             child: widget.child,
@@ -74,22 +70,16 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
 class _CyberGridPainter extends CustomPainter {
   _CyberGridPainter({
     required this.gridAnimation,
-    required this.particleAnimation,
     required this.pulseAnimation,
   });
 
   final double gridAnimation;
-  final double particleAnimation;
   final double pulseAnimation;
-
-  static const int particleCount = 50;
-  static final math.Random _random = math.Random(42);
 
   @override
   void paint(Canvas canvas, Size size) {
     _drawPerspectiveGrid(canvas, size);
     _drawEnergyWaves(canvas, size);
-    _drawFloatingParticles(canvas, size);
     _drawCornerAccents(canvas, size);
     _drawHexagonPattern(canvas, size);
     _drawVignette(canvas, size);
@@ -174,27 +164,6 @@ class _CyberGridPainter extends CustomPainter {
 
         canvas.drawCircle(Offset(centerX, centerY), radius, wavePaint);
       }
-    }
-  }
-
-  void _drawFloatingParticles(Canvas canvas, Size size) {
-    for (int i = 0; i < particleCount; i++) {
-      final seed = _random.nextDouble();
-      final x = ((seed * 1000 + particleAnimation * 200) % size.width);
-      final baseY = (_random.nextDouble() * size.height);
-      final y = (baseY - particleAnimation * 100 * (0.5 + seed)) % size.height;
-
-      final particleSize = 1.0 + seed * 3;
-      final alpha = 0.3 + seed * 0.5;
-
-      final colors = [NeonColors.cyan, NeonColors.magenta, NeonColors.purple];
-      final color = colors[i % colors.length];
-
-      final particlePaint = Paint()
-        ..color = color.withOpacity(alpha)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, particleSize);
-
-      canvas.drawCircle(Offset(x, y), particleSize, particlePaint);
     }
   }
 
@@ -317,6 +286,5 @@ class _CyberGridPainter extends CustomPainter {
   @override
   bool shouldRepaint(_CyberGridPainter oldDelegate) =>
       oldDelegate.gridAnimation != gridAnimation ||
-      oldDelegate.particleAnimation != particleAnimation ||
       oldDelegate.pulseAnimation != pulseAnimation;
 }

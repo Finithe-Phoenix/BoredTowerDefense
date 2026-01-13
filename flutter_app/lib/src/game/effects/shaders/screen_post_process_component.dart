@@ -16,14 +16,13 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
   }
 
   final double opacity;
-  final bool enabled;
+  bool enabled;
   ui.FragmentProgram? _program;
   double _time = 0;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    if (!enabled) return;
     size = gameRef.size;
     anchor = Anchor.topLeft;
     position = Vector2.zero();
@@ -38,7 +37,6 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
   @override
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
-    if (!enabled) return;
     size = gameSize;
   }
 
@@ -54,21 +52,29 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
     super.render(canvas);
     if (!enabled) return;
     if (_program == null) return;
-    final rect = ui.Rect.fromLTWH(0, 0, size.x, size.y);
+    final scale = gameRef.shaderScale;
+    final renderWidth = size.x * scale;
+    final renderHeight = size.y * scale;
+    final rect = ui.Rect.fromLTWH(0, 0, renderWidth, renderHeight);
     final shader = _program!.fragmentShader();
-    final uniforms = _buildUniforms();
+    final uniforms = _buildUniforms(renderWidth, renderHeight);
     for (var i = 0; i < uniforms.length; i++) {
       shader.setFloat(i, uniforms[i]);
     }
     final paint = ui.Paint()..shader = shader;
+    canvas.save();
+    if (scale != 1.0) {
+      canvas.scale(1 / scale);
+    }
     canvas.drawRect(rect, paint);
+    canvas.restore();
     shader.dispose();
   }
 
-  Float32List _buildUniforms() {
+  Float32List _buildUniforms(double width, double height) {
     return Float32List.fromList([
-      size.x,
-      size.y,
+      width,
+      height,
       _time,
       gameRef.screenEffects.trauma,
       gameRef.enemyManager.waveIntensity,

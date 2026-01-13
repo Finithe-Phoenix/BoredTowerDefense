@@ -476,8 +476,9 @@ class ParticleEmitter extends Component {
 
   void _emitConfiguredBurst() {
     if (config == null) return;
-    for (int i = 0; i < config!.particleCount; i++) {
-      _emitConfiguredParticle(i, config!.particleCount);
+    final count = _scaledCount(config!.particleCount);
+    for (int i = 0; i < count; i++) {
+      _emitConfiguredParticle(i, count);
     }
   }
 
@@ -517,6 +518,11 @@ class ParticleEmitter extends Component {
     final lifetime = config!.minLifetime +
         _random.nextDouble() * (config!.maxLifetime - config!.minLifetime);
 
+    final quality = GameParticles.instance;
+    final hasTrail = config!.hasTrail && quality.allowTrails;
+    final glow = config!.glow && quality.allowGlow;
+    final trailLength = hasTrail ? config!.trailLength : 0;
+
     _particles.add(Particle(
       position: position.clone(),
       velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
@@ -529,10 +535,10 @@ class ParticleEmitter extends Component {
       drag: config!.drag,
       fadeOut: config!.fadeOut,
       shrink: config!.shrink,
-      hasTrail: config!.hasTrail,
-      trailLength: config!.trailLength,
-      glow: config!.glow,
-      glowRadius: config!.glowRadius,
+      hasTrail: hasTrail,
+      trailLength: trailLength,
+      glow: glow,
+      glowRadius: glow ? config!.glowRadius : 0,
       spin: config!.spin,
       spinSpeed: config!.spinSpeed,
     ));
@@ -550,7 +556,9 @@ class ParticleEmitter extends Component {
     bool hasTrail = false,
     Color? colorEnd,
   }) {
-    for (int i = 0; i < count && _particles.length < maxParticles; i++) {
+    final scaledCount = _scaledCount(count);
+    final quality = GameParticles.instance;
+    for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
       final angle = _random.nextDouble() * math.pi * 2;
       final spd = speed * (0.5 + _random.nextDouble() * 0.5);
 
@@ -562,8 +570,10 @@ class ParticleEmitter extends Component {
         lifetime: lifetime * (0.5 + _random.nextDouble() * 0.5),
         size: size * (0.5 + _random.nextDouble() * 0.5),
         shape: shape,
-        hasTrail: hasTrail,
-        trailLength: 4,
+        hasTrail: hasTrail && quality.allowTrails,
+        trailLength: hasTrail && quality.allowTrails ? 4 : 0,
+        glow: quality.allowGlow,
+        glowRadius: quality.allowGlow ? 4 : 0,
       ));
     }
   }
@@ -581,7 +591,9 @@ class ParticleEmitter extends Component {
   }) {
     final baseAngle = math.atan2(direction.y, direction.x);
 
-    for (int i = 0; i < count && _particles.length < maxParticles; i++) {
+    final scaledCount = _scaledCount(count);
+    final quality = GameParticles.instance;
+    for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
       final angle = baseAngle + (_random.nextDouble() - 0.5) * spread;
       final spd = speed * (0.7 + _random.nextDouble() * 0.3);
 
@@ -592,6 +604,8 @@ class ParticleEmitter extends Component {
         lifetime: lifetime * (0.7 + _random.nextDouble() * 0.3),
         size: 3 + _random.nextDouble() * 2,
         shape: shape,
+        glow: quality.allowGlow,
+        glowRadius: quality.allowGlow ? 3 : 0,
       ));
     }
   }
@@ -605,6 +619,8 @@ class ParticleEmitter extends Component {
     ParticleShape shape = ParticleShape.circle,
   }) {
     if (_particles.length >= maxParticles) return;
+    final quality = GameParticles.instance;
+    if (!quality.allowTrails) return;
 
     _particles.add(Particle(
       position: position.clone(),
@@ -629,7 +645,9 @@ class ParticleEmitter extends Component {
     ParticleShape shape = ParticleShape.circle,
     double speed = 50,
   }) {
-    for (int i = 0; i < count && _particles.length < maxParticles; i++) {
+    final scaledCount = _scaledCount(count);
+    final quality = GameParticles.instance;
+    for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
       final angle = (i / count) * math.pi * 2;
       final pos = Vector2(
         center.x + math.cos(angle) * radius,
@@ -643,6 +661,8 @@ class ParticleEmitter extends Component {
         lifetime: lifetime,
         size: 4,
         shape: shape,
+        glow: quality.allowGlow,
+        glowRadius: quality.allowGlow ? 4 : 0,
       ));
     }
   }
@@ -655,7 +675,9 @@ class ParticleEmitter extends Component {
     double speed = 120,
     double lifetime = 0.4,
   }) {
-    for (int i = 0; i < count && _particles.length < maxParticles; i++) {
+    final scaledCount = _scaledCount(count);
+    final quality = GameParticles.instance;
+    for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
       final angle = _random.nextDouble() * math.pi * 2;
       final spd = speed * (0.6 + _random.nextDouble() * 0.4);
 
@@ -669,10 +691,10 @@ class ParticleEmitter extends Component {
         shape: ParticleShape.spark,
         gravity: 80,
         drag: 0.94,
-        hasTrail: true,
-        trailLength: 4,
-        glow: true,
-        glowRadius: 5,
+        hasTrail: quality.allowTrails,
+        trailLength: quality.allowTrails ? 4 : 0,
+        glow: quality.allowGlow,
+        glowRadius: quality.allowGlow ? 5 : 0,
       ));
     }
   }
@@ -685,7 +707,9 @@ class ParticleEmitter extends Component {
     double speed = 60,
     double lifetime = 1.0,
   }) {
-    for (int i = 0; i < count && _particles.length < maxParticles; i++) {
+    final scaledCount = _scaledCount(count);
+    final quality = GameParticles.instance;
+    for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
       _spiralAngle += 0.4;
       final spd = speed * (0.5 + _random.nextDouble() * 0.5);
 
@@ -699,10 +723,18 @@ class ParticleEmitter extends Component {
         shape: ParticleShape.star,
         spin: true,
         spinSpeed: 4 + _random.nextDouble() * 3,
-        glow: true,
-        glowRadius: 8,
+        glow: quality.allowGlow,
+        glowRadius: quality.allowGlow ? 8 : 0,
       ));
     }
+  }
+
+  int _scaledCount(int count) {
+    final scale = GameParticles.instance.burstScale;
+    if (count <= 0) return 0;
+    if (scale >= 1) return count;
+    final scaled = (count * scale).round();
+    return scaled.clamp(1, count);
   }
 
   @override
@@ -756,6 +788,19 @@ class GameParticles {
   static final instance = GameParticles._();
 
   ParticleEmitter? _emitter;
+  double burstScale = 1.0;
+  bool allowGlow = true;
+  bool allowTrails = true;
+
+  void setQuality({
+    required double burstScale,
+    required bool allowGlow,
+    required bool allowTrails,
+  }) {
+    this.burstScale = burstScale.clamp(0.1, 1.0).toDouble();
+    this.allowGlow = allowGlow;
+    this.allowTrails = allowTrails;
+  }
 
   void setEmitter(ParticleEmitter emitter) {
     _emitter = emitter;

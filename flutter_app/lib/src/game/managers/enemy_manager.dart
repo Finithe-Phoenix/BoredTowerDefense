@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import '../effects/explosion_effect.dart';
 import '../entities/enemy.dart';
 import '../world/game_world.dart';
+import '../bored_games_game.dart';
 import '../../services/audio_service.dart';
 
 /// Callback types for wave events
@@ -21,14 +22,14 @@ enum WaveModifier {
   phantom, // Invisible enemies - need Phase Mage to detect!
 }
 
-class EnemyManager extends Component {
+class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   EnemyManager({
     required this.tileSize,
     required this.world,
     this.onEnemyKilled,
     this.onEnemyLeaked,
     this.onWaveComplete,
-  });
+  }) : _spatialCellSize = tileSize;
 
   final double tileSize;
   final GameWorld world;
@@ -46,13 +47,26 @@ class EnemyManager extends Component {
   WaveModifier _currentModifier = WaveModifier.normal;
   int _spawnIndex = 0;
   int _waveTotalEnemies = 0;
+  double _levelHealthScale = 1.0;
+  double _levelSpeedScale = 1.0;
+  double _spawnRateScale = 1.0;
+  double _enemyCountScale = 1.0;
+  double _goldScale = 1.0;
+  double _spawnInterval = 1.0;
+  int _levelWorld = 1;
+  bool _tuningReady = false;
   final List<Enemy> _activeEnemies = [];
+  final Map<int, List<Enemy>> _enemyBuckets = {};
+  final double _spatialCellSize;
 
   /// Base stats for wave scaling
   static const double baseHealth = 100;
   static const double baseSpeed = 60;
   static const int baseGold = 10;
-  static const double healthScaling = 1.2; // HP_n = HP_base * 1.2^n
+  static const double healthPerWave = 0.18; // Linear scaling per wave
+  static const int minEnemyCount = 3;
+  static const int maxEnemyCount = 160;
+  static const int minGoldReward = 4;
 
   /// Current wave number
   int get currentWave => _currentWave;
@@ -79,16 +93,61 @@ class EnemyManager extends Component {
   /// Get all active enemies
   List<Enemy> get activeEnemies => _activeEnemies;
 
+  int _cellKey(int x, int y) => Object.hash(x, y);
+
+  int _cellFor(double value) => (value / _spatialCellSize).floor();
+
+  void rebuildSpatialIndex() {
+    for (final bucket in _enemyBuckets.values) {
+      bucket.clear();
+    }
+    if (_activeEnemies.isEmpty) return;
+
+    for (final enemy in _activeEnemies) {
+      if (!enemy.isAlive) continue;
+      final cx = _cellFor(enemy.position.x);
+      final cy = _cellFor(enemy.position.y);
+      final key = _cellKey(cx, cy);
+      final bucket = _enemyBuckets.putIfAbsent(key, () => <Enemy>[]);
+      bucket.add(enemy);
+    }
+  }
+
+  void queryEnemiesInRange(Vector2 center, double range, List<Enemy> out) {
+    out.clear();
+    if (_activeEnemies.isEmpty) return;
+
+    final minX = _cellFor(center.x - range);
+    final maxX = _cellFor(center.x + range);
+    final minY = _cellFor(center.y - range);
+    final maxY = _cellFor(center.y + range);
+    final rangeSq = range * range;
+
+    for (int cy = minY; cy <= maxY; cy++) {
+      for (int cx = minX; cx <= maxX; cx++) {
+        final bucket = _enemyBuckets[_cellKey(cx, cy)];
+        if (bucket == null || bucket.isEmpty) continue;
+        for (final enemy in bucket) {
+          if (!enemy.isAlive) continue;
+          final dx = enemy.position.x - center.x;
+          final dy = enemy.position.y - center.y;
+          if ((dx * dx) + (dy * dy) <= rangeSq) {
+            out.add(enemy);
+          }
+        }
+      }
+    }
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
-    Enemy.lowFx = _aliveCount > 18;
+    Enemy.lowFx = _aliveCount > 18 || gameRef.reduceFx;
     if (!spawning || world.waypoints.isEmpty || remaining <= 0) return;
 
     _timer += dt;
-    final spawnInterval = _currentModifier == WaveModifier.overload ? 0.6 : 1.0;
 
-    if (_timer > spawnInterval) {
+    if (_timer > _spawnInterval) {
       _timer = 0;
       remaining -= 1;
       _spawnEnemy();
@@ -99,10 +158,16 @@ class EnemyManager extends Component {
   }
 
   void _spawnEnemy() {
+    if (!_tuningReady) {
+      _applyLevelTuning();
+    }
+
     // Calculate scaled stats based on wave number
-    final scaledHealth = baseHealth * pow(healthScaling, _currentWave);
-    final scaledSpeed = baseSpeed + (_currentWave * 2);
-    final scaledGold = baseGold + (_currentWave * 2);
+    final waveHealth = baseHealth * (1 + ((_currentWave - 1) * healthPerWave));
+    final scaledHealth = waveHealth * _levelHealthScale;
+    final scaledSpeed = (baseSpeed + (_currentWave * 2)) * _levelSpeedScale;
+    final scaledGold =
+        ((baseGold + (_currentWave * 2)) * _goldScale).round().clamp(minGoldReward, 9999);
 
     // Determine enemy type based on wave modifier
     EnemyType enemyType;
@@ -131,6 +196,7 @@ class EnemyManager extends Component {
       maxHealth: scaledHealth,
       goldReward: scaledGold,
       type: enemyType,
+      spawnIndex: _spawnIndex,
       onDeath: _onEnemyDeath,
       onReachBase: _onEnemyReachBase,
     );
@@ -183,37 +249,32 @@ class EnemyManager extends Component {
 
     _currentWave++;
     _spawnIndex = 0;
+    if (!_tuningReady) {
+      _applyLevelTuning();
+    }
 
     // Determine wave modifier
-    // Wave 4: First phantom wave (warning!)
-    // Every 3rd wave is Overload, every 5th is Juggernaut
-    // Every 4th wave (from wave 4) is Phantom, every 7th is Mixed
-    if (_currentWave % 7 == 0) {
-      _currentModifier = WaveModifier.mixed;
-    } else if (_currentWave >= 4 && _currentWave % 4 == 0) {
-      _currentModifier = WaveModifier.phantom; // Phantom waves at 4, 8, 12, etc.
-    } else if (_currentWave % 5 == 0) {
-      _currentModifier = WaveModifier.juggernaut;
-    } else if (_currentWave % 3 == 0) {
-      _currentModifier = WaveModifier.overload;
-    } else {
-      _currentModifier = WaveModifier.normal;
-    }
+    _currentModifier = _selectModifierForWave(_currentWave);
 
     // More enemies each wave, special waves have different counts
     int enemyCount = count + (_currentWave - 1);
     if (_currentModifier == WaveModifier.overload) {
-      enemyCount = (enemyCount * 1.5).toInt(); // More but weaker
+      enemyCount = (enemyCount * 1.35).ceil(); // More but weaker
     } else if (_currentModifier == WaveModifier.juggernaut) {
-      enemyCount = (enemyCount * 0.6).toInt().clamp(2, 100); // Fewer but stronger
+      enemyCount = (enemyCount * 0.7).ceil().clamp(2, maxEnemyCount); // Fewer but stronger
     } else if (_currentModifier == WaveModifier.phantom) {
-      enemyCount = (enemyCount * 0.8).toInt().clamp(3, 100); // Moderate count, tricky
+      enemyCount = (enemyCount * 0.85).ceil().clamp(3, maxEnemyCount); // Moderate count, tricky
+    } else if (_currentModifier == WaveModifier.mixed) {
+      enemyCount = (enemyCount * 1.1).ceil();
     }
+    enemyCount = (enemyCount * _enemyCountScale).round().clamp(minEnemyCount, maxEnemyCount);
 
     remaining = enemyCount;
     _waveTotalEnemies = enemyCount;
     spawning = true;
     _timer = 0;
+    final baseInterval = _currentModifier == WaveModifier.overload ? 0.6 : 1.0;
+    _spawnInterval = (baseInterval / _spawnRateScale).clamp(0.35, 1.6);
 
     // Play wave start sound
     AudioService.instance.playWaveStart();
@@ -228,7 +289,11 @@ class EnemyManager extends Component {
     _aliveCount = 0;
     _currentModifier = WaveModifier.normal;
     _spawnIndex = 0;
+    _spawnInterval = 1.0;
     _activeEnemies.clear();
+    for (final bucket in _enemyBuckets.values) {
+      bucket.clear();
+    }
 
     // Remove all existing enemies
     for (final enemy in children.whereType<Enemy>().toList()) {
@@ -250,5 +315,51 @@ class EnemyManager extends Component {
       case WaveModifier.normal:
         return '';
     }
+  }
+
+  void _applyLevelTuning() {
+    final levelId = gameRef.levelConfig?.id ?? 1;
+    final difficulty = gameRef.levelConfig?.difficulty ?? 1;
+    _levelWorld = ((levelId - 1) ~/ 10) + 1;
+    final localIndex = ((levelId - 1) % 10) + 1;
+
+    final worldBoost = 1 + (_levelWorld - 1) * 0.08;
+    final localBoost = 1 + (localIndex - 1) * 0.02;
+    final difficultyBoost = 1 + (difficulty - 1) * 0.04;
+
+    _levelHealthScale = worldBoost * localBoost * difficultyBoost;
+    _levelSpeedScale = 1 + (_levelWorld - 1) * 0.03 + (localIndex - 1) * 0.006;
+    _spawnRateScale = 1 + (_levelWorld - 1) * 0.04 + (localIndex - 1) * 0.01;
+    _enemyCountScale = 1 + (_levelWorld - 1) * 0.03 + (localIndex - 1) * 0.01;
+    _goldScale =
+        (1 - (_levelWorld - 1) * 0.02 - (localIndex - 1) * 0.005).clamp(0.7, 1.0);
+    _tuningReady = true;
+  }
+
+  WaveModifier _selectModifierForWave(int wave) {
+    if (_levelWorld <= 1) {
+      if (wave % 5 == 0) return WaveModifier.juggernaut;
+      if (wave % 3 == 0) return WaveModifier.overload;
+      return WaveModifier.normal;
+    }
+    if (_levelWorld == 2) {
+      if (wave % 6 == 0) return WaveModifier.phantom;
+      if (wave % 5 == 0) return WaveModifier.juggernaut;
+      if (wave % 3 == 0) return WaveModifier.overload;
+      return WaveModifier.normal;
+    }
+    if (_levelWorld == 3) {
+      if (wave % 7 == 0) return WaveModifier.mixed;
+      if (wave % 4 == 0) return WaveModifier.phantom;
+      if (wave % 5 == 0) return WaveModifier.juggernaut;
+      if (wave % 3 == 0) return WaveModifier.overload;
+      return WaveModifier.normal;
+    }
+
+    if (wave % 8 == 0) return WaveModifier.mixed;
+    if (wave % 6 == 0) return WaveModifier.phantom;
+    if (wave % 5 == 0) return WaveModifier.juggernaut;
+    if (wave % 3 == 0) return WaveModifier.overload;
+    return WaveModifier.normal;
   }
 }

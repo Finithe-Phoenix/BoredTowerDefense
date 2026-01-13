@@ -20,6 +20,8 @@ class ScreenEffects extends PositionComponent {
   final bool enableScanlines;
   final bool enableFlash;
   final math.Random _random;
+  bool reduceFx = false;
+  bool allowBlur = true;
 
   // Screen shake
   double _shakeIntensity = 0;
@@ -49,6 +51,11 @@ class ScreenEffects extends PositionComponent {
 
   /// Current trauma value (0-1) for shader overlays
   double get trauma => _trauma;
+
+  void setQuality({required bool reduceFx, required bool allowBlur}) {
+    this.reduceFx = reduceFx;
+    this.allowBlur = allowBlur;
+  }
 
   /// Add trauma intensity (0-1)
   void addTrauma(double amount) {
@@ -138,17 +145,17 @@ class ScreenEffects extends PositionComponent {
     final screenRect = Rect.fromLTWH(0, 0, gameSize.x, gameSize.y);
 
     // Draw CRT effects
-    if (enableCRT) {
+    if (enableCRT && !reduceFx) {
       _renderCRTEffect(canvas, screenRect);
     }
 
     // Draw scanlines
-    if (enableScanlines) {
+    if (enableScanlines && !reduceFx) {
       _renderScanlines(canvas, screenRect);
     }
 
     // Draw vignette
-    if (enableVignette) {
+    if (enableVignette && !reduceFx) {
       _renderVignette(canvas, screenRect);
     }
 
@@ -163,7 +170,7 @@ class ScreenEffects extends PositionComponent {
     }
 
     // Draw chromatic aberration hint at edges
-    if (_chromaticAberration > 0) {
+    if (_chromaticAberration > 0 && !reduceFx) {
       _renderChromaticHint(canvas, screenRect);
     }
   }
@@ -275,7 +282,7 @@ class ScreenEffects extends PositionComponent {
       Rect.fromLTWH(0, 0, screenRect.width, 3),
       Paint()
         ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
     );
 
     // Bottom border
@@ -283,7 +290,7 @@ class ScreenEffects extends PositionComponent {
       Rect.fromLTWH(0, screenRect.height - 3, screenRect.width, 3),
       Paint()
         ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
     );
 
     // Left border
@@ -291,7 +298,7 @@ class ScreenEffects extends PositionComponent {
       Rect.fromLTWH(0, 0, 3, screenRect.height),
       Paint()
         ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
     );
 
     // Right border
@@ -299,7 +306,7 @@ class ScreenEffects extends PositionComponent {
       Rect.fromLTWH(screenRect.width - 3, 0, 3, screenRect.height),
       Paint()
         ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
     );
   }
 
@@ -345,7 +352,7 @@ class ScreenEffects extends PositionComponent {
       Rect.fromLTWH(0, 0, aberrationAmount * 2, screenRect.height),
       Paint()
         ..color = Colors.red.withOpacity(0.1)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null,
     );
 
     // Cyan channel shift (right edge)
@@ -358,7 +365,7 @@ class ScreenEffects extends PositionComponent {
       ),
       Paint()
         ..color = Colors.cyan.withOpacity(0.1)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null,
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../services/level_service.dart';
 import '../overlays/pause_menu_overlay.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/victory_overlay.dart';
+import '../overlays/run_upgrade_overlay.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.levelId});
@@ -46,9 +47,11 @@ class _GameScreenState extends State<GameScreen> {
       score: _game.score,
       wavesCleared: _game.enemyManager.currentWave,
       livesRemaining: 0,
-      maxLives: _levelConfig.startingLives,
+      maxLives: _game.maxLives,
     ).then((_) {
-      debugPrint('[GameScreen] Partial progress saved for level ${_levelConfig.id}');
+      if (kDebugMode) {
+        debugPrint('[GameScreen] Partial progress saved for level ${_levelConfig.id}');
+      }
     });
 
     _game.overlays.add('gameOver');
@@ -64,9 +67,11 @@ class _GameScreenState extends State<GameScreen> {
       score: _game.score,
       wavesCleared: _game.enemyManager.currentWave,
       livesRemaining: _game.lives,
-      maxLives: _levelConfig.startingLives,
+      maxLives: _game.maxLives,
     ).then((_) {
-      debugPrint('[GameScreen] Progress saved for level ${_levelConfig.id}');
+      if (kDebugMode) {
+        debugPrint('[GameScreen] Progress saved for level ${_levelConfig.id}');
+      }
     });
 
     _game.overlays.add('victory');
@@ -150,10 +155,13 @@ class _GameScreenState extends State<GameScreen> {
                   'victory': (context, game) => VictoryOverlay(
                         score: _game.score,
                         livesRemaining: _game.lives,
-                        maxLives: _levelConfig.startingLives,
+                        maxLives: _game.maxLives,
                         onNextLevel: _nextLevel,
                         onRestart: _restartLevel,
                         onQuit: _quitToMenu,
+                      ),
+                  'upgrade': (context, game) => RunUpgradeOverlay(
+                        game: _game,
                       ),
                 },
               ),

@@ -26,13 +26,20 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
   ui.Image? _entityTexture;
   bool _texturePending = false;
   double _updateTimer = 0;
+  bool enabled = true;
 
   @override
   void update(double dt) {
     super.update(dt);
+    if (!enabled) return;
     _updateTimer += dt;
     if (_updateTimer < updateInterval) return;
     _updateTimer = 0;
+    if (_entityLimit() == 0) {
+      towerCount = 0;
+      enemyCount = 0;
+      return;
+    }
     final hasEntities =
         gameRef.towerManager.towerCount > 0 || gameRef.enemyManager.aliveCount > 0;
     if (!hasEntities) {
@@ -47,31 +54,44 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
   }
 
   void _updatePositions() {
-    towerCount = _fillBuffer(
-      buffer: towerPositionBuffer,
-      positions: gameRef.towerManager.towers
-          .map((tower) => gameRef.worldToScreen(tower.centerPosition))
-          .toList(),
-    );
-    enemyCount = _fillBuffer(
-      buffer: enemyPositionBuffer,
-      positions: gameRef.enemyManager.activeEnemies
-          .map((enemy) => gameRef.worldToScreen(enemy.position))
-          .toList(),
-    );
+    final scale = gameRef.shaderScale;
+    final limit = _entityLimit();
+    towerCount = _fillBufferFromTowers(limit, scale);
+    enemyCount = _fillBufferFromEnemies(limit, scale);
   }
 
-  int _fillBuffer({
-    required Float32List buffer,
-    required List<Vector2> positions,
-  }) {
-    buffer.fillRange(0, buffer.length, 0);
-    final limited = positions.take(maxEntities).toList();
-    for (var i = 0; i < limited.length; i++) {
-      buffer[i * 2] = limited[i].x;
-      buffer[i * 2 + 1] = limited[i].y;
+  int _entityLimit() {
+    return switch (gameRef.quality) {
+      QualityLevel.high => maxEntities,
+      QualityLevel.medium => 6,
+      QualityLevel.low => 0,
+    };
+  }
+
+  int _fillBufferFromTowers(int limit, double scale) {
+    towerPositionBuffer.fillRange(0, towerPositionBuffer.length, 0);
+    if (limit == 0) return 0;
+    final towers = gameRef.towerManager.towers;
+    final count = towers.length < limit ? towers.length : limit;
+    for (var i = 0; i < count; i++) {
+      final pos = gameRef.worldToScreen(towers[i].centerPosition) * scale;
+      towerPositionBuffer[i * 2] = pos.x;
+      towerPositionBuffer[i * 2 + 1] = pos.y;
     }
-    return limited.length;
+    return count;
+  }
+
+  int _fillBufferFromEnemies(int limit, double scale) {
+    enemyPositionBuffer.fillRange(0, enemyPositionBuffer.length, 0);
+    if (limit == 0) return 0;
+    final enemies = gameRef.enemyManager.activeEnemies;
+    final count = enemies.length < limit ? enemies.length : limit;
+    for (var i = 0; i < count; i++) {
+      final pos = gameRef.worldToScreen(enemies[i].position) * scale;
+      enemyPositionBuffer[i * 2] = pos.x;
+      enemyPositionBuffer[i * 2 + 1] = pos.y;
+    }
+    return count;
   }
 
   ui.Image? get entityTexture => _entityTexture;
@@ -81,15 +101,18 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
     _texturePending = true;
 
     _pixelBuffer.fillRange(0, _pixelBuffer.length, 0);
+    final scale = gameRef.shaderScale;
     _writeRow(
       row: 0,
       positions: towerPositionBuffer,
       count: towerCount,
+      scale: scale,
     );
     _writeRow(
       row: 1,
       positions: enemyPositionBuffer,
       count: enemyCount,
+      scale: scale,
     );
 
     final bytes = Uint8List.fromList(_pixelBuffer);
@@ -110,10 +133,11 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
     required int row,
     required Float32List positions,
     required int count,
+    required double scale,
   }) {
     final width = _textureWidth;
     final height = _textureHeight;
-    final size = gameRef.size;
+    final size = gameRef.size * scale;
     for (var i = 0; i < width; i++) {
       final base = (row * width + i) * 4;
       if (i >= count) {

@@ -9,6 +9,7 @@ import 'src/ui/screens/level_select_screen.dart';
 import 'src/ui/screens/game_screen.dart';
 import 'src/ui/screens/settings_screen.dart';
 import 'src/ui/screens/story_screen.dart';
+import 'src/ui/screens/upgrades_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,6 +58,10 @@ class NeonDefenseApp extends StatelessWidget {
             case '/settings':
               return MaterialPageRoute(
                 builder: (_) => const SettingsScreen(),
+              );
+            case '/upgrades':
+              return MaterialPageRoute(
+                builder: (_) => const UpgradesScreen(),
               );
             default:
               return MaterialPageRoute(

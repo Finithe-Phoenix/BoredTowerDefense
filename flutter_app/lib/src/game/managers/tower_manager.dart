@@ -16,6 +16,7 @@ import '../../ui/theme/neon_theme.dart';
 import 'bullet_manager.dart';
 import 'enemy_manager.dart';
 import '../../services/audio_service.dart';
+import '../../models/upgrade_data.dart';
 
 class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   TowerManager({
@@ -36,6 +37,8 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   final Set<math.Point<int>> occupied = {};
   bool blockRejected = false;
   double _ghostPulse = 0;
+  double _targetingAccumulator = 0;
+  static const double _targetingInterval = 1 / 30;
 
   /// Currently selected tower type for placement
   TowerType selectedTowerType = TowerType.pulseArcher;
@@ -49,6 +52,26 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   List<Tower> get towers => _towers;
 
   int get towerCount => _towers.length;
+
+  void applyUpgradeStats(UpgradeStats stats) {
+    for (final tower in _towers) {
+      tower.applyUpgradeStats(stats);
+    }
+  }
+
+  Tower? towerAt(Vector2 worldPos) {
+    for (final tower in _towers.reversed) {
+      final pos = tower.position;
+      final size = tower.size;
+      if (worldPos.x >= pos.x &&
+          worldPos.x <= pos.x + size.x &&
+          worldPos.y >= pos.y &&
+          worldPos.y <= pos.y + size.y) {
+        return tower;
+      }
+    }
+    return null;
+  }
 
   bool placeTower(Vector2 worldPos) {
     final cell = screenToGrid(worldPos, tileSize);
@@ -83,6 +106,11 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       size: tileSize,
       type: selectedTowerType,
       onFire: _onTowerFire,
+      damageMultiplier: gameRef.upgradeStats.towerDamageMult,
+      rangeMultiplier: gameRef.upgradeStats.towerRangeMult,
+      fireRateMultiplier: gameRef.upgradeStats.towerFireRateMult,
+      projectileSpeedMultiplier: gameRef.upgradeStats.projectileSpeedMult,
+      slowMultiplier: gameRef.upgradeStats.slowMult,
     );
     add(tower);
     _towers.add(tower);
@@ -109,12 +137,12 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     bulletManager?.fire(
       from: tower.centerPosition,
       to: targetPos,
-      speed: tower.type.projectileSpeed,
+      speed: tower.projectileSpeed,
       damage: tower.damage,
       color: tower.color,
       target: target,
-      slowAmount: tower.type.slowAmount,
-      slowDuration: tower.type.slowDuration,
+      slowAmount: tower.slowAmount,
+      slowDuration: tower.slowDuration,
       towerType: tower.type,
     );
 
@@ -134,7 +162,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       riseSpeed: 22,
     );
     parent?.add(text);
-    debugPrint('[TowerManager] $message at $position (cell $cell)');
+    if (kDebugMode) {
+      debugPrint('[TowerManager] $message at $position (cell $cell)');
+    }
   }
 
   void setSelectedTowerType(TowerType type) {
@@ -169,10 +199,16 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   void update(double dt) {
     super.update(dt);
 
-    // Update tower targeting
-    final enemies = enemyManager?.activeEnemies ?? [];
-    for (final tower in towers) {
-      tower.updateTargeting(enemies, dt);
+    _targetingAccumulator += dt;
+    if (_targetingAccumulator >= _targetingInterval) {
+      _targetingAccumulator = 0;
+      final manager = enemyManager;
+      if (manager != null) {
+        manager.rebuildSpatialIndex();
+        for (final tower in towers) {
+          tower.updateTargeting(manager);
+        }
+      }
     }
 
     _ghostPulse += dt * 3;
@@ -240,9 +276,10 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
             ..color = rangeColor.withOpacity(canBuild ? 0.18 : 0.12)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 2;
+          final range = gameRef.towerRange(selectedTowerType);
           canvas.drawCircle(
             Offset(topLeft.x + tileSize / 2, topLeft.y + tileSize / 2),
-            selectedTowerType.range,
+            range,
             rangePaint,
           );
 
