@@ -16,9 +16,12 @@ class NeonPulse extends PositionComponent {
     required this.enemies,
     this.expandDuration = 0.3,
     this.holdDuration = 0.5,
+    this.reducedFx = false,
   }) : _phase = _PulsePhase.expanding,
        _timer = 0,
        _currentRadius = 0,
+       _particleCount = reducedFx ? 18 : 40,
+       _arcCount = reducedFx ? 4 : 8,
        _random = math.Random() {
     position = center;
     anchor = Anchor.center;
@@ -31,6 +34,7 @@ class NeonPulse extends PositionComponent {
   final List<Enemy> Function() enemies;
   final double expandDuration;
   final double holdDuration;
+  final bool reducedFx;
   final math.Random _random;
 
   _PulsePhase _phase;
@@ -40,11 +44,11 @@ class NeonPulse extends PositionComponent {
 
   // Particle burst system
   final List<_PulseParticle> _particles = [];
-  static const int _particleCount = 40;
+  final int _particleCount;
 
   // Electric arc system
   final List<_ElectricArc> _arcs = [];
-  static const int _arcCount = 8;
+  final int _arcCount;
 
   void _initializeParticles() {
     // Burst particles
@@ -81,7 +85,8 @@ class NeonPulse extends PositionComponent {
     }
 
     // Regenerate arcs periodically
-    if (_phase == _PulsePhase.expanding || _phase == _PulsePhase.holding) {
+    if (!reducedFx &&
+        (_phase == _PulsePhase.expanding || _phase == _PulsePhase.holding)) {
       for (final arc in _arcs) {
         arc.update(dt);
         if (!arc.isAlive) {
@@ -140,7 +145,9 @@ class NeonPulse extends PositionComponent {
     _drawParticles(canvas, opacity);
 
     // Draw electric arcs to affected enemies
-    _drawElectricArcs(canvas, opacity);
+    if (!reducedFx) {
+      _drawElectricArcs(canvas, opacity);
+    }
 
     // Draw inner ring (leading edge)
     _drawInnerRing(canvas, opacity);
@@ -149,13 +156,19 @@ class NeonPulse extends PositionComponent {
     _drawOuterRing(canvas, opacity);
 
     // Draw double-wave effect
-    _drawDoubleWave(canvas, opacity);
+    if (!reducedFx) {
+      _drawDoubleWave(canvas, opacity);
+    }
 
     // Draw center origin effect
-    _drawCenterOrigin(canvas, opacity);
+    if (!reducedFx) {
+      _drawCenterOrigin(canvas, opacity);
+    }
 
     // Draw energy field fill
-    _drawEnergyField(canvas, opacity);
+    if (!reducedFx) {
+      _drawEnergyField(canvas, opacity);
+    }
   }
 
   void _drawParticles(Canvas canvas, double opacity) {

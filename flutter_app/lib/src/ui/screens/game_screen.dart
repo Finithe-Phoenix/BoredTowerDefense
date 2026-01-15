@@ -9,6 +9,7 @@ import '../overlays/pause_menu_overlay.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/victory_overlay.dart';
 import '../overlays/run_upgrade_overlay.dart';
+import '../widgets/materialization_overlay.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.levelId});
@@ -23,6 +24,7 @@ class _GameScreenState extends State<GameScreen> {
   late BoredGamesGame _game;
   late LevelConfig _levelConfig;
   bool _isPaused = false;
+  bool _showMaterialization = true;
 
   @override
   void initState() {
@@ -179,6 +181,17 @@ class _GameScreenState extends State<GameScreen> {
                   onPressed: _togglePause,
                 ),
               ),
+
+              // Materialization Overlay
+              if (_showMaterialization)
+                MaterializationOverlay(
+                  onComplete: () {
+                    setState(() {
+                      _showMaterialization = false;
+                      // You could resume game here if you started it paused
+                    });
+                  },
+                ),
             ],
           ),
         ),

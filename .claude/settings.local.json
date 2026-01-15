@@ -11,7 +11,13 @@
       "Bash(timeout 60 docker logs:*)",
       "Bash(timeout 90 docker logs:*)",
       "Bash(timeout 45 docker logs:*)",
-      "Bash(timeout 50 docker logs:*)"
+      "Bash(timeout 50 docker logs:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker-compose up:*)",
+      "Bash(docker stop:*)",
+      "Bash(flutter test:*)",
+      "Bash(python:*)",
+      "Bash(find:*)"
     ]
   }
 }

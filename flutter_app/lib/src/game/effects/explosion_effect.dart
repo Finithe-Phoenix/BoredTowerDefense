@@ -23,6 +23,7 @@ class ExplosionEffect extends PositionComponent {
   static const int maxActive = 18;
   static final List<ExplosionEffect> _pool = [];
   static int _activeCount = 0;
+  static double fxScale = 1.0;
 
   static ExplosionEffect? spawn({
     required Vector2 position,
@@ -112,7 +113,8 @@ class ExplosionEffect extends PositionComponent {
   }
 
   void _initializeParticles() {
-    const particleCount = 24;
+    final particleCount = _scaledCount(24, allowZero: true);
+    if (particleCount == 0) return;
 
     for (int i = 0; i < particleCount; i++) {
       final angle = (i / particleCount) * math.pi * 2 + _random.nextDouble() * 0.3;
@@ -131,7 +133,8 @@ class ExplosionEffect extends PositionComponent {
     }
 
     // Add some slower, larger particles for debris
-    for (int i = 0; i < 8; i++) {
+    final debrisCount = _scaledCount(8, allowZero: true);
+    for (int i = 0; i < debrisCount; i++) {
       final angle = _random.nextDouble() * math.pi * 2;
       final speed = 30 + _random.nextDouble() * 50;
 
@@ -148,7 +151,8 @@ class ExplosionEffect extends PositionComponent {
   }
 
   void _initializeEnergyArcs() {
-    const arcCount = 8;
+    final arcCount = _scaledCount(8, allowZero: true);
+    if (arcCount == 0) return;
 
     for (int i = 0; i < arcCount; i++) {
       final angle = (i / arcCount) * math.pi * 2 + _random.nextDouble() * 0.3;
@@ -165,7 +169,8 @@ class ExplosionEffect extends PositionComponent {
   }
 
   void _initializeDebris() {
-    const debrisCount = 12;
+    final debrisCount = _scaledCount(12, allowZero: true);
+    if (debrisCount == 0) return;
 
     for (int i = 0; i < debrisCount; i++) {
       final angle = _random.nextDouble() * math.pi * 2;
@@ -185,7 +190,8 @@ class ExplosionEffect extends PositionComponent {
   }
 
   void _initializeSmoke() {
-    const smokeCount = 6;
+    final smokeCount = _scaledCount(6, allowZero: true);
+    if (smokeCount == 0) return;
 
     for (int i = 0; i < smokeCount; i++) {
       final angle = _random.nextDouble() * math.pi * 2;
@@ -200,6 +206,14 @@ class ExplosionEffect extends PositionComponent {
         expansionRate: 1.5 + _random.nextDouble(),
       ));
     }
+  }
+
+  int _scaledCount(int base, {bool allowZero = false}) {
+    final scaled = (base * fxScale).round();
+    if (scaled <= 0 && !allowZero) {
+      return 1;
+    }
+    return scaled;
   }
 
   @override

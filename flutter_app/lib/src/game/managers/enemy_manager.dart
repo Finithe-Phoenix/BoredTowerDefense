@@ -3,9 +3,12 @@ import 'dart:math';
 import 'package:flame/components.dart';
 
 import '../effects/explosion_effect.dart';
+import '../effects/boss_entrance_effect.dart';
 import '../entities/enemy.dart';
+import '../entities/boss.dart';
 import '../world/game_world.dart';
 import '../bored_games_game.dart';
+import '../balance/difficulty_curve.dart';
 import '../../services/audio_service.dart';
 
 /// Callback types for wave events
@@ -47,26 +50,29 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   WaveModifier _currentModifier = WaveModifier.normal;
   int _spawnIndex = 0;
   int _waveTotalEnemies = 0;
-  double _levelHealthScale = 1.0;
-  double _levelSpeedScale = 1.0;
-  double _spawnRateScale = 1.0;
-  double _enemyCountScale = 1.0;
-  double _goldScale = 1.0;
   double _spawnInterval = 1.0;
   int _levelWorld = 1;
+  int _localIndex = 1;
+  int _progressIndex = 0;
+  int _difficulty = 1;
   bool _tuningReady = false;
   final List<Enemy> _activeEnemies = [];
   final Map<int, List<Enemy>> _enemyBuckets = {};
   final double _spatialCellSize;
+  double _threatPulseTimer = 0;
+  Boss? _currentBoss;
+  bool _bossSpawned = false;
+  int _totalWavesInLevel = 0;
 
   /// Base stats for wave scaling
   static const double baseHealth = 100;
   static const double baseSpeed = 60;
   static const int baseGold = 10;
-  static const double healthPerWave = 0.18; // Linear scaling per wave
   static const int minEnemyCount = 3;
   static const int maxEnemyCount = 160;
   static const int minGoldReward = 4;
+  static const double _nearBaseThreshold = 0.82;
+  static const double _threatPulseInterval = 0.7;
 
   /// Current wave number
   int get currentWave => _currentWave;
@@ -92,6 +98,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
   /// Get all active enemies
   List<Enemy> get activeEnemies => _activeEnemies;
+
+  /// Current boss (if any)
+  Boss? get currentBoss => _currentBoss;
 
   int _cellKey(int x, int y) => Object.hash(x, y);
 
@@ -142,7 +151,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   @override
   void update(double dt) {
     super.update(dt);
-    Enemy.lowFx = _aliveCount > 18 || gameRef.reduceFx;
+    final threshold = gameRef.isTouchLayout ? 12 : 18;
+    Enemy.lowFx = _aliveCount > threshold || gameRef.reduceFx;
+    _updateThreatPulse(dt);
     if (!spawning || world.waypoints.isEmpty || remaining <= 0) return;
 
     _timer += dt;
@@ -162,12 +173,29 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       _applyLevelTuning();
     }
 
-    // Calculate scaled stats based on wave number
-    final waveHealth = baseHealth * (1 + ((_currentWave - 1) * healthPerWave));
-    final scaledHealth = waveHealth * _levelHealthScale;
-    final scaledSpeed = (baseSpeed + (_currentWave * 2)) * _levelSpeedScale;
+    // Check if we should spawn a boss
+    if (_shouldSpawnBoss()) {
+      _spawnBoss();
+      return;
+    }
+
+    // Calculate scaled stats based on wave and progression curve
+    final healthMult = DifficultyCurve.healthMultiplier(
+      progressIndexValue: _progressIndex,
+      wave: _currentWave,
+      difficulty: _difficulty,
+    );
+    final speedMult = DifficultyCurve.speedMultiplier(
+      progressIndexValue: _progressIndex,
+      wave: _currentWave,
+      difficulty: _difficulty,
+    );
+    final scaledHealth = baseHealth * healthMult;
+    final scaledSpeed = baseSpeed * speedMult;
     final scaledGold =
-        ((baseGold + (_currentWave * 2)) * _goldScale).round().clamp(minGoldReward, 9999);
+        ((baseGold + (_currentWave * 2)) * _goldScaleForProgress())
+            .round()
+            .clamp(minGoldReward, 9999);
 
     // Determine enemy type based on wave modifier
     EnemyType enemyType;
@@ -187,16 +215,24 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
         enemyType = types[_spawnIndex % types.length];
         break;
       case WaveModifier.normal:
-        enemyType = EnemyType.runner;
+        // Use progressive pool for normal and mixed waves
+        final pool = _getAvailableTypes();
+        enemyType = pool[_spawnIndex % pool.length];
     }
+
+    final threatTier = _resolveThreatTier();
+    final adjustedGold =
+        (scaledGold * (1 + threatTier * 0.18)).round().clamp(minGoldReward, 9999);
 
     final enemy = Enemy(
       path: world.waypoints,
       speed: scaledSpeed,
       maxHealth: scaledHealth,
-      goldReward: scaledGold,
+      goldReward: adjustedGold,
       type: enemyType,
       spawnIndex: _spawnIndex,
+      threatTier: threatTier,
+      worldIndex: _levelWorld,
       onDeath: _onEnemyDeath,
       onReachBase: _onEnemyReachBase,
     );
@@ -207,12 +243,146 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     _activeEnemies.add(enemy);
   }
 
+  bool _shouldSpawnBoss() {
+    // Don't spawn boss if already spawned this wave
+    if (_bossSpawned) return false;
+
+    // Spawn mini-boss at the end of every level (last wave)
+    if (_currentWave == _totalWavesInLevel && remaining == 1) {
+      return true;
+    }
+
+    return false;
+  }
+
+  void _spawnBoss() {
+    _bossSpawned = true;
+
+    // Determine boss type
+    BossType bossType;
+    final levelId = gameRef.levelConfig?.id ?? 1;
+
+    // World bosses (every 10th level)
+    if (levelId % 10 == 0) {
+      bossType = _getBossTypeForLevel(levelId);
+    } else {
+      // Mini-boss for regular levels
+      bossType = BossType.miniBoss;
+    }
+
+    // Calculate boss stats
+    final healthMult = DifficultyCurve.healthMultiplier(
+      progressIndexValue: _progressIndex,
+      wave: _currentWave,
+      difficulty: _difficulty,
+    );
+    final speedMult = DifficultyCurve.speedMultiplier(
+      progressIndexValue: _progressIndex,
+      wave: _currentWave,
+      difficulty: _difficulty,
+    );
+
+    // Boss has much higher stats
+    final bossHealthMultiplier = bossType == BossType.miniBoss ? 8.0 : 15.0;
+    final scaledHealth = baseHealth * healthMult * bossHealthMultiplier;
+    final scaledSpeed = baseSpeed * speedMult * 0.6; // Bosses are slower
+    final scaledGold = bossType == BossType.miniBoss ? 300 : 1000;
+
+    final boss = Boss(
+      path: world.waypoints,
+      bossType: bossType,
+      bossLevel: levelId,
+      speed: scaledSpeed,
+      maxHealth: scaledHealth,
+      goldReward: scaledGold,
+      onDeath: _onEnemyDeath,
+      onReachBase: _onEnemyReachBase,
+      onPhaseChange: _onBossPhaseChange,
+      onAbilityUsed: _onBossAbility,
+    );
+
+    _currentBoss = boss;
+    _aliveCount++;
+    _spawnIndex++;
+    add(boss);
+    _activeEnemies.add(boss);
+
+    // Create epic entrance effect
+    final entranceEffect = BossEntranceEffect(
+      bossPosition: boss.position.clone(),
+      bossColor: boss.type.color,
+    );
+    add(entranceEffect);
+
+    // Play boss music/sound
+    AudioService.instance.playWaveStart();
+  }
+
+  BossType _getBossTypeForLevel(int levelId) {
+    switch (levelId) {
+      case 10: return BossType.citadelCore;
+      case 20: return BossType.abyssGate;
+      case 30: return BossType.voidlineApex;
+      case 40: return BossType.shardVault;
+      case 50: return BossType.arcFortress;
+      case 60: return BossType.coreHunter;
+      case 70: return BossType.omegaGrid;
+      case 80: return BossType.stormTower;
+      case 90: return BossType.finalGate;
+      case 100: return BossType.omegaNexus;
+      default: return BossType.miniBoss;
+    }
+  }
+
+  void _onBossPhaseChange(Boss boss, int phase) {
+    // Trigger visual/audio effects for phase change
+    AudioService.instance.playExplosion();
+  }
+
+  void _onBossAbility(Boss boss, String abilityName) {
+    switch (abilityName) {
+      case 'spawn_minions':
+        // Get the boss's current position and path progress
+        final startNode = boss.currentPathIndex;
+        if (startNode == null) return; // Cannot determine path position
+
+        const minionCount = 3;
+        for (int i = 0; i < minionCount; i++) {
+          // Spawn in a small cluster around the boss
+          final offset = (Vector2.random() - Vector2.all(0.5)) * 80;
+          final startPosition = boss.position + offset;
+
+          final minion = Enemy(
+            path: world.waypoints,
+            startPosition: startPosition,
+            // Weak minions: 50% base health, no gold
+            maxHealth: baseHealth * 0.5,
+            speed: baseSpeed * 1.1, // Slightly faster
+            goldReward: 0,
+            type: EnemyType.runner,
+            onDeath: _onEnemyDeath,
+            onReachBase: _onEnemyReachBase,
+          );
+
+          _aliveCount++;
+          add(minion);
+          _activeEnemies.add(minion);
+        }
+        break;
+      // Future abilities can be handled here
+      default:
+        // For example, tower hacking, time manipulation, etc.
+        break;
+    }
+  }
+
   void _onEnemyDeath(Enemy enemy) {
     _aliveCount--;
     _activeEnemies.remove(enemy);
 
     // Spawn epic explosion effect at enemy position
-    final expSize = 30.0 + (enemy.type.sizeMult * 20);
+    final expSize =
+        (30.0 + (enemy.type.sizeMult * 20)) * (1 + enemy.threatTier * 0.15);
     final effect = ExplosionEffect.spawn(
       position: enemy.position.clone(),
       color: enemy.type.color,
@@ -243,12 +413,40 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     }
   }
 
+  void _updateThreatPulse(double dt) {
+    if (_activeEnemies.isEmpty) {
+      _threatPulseTimer = 0;
+      return;
+    }
+
+    if (_threatPulseTimer > 0) {
+      _threatPulseTimer -= dt;
+      return;
+    }
+
+    double maxProgress = 0.0;
+    for (final enemy in _activeEnemies) {
+      if (!enemy.isAlive) continue;
+      maxProgress = max(maxProgress, enemy.pathProgress);
+    }
+
+    if (maxProgress >= _nearBaseThreshold) {
+      final intensity =
+          ((maxProgress - _nearBaseThreshold) / (1 - _nearBaseThreshold))
+              .clamp(0.0, 1.0);
+      gameRef.triggerBaseThreat(intensity);
+      _threatPulseTimer = _threatPulseInterval;
+    }
+  }
+
   /// Start a new wave with specified enemy count
   void startWave({int count = 5}) {
     if (spawning) return; // Don't interrupt ongoing wave
 
     _currentWave++;
     _spawnIndex = 0;
+    _bossSpawned = false; // Reset boss spawn flag for new wave
+
     if (!_tuningReady) {
       _applyLevelTuning();
     }
@@ -257,9 +455,16 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     _currentModifier = _selectModifierForWave(_currentWave);
 
     // More enemies each wave, special waves have different counts
-    int enemyCount = count + (_currentWave - 1);
+    var enemyCount = DifficultyCurve.enemyCount(
+      baseCount: count,
+      progressIndexValue: _progressIndex,
+      wave: _currentWave,
+      difficulty: _difficulty,
+      minCount: minEnemyCount,
+      maxCount: maxEnemyCount,
+    );
     if (_currentModifier == WaveModifier.overload) {
-      enemyCount = (enemyCount * 1.35).ceil(); // More but weaker
+      enemyCount = (enemyCount * 1.25).ceil(); // More but weaker
     } else if (_currentModifier == WaveModifier.juggernaut) {
       enemyCount = (enemyCount * 0.7).ceil().clamp(2, maxEnemyCount); // Fewer but stronger
     } else if (_currentModifier == WaveModifier.phantom) {
@@ -267,14 +472,25 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     } else if (_currentModifier == WaveModifier.mixed) {
       enemyCount = (enemyCount * 1.1).ceil();
     }
-    enemyCount = (enemyCount * _enemyCountScale).round().clamp(minEnemyCount, maxEnemyCount);
+    enemyCount = enemyCount.clamp(minEnemyCount, maxEnemyCount);
 
     remaining = enemyCount;
     _waveTotalEnemies = enemyCount;
     spawning = true;
     _timer = 0;
-    final baseInterval = _currentModifier == WaveModifier.overload ? 0.6 : 1.0;
-    _spawnInterval = (baseInterval / _spawnRateScale).clamp(0.35, 1.6);
+    var interval = DifficultyCurve.spawnInterval(
+      progressIndexValue: _progressIndex,
+      wave: _currentWave,
+      difficulty: _difficulty,
+    );
+    if (_currentModifier == WaveModifier.overload) {
+      interval *= 0.8;
+    } else if (_currentModifier == WaveModifier.juggernaut) {
+      interval *= 1.15;
+    } else if (_currentModifier == WaveModifier.phantom) {
+      interval *= 1.05;
+    }
+    _spawnInterval = interval.clamp(0.35, 1.6);
 
     // Play wave start sound
     AudioService.instance.playWaveStart();
@@ -290,6 +506,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     _currentModifier = WaveModifier.normal;
     _spawnIndex = 0;
     _spawnInterval = 1.0;
+    _bossSpawned = false;
+    _currentBoss = null;
     _activeEnemies.clear();
     for (final bucket in _enemyBuckets.values) {
       bucket.clear();
@@ -320,39 +538,98 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   void _applyLevelTuning() {
     final levelId = gameRef.levelConfig?.id ?? 1;
     final difficulty = gameRef.levelConfig?.difficulty ?? 1;
-    _levelWorld = ((levelId - 1) ~/ 10) + 1;
-    final localIndex = ((levelId - 1) % 10) + 1;
-
-    final worldBoost = 1 + (_levelWorld - 1) * 0.08;
-    final localBoost = 1 + (localIndex - 1) * 0.02;
-    final difficultyBoost = 1 + (difficulty - 1) * 0.04;
-
-    _levelHealthScale = worldBoost * localBoost * difficultyBoost;
-    _levelSpeedScale = 1 + (_levelWorld - 1) * 0.03 + (localIndex - 1) * 0.006;
-    _spawnRateScale = 1 + (_levelWorld - 1) * 0.04 + (localIndex - 1) * 0.01;
-    _enemyCountScale = 1 + (_levelWorld - 1) * 0.03 + (localIndex - 1) * 0.01;
-    _goldScale =
-        (1 - (_levelWorld - 1) * 0.02 - (localIndex - 1) * 0.005).clamp(0.7, 1.0);
+    _levelWorld = DifficultyCurve.worldForLevel(levelId);
+    _localIndex = DifficultyCurve.localIndexForLevel(levelId);
+    _progressIndex = DifficultyCurve.progressIndex(levelId: levelId);
+    _difficulty = difficulty;
+    _totalWavesInLevel = gameRef.levelConfig?.waves ?? 5;
     _tuningReady = true;
   }
 
+  double _goldScaleForProgress() {
+    final scale =
+        0.92 -
+        (_levelWorld - 1) * 0.03 -
+        (_localIndex - 1) * 0.006 -
+        (_difficulty - 1) * 0.02;
+    return scale.clamp(0.55, 0.95);
+  }
+
+  int _baseThreatTier() {
+    int tier = 0;
+    if (_currentWave >= 4 || _levelWorld >= 2) {
+      tier = 1;
+    }
+    if (_currentWave >= 8 || _levelWorld >= 4) {
+      tier = 2;
+    }
+    if (_currentWave >= 12 || _levelWorld >= 7) {
+      tier = 3;
+    }
+    return tier;
+  }
+
+  int _resolveThreatTier() {
+    var tier = _baseThreatTier();
+    if (_currentModifier == WaveModifier.juggernaut) {
+      tier = max(tier, 1);
+    } else if (_currentModifier == WaveModifier.overload) {
+      tier = max(tier, 1);
+    }
+    if (tier <= 0) return 0;
+    final interval = switch (tier) {
+      1 => 6,
+      2 => 4,
+      _ => 3,
+    };
+    if (_spawnIndex % interval != 0) {
+      tier = max(0, tier - 1);
+    }
+    return tier;
+  }
+
+  List<EnemyType> _getAvailableTypes() {
+    final pool = <EnemyType>[EnemyType.runner];
+    
+    // Progressive introduction in World 1
+    if (_levelWorld == 1) {
+      if (_localIndex >= 3) pool.add(EnemyType.overloaded);
+      if (_localIndex >= 5) pool.add(EnemyType.juggernaut);
+      if (_localIndex >= 7) pool.add(EnemyType.phantom);
+    } else {
+      // In higher worlds, everything is available but maybe differently balanced
+      pool.addAll([
+        EnemyType.overloaded,
+        EnemyType.juggernaut,
+        EnemyType.phantom,
+      ]);
+    }
+    
+    return pool;
+  }
+
   WaveModifier _selectModifierForWave(int wave) {
+    final pool = _getAvailableTypes();
+    final canOverload = pool.contains(EnemyType.overloaded);
+    final canJuggernaut = pool.contains(EnemyType.juggernaut);
+    final canPhantom = pool.contains(EnemyType.phantom);
+
     if (_levelWorld <= 1) {
-      if (wave % 5 == 0) return WaveModifier.juggernaut;
-      if (wave % 3 == 0) return WaveModifier.overload;
+      if (wave % 5 == 0 && canJuggernaut) return WaveModifier.juggernaut;
+      if (wave % 3 == 0 && canOverload) return WaveModifier.overload;
       return WaveModifier.normal;
     }
     if (_levelWorld == 2) {
-      if (wave % 6 == 0) return WaveModifier.phantom;
-      if (wave % 5 == 0) return WaveModifier.juggernaut;
-      if (wave % 3 == 0) return WaveModifier.overload;
+      if (wave % 6 == 0 && canPhantom) return WaveModifier.phantom;
+      if (wave % 5 == 0 && canJuggernaut) return WaveModifier.juggernaut;
+      if (wave % 3 == 0 && canOverload) return WaveModifier.overload;
       return WaveModifier.normal;
     }
     if (_levelWorld == 3) {
       if (wave % 7 == 0) return WaveModifier.mixed;
-      if (wave % 4 == 0) return WaveModifier.phantom;
-      if (wave % 5 == 0) return WaveModifier.juggernaut;
-      if (wave % 3 == 0) return WaveModifier.overload;
+      if (wave % 4 == 0 && canPhantom) return WaveModifier.phantom;
+      if (wave % 5 == 0 && canJuggernaut) return WaveModifier.juggernaut;
+      if (wave % 3 == 0 && canOverload) return WaveModifier.overload;
       return WaveModifier.normal;
     }
 

@@ -26,6 +26,7 @@ class ImpactEffect extends PositionComponent {
   static const int maxActive = 80;
   static final List<ImpactEffect> _pool = [];
   static int _activeCount = 0;
+  static double fxScale = 1.0;
 
   static ImpactEffect? spawn({
     required Vector2 position,
@@ -96,7 +97,8 @@ class ImpactEffect extends PositionComponent {
     switch (towerType) {
       case TowerType.pulseArcher:
         // Fast, directional sparks
-        for (int i = 0; i < 8; i++) {
+        final sparkCount = _scaledCount(8, allowZero: true);
+        for (int i = 0; i < sparkCount; i++) {
           _sparks.add(_Spark(
             angle: _random.nextDouble() * math.pi * 2,
             speed: 80 + _random.nextDouble() * 60,
@@ -104,16 +106,19 @@ class ImpactEffect extends PositionComponent {
             lifetime: 0.15 + _random.nextDouble() * 0.1,
           ));
         }
-        _rings.add(_ImpactRing(
-          startRadius: 5,
-          endRadius: 25,
-          duration: 0.2,
-        ));
+        if (fxScale > 0.2) {
+          _rings.add(_ImpactRing(
+            startRadius: 5,
+            endRadius: 25,
+            duration: 0.2,
+          ));
+        }
         break;
 
       case TowerType.circuitCannon:
         // Heavy explosion with multiple rings
-        for (int i = 0; i < 3; i++) {
+        final ringCount = _scaledCount(3);
+        for (int i = 0; i < ringCount; i++) {
           _rings.add(_ImpactRing(
             startRadius: 5 + i * 5,
             endRadius: 40 + i * 10,
@@ -121,7 +126,8 @@ class ImpactEffect extends PositionComponent {
           ));
         }
         // Large debris particles
-        for (int i = 0; i < 12; i++) {
+        final particleCount = _scaledCount(12, allowZero: true);
+        for (int i = 0; i < particleCount; i++) {
           _particles.add(_ImpactParticle(
             angle: _random.nextDouble() * math.pi * 2,
             speed: 40 + _random.nextDouble() * 80,
@@ -134,7 +140,8 @@ class ImpactEffect extends PositionComponent {
 
       case TowerType.phaseMage:
         // Mystical burst with arcane symbols
-        for (int i = 0; i < 6; i++) {
+        final runeCount = _scaledCount(6, allowZero: true);
+        for (int i = 0; i < runeCount; i++) {
           _particles.add(_ImpactParticle(
             angle: i * math.pi / 3,
             speed: 30 + _random.nextDouble() * 20,
@@ -145,7 +152,8 @@ class ImpactEffect extends PositionComponent {
           ));
         }
         // Electric discharge
-        for (int i = 0; i < 5; i++) {
+        final sparkCount = _scaledCount(5, allowZero: true);
+        for (int i = 0; i < sparkCount; i++) {
           _sparks.add(_Spark(
             angle: _random.nextDouble() * math.pi * 2,
             speed: 60 + _random.nextDouble() * 40,
@@ -154,16 +162,19 @@ class ImpactEffect extends PositionComponent {
             isElectric: true,
           ));
         }
-        _rings.add(_ImpactRing(
-          startRadius: 8,
-          endRadius: 30,
-          duration: 0.3,
-        ));
+        if (fxScale > 0.2) {
+          _rings.add(_ImpactRing(
+            startRadius: 8,
+            endRadius: 30,
+            duration: 0.3,
+          ));
+        }
         break;
 
       case TowerType.glimmerField:
         // Sparkle burst
-        for (int i = 0; i < 16; i++) {
+        final sparkleCount = _scaledCount(16, allowZero: true);
+        for (int i = 0; i < sparkleCount; i++) {
           _particles.add(_ImpactParticle(
             angle: _random.nextDouble() * math.pi * 2,
             speed: 50 + _random.nextDouble() * 50,
@@ -174,13 +185,23 @@ class ImpactEffect extends PositionComponent {
           ));
         }
         // Quick flash ring
-        _rings.add(_ImpactRing(
-          startRadius: 3,
-          endRadius: 20,
-          duration: 0.15,
-        ));
+        if (fxScale > 0.2) {
+          _rings.add(_ImpactRing(
+            startRadius: 3,
+            endRadius: 20,
+            duration: 0.15,
+          ));
+        }
         break;
     }
+  }
+
+  int _scaledCount(int base, {bool allowZero = false}) {
+    final scaled = (base * fxScale).round();
+    if (scaled <= 0 && !allowZero) {
+      return 1;
+    }
+    return scaled;
   }
 
   @override

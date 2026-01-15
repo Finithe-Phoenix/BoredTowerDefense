@@ -38,7 +38,7 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   bool blockRejected = false;
   double _ghostPulse = 0;
   double _targetingAccumulator = 0;
-  static const double _targetingInterval = 1 / 30;
+  static const double _targetingIntervalBase = 1 / 30;
 
   /// Currently selected tower type for placement
   TowerType selectedTowerType = TowerType.pulseArcher;
@@ -71,6 +71,14 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       }
     }
     return null;
+  }
+
+  bool removeTower(Tower tower) {
+    if (!_towers.remove(tower)) return false;
+    final cell = screenToGrid(tower.position, tileSize);
+    occupied.remove(cell);
+    tower.removeFromParent();
+    return true;
   }
 
   bool placeTower(Vector2 worldPos) {
@@ -106,6 +114,7 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       size: tileSize,
       type: selectedTowerType,
       onFire: _onTowerFire,
+      buildCost: gameRef.towerCost(selectedTowerType),
       damageMultiplier: gameRef.upgradeStats.towerDamageMult,
       rangeMultiplier: gameRef.upgradeStats.towerRangeMult,
       fireRateMultiplier: gameRef.upgradeStats.towerFireRateMult,
@@ -134,6 +143,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   }
 
   void _onTowerFire(Tower tower, Enemy target, Vector2 targetPos) {
+    if (tower.manualTargeting) {
+      gameRef.triggerFocusShot(tower);
+    }
     bulletManager?.fire(
       from: tower.centerPosition,
       to: targetPos,
@@ -141,6 +153,14 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       damage: tower.damage,
       color: tower.color,
       target: target,
+      onHit: (enemy, hitPosition, killed) {
+        gameRef.registerFocusHit(
+          tower: tower,
+          target: enemy,
+          hitWorld: hitPosition,
+          killed: killed,
+        );
+      },
       slowAmount: tower.slowAmount,
       slowDuration: tower.slowDuration,
       towerType: tower.type,
@@ -200,7 +220,16 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     super.update(dt);
 
     _targetingAccumulator += dt;
-    if (_targetingAccumulator >= _targetingInterval) {
+    final enemies = enemyManager?.aliveCount ?? 0;
+    final towerCount = _towers.length;
+    double interval = _targetingIntervalBase;
+    if (gameRef.reduceFx || enemies > 24 || towerCount > 20) {
+      interval = 1 / 20;
+    }
+    if (enemies > 40 || towerCount > 30) {
+      interval = 1 / 12;
+    }
+    if (_targetingAccumulator >= interval) {
       _targetingAccumulator = 0;
       final manager = enemyManager;
       if (manager != null) {

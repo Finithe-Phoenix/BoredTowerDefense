@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/foundation.dart';
 
 /// Synthwave audio service with procedural sound generation
@@ -68,6 +69,18 @@ class AudioService {
       duration: 0.08,
       type: WaveType.noise,
       frequencySlide: -100,
+    );
+  }
+
+  /// Critical hit - sharp confirm tone
+  void playCriticalHit() {
+    if (!_canPlay) return;
+    _playTone(
+      frequency: 1600,
+      duration: 0.06,
+      type: WaveType.square,
+      frequencySlide: -300,
+      volume: 0.9,
     );
   }
 
@@ -218,38 +231,78 @@ class AudioService {
   bool get _canPlay => _enabled && _sfxVolume > 0 && _initialized;
 
   /// Generate and play a procedural tone
-  /// Note: In a real implementation, this would use audioplayers or just_audio
-  /// For now, this logs the sound for debugging and can be expanded later
-  void _playTone({
+  Future<void> _playTone({
     required double frequency,
     required double duration,
     required WaveType type,
     double frequencySlide = 0,
     double volume = 0.8,
-  }) {
-    // In web/mobile, we'd generate actual PCM data and play it
-    // For this implementation, we'll use a visual feedback system
-    // that can be replaced with actual audio later
-
+  }) async {
     final actualVolume = volume * _sfxVolume;
+    if (actualVolume <= 0) return;
 
-    // Debug logging (can be disabled in production)
-    if (kDebugMode) {
-      debugPrint('🔊 ${type.name}: ${frequency.toInt()}Hz, ${(duration * 1000).toInt()}ms, vol:${actualVolume.toStringAsFixed(2)}');
-    }
-
-    // Generate waveform data (for future audio implementation)
-    _generateWaveform(
+    // Generate waveform data
+    final pcmFloat32 = _generateWaveform(
       frequency: frequency,
       duration: duration,
       type: type,
       frequencySlide: frequencySlide,
       volume: actualVolume,
     );
+
+    // Convert to 16-bit PCM
+    final pcm16 = Int16List(pcmFloat32.length);
+    for (var i = 0; i < pcmFloat32.length; i++) {
+      final sample = (pcmFloat32[i] * 32767.0).clamp(-32768.0, 32767.0);
+      pcm16[i] = sample.toInt();
+    }
+    final pcmBytes = pcm16.buffer.asUint8List();
+
+    // Add WAV header and play
+    final wavBytes = _addWavHeader(pcmBytes);
+    await FlameAudio.playBytes(wavBytes, volume: actualVolume);
+
+    if (kDebugMode) {
+      debugPrint(
+          '🔊 ${type.name}: ${frequency.toInt()}Hz, ${(duration * 1000).toInt()}ms, vol:${actualVolume.toStringAsFixed(2)}');
+    }
   }
 
+  /// Create a WAV file header for the given PCM data
+  Uint8List _addWavHeader(Uint8List pcmBytes) {
+    final int pcmLength = pcmBytes.length;
+    final int totalLength = pcmLength + 36;
+    const int sampleRate = _sampleRate;
+    const int numChannels = 1;
+    const int bitsPerSample = 16;
+    final int byteRate = (sampleRate * numChannels * bitsPerSample) ~/ 8;
+    final int blockAlign = (numChannels * bitsPerSample) ~/ 8;
+
+    final header = ByteData(44);
+    // RIFF header
+    header.setUint32(0, 0x52494646, Endian.big); // "RIFF"
+    header.setUint32(4, totalLength, Endian.little);
+    header.setUint32(8, 0x57415645, Endian.big); // "WAVE"
+
+    // fmt sub-chunk
+    header.setUint32(12, 0x666d7420, Endian.big); // "fmt "
+    header.setUint32(16, 16, Endian.little); // Sub-chunk size for PCM
+    header.setUint16(20, 1, Endian.little); // Audio format (1 = PCM)
+    header.setUint16(22, numChannels, Endian.little);
+    header.setUint32(24, sampleRate, Endian.little);
+    header.setUint32(28, byteRate, Endian.little);
+    header.setUint16(32, blockAlign, Endian.little);
+    header.setUint16(34, bitsPerSample, Endian.little);
+
+    // data sub-chunk
+    header.setUint32(36, 0x64617461, Endian.big); // "data"
+    header.setUint32(40, pcmLength, Endian.little);
+
+    return Uint8List.fromList(header.buffer.asUint8List().toList() + pcmBytes.toList());
+  }
+
+
   /// Generate PCM waveform data
-  /// This can be used with audioplayers or platform channels for actual playback
   @visibleForTesting
   Float32List generateWaveformForTesting({
     required double frequency,
@@ -268,7 +321,6 @@ class AudioService {
   }
 
   /// Generate PCM waveform data
-  /// This can be used with audioplayers or platform channels for actual playback
   Float32List _generateWaveform({
     required double frequency,
     required double duration,

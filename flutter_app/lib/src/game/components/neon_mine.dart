@@ -103,7 +103,7 @@ class NeonMine extends PositionComponent {
   }
 
   void _checkEnemyProximity() {
-    const triggerRadius = 20.0;
+    final triggerRadius = math.max(28.0, explosionRadius * 0.4);
 
     for (final enemy in enemies()) {
       if (!enemy.isAlive) continue;

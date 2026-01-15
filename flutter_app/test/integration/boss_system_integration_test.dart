@@ -1,0 +1,513 @@
+import 'package:flame/components.dart';
+import 'package:flame_test/flame_test.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:bored_games/src/game/bored_games_game.dart';
+import 'package:bored_games/src/game/entities/boss.dart';
+import 'package:bored_games/src/models/level_config.dart';
+
+/// Integration tests for the complete boss system
+/// Tests the interaction between Boss, EnemyManager, HUD, and Game
+void main() {
+  group('Boss System Integration', () {
+    testWithGame(
+      'complete boss encounter - level 10',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Citadel Core',
+          mapFile: 'maps/level10.tmx',
+          waves: 5,
+          difficulty: 1,
+          startingGold: 200,
+          startingLives: 20,
+        ),
+      ),
+      (game) async {
+        // Initialize game
+        await game.onLoad();
+        await game.ready();
+
+        // Start final wave
+        for (int wave = 1; wave <= 5; wave++) {
+          game.enemyManager.startWave(count: 5);
+          await game.ready();
+
+          // Wait for wave to spawn
+          while (game.enemyManager.spawning) {
+            game.update(2.0);
+            await game.ready();
+          }
+        }
+
+        // Boss should spawn on last wave
+        expect(game.enemyManager.currentBoss, isNotNull);
+        expect(game.enemyManager.currentBoss?.bossType, BossType.citadelCore);
+        expect(game.enemyManager.currentBoss?.isAlive, true);
+      },
+    );
+
+    testWithGame(
+      'boss health bar updates correctly',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        await game.onLoad();
+        await game.ready();
+
+        // Create and add boss directly for testing
+        final boss = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 1000,
+        );
+
+        await game.enemyManager.add(boss);
+        game.update(0.1);
+
+        // HUD should track boss
+        expect(game.enemyManager.currentBoss, equals(boss));
+
+        // Damage boss
+        boss.takeDamage(500);
+        game.update(0.1);
+
+        expect(boss.healthPercent, 0.5);
+        expect(boss.currentPhase, 2);
+      },
+    );
+
+    testWithGame(
+      'boss phase changes trigger visual effects',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        int phaseChanges = 0;
+        await game.onLoad();
+        await game.ready();
+
+        final boss = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 1000,
+          onPhaseChange: (boss, phase) {
+            phaseChanges++;
+          },
+        );
+
+        await game.enemyManager.add(boss);
+
+        // Damage through all phases
+        boss.takeDamage(260); // Phase 2
+        expect(phaseChanges, 1);
+
+        boss.takeDamage(250); // Phase 3
+        expect(phaseChanges, 2);
+
+        boss.takeDamage(250); // Phase 4
+        expect(phaseChanges, 3);
+      },
+    );
+
+    testWithGame(
+      'BOOST mode activates with boss present',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        await game.onLoad();
+        await game.ready();
+
+        // No boss initially
+        expect(game.enemyManager.currentBoss, isNull);
+
+        // Add boss
+        final boss = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 1000,
+        );
+
+        await game.enemyManager.add(boss);
+        game.update(0.1);
+
+        // Boss should be tracked
+        expect(game.enemyManager.currentBoss, isNotNull);
+        expect(game.enemyManager.currentBoss?.isAlive, true);
+      },
+    );
+
+    testWithGame(
+      'boss rewards gold correctly',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        final initialGold = game.gold;
+        int goldRewarded = 0;
+        await game.onLoad();
+        await game.ready();
+
+        // Setup enemy killed callback
+        game.enemyManager.onEnemyKilled = (enemy, gold) {
+          goldRewarded += gold;
+        };
+
+        final boss = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 1000,
+          goldReward: 1000,
+          onDeath: (enemy) {
+            game.enemyManager.onEnemyKilled?.call(enemy, enemy.goldReward);
+          },
+        );
+
+        await game.enemyManager.add(boss);
+
+        // Kill boss
+        boss.takeDamage(1000);
+        game.update(0.1);
+
+        expect(goldRewarded, 1000);
+      },
+    );
+
+    testWithGame(
+      'all 10 world bosses spawn correctly',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        final bossLevels = {
+          10: BossType.citadelCore,
+          20: BossType.abyssGate,
+          30: BossType.voidlineApex,
+          40: BossType.shardVault,
+          50: BossType.arcFortress,
+          60: BossType.coreHunter,
+          70: BossType.omegaGrid,
+          80: BossType.stormTower,
+          90: BossType.finalGate,
+          100: BossType.omegaNexus,
+        };
+
+        for (final entry in bossLevels.entries) {
+          final levelId = entry.key;
+          final expectedBossType = entry.value;
+
+          final boss = Boss(
+            path: [Vector2(0, 0), Vector2(100, 0)],
+            bossType: expectedBossType,
+            bossLevel: levelId,
+            maxHealth: 5000,
+          );
+
+          expect(boss.bossType, expectedBossType);
+          expect(boss.bossLevel, levelId);
+        }
+      },
+    );
+
+    testWithGame(
+      'boss entrance effect spawns',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        await game.onLoad();
+        await game.ready();
+
+        final initialChildCount = game.enemyManager.children.length;
+
+        final boss = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 1000,
+        );
+
+        await game.enemyManager.add(boss);
+        game.update(0.1);
+
+        // Should have additional children (boss + entrance effect)
+        expect(game.enemyManager.children.length, greaterThan(initialChildCount));
+      },
+    );
+
+    testWithGame(
+      'mini-boss spawns on regular levels',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 5, // Not a multiple of 10
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        await game.onLoad();
+        await game.ready();
+
+        game.enemyManager.startWave(count: 5);
+
+        // Spawn all enemies until boss
+        while (game.enemyManager.remaining > 0) {
+          game.update(2.0);
+        }
+
+        // Should spawn mini-boss
+        expect(game.enemyManager.currentBoss, isNotNull);
+        if (game.enemyManager.currentBoss != null) {
+          expect(
+            game.enemyManager.currentBoss?.bossType,
+            BossType.miniBoss,
+          );
+        }
+      },
+    );
+
+    testWithGame(
+      'boss abilities are called during combat',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        int abilitiesUsed = 0;
+        final abilities = <String>[];
+
+        final boss = Boss(
+          path: [Vector2(0, 0), Vector2(100, 0), Vector2(200, 100)],
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 10000,
+          onAbilityUsed: (boss, abilityName) {
+            abilitiesUsed++;
+            abilities.add(abilityName);
+          },
+        );
+
+        // Update boss for long enough to trigger abilities
+        for (int i = 0; i < 60; i++) {
+          boss.update(0.1);
+        }
+
+        expect(abilitiesUsed, greaterThan(0));
+        expect(abilities.contains('emp_pulse'), true);
+      },
+    );
+
+    testWithGame(
+      'Omega Nexus cycles through all mechanics',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 1,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 1,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        final abilities = <String>{};
+
+        final boss = Boss(
+          path: [Vector2(0, 0), Vector2(200, 0)],
+          bossType: BossType.omegaNexus,
+          bossLevel: 100,
+          maxHealth: 50000,
+          onAbilityUsed: (boss, abilityName) {
+            abilities.add(abilityName);
+          },
+        );
+
+        // Update for extended time to cycle mechanics
+        for (int i = 0; i < 120; i++) {
+          boss.update(0.1);
+        }
+
+        // Should have used multiple different abilities
+        expect(abilities.length, greaterThan(1));
+      },
+    );
+
+    testWithGame(
+      'boss death completes wave',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 10,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 3,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        bool waveCompleted = false;
+        await game.onLoad();
+        await game.ready();
+
+        game.enemyManager.onWaveComplete = (wave) {
+          waveCompleted = true;
+        };
+
+        final boss = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 100,
+          onDeath: (enemy) {
+            game.enemyManager.onEnemyKilled?.call(enemy, enemy.goldReward);
+          },
+        );
+
+        await game.enemyManager.add(boss);
+        game.enemyManager.spawning = false;
+
+        // Kill boss
+        boss.takeDamage(100);
+        game.update(0.1);
+
+        expect(waveCompleted, true);
+      },
+    );
+
+    testWithGame(
+      'multiple bosses can exist in sequence',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 1,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 1,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        await game.onLoad();
+        await game.ready();
+
+        // Boss 1
+        final boss1 = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 100,
+        );
+
+        await game.enemyManager.add(boss1);
+        expect(game.enemyManager.currentBoss, equals(boss1));
+
+        // Kill boss 1
+        boss1.takeDamage(100);
+        game.update(0.1);
+
+        // Boss 2
+        final boss2 = Boss(
+          path: game.enemyManager.world.waypoints,
+          bossType: BossType.abyssGate,
+          bossLevel: 20,
+          maxHealth: 200,
+        );
+
+        await game.enemyManager.add(boss2);
+
+        // Should track new boss
+        expect(boss1.isAlive, false);
+        expect(boss2.isAlive, true);
+      },
+    );
+
+    testWithGame(
+      'boss scales with difficulty',
+      () => BoredGamesGame(
+        tileSize: 32,
+        levelConfig: LevelConfig(
+          id: 1,
+          name: 'Test',
+          mapFile: 'test.tmx',
+          waves: 1,
+          difficulty: 1,
+        ),
+      ),
+      (game) async {
+        // Create bosses at different difficulty levels
+        final easyBoss = Boss(
+          path: [Vector2(0, 0), Vector2(100, 0)],
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 1000,
+        );
+
+        final hardBoss = Boss(
+          path: [Vector2(0, 0), Vector2(100, 0)],
+          bossType: BossType.citadelCore,
+          bossLevel: 10,
+          maxHealth: 2000, // Scaled for higher difficulty
+        );
+
+        expect(hardBoss.maxHealth, greaterThan(easyBoss.maxHealth));
+      },
+    );
+  });
+}

@@ -52,19 +52,22 @@ class Enemy extends PositionComponent {
     this.goldReward = 10,
     this.type = EnemyType.runner,
     this.spawnIndex = 0,
+    this.threatTier = 0,
+    this.worldIndex = 1,
     Vector2? startPosition,
     this.onDeath,
     this.onReachBase,
   }) : _baseSpeed = speed,
        _baseMaxHealth = maxHealth,
        _currentTargetIndex = 0,
-       _animationPhase = math.Random().nextDouble() * math.pi * 2 {
+       _animationPhase = math.Random().nextDouble() * math.pi * 2,
+       _circuitSeed = math.Random().nextDouble() {
     // Apply type multipliers
-    _maxHealth = _baseMaxHealth * type.healthMult;
+    _maxHealth = _baseMaxHealth * type.healthMult * _tierHealthMult;
     _health = _maxHealth;
-    _speed = _baseSpeed * type.speedMult;
+    _speed = _baseSpeed * type.speedMult * _tierSpeedMult;
 
-    size = Vector2.all(24 * type.sizeMult);
+    size = Vector2.all(24 * type.sizeMult * _tierSizeMult);
     anchor = Anchor.center;
     position = startPosition ?? (path.isNotEmpty ? path.first.clone() : Vector2.zero());
 
@@ -78,6 +81,8 @@ class Enemy extends PositionComponent {
   final int goldReward;
   final EnemyType type;
   final int spawnIndex;
+  final int threatTier;
+  final int worldIndex;
 
   int _currentTargetIndex;
   late double _health;
@@ -110,6 +115,14 @@ class Enemy extends PositionComponent {
   double _speedIndicator = 0;
   double _offscreenAccumulator = 0;
 
+  // New visual state for overhaul
+  double _animationTimer = 0;
+  final List<_DataBit> _dataBits = [];
+  final List<_PlasmaParticle> _plasmaParticles = [];
+  late final double _circuitSeed;
+  double _orbitalRotation = 0;
+  double _lastHealth = 0;
+
   // Damage particles
   final List<_DamageParticle> _damageParticles = [];
   static const int _maxDamageParticles = 12;
@@ -139,8 +152,29 @@ class Enemy extends PositionComponent {
   /// Whether enemy is currently slowed
   bool get isSlowed => _slowFactor < 1.0;
 
+  /// The index of the current waypoint the enemy is moving towards.
+  int get currentPathIndex => _currentTargetIndex;
+
+  /// Progress along the path (0.0 start, 1.0 end)
+  double get pathProgress {
+    if (path.isEmpty) return 0.0;
+    return (_currentTargetIndex / path.length).clamp(0.0, 1.0);
+  }
+
   /// Whether this enemy is a phantom type
   bool get isPhantom => type.isPhantom;
+
+  double get _tierHealthMult => 1 + (threatTier * 0.2);
+
+  double get _tierSpeedMult => 1 + (threatTier * 0.04);
+
+  double get _tierSizeMult => 1 + (threatTier * 0.08);
+
+  Color get _threatColor {
+    if (threatTier <= 0) return type.color;
+    final mix = (0.2 + threatTier * 0.12).clamp(0.2, 0.6);
+    return Color.lerp(type.color, const Color(0xFFFF3344), mix)!;
+  }
 
   /// Whether the phantom has been revealed (damaged or detected)
   bool _isRevealed = false;
@@ -188,8 +222,9 @@ class Enemy extends PositionComponent {
   void _spawnDamageParticles() {
     if (Enemy.lowFx || Enemy.forceLowFx) return;
     final random = math.Random();
-    final particleCount = 4 + random.nextInt(4);
-
+    
+    // Standard sparks
+    final particleCount = 2 + random.nextInt(3);
     for (int i = 0; i < particleCount && _damageParticles.length < _maxDamageParticles; i++) {
       _damageParticles.add(_DamageParticle(
         angle: random.nextDouble() * math.pi * 2,
@@ -198,12 +233,96 @@ class Enemy extends PositionComponent {
         lifetime: 0.3 + random.nextDouble() * 0.2,
       ));
     }
+
+    // New Data Bits
+    final bitCount = 3 + random.nextInt(4);
+    for (int i = 0; i < bitCount; i++) {
+      _dataBits.add(_DataBit(
+        position: Vector2.zero(),
+        velocity: Vector2(
+          (random.nextDouble() - 0.5) * 80,
+          (random.nextDouble() - 0.5) * 80,
+        ),
+        color: type.color,
+        size: 2 + random.nextDouble() * 2,
+      ));
+    }
   }
 
-  /// Apply slow effect
-  void applySlow(double factor, double duration) {
-    _slowFactor = factor.clamp(0.1, 1.0);
-    _slowDuration = duration;
+  @override
+  void update(double dt) {
+    super.update(dt);
+    _animationTimer += dt;
+    _animationPhase += dt * 2;
+    _walkPhase += dt * speed / 15.0;
+
+    // Update particles
+    _updateParticles(dt);
+
+    if (_hitFlashTimer > 0) {
+      _hitFlashTimer -= dt;
+    }
+
+    if (_pulseScale > 1.0) {
+      _pulseScale -= dt * 2;
+      if (_pulseScale < 1.0) _pulseScale = 1.0;
+    }
+
+    if (isPhantom && _isRevealed) {
+      _revealTimer -= dt;
+      if (_revealTimer <= 0) {
+        _isRevealed = false;
+        _revealTimer = 0;
+      }
+    }
+
+      }
+    }
+
+    _orbitalRotation += dt * 2;
+    _updatePlasmaParticles(dt);
+    _lastHealth = _health;
+
+    _move(dt);
+  }
+
+  void _updatePlasmaParticles(double dt) {
+    if (Enemy.lowFx || Enemy.forceLowFx) {
+      _plasmaParticles.clear();
+      return;
+    }
+    
+    // Spawn plasma smoke if health is low
+    if (healthPercent < 0.4 && math.Random().nextDouble() < 0.15) {
+      _plasmaParticles.add(_PlasmaParticle(
+        position: Vector2.zero(),
+        velocity: Vector2((math.Random().nextDouble() - 0.5) * 30, -30 - math.Random().nextDouble() * 30),
+        color: type.color,
+      ));
+    }
+
+    for (int i = _plasmaParticles.length - 1; i >= 0; i--) {
+      _plasmaParticles[i].update(dt);
+      if (!_plasmaParticles[i].isActive) {
+        _plasmaParticles.removeAt(i);
+      }
+    }
+  }
+
+  void _updateParticles(double dt) {
+    for (int i = _damageParticles.length - 1; i >= 0; i--) {
+      _damageParticles[i].update(dt);
+      if (!_damageParticles[i].isActive) {
+        _damageParticles.removeAt(i);
+      }
+    }
+
+    for (int i = _dataBits.length - 1; i >= 0; i--) {
+      _dataBits[i].update(dt);
+      if (!_dataBits[i].isActive) {
+        _dataBits.removeAt(i);
+      }
+    }
   }
 
   @override
@@ -228,6 +347,15 @@ class Enemy extends PositionComponent {
       phantomOpacity = 0.6 + math.sin(_animationPhase * 3) * 0.08;
     }
 
+    // Reactive distortion at low health
+    final hpFactor = healthPercent;
+    if (hpFactor < 0.5 && !reduceFx) {
+      final glitchChance = 0.1 + (0.5 - hpFactor) * 0.8;
+      if (math.Random().nextDouble() < glitchChance) {
+        canvas.translate((math.Random().nextDouble() - 0.5) * 3, (math.Random().nextDouble() - 0.5) * 3);
+      }
+    }
+
     if (!reduceFx) {
       // Render trail first (behind enemy)
       _renderTrail(canvas, phantomOpacity, allowBlur);
@@ -235,6 +363,9 @@ class Enemy extends PositionComponent {
       // Render damage particles
       _renderDamageParticles(canvas, allowBlur);
     }
+
+    // Apply world-specific distortions/effects
+    _applyWorldVisuals(canvas);
 
     // Apply walking bob transformation
     canvas.save();
@@ -262,9 +393,14 @@ class Enemy extends PositionComponent {
       ..maskFilter = _blur(allowBlur, 5);
     canvas.drawCircle(Offset.zero, radius, bodyGlowPaint);
 
-    // Enemy body - solid core
-    final bodyPaint = Paint()..color = type.color.withOpacity(phantomOpacity);
-    canvas.drawCircle(Offset.zero, radius * 0.8, bodyPaint);
+    // Draw Internal Circuitry
+    _drawInternalCircuitry(canvas, radius, phantomOpacity);
+
+    // Draw Data Aura & Fragments
+    if (!reduceFx) _drawDataAura(canvas, radius, phantomOpacity);
+
+    // MEGA GEOMETRY: Core, Shell and Plates
+    _drawMegaGeometry(canvas, radius, phantomOpacity, allowBlur);
 
     // Inner highlight (bobs with movement)
     final highlightOffset = Offset(
@@ -275,6 +411,10 @@ class Enemy extends PositionComponent {
       ..color = Colors.white.withOpacity(0.3 * phantomOpacity);
     canvas.drawCircle(highlightOffset, radius * 0.3, highlightPaint);
 
+    if (threatTier > 0) {
+      _renderThreatCrown(canvas, radius, phantomOpacity, allowBlur, reduceFx);
+    }
+
     if (!reduceFx) {
       // Walking legs/tentacles effect (type-specific)
       _renderWalkingEffect(canvas, radius, phantomOpacity, allowBlur);
@@ -283,11 +423,17 @@ class Enemy extends PositionComponent {
       _renderTypeEffects(canvas, radius, phantomOpacity, allowBlur);
     }
 
-    canvas.restore();
+    canvas.restore(); // Restore world visuals
+    canvas.restore(); // Restore walking bob
 
     // Hit flash overlay (outside canvas transform)
     if (!reduceFx && _hitFlashTimer > 0) {
       _renderHitFlash(canvas, radius, phantomOpacity, allowBlur);
+    }
+
+    // Plasma Smoke effect for damaged enemies
+    if (!reduceFx && healthPercent < 0.45) {
+      _renderPlasmaSmoke(canvas, radius, phantomOpacity);
     }
 
     // Slow indicator (ice crystal effect)
@@ -468,6 +614,7 @@ class Enemy extends PositionComponent {
   }
 
   void _renderDamageParticles(Canvas canvas, bool allowBlur) {
+    // Standard sparks
     for (final particle in _damageParticles) {
       if (!particle.isActive) continue;
 
@@ -475,7 +622,6 @@ class Enemy extends PositionComponent {
       final py = math.sin(particle.angle) * particle.distance;
       final alpha = particle.alpha;
 
-      // Particle with glow
       canvas.drawCircle(
         Offset(px, py),
         particle.size * 1.5,
@@ -489,6 +635,33 @@ class Enemy extends PositionComponent {
         particle.size * (1 - particle.progress * 0.5),
         Paint()..color = type.color.withOpacity(alpha),
       );
+    }
+
+    // Data bits
+    for (final bit in _dataBits) {
+      if (!bit.isActive) continue;
+      
+      final paint = Paint()
+        ..color = bit.color.withOpacity(bit.alpha)
+        ..style = PaintingStyle.fill;
+      
+      canvas.save();
+      canvas.translate(bit.position.x, bit.position.y);
+      canvas.rotate(bit.rotation);
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset.zero, width: bit.size, height: bit.size),
+        paint,
+      );
+      
+      if (allowBlur) {
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset.zero, width: bit.size * 1.5, height: bit.size * 1.5),
+          Paint()
+            ..color = bit.color.withOpacity(bit.alpha * 0.5)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        );
+      }
+      canvas.restore();
     }
   }
 
@@ -514,117 +687,297 @@ class Enemy extends PositionComponent {
   }
 
   void _renderTypeEffects(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    final t = _animationTimer;
     switch (type) {
       case EnemyType.runner:
-        // Motion lines
-        final motionPaint = Paint()
-          ..color = type.color.withOpacity(0.4 * opacity)
-          ..strokeWidth = 2
-          ..maskFilter = _blur(allowBlur, 2);
-        canvas.drawLine(
-          Offset(-radius * 1.5, 0),
-          Offset(-radius * 0.8, 0),
-          motionPaint,
-        );
+        // Streamers
+        final streamerPaint = Paint()
+          ..color = type.color.withOpacity(0.3 * opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0;
+        
+        for (int i = 0; i < 3; i++) {
+          final offset = math.sin(t * 10 + i) * 4;
+          canvas.drawLine(
+            Offset(-radius * 1.2, offset),
+            Offset(-radius * 2.5, offset),
+            streamerPaint,
+          );
+        }
+        
+        // Animated Chevrons
+        final chevronPaint = Paint()
+          ..color = Colors.white.withOpacity(0.3 * opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+        
+        for (int i = 0; i < 2; i++) {
+          final x = -radius * 0.5 + ((t * 2 + i * 0.5) % 1.0) * radius;
+          final chevronPath = Path()
+            ..moveTo(x - 4, -4)
+            ..lineTo(x, 0)
+            ..lineTo(x - 4, 4);
+          canvas.drawPath(chevronPath, chevronPaint);
+        }
         break;
 
       case EnemyType.overloaded:
-        // Pulsing energy core
-        final coreRadius = radius * 0.4 * (1 + math.sin(_animationPhase * 3) * 0.3);
-        final corePaint = Paint()
-          ..color = Colors.white.withOpacity(0.8 * opacity)
-          ..maskFilter = _blur(allowBlur, 4);
-        canvas.drawCircle(Offset.zero, coreRadius, corePaint);
+        // Fractal Core
+        final spikes = 8;
+        final fractalPath = Path();
+        for (int i = 0; i < spikes * 2; i++) {
+          final angle = (i / (spikes * 2)) * math.pi * 2 + t * 5;
+          final r = (i % 2 == 0) 
+            ? radius * 0.4 * (1 + math.sin(t * 15) * 0.1)
+            : radius * 0.2;
+          final x = math.cos(angle) * r;
+          final y = math.sin(angle) * r;
+          if (i == 0) fractalPath.moveTo(x, y);
+          else fractalPath.lineTo(x, y);
+        }
+        fractalPath.close();
+        
+        canvas.drawPath(fractalPath, Paint()..color = Colors.white.withOpacity(0.8 * opacity));
+        if (allowBlur) {
+          canvas.drawPath(fractalPath, Paint()
+            ..color = Colors.white.withOpacity(0.4 * opacity)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+        }
 
-        // Energy sparks
-        for (int i = 0; i < 4; i++) {
-          final sparkAngle = _animationPhase * 2 + i * math.pi / 2;
-          final sparkDist = radius * 0.6;
-          final sparkPaint = Paint()
-            ..color = Colors.white.withOpacity(0.6 * opacity)
-            ..maskFilter = _blur(allowBlur, 2);
+        // Energy Sparks
+        if (math.Random().nextDouble() < 0.3) {
+          final sparkAngle = math.Random().nextDouble() * math.pi * 2;
+          final sparkDist = radius * 0.8;
           canvas.drawCircle(
             Offset(math.cos(sparkAngle) * sparkDist, math.sin(sparkAngle) * sparkDist),
-            2,
-            sparkPaint,
+            1.5,
+            Paint()..color = Colors.white.withOpacity(0.9 * opacity),
           );
         }
         break;
 
       case EnemyType.juggernaut:
-        // Armor ring
-        final armorPaint = Paint()
-          ..color = type.color.withOpacity(0.6 * opacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3;
-        canvas.drawCircle(Offset.zero, radius * 0.9, armorPaint);
-
-        // Shield glow
+        // Rotating Hex-Shields
+        canvas.save();
+        canvas.rotate(t * 0.5);
         final shieldPaint = Paint()
-          ..color = Colors.white.withOpacity(0.15 * opacity)
-          ..maskFilter = _blur(allowBlur, 6);
-        canvas.drawCircle(Offset.zero, radius * 1.1, shieldPaint);
+          ..color = type.color.withOpacity(0.25 * opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0;
+          
+        for (int i = 0; i < 6; i++) {
+          final angle = (i / 6) * math.pi * 2;
+          final x = math.cos(angle) * radius * 1.25;
+          final y = math.sin(angle) * radius * 1.25;
+          
+          final hex = Path();
+          for (int j = 0; j < 6; j++) {
+            final hAngle = (j / 6) * math.pi * 2 + t * 2;
+            final hR = radius * 0.25;
+            final hX = x + math.cos(hAngle) * hR;
+            final hY = y + math.sin(hAngle) * hR;
+            if (j == 0) hex.moveTo(hX, hY);
+            else hex.lineTo(hX, hY);
+          }
+          hex.close();
+          canvas.drawPath(hex, shieldPaint);
+        }
+        canvas.restore();
         break;
 
       case EnemyType.phantom:
-        // Glitch/distortion effect - digital scan lines
-        final glitchPaint = Paint()
-          ..color = type.color.withOpacity(0.5 * opacity)
-          ..strokeWidth = 1;
-
-        // Horizontal glitch lines that shift
-        for (int i = 0; i < 5; i++) {
-          final yOffset = (i - 2) * radius * 0.3;
-          final glitchShift = math.sin(_animationPhase * 8 + i) * radius * 0.3;
-          canvas.drawLine(
-            Offset(-radius + glitchShift, yOffset),
-            Offset(radius + glitchShift, yOffset),
-            glitchPaint,
-          );
-        }
-
-        // Digital noise particles around the phantom
+        // Digital Hologram Upgrade
+        final hologramPaint = Paint()
+          ..color = type.color.withOpacity(0.4 * opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.0;
+          
+        // Scanlines
         for (int i = 0; i < 8; i++) {
-          final noiseAngle = _animationPhase * 3 + i * math.pi / 4;
-          final noiseDist = radius * (0.8 + math.sin(_animationPhase * 5 + i) * 0.4);
-          final noiseSize = 2.0 + math.sin(_animationPhase * 7 + i * 2) * 1.5;
-
-          // Flicker effect - only show some particles at a time
-          if (math.sin(_animationPhase * 10 + i * 3) > 0) {
-            final noisePaint = Paint()
-              ..color = type.color.withOpacity(0.7 * opacity)
-              ..maskFilter = _blur(allowBlur, 2);
+          final y = -radius + (radius * 2 * ((t * 0.5 + i / 8) % 1.0));
+          canvas.drawLine(Offset(-radius, y), Offset(radius, y), hologramPaint);
+        }
+        
+        // Data bits noise
+        final rand = math.Random(spawnIndex);
+        for (int i = 0; i < 5; i++) {
+          if (rand.nextDouble() < 0.6) {
+            final bx = (rand.nextDouble() - 0.5) * radius * 2.5;
+            final by = (rand.nextDouble() - 0.5) * radius * 2.5;
             canvas.drawRect(
-              Rect.fromCenter(
-                center: Offset(
-                  math.cos(noiseAngle) * noiseDist,
-                  math.sin(noiseAngle) * noiseDist,
-                ),
-                width: noiseSize,
-                height: noiseSize,
-              ),
-              noisePaint,
+              Rect.fromLTWH(bx, by, 2, 2),
+              Paint()..color = type.color.withOpacity(0.5 * opacity),
             );
           }
         }
+        break;
+    }
+  }
 
-        // Ghostly outer ring that phases in/out
-        final ringOpacity = (0.3 + math.sin(_animationPhase * 2) * 0.2) * opacity;
-        final ringPaint = Paint()
-          ..color = type.color.withOpacity(ringOpacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..maskFilter = _blur(allowBlur, 4);
-        canvas.drawCircle(Offset.zero, radius * 1.2, ringPaint);
+  void _applyWorldVisuals(Canvas canvas) {
+    canvas.save();
+    
+    final t = _animationTimer;
+    final rand = math.Random((_circuitSeed * 100).toInt());
 
-        // Inner data core (when revealed)
-        if (_isRevealed) {
-          final corePaint = Paint()
-            ..color = Colors.white.withOpacity(0.6 * opacity)
-            ..maskFilter = _blur(allowBlur, 3);
-          canvas.drawCircle(Offset.zero, radius * 0.3, corePaint);
+    switch (worldIndex) {
+      case 2: // Rift Wars - Glitch style
+        if (rand.nextDouble() < 0.15) {
+          final shiftX = (rand.nextDouble() - 0.5) * 4;
+          final shiftY = (rand.nextDouble() - 0.5) * 2;
+          canvas.translate(shiftX, shiftY);
         }
         break;
+      case 3: // Signal Wastes - Noise/Static
+        if (math.sin(t * 20) > 0.8) {
+          canvas.skew(0.05 * math.sin(t * 30), 0);
+        }
+        break;
+      case 4: // Ion Crown - Arc/Electrical jitter
+        final jitter = math.sin(t * 40) * 0.8;
+        canvas.translate(jitter, jitter);
+        break;
+      case 5: // Shard Vault - Sharp Jumps
+        if ((t * 2).toInt() % 2 == 0) {
+           canvas.scale(1.02);
+        }
+        break;
+      default:
+        // Neon Frontier - Standard
+        break;
+    }
+  }
+
+  void _drawInternalCircuitry(Canvas canvas, double radius, double opacity) {
+    if (Enemy.lowFx || Enemy.forceLowFx) return;
+    
+    final paint = Paint()
+      ..color = type.color.withOpacity(0.2 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8;
+      
+    final rand = math.Random((_circuitSeed * 1000).toInt());
+    final pulse = 0.5 + math.sin(_animationTimer * 3) * 0.5;
+    paint.color = paint.color.withOpacity(0.1 * opacity + 0.15 * pulse * opacity);
+
+    for (int i = 0; i < 4; i++) {
+      final x1 = (rand.nextDouble() - 0.5) * radius * 1.4;
+      final y1 = (rand.nextDouble() - 0.5) * radius * 1.4;
+      final x2 = (rand.nextDouble() - 0.5) * radius * 1.4;
+      final y2 = (rand.nextDouble() - 0.5) * radius * 1.4;
+      
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
+      canvas.drawCircle(Offset(x1, y1), 1.0, paint..style = PaintingStyle.fill);
+    }
+  }
+
+  Path _createBodyPath(double radius) {
+    final path = Path();
+    switch (type) {
+      case EnemyType.runner:
+        // Sleek aerodynamic diamond
+        path.moveTo(radius, 0);
+        path.lineTo(0, -radius * 0.6);
+        path.lineTo(-radius * 0.8, 0);
+        path.lineTo(0, radius * 0.6);
+        break;
+      case EnemyType.overloaded:
+        // Shifting fractal-like square
+        final shift = math.sin(_animationTimer * 10) * radius * 0.1;
+        path.addRect(Rect.fromCenter(
+          center: Offset.zero, 
+          width: radius * 1.6 + shift, 
+          height: radius * 1.6 - shift,
+        ));
+        break;
+      case EnemyType.juggernaut:
+        // Heavy octagon
+        for (int i = 0; i < 8; i++) {
+          final angle = (i / 8) * math.pi * 2;
+          final x = math.cos(angle) * radius;
+          final y = math.sin(angle) * radius;
+          if (i == 0) path.moveTo(x, y);
+          else path.lineTo(x, y);
+        }
+        break;
+      case EnemyType.phantom:
+        // Unstable triangular ghost
+        for (int i = 0; i < 3; i++) {
+          final angle = (i / 3) * math.pi * 2 + _animationTimer * 2;
+          final x = math.cos(angle) * radius;
+          final y = math.sin(angle) * radius;
+          if (i == 0) path.moveTo(x, y);
+          else path.lineTo(x, y);
+        }
+        break;
+    }
+    path.close();
+    return path;
+  }
+
+  void _renderThreatCrown(
+    Canvas canvas,
+    double radius,
+    double opacity,
+    bool allowBlur,
+    bool reduceFx,
+  ) {
+    final color = _threatColor;
+    final spikeCount = 6 + threatTier * 2;
+    final innerRadius = radius * (1.05 + threatTier * 0.06);
+    final outerRadius = innerRadius + radius * (0.22 + threatTier * 0.05);
+    final pointCount = spikeCount * 2;
+
+    final crownPath = Path();
+    for (int i = 0; i < pointCount; i++) {
+      final angle = (i / pointCount) * math.pi * 2;
+      final r = (i % 2 == 0) ? outerRadius : innerRadius;
+      final x = math.cos(angle) * r;
+      final y = math.sin(angle) * r;
+      if (i == 0) {
+        crownPath.moveTo(x, y);
+      } else {
+        crownPath.lineTo(x, y);
+      }
+    }
+    crownPath.close();
+
+    final fillPaint = Paint()
+      ..color = color.withOpacity((reduceFx ? 0.3 : 0.45) * opacity);
+    final strokePaint = Paint()
+      ..color = color.withOpacity(0.7 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = reduceFx ? 1.0 : 1.6
+      ..maskFilter = _blur(allowBlur, reduceFx ? 2 : 4);
+
+    canvas.drawPath(crownPath, fillPaint);
+    canvas.drawPath(crownPath, strokePaint);
+
+    if (threatTier >= 2) {
+      final eyeRadius = radius * (0.12 + threatTier * 0.03);
+      final eyePaint = Paint()
+        ..color = color.withOpacity(0.9 * opacity)
+        ..maskFilter = _blur(allowBlur, 4);
+      canvas.drawCircle(Offset.zero, eyeRadius, eyePaint);
+    }
+
+    if (!reduceFx && threatTier >= 3) {
+      final arcPaint = Paint()
+        ..color = color.withOpacity(0.4 * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..maskFilter = _blur(allowBlur, 3);
+      final arcRadius = outerRadius + radius * 0.12;
+      for (int i = 0; i < 3; i++) {
+        final start = _animationPhase * 0.6 + i * (math.pi * 2 / 3);
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset.zero, radius: arcRadius),
+          start,
+          math.pi / 3,
+          false,
+          arcPaint,
+        );
+      }
     }
   }
 
@@ -722,6 +1075,148 @@ class Enemy extends PositionComponent {
     );
   }
 
+  void _drawMegaGeometry(Canvas canvas, double radius, double phantomOpacity, bool allowBlur) {
+    final t = _animationTimer;
+    final color = type.color.withOpacity(phantomOpacity);
+    
+    // Core Layer
+    _drawCore(canvas, radius, color, phantomOpacity);
+    
+    // Shell Layer (Semi-transparent)
+    _drawShell(canvas, radius, color, phantomOpacity, allowBlur);
+    
+    // Armor Plates (Independent rotation)
+    _drawArmorPlates(canvas, radius, color, phantomOpacity);
+  }
+
+  void _drawCore(Canvas canvas, double radius, Color color, double opacity) {
+    final coreRadius = radius * 0.6;
+    final corePaint = Paint()
+      ..shader = RadialGradient(
+        colors: [Colors.white.withOpacity(opacity), color],
+        stops: const [0.0, 0.8],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadius));
+      
+    final corePath = _createTypeLayerPath(coreRadius, 0);
+    canvas.drawPath(corePath, corePaint);
+  }
+
+  void _drawShell(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+    final shellPaint = Paint()
+      ..color = color.withOpacity(opacity * 0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+      
+    if (allowBlur && !Enemy.lowFx) {
+      shellPaint.maskFilter = MaskFilter.blur(BlurStyle.outer, 4 * (1 + math.sin(_animationTimer * 2).abs()));
+    }
+
+    final shellPath = _createTypeLayerPath(radius * 0.9, 1);
+    canvas.drawPath(shellPath, shellPaint);
+  }
+
+  void _drawArmorPlates(Canvas canvas, double radius, Color color, double opacity) {
+    final platePaint = Paint()
+      ..color = color.withOpacity(opacity * 0.8)
+      ..style = PaintingStyle.fill;
+      
+    final plateCount = switch (type) {
+      EnemyType.juggernaut => 6,
+      EnemyType.overloaded => 3,
+      _ => 4,
+    };
+
+    for (int i = 0; i < plateCount; i++) {
+        canvas.save();
+        final angle = (i * 2 * math.pi / plateCount) + (_orbitalRotation * 0.5);
+        canvas.rotate(angle);
+        
+        final plateDist = radius * 0.85;
+        final plateSize = radius * 0.3;
+        
+        final platePath = Path()
+          ..moveTo(plateDist, -plateSize/2)
+          ..lineTo(plateDist + 4, 0)
+          ..lineTo(plateDist, plateSize/2)
+          ..close();
+          
+        canvas.drawPath(platePath, platePaint);
+        canvas.restore();
+    }
+  }
+
+  void _drawDataAura(Canvas canvas, double radius, double opacity) {
+    final t = _animationTimer;
+    final bitPaint = Paint()..color = type.color.withOpacity(opacity * 0.6);
+    
+    for (int i = 0; i < 4; i++) {
+      final angle = (i * math.pi / 2) - _orbitalRotation;
+      final dist = radius * 1.4 + 4 * math.sin(t * 3 + i);
+      final bitPos = Offset(math.cos(angle) * dist, math.sin(angle) * dist);
+      
+      canvas.drawRect(
+        Rect.fromCenter(center: bitPos, width: 3, height: 3),
+        bitPaint,
+      );
+      
+      // Connect to center with thin line
+      if (healthPercent > 0.8) {
+        canvas.drawLine(
+          Offset.zero, 
+          bitPos, 
+          Paint()..color = type.color.withOpacity(opacity * 0.1)..strokeWidth = 0.5
+        );
+      }
+    }
+  }
+
+  void _renderPlasmaSmoke(Canvas canvas, double radius, double opacity) {
+    for (final particle in _plasmaParticles) {
+      final pPaint = Paint()
+        ..color = particle.color.withOpacity(particle.opacity * opacity)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+        
+      canvas.drawCircle(particle.position.toOffset(), particle.size, pPaint);
+    }
+  }
+
+  Path _createTypeLayerPath(double radius, int layer) {
+    // Specialized geometry per type and layer
+    switch (type) {
+      case EnemyType.runner:
+        return Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: radius));
+        
+      case EnemyType.overloaded:
+        final path = Path();
+        final sides = 3 + layer;
+        for (int i = 0; i < sides; i++) {
+          final angle = (i * 2 * math.pi / sides) + (layer * math.pi / sides);
+          final point = Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+          if (i == 0) path.moveTo(point.dx, point.dy);
+          else path.lineTo(point.dx, point.dy);
+        }
+        return path..close();
+        
+      case EnemyType.juggernaut:
+        return Path()..addRRect(RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset.zero, width: radius * 2, height: radius * 2),
+          Radius.circular(layer == 0 ? 4 : 8),
+        ));
+        
+      case EnemyType.phantom:
+        final path = Path();
+        final points = 5 + layer;
+        for (int i = 0; i < points * 2; i++) {
+          final r = i.isEven ? radius : radius * 0.7;
+          final angle = i * math.pi / points;
+          final point = Offset(math.cos(angle) * r, math.sin(angle) * r);
+          if (i == 0) path.moveTo(point.dx, point.dy);
+          else path.lineTo(point.dx, point.dy);
+        }
+        return path..close();
+    }
+  }
+
   Color _getHealthColor() {
     if (healthPercent > 0.6) {
       return const Color(0xFF00FF88); // Neon green
@@ -732,143 +1227,23 @@ class Enemy extends PositionComponent {
     }
   }
 
-  double _resolveUpdateStep(double dt) {
-    if (!Enemy.throttleOffscreen || Enemy.screenSize.isZero()) {
-      return dt;
-    }
-    final screenX = position.x * Enemy.screenScale + Enemy.screenOffset.x;
-    final screenY = position.y * Enemy.screenScale + Enemy.screenOffset.y;
-    final visible = screenX >= -offscreenPadding &&
-        screenX <= Enemy.screenSize.x + offscreenPadding &&
-        screenY >= -offscreenPadding &&
-        screenY <= Enemy.screenSize.y + offscreenPadding;
-    if (visible) {
-      _offscreenAccumulator = 0;
-      return dt;
-    }
-    _offscreenAccumulator += dt;
-    if (_offscreenAccumulator < offscreenUpdateInterval) {
-      return 0;
-    }
-    final step = _offscreenAccumulator;
-    _offscreenAccumulator = 0;
-    return step;
-  }
-
-  @override
-  void update(double dt) {
-    super.update(dt);
-    if (!isAlive) return;
-
-    final stepDt = _resolveUpdateStep(dt);
-    if (stepDt <= 0) return;
-
-    // Animation updates
-    _animationPhase += stepDt * 4;
-
-    // Walk animation based on speed
-    final walkSpeed = switch (type) {
-      EnemyType.runner => 15.0,
-      EnemyType.overloaded => 18.0,
-      EnemyType.juggernaut => 8.0,
-      EnemyType.phantom => 12.0,
-    };
-    _walkPhase += stepDt * walkSpeed;
-
-    // Calculate speed indicator for motion effects
-    final currentSpeed = (position - _lastPosition).length / stepDt;
-    _speedIndicator = (currentSpeed / (_baseSpeed * 2)).clamp(0.0, 1.0);
-
-    // Walking bob effect - different per type
-    final bobAmount = switch (type) {
-      EnemyType.runner => 2.0,
-      EnemyType.overloaded => 1.5,
-      EnemyType.juggernaut => 3.0,
-      EnemyType.phantom => 0.5,
-    };
-
-    _verticalBob = math.sin(_walkPhase * 2) * bobAmount * _speedIndicator;
-    _wobbleOffset = math.sin(_walkPhase) * bobAmount * 0.3 * _speedIndicator;
-
-    // Store last position for motion blur
-    _lastPosition = position.clone();
-
-    // Pulse scale decay
-    if (_pulseScale > 1.0) {
-      _pulseScale = math.max(1.0, _pulseScale - stepDt * 2);
-    }
-
-    // Hit flash decay
-    if (_hitFlashTimer > 0) {
-      _hitFlashTimer -= stepDt;
-    }
-
-    // Update damage particles
-    if (Enemy.lowFx || Enemy.forceLowFx) {
-      if (_damageParticles.isNotEmpty) {
-        _damageParticles.clear();
-      }
-    } else {
-      _damageParticles.removeWhere((p) => !p.isActive);
-      for (final particle in _damageParticles) {
-        particle.update(stepDt);
-      }
-    }
-
-    // Update trail
-    _trailUpdateTimer += stepDt;
-    final trailInterval = (Enemy.lowFx || Enemy.forceLowFx)
-        ? _trailUpdateInterval * 3
-        : _trailUpdateInterval;
-    if (_trailUpdateTimer >= trailInterval) {
-      _trailUpdateTimer = 0;
-      // Shift trail positions
-      for (int i = _trailPositions.length - 1; i > 0; i--) {
-        _trailPositions[i] = _trailPositions[i - 1].clone();
-      }
-      _trailPositions[0] = position.clone();
-    }
-
-    // Update slow effect
-    if (_slowDuration > 0) {
-      _slowDuration -= stepDt;
-      if (_slowDuration <= 0) {
-        _slowFactor = 1.0;
-        _slowDuration = 0;
-      }
-    }
-
-    // Update phantom reveal timer
-    if (isPhantom && _isRevealed && _revealTimer > 0) {
-      _revealTimer -= stepDt;
-      if (_revealTimer <= 0) {
-        _isRevealed = false;
-        _revealTimer = 0;
-      }
-    }
-
+  void _move(double dt) {
     if (path.isEmpty || _currentTargetIndex >= path.length) {
-      // Reached the base
       onReachBase?.call(this);
       removeFromParent();
       return;
     }
 
     final target = path[_currentTargetIndex];
-    final direction = (target - position);
+    final direction = target - position;
     final distance = direction.length;
+    final moveDist = speed * dt;
 
-    if (distance < 1) {
-      _currentTargetIndex++;
-      return;
-    }
-
-    final step = direction.normalized() * speed * stepDt;
-    if (step.length >= distance) {
+    if (moveDist >= distance) {
       position = target;
       _currentTargetIndex++;
     } else {
-      position += step;
+      position += direction.normalized() * moveDist;
     }
   }
 }
@@ -897,6 +1272,56 @@ class _DamageParticle {
 
   void update(double dt) {
     _timer += dt;
-    distance += speed * dt * (1 - progress * 0.5); // Slow down over time
+    distance += speed * dt * (1 - progress * 0.5);
   }
 }
+
+class _DataBit {
+  _DataBit({
+    required this.position,
+    required this.velocity,
+    required this.color,
+    required this.size,
+  }) : rotation = math.Random().nextDouble() * math.pi * 2,
+       lifetime = 0.6 + math.Random().nextDouble() * 0.4;
+
+  final Vector2 position;
+  final Vector2 velocity;
+  final Color color;
+  final double size;
+  final double rotation;
+  final double lifetime;
+  double _timer = 0;
+
+  bool get isActive => _timer < lifetime;
+  double get alpha => (1 - _timer / lifetime).clamp(0.0, 1.0);
+
+  void update(double dt) {
+    _timer += dt;
+    position.add(velocity * dt);
+    velocity.y += 150 * dt; // Gravity
+  }
+}
+
+class _PlasmaParticle {
+  _PlasmaParticle({
+    required this.position,
+    required this.velocity,
+    required this.color,
+  });
+
+  Vector2 position;
+  final Vector2 velocity;
+  final Color color;
+  bool isActive = true;
+  double opacity = 0.8;
+  double size = 4.0;
+
+  void update(double dt) {
+    position += velocity * dt;
+    opacity -= dt * 1.2;
+    size -= dt * 2;
+    if (opacity <= 0 || size <= 0) isActive = false;
+  }
+}
+```

@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import '../../game/bored_games_game.dart';
 import '../../models/upgrade_data.dart';
@@ -14,66 +12,84 @@ class RunUpgradeOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final choices = game.pendingRunUpgrades;
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-      child: Container(
-        color: Colors.black.withOpacity(0.72),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 720;
-              return Column(
-                children: [
-                  const SizedBox(height: 20),
-                  Text(
-                    'SELECT AN UPGRADE',
-                    style: NeonTextStyles.title.copyWith(
-                      fontSize: 28,
-                      color: NeonColors.cyan,
-                      letterSpacing: 2,
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        children: [
+          IgnorePointer(
+            child: Container(color: Colors.black.withOpacity(0.45)),
+          ),
+          SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth > 720;
+                return Column(
+                  children: [
+                    const SizedBox(height: 20),
+                    Text(
+                      'SELECT AN UPGRADE',
+                      style: NeonTextStyles.title.copyWith(
+                        fontSize: 28,
+                        color: NeonColors.cyan,
+                        letterSpacing: 2,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tune the grid before the next wave.',
-                    style: NeonTextStyles.small.copyWith(
-                      color: NeonColors.white.withOpacity(0.6),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Choose when you are ready.',
+                      style: NeonTextStyles.small.copyWith(
+                        color: NeonColors.white.withOpacity(0.6),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: Center(
-                      child: SizedBox(
-                        width: isWide ? 760 : double.infinity,
-                        child: Wrap(
-                          alignment: WrapAlignment.center,
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: choices
-                              .map((upgrade) => _UpgradeChoiceCard(
-                                    upgrade: upgrade,
-                                    onSelect: () => game.selectRunUpgrade(upgrade.id),
-                                  ))
-                              .toList(),
+                    const SizedBox(height: 20),
+                    Expanded(
+                      child: Center(
+                        child: SizedBox(
+                          width: isWide ? 760 : double.infinity,
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            spacing: 16,
+                            runSpacing: 16,
+                            children: choices
+                                .map((upgrade) => _UpgradeChoiceCard(
+                                      upgrade: upgrade,
+                                      onSelect: () => game.selectRunUpgrade(upgrade.id),
+                                    ))
+                                .toList(),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 24),
-                    child: EpicNeonButton(
-                      text: 'SKIP',
-                      width: 160,
-                      height: 40,
-                      color: NeonColors.magenta,
-                      onPressed: game.skipRunUpgrade,
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 24),
+                      child: Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          EpicNeonButton(
+                            text: 'CLOSE',
+                            width: 160,
+                            height: 40,
+                            color: NeonColors.cyan,
+                            onPressed: game.closeRunUpgradeOverlay,
+                          ),
+                          EpicNeonButton(
+                            text: 'SKIP',
+                            width: 160,
+                            height: 40,
+                            color: NeonColors.magenta,
+                            onPressed: game.skipRunUpgrade,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

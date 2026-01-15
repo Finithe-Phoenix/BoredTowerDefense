@@ -10,6 +10,10 @@ WORKDIR /app/flutter_app
 
 RUN flutter pub get
 
+# Hacer el script ejecutable
+RUN chmod +x entrypoint.sh
+
 EXPOSE 8080
 
-CMD ["sh", "-c", "flutter run -d web-server --web-port 8080 --web-hostname 0.0.0.0 --dart-define=APP_ENV=$APP_ENV"]
+# Usar el script de entrypoint que ejecuta pruebas primero
+CMD ["./entrypoint.sh"]

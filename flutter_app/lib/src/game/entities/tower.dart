@@ -104,6 +104,7 @@ class Tower extends PositionComponent {
     this.type = TowerType.pulseArcher,
     this.targetMode = TargetMode.first,
     this.onFire,
+    this.buildCost = 0,
     double damageMultiplier = 1.0,
     double rangeMultiplier = 1.0,
     double fireRateMultiplier = 1.0,
@@ -126,12 +127,14 @@ class Tower extends PositionComponent {
   final TowerType type;
   TargetMode targetMode;
   TowerFireCallback? onFire;
+  final int buildCost;
   final math.Random _random;
   double _damageMultiplier;
   double _rangeMultiplier;
   double _fireRateMultiplier;
   double _projectileSpeedMultiplier;
   double _slowMultiplier;
+  bool _isBoosted = false;
 
   Enemy? _currentTarget;
   Enemy? _manualTarget;
@@ -184,14 +187,27 @@ class Tower extends PositionComponent {
   /// Center position for targeting calculations
   Vector2 get centerPosition => position + size / 2;
 
+  double get _boostMultiplier => _isBoosted ? 1.2 : 1.0;
+
   /// Get tower stats from type
-  double get damage => type.damage * _damageMultiplier;
-  double get fireRate => type.fireRate * _fireRateMultiplier;
+  double get damage => type.damage * _damageMultiplier * _boostMultiplier;
+  double get fireRate => type.fireRate * _fireRateMultiplier * _boostMultiplier;
   double get range => type.range * _rangeMultiplier;
   Color get color => type.color;
   double get projectileSpeed => type.projectileSpeed * _projectileSpeedMultiplier;
   double get slowAmount => type.slowAmount * _slowMultiplier;
   double get slowDuration => type.slowDuration;
+
+  // FPS view support
+  double get currentDamage => damage;
+  double get currentFireRate => fireRate;
+  double get currentRange => range;
+  Enemy? get currentTarget => _currentTarget;
+  double _lastFireTime = 0;
+  double get lastFireTime => _lastFireTime;
+
+  /// Whether the tower is ready to fire
+  bool get isReady => _fireCooldown <= 0;
 
   void applyUpgradeStats(UpgradeStats stats) {
     _damageMultiplier = stats.towerDamageMult;
@@ -199,6 +215,21 @@ class Tower extends PositionComponent {
     _fireRateMultiplier = stats.towerFireRateMult;
     _projectileSpeedMultiplier = stats.projectileSpeedMult;
     _slowMultiplier = stats.slowMult;
+  }
+
+  /// Manually reset the fire cooldown after a shot
+  void resetCooldown() {
+    _fireCooldown = 1.0 / fireRate;
+    _chargeLevel = 0;
+    _triggerMuzzleFlash();
+  }
+
+  void enterFpsBoost() {
+    _isBoosted = true;
+  }
+
+  void exitFpsBoost() {
+    _isBoosted = false;
   }
 
   bool get manualTargeting => _manualTargeting;
@@ -417,6 +448,18 @@ class Tower extends PositionComponent {
   void _fire(Enemy target) {
     // Calculate lead position for moving target
     final targetPos = _calculateLeadPosition(target);
+
+    // Try to get game time from the game instance
+    try {
+      final game = findGame();
+      if (game != null) {
+        _lastFireTime = (game as dynamic).gameTime ?? 0.0;
+      }
+    } catch (_) {
+      // Fallback: use current time
+      _lastFireTime = 0.0;
+    }
+
     onFire?.call(this, target, targetPos);
   }
 

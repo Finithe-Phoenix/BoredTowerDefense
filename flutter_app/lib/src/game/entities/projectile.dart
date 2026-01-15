@@ -10,11 +10,16 @@ import '../../services/audio_service.dart';
 import '../effects/impact_effect.dart';
 
 class Projectile extends PositionComponent {
+  static bool lowFx = false;
+  static bool allowTrails = true;
+  static bool allowGlow = true;
+
   Projectile({
     required Vector2 startPosition,
     required this.targetPosition,
     required this.speed,
     required this.damage,
+    this.onHit,
     this.color = const Color(0xFF00FFFF),
     this.target,
     this.slowAmount = 0,
@@ -32,6 +37,7 @@ class Projectile extends PositionComponent {
   final Vector2 targetPosition;
   double speed;
   double damage;
+  void Function(Enemy target, Vector2 hitPosition, bool killed)? onHit;
   Color color;
   double slowAmount;
   double slowDuration;
@@ -97,29 +103,43 @@ class Projectile extends PositionComponent {
         _wobbleAmount = 0.1;
         break;
     }
+
+    if (lowFx) {
+      _maxTrailLength = math.max(2, (_maxTrailLength * 0.35).round());
+      _particleCount = (_particleCount * 0.25).round();
+      if (_particleCount < 0) {
+        _particleCount = 0;
+      }
+      _wobbleAmount = 0;
+      _electricSegments = [];
+    }
   }
 
   void _initializeTrail() {
     _trailPositions.clear();
     _trailAlphas.clear();
-    for (int i = 0; i < _maxTrailLength; i++) {
-      _trailPositions.add(position.clone());
-      _trailAlphas.add(0);
+    if (allowTrails && !lowFx && _maxTrailLength > 1) {
+      for (int i = 0; i < _maxTrailLength; i++) {
+        _trailPositions.add(position.clone());
+        _trailAlphas.add(0);
+      }
     }
 
     // Initialize particles
     _particles.clear();
-    for (int i = 0; i < _particleCount; i++) {
-      _particles.add(_ProjectileParticle(
-        offset: Vector2(
-          (_random.nextDouble() - 0.5) * 10,
-          (_random.nextDouble() - 0.5) * 10,
-        ),
-        speed: 20 + _random.nextDouble() * 30,
-        angle: _random.nextDouble() * math.pi * 2,
-        size: 1 + _random.nextDouble() * 2,
-        alpha: 0.3 + _random.nextDouble() * 0.5,
-      ));
+    if (!lowFx && _particleCount > 0) {
+      for (int i = 0; i < _particleCount; i++) {
+        _particles.add(_ProjectileParticle(
+          offset: Vector2(
+            (_random.nextDouble() - 0.5) * 10,
+            (_random.nextDouble() - 0.5) * 10,
+          ),
+          speed: 20 + _random.nextDouble() * 30,
+          angle: _random.nextDouble() * math.pi * 2,
+          size: 1 + _random.nextDouble() * 2,
+          alpha: 0.3 + _random.nextDouble() * 0.5,
+        ));
+      }
     }
   }
 
@@ -131,6 +151,7 @@ class Projectile extends PositionComponent {
     required double damage,
     Color? color,
     Enemy? target,
+    void Function(Enemy target, Vector2 hitPosition, bool killed)? onHit,
     double slowAmount = 0,
     double slowDuration = 0,
     TowerType towerType = TowerType.pulseArcher,
@@ -144,6 +165,7 @@ class Projectile extends PositionComponent {
     this.slowDuration = slowDuration;
     this.towerType = towerType;
     this.target = target;
+    this.onHit = onHit;
     _active = true;
     _time = 0;
     _rotationAngle = 0;
@@ -172,16 +194,22 @@ class Projectile extends PositionComponent {
     _pulsePhase += dt * 15;
 
     // Update trail
-    _updateTrail();
+    if (allowTrails && !lowFx) {
+      _updateTrail();
+    }
 
     // Update particles
-    for (final particle in _particles) {
-      particle.update(dt);
+    if (!lowFx) {
+      for (final particle in _particles) {
+        particle.update(dt);
+      }
     }
 
     // Update electric segments for Phase Mage
-    for (final segment in _electricSegments) {
-      segment.update(dt, _random);
+    if (!lowFx) {
+      for (final segment in _electricSegments) {
+        segment.update(dt, _random);
+      }
     }
 
     // Move toward target position
@@ -192,14 +220,17 @@ class Projectile extends PositionComponent {
       // Hit - apply damage and effects if target still valid
       if (target != null && target!.isAlive) {
         target!.takeDamage(damage);
+        final killed = !target!.isAlive;
 
         // Apply slow effect if applicable
-        if (appliesSlow) {
+        if (appliesSlow && target!.isAlive) {
           target!.applySlow(slowAmount, slowDuration);
         }
 
         // Play hit sound
         AudioService.instance.playHit();
+
+        onHit?.call(target!, target!.position.clone(), killed);
 
         // Spawn impact effect
         _spawnImpactEffect();
@@ -250,6 +281,15 @@ class Projectile extends PositionComponent {
     if (!_active) return;
     super.render(canvas);
 
+    if (lowFx) {
+      canvas.drawCircle(
+        Offset.zero,
+        size.x * 0.4,
+        Paint()..color = color.withOpacity(0.85),
+      );
+      return;
+    }
+
     // Draw type-specific effects
     switch (towerType) {
       case TowerType.pulseArcher:
@@ -269,7 +309,9 @@ class Projectile extends PositionComponent {
 
   void _renderPulseArcher(Canvas canvas) {
     // Sleek arrow-like projectile
-    _drawTrail(canvas);
+    if (allowTrails) {
+      _drawTrail(canvas);
+    }
 
     final pulseScale = 1.0 + math.sin(_pulsePhase) * 0.1;
 
@@ -320,7 +362,9 @@ class Projectile extends PositionComponent {
 
   void _renderCircuitCannon(Canvas canvas) {
     // Heavy, powerful projectile
-    _drawTrail(canvas);
+    if (allowTrails) {
+      _drawTrail(canvas);
+    }
 
     final pulseScale = 1.0 + math.sin(_pulsePhase * 0.5) * 0.2;
 
@@ -386,7 +430,9 @@ class Projectile extends PositionComponent {
 
   void _renderPhaseMage(Canvas canvas) {
     // Mystical, ethereal projectile with electric arcs
-    _drawTrail(canvas);
+    if (allowTrails) {
+      _drawTrail(canvas);
+    }
 
     final pulseScale = 1.0 + math.sin(_pulsePhase) * 0.15;
 
@@ -477,7 +523,9 @@ class Projectile extends PositionComponent {
 
   void _renderGlimmerField(Canvas canvas) {
     // Rapid, sparkly projectile
-    _drawTrail(canvas);
+    if (allowTrails) {
+      _drawTrail(canvas);
+    }
 
     final pulseScale = 1.0 + math.sin(_pulsePhase * 2) * 0.2;
 
@@ -561,14 +609,16 @@ class Projectile extends PositionComponent {
       final trailSize = size.x * 0.5 * (1 - i / _maxTrailLength);
 
       // Trail glow
-      final glowPaint = Paint()
-        ..color = color.withOpacity(alpha * 0.3)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 + i * 0.5);
-      canvas.drawCircle(
-        Offset(trailOffset.x, trailOffset.y),
-        trailSize * 1.5,
-        glowPaint,
-      );
+      if (allowGlow) {
+        final glowPaint = Paint()
+          ..color = color.withOpacity(alpha * 0.3)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 + i * 0.5);
+        canvas.drawCircle(
+          Offset(trailOffset.x, trailOffset.y),
+          trailSize * 1.5,
+          glowPaint,
+        );
+      }
 
       // Trail core
       final trailPaint = Paint()
@@ -584,8 +634,10 @@ class Projectile extends PositionComponent {
     final linePaint = Paint()
       ..color = color.withOpacity(0.4)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      ..strokeCap = StrokeCap.round;
+    if (allowGlow) {
+      linePaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    }
 
     for (int i = 0; i < _trailPositions.length - 1; i++) {
       if (_trailAlphas[i] < 0.1 || _trailAlphas[i + 1] < 0.1) continue;
@@ -608,8 +660,11 @@ class Projectile extends PositionComponent {
       final py = math.sin(particle.angle + _time * particle.speed * 0.1) * particle.offset.y;
 
       final particlePaint = Paint()
-        ..color = color.withOpacity(particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3))
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size);
+        ..color =
+            color.withOpacity(particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3));
+      if (allowGlow) {
+        particlePaint.maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size);
+      }
 
       canvas.drawCircle(Offset(px, py), particle.size, particlePaint);
     }

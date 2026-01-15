@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../models/level_config.dart';
+import '../../services/level_service.dart';
 import '../theme/neon_theme.dart';
 import '../widgets/animated_grid_background.dart';
 import '../widgets/epic_neon_button.dart';
@@ -8,51 +10,151 @@ import '../widgets/epic_neon_title.dart';
 class StoryScreen extends StatelessWidget {
   const StoryScreen({super.key});
 
+  static const int _levelsPerWorld = 10;
+
   static const List<_StoryChapter> _chapters = [
     _StoryChapter(
-      title: 'The Flicker Nations',
-      subtitle: 'A neon skyline on the edge of collapse.',
+      worldId: 1,
+      title: 'Neon Frontier',
+      subtitle: 'Capitulo 1 - La primera chispa.',
       beats: [
-        '2141—after the Resonance Event severed the Central Grid, every megastructure flickers between light and silence.',
-        'You are Commander Lira Kestrel of the Aegis Vanguard, sent into the ruined sectors to re-ignite stability and buy time for the remaining cities.',
-        'Each tower you deploy anchors a shard of power into the fracturing grid, and every enemy wave is a corrupted synth-swarm hungry for your light.',
+        'El Evento Resonancia apago la red central y las ciudades quedaron en modo supervivencia.',
+        'Eres la comandante Lira Kestrel, enviada a reactivar nodos y sostener la linea.',
+        'Cada torre ancla energia y corta el avance del ruido corrupto.',
       ],
       accent: NeonColors.cyan,
     ),
     _StoryChapter(
-      title: 'The Pulse Accord',
-      subtitle: 'Forged between science and sorcery.',
+      worldId: 2,
+      title: 'Rift Wars',
+      subtitle: 'Capitulo 2 - Grietas en la malla.',
       beats: [
-        'The Neon Pulse ability is more than a weapon—it is the ancient waveform of the old Grid, cleansed and reshaped by the Phase Mages.',
-        'Mines are celestial anchors: when armed, they hum in the key of Aether and explode in kaleidoscopic cascades that rip holes through the static.',
-        'As you progress, the Accord’s holographic sages narrate instructions, unlocking new rites and upgraded towers in exchange for living energy.',
+        'Las grietas abren rutas nuevas y los enjambres se filtran a velocidad rift.',
+        'Tus pulsos reescriben el flujo y las minas sellan pasos inestables.',
+        'La vanguardia mantiene el pulso mientras la historia se fractura.',
       ],
       accent: NeonColors.magenta,
     ),
     _StoryChapter(
-      title: 'Waves of the Fallen',
-      subtitle: 'Overload, Juggernaut, Phantom—their names echo in the tunnel cores.',
+      worldId: 3,
+      title: 'Signal Wastes',
+      subtitle: 'Capitulo 3 - Silencio y eco.',
       beats: [
-        'Overload waves are the corrupted couriers of the Syndicate, arriving in bursts of hyperspeed that force you to mesh lightning-fast towers.',
-        'Juggernauts clank across the broken sidewalks, their armor plated in forgotten currencies, slowing your pulse with every stomp.',
-        'Phantoms slip through emitted light, detected only by the Phase Mage’s arcane shimmer—if they reach the Core, they siphon the very story you fight to preserve.',
+        'Los desiertos de senal rompen el ritmo y obligan a defender pasillos largos.',
+        'Los enemigos aprenden a ocultarse en el vacio; tu vision debe ser total.',
+        'Si sostienes la luz, la red responde con fuerza renovada.',
       ],
       accent: NeonColors.yellow,
     ),
     _StoryChapter(
-      title: 'Renegade Beacon',
-      subtitle: 'Every victory plants a beacon of hope.',
+      worldId: 4,
+      title: 'Ion Crown',
+      subtitle: 'Capitulo 4 - La corona de tormenta.',
       beats: [
-        'The Level Select interface is your orbital map; each cleared stage unlocks a new beacon, a reference point for the fleeing citizens.',
-        'Stars track your lives and how elegantly you danced through the storm—perfect clears send ripples of light down the Aegis lines.',
-        'In the final arc, the Grid itself starts singing. Hold it together, and a new dawn blooms beyond the data horizon.',
+        'Tormentas ionicas recortan los carriles y obligan a cerrar brechas rapido.',
+        'Las oleadas pesan mas; cada decision define el pulso del mundo.',
+        'Sobrevivir aqui es ganar tiempo para que el Grid vuelva a latir.',
       ],
       accent: NeonColors.green,
     ),
+    _StoryChapter(
+      worldId: 5,
+      title: 'Shard Vault',
+      subtitle: 'Capitulo 5 - La memoria perdida.',
+      beats: [
+        'Las bovedas antiguas guardan codigos de mejora y secretos de combate.',
+        'Tus torres absorben fragmentos de memoria y evolucionan en pleno asedio.',
+        'Cada nivel limpiado libera un nodo del pasado.',
+      ],
+      accent: NeonColors.red,
+    ),
+    _StoryChapter(
+      worldId: 6,
+      title: 'Arc Fortress',
+      subtitle: 'Capitulo 6 - El asedio.',
+      beats: [
+        'La fortaleza concentra ataques y obliga a defender multiples frentes.',
+        'Las oleadas llegan mas compactas; el control del mapa es vital.',
+        'Solo la disciplina mantiene la linea de Aegis.',
+      ],
+      accent: NeonColors.purple,
+    ),
+    _StoryChapter(
+      worldId: 7,
+      title: 'Core Hunt',
+      subtitle: 'Capitulo 7 - Caza al nucleo.',
+      beats: [
+        'El enemigo ignora todo menos el nucleo; cada error cuesta caro.',
+        'La precision manda: pulsa, mina y enfoca cada disparo.',
+        'El Grid tiembla, pero no se rinde.',
+      ],
+      accent: NeonColors.orange,
+    ),
+    _StoryChapter(
+      worldId: 8,
+      title: 'Omega Grid',
+      subtitle: 'Capitulo 8 - Bucle infinito.',
+      beats: [
+        'El Omega Grid repite patrones y castiga a quien no se adapta.',
+        'La presion es constante; solo la estrategia rompe el ciclo.',
+        'Cada victoria escribe una ruta nueva en la red.',
+      ],
+      accent: NeonColors.blue,
+    ),
+    _StoryChapter(
+      worldId: 9,
+      title: 'Storm Tower',
+      subtitle: 'Capitulo 9 - El filo del rayo.',
+      beats: [
+        'Los corredores se fracturan y el tiempo se vuelve enemigo.',
+        'Los rayos marcan el ritmo; tus torres deben responder al instante.',
+        'La vanguardia empieza a ver la salida.',
+      ],
+      accent: NeonColors.cyan,
+    ),
+    _StoryChapter(
+      worldId: 10,
+      title: 'Final Gate',
+      subtitle: 'Capitulo 10 - El ultimo umbral.',
+      beats: [
+        'La ultima puerta resiste con su ultima energia.',
+        'Si la mantienes en pie, el Grid renace.',
+        'Un nuevo amanecer espera al otro lado del ruido.',
+      ],
+      accent: NeonColors.white,
+    ),
   ];
+
+  int _worldForLevel(int levelId) => ((levelId - 1) ~/ _levelsPerWorld) + 1;
+
+  List<LevelConfig> _levelsForWorld(LevelService service, int worldId) {
+    return service.levels
+        .where((level) => _worldForLevel(level.id) == worldId)
+        .toList(growable: false);
+  }
+
+  _WorldProgress _worldProgress(LevelService service, int worldId) {
+    final levels = _levelsForWorld(service, worldId);
+    int completed = 0;
+    bool unlocked = false;
+    for (final level in levels) {
+      if (service.isLevelUnlocked(level.id)) {
+        unlocked = true;
+      }
+      if (service.getProgress(level.id).completed) {
+        completed += 1;
+      }
+    }
+    return _WorldProgress(
+      total: levels.length,
+      completed: completed,
+      unlocked: unlocked || worldId == 1,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    final levelService = LevelService.instance;
     return Scaffold(
       body: AnimatedGridBackground(
         child: SafeArea(
@@ -69,7 +171,7 @@ class StoryScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Every tower is a promise. Every wave is a prophecy being rewritten.',
+                  'La historia avanza con cada mundo. Cada victoria enciende un nodo mas.',
                   textAlign: TextAlign.center,
                   style: NeonTextStyles.body.copyWith(
                     color: NeonColors.white.withOpacity(0.8),
@@ -84,7 +186,8 @@ class StoryScreen extends StatelessWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 12),
                     itemBuilder: (context, index) {
                       final chapter = _chapters[index];
-                      return _StoryCard(chapter: chapter);
+                      final progress = _worldProgress(levelService, chapter.worldId);
+                      return _StoryCard(chapter: chapter, progress: progress);
                     },
                   ),
                 ),
@@ -108,12 +211,14 @@ class StoryScreen extends StatelessWidget {
 
 class _StoryChapter {
   const _StoryChapter({
+    required this.worldId,
     required this.title,
     required this.subtitle,
     required this.beats,
     required this.accent,
   });
 
+  final int worldId;
   final String title;
   final String subtitle;
   final List<String> beats;
@@ -121,12 +226,34 @@ class _StoryChapter {
 }
 
 class _StoryCard extends StatelessWidget {
-  const _StoryCard({required this.chapter});
+  const _StoryCard({required this.chapter, required this.progress});
 
   final _StoryChapter chapter;
+  final _WorldProgress progress;
+
+  String get _statusLabel {
+    if (!progress.unlocked) return 'LOCKED';
+    if (progress.total > 0 && progress.completed >= progress.total) {
+      return 'CLEARED';
+    }
+    if (progress.completed > 0) return 'IN PROGRESS';
+    return 'UNLOCKED';
+  }
+
+  Color get _statusColor {
+    if (!progress.unlocked) return NeonColors.red;
+    if (progress.total > 0 && progress.completed >= progress.total) {
+      return NeonColors.green;
+    }
+    if (progress.completed > 0) return NeonColors.cyan;
+    return NeonColors.magenta;
+  }
 
   @override
   Widget build(BuildContext context) {
+    final opacity = progress.unlocked ? 1.0 : 0.55;
+    final progressRatio =
+        progress.total == 0 ? 0.0 : progress.completed / progress.total;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -147,10 +274,75 @@ class _StoryCard extends StatelessWidget {
           Row(
             children: [
               Text(
+                'WORLD ${chapter.worldId}',
+                style: NeonTextStyles.small.copyWith(
+                  color: chapter.accent.withOpacity(0.85),
+                  letterSpacing: 1.3,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _statusColor.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _statusColor.withOpacity(0.6)),
+                ),
+                child: Text(
+                  _statusLabel,
+                  style: NeonTextStyles.small.copyWith(
+                    color: _statusColor,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${progress.completed}/${progress.total} NODES',
+                style: NeonTextStyles.small.copyWith(
+                  color: NeonColors.white.withOpacity(0.6),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 6,
+            decoration: BoxDecoration(
+              color: Colors.black.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: progressRatio.clamp(0.0, 1.0),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      chapter.accent.withOpacity(0.9),
+                      chapter.accent.withOpacity(0.4),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                  boxShadow: [
+                    BoxShadow(
+                      color: chapter.accent.withOpacity(0.5),
+                      blurRadius: 8,
+                      spreadRadius: -2,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Text(
                 chapter.title,
                 style: NeonTextStyles.title.copyWith(
                   fontSize: 22,
-                  color: chapter.accent,
+                  color: chapter.accent.withOpacity(opacity),
                   letterSpacing: 1.3,
                 ),
               ),
@@ -161,8 +353,8 @@ class _StoryCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      chapter.accent,
-                      chapter.accent.withOpacity(0.3),
+                      chapter.accent.withOpacity(opacity),
+                      chapter.accent.withOpacity(0.3 * opacity),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -176,7 +368,7 @@ class _StoryCard extends StatelessWidget {
           Text(
             chapter.subtitle,
             style: NeonTextStyles.body.copyWith(
-              color: NeonColors.white.withOpacity(0.7),
+              color: NeonColors.white.withOpacity(0.7 * opacity),
               fontSize: 14,
             ),
           ),
@@ -191,7 +383,7 @@ class _StoryCard extends StatelessWidget {
                       width: 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: chapter.accent,
+                        color: chapter.accent.withOpacity(opacity),
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -200,7 +392,7 @@ class _StoryCard extends StatelessWidget {
                       child: Text(
                         beat,
                         style: NeonTextStyles.body.copyWith(
-                          color: NeonColors.white.withOpacity(0.8),
+                          color: NeonColors.white.withOpacity(0.8 * opacity),
                           fontSize: 13,
                           height: 1.4,
                         ),
@@ -213,4 +405,16 @@ class _StoryCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _WorldProgress {
+  const _WorldProgress({
+    required this.total,
+    required this.completed,
+    required this.unlocked,
+  });
+
+  final int total;
+  final int completed;
+  final bool unlocked;
 }

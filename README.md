@@ -8,11 +8,14 @@ A Tron-style neon tower defense game built with Flutter + Flame engine.
 
 - **4 Tower Types**: Pulse Archer, Circuit Cannon, Phase Mage, Glimmer Field
 - **3 Enemy Types**: Runner, Overloaded, Juggernaut
+- **Boss System**: 10 unique world bosses + mini-bosses with special mechanics
+- **FPS View Mode**: First-person perspective for each tower with BOOST mode
 - **Wave System**: Progressive difficulty with modifiers (Overload, Juggernaut, Mixed waves)
 - **Neon Pulse Ability**: Area slow effect (SPACE key)
-- **8 Campaign Levels**: Progressive unlocking with star ratings
+- **100 Campaign Levels**: 10 worlds with progressive unlocking and star ratings
 - **Settings**: Audio, graphics, particle intensity controls
 - **Neon Tron Aesthetic**: Glowing UI, animated grid backgrounds, particle effects
+- **Comprehensive Testing**: 600+ unit and integration tests
 
 ## Story Mode
 Unlock the lore by selecting **Story Mode** from the main menu. Each chapter chronicles Commander Lira Kestrel’s fight to restore the fractured Grid, describing the factions, abilities, and wave modifiers you face; completing deeper waves unlocks glowing beacons and new narrative beats as the Campaign progresses.
@@ -22,12 +25,17 @@ Unlock the lore by selecting **Story Mode** from the main menu. Each chapter chr
 ### Using Docker (Recommended)
 
 ```bash
-# Build and run
+# Build and run (includes automated testing)
 docker compose up --build
 
 # Access the game
 open http://localhost:3001
+
+# Skip tests for faster development
+docker compose up bored-games-dev --build
 ```
+
+> 📋 **Note**: By default, all unit tests (600+ test cases) run automatically before starting the app. See [DOCKER_TESTING.md](DOCKER_TESTING.md) for details.
 
 ### Local Development
 
@@ -36,6 +44,9 @@ cd flutter_app
 
 # Install dependencies
 flutter pub get
+
+# Run tests
+flutter test
 
 # Run in debug mode
 flutter run -d chrome
@@ -105,6 +116,29 @@ flutter build web --release --web-renderer canvaskit --base-href "/your-base-pat
 ## Development Guide
 
 See [Guide.md](Guide.md) for the complete development roadmap and phase documentation.
+
+### Testing
+
+The project includes comprehensive test coverage (600+ tests). See [TEST_SUMMARY.md](flutter_app/TEST_SUMMARY.md) for details.
+
+```bash
+# Run all tests
+flutter test
+
+# Run specific test file
+flutter test test/boss_test.dart
+
+# Run with coverage
+flutter test --coverage
+```
+
+### Boss System
+
+See [BOSS_GUIDE.md](flutter_app/docs/BOSS_GUIDE.md) for details on all 10 world bosses and their mechanics.
+
+### FPS View System
+
+See [FPS_VIEW_GUIDE.md](flutter_app/docs/FPS_VIEW_GUIDE.md) for implementation details of the first-person tower view system.
 
 ### Adding New Tower Types
 
