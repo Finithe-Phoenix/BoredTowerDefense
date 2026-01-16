@@ -95,6 +95,7 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   void render(Canvas canvas) {
     super.render(canvas);
     if (_hidden || gameRef.size.y == 0) return;
+    if (gameRef.hideHud) return; // Hide in benchmark mode
 
     final width = math.min(360.0, gameRef.size.x - 32);
     final textPainter = TextPainter(

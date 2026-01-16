@@ -45,6 +45,29 @@ class LevelConfig {
         'startingGold': startingGold,
         'startingLives': startingLives,
       };
+
+  /// Create a copy with modified values
+  LevelConfig copyWith({
+    int? id,
+    String? name,
+    String? mapFile,
+    int? waves,
+    int? difficulty,
+    int? unlockRequirement,
+    int? startingGold,
+    int? startingLives,
+  }) {
+    return LevelConfig(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      mapFile: mapFile ?? this.mapFile,
+      waves: waves ?? this.waves,
+      difficulty: difficulty ?? this.difficulty,
+      unlockRequirement: unlockRequirement ?? this.unlockRequirement,
+      startingGold: startingGold ?? this.startingGold,
+      startingLives: startingLives ?? this.startingLives,
+    );
+  }
 }
 
 /// Player progress for a level

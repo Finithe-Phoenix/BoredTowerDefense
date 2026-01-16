@@ -61,24 +61,70 @@ class HudButton extends PositionComponent with TapCallbacks {
     super.render(canvas);
 
     final rect = Rect.fromLTWH(0, 0, buttonSize.x, buttonSize.y);
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(8));
 
-    // === BACKGROUND LAYERS ===
-    _drawBackground(canvas, rect);
+    // === MODERN BUTTON STYLE ===
 
-    // === ANIMATED EFFECTS ===
-    _drawAnimatedEffects(canvas, rect);
-
-    // === BORDERS AND FRAME ===
-    _drawFrame(canvas, rect);
-
-    // === SELECTION INDICATORS ===
+    // Outer glow when selected
     if (isSelected) {
-      _drawSelectionEffects(canvas, rect);
+      canvas.drawRRect(
+        rrect.inflate(3),
+        Paint()
+          ..color = color.withOpacity(0.4)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      );
+    }
+
+    // Main background - glassmorphic style
+    final bgColor = isSelected
+        ? color.withOpacity(0.25)
+        : (isEnabled ? const Color(0xFF0a0a18).withOpacity(0.8) : const Color(0xFF0a0a18).withOpacity(0.4));
+    canvas.drawRRect(rrect, Paint()..color = bgColor);
+
+    // Gradient overlay for depth
+    final gradientShader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Colors.white.withOpacity(isSelected ? 0.15 : 0.08),
+        Colors.transparent,
+        Colors.black.withOpacity(0.2),
+      ],
+      stops: const [0.0, 0.3, 1.0],
+    ).createShader(rect);
+    canvas.drawRRect(rrect, Paint()..shader = gradientShader);
+
+    // Border
+    final borderColor = isSelected
+        ? color
+        : (isEnabled ? color.withOpacity(0.4) : color.withOpacity(0.15));
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..color = borderColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = isSelected ? 2 : 1,
+    );
+
+    // Bottom accent line when selected
+    if (isSelected) {
+      final lineY = buttonSize.y - 3;
+      canvas.drawLine(
+        Offset(8, lineY),
+        Offset(buttonSize.x - 8, lineY),
+        Paint()
+          ..color = color
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round,
+      );
     }
 
     // === PRESS EFFECT ===
     if (_pressAnimation > 0) {
-      _drawPressEffect(canvas, rect);
+      canvas.drawRRect(
+        rrect,
+        Paint()..color = color.withOpacity(0.3 * _pressAnimation),
+      );
     }
 
     // === TEXT ===
@@ -346,55 +392,24 @@ class HudButton extends PositionComponent with TapCallbacks {
   }
 
   void _drawLabel(Canvas canvas) {
-    // Text glow for selected state
-    if (isSelected) {
-      final glowPainter = TextPainter(
-        text: TextSpan(
-          text: label,
-          style: TextStyle(
-            color: color.withOpacity(0.6),
-            fontSize: 12,
-            fontFamily: 'monospace',
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      // Draw glow multiple times for stronger effect
-      for (int i = 0; i < 3; i++) {
-        glowPainter.paint(
-          canvas,
-          Offset(
-            (buttonSize.x - glowPainter.width) / 2,
-            (buttonSize.y - glowPainter.height) / 2,
-          ),
-        );
-      }
-    }
-
-    // Main text
+    // Modern clean text style
     final textColor = isEnabled
-        ? (isSelected ? color : Colors.white.withOpacity(0.85))
-        : Colors.grey.withOpacity(0.7);
+        ? (isSelected ? Colors.white : Colors.white.withOpacity(0.9))
+        : Colors.white.withOpacity(0.4);
+
+    final fontSize = buttonSize.x < 90 ? 10.0 : 11.0;
+
     final textPainter = TextPainter(
       text: TextSpan(
         text: label,
         style: TextStyle(
           color: textColor,
-          fontSize: 12,
-          fontFamily: 'monospace',
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          letterSpacing: 1.5,
+          fontSize: fontSize,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+          letterSpacing: 1.2,
           shadows: isSelected
-              ? [
-                  Shadow(color: color.withOpacity(0.8), blurRadius: 10),
-                  Shadow(color: color.withOpacity(0.4), blurRadius: 20),
-                ]
-              : [
-                  Shadow(color: color.withOpacity(0.3), blurRadius: 4),
-                ],
+              ? [Shadow(color: color, blurRadius: 8)]
+              : null,
         ),
       ),
       textDirection: TextDirection.ltr,

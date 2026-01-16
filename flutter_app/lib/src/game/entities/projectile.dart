@@ -8,11 +8,26 @@ import 'enemy.dart';
 import 'tower.dart';
 import '../../services/audio_service.dart';
 import '../effects/impact_effect.dart';
+import '../managers/bullet_manager.dart';
 
 class Projectile extends PositionComponent {
   static bool lowFx = false;
   static bool allowTrails = true;
   static bool allowGlow = true;
+
+  /// Nivel de estrés del sistema (0-2)
+  /// 0: Full quality (<200 bullets)
+  /// 1: Reduced trails (200-400 bullets)
+  /// 2: Minimal FX (400+ bullets)
+  static int stressLevel = 0;
+
+  /// Configura el nivel de estrés del sistema de proyectiles
+  static void setStressLevel(int level) {
+    stressLevel = level.clamp(0, 2);
+    lowFx = stressLevel >= 2;
+    // Nivel 1: reduce trails pero mantiene glow
+    // Nivel 2: reduce todo (lowFx = true)
+  }
 
   Projectile({
     required Vector2 startPosition,
@@ -115,7 +130,14 @@ class Projectile extends PositionComponent {
         break;
     }
 
-    if (lowFx) {
+    // Ajustar calidad según nivel de estrés
+    if (stressLevel >= 1) {
+      // Nivel 1: reduce trails y partículas moderadamente
+      _maxTrailLength = math.max(3, (_maxTrailLength * 0.5).round());
+      _particleCount = math.max(2, (_particleCount * 0.5).round());
+    }
+    if (lowFx || stressLevel >= 2) {
+      // Nivel 2: reducción agresiva para alto estrés
       _maxTrailLength = math.max(2, (_maxTrailLength * 0.35).round());
       _particleCount = (_particleCount * 0.25).round();
       if (_particleCount < 0) {
@@ -192,6 +214,9 @@ class Projectile extends PositionComponent {
   void deactivate() {
     _active = false;
     target = null;
+    onHit = null;
+    removeFromParent();
+    BulletManager.returnToPool(this);
   }
 
   @override
@@ -200,6 +225,22 @@ class Projectile extends PositionComponent {
     if (!_active) return;
 
     _time += dt;
+
+    // Lifetime máximo (5 segundos) - evita balas zombies
+    if (_time > 5.0) {
+      deactivate();
+      return;
+    }
+
+    // Bounds check - elimina balas fuera del mundo
+    const maxBound = 1500.0;
+    const minBound = -200.0;
+    if (position.x < minBound || position.x > maxBound ||
+        position.y < minBound || position.y > maxBound) {
+      deactivate();
+      return;
+    }
+
     _rotationAngle += dt * 10;
     _spiralPhase += dt * 8;
     _pulsePhase += dt * 15;

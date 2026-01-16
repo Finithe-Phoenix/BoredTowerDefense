@@ -129,6 +129,15 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                   color: NeonColors.magenta,
                   delay: const Duration(milliseconds: 700),
                 ),
+                const SizedBox(height: 16),
+
+                TronButton(
+                  text: 'BENCHMARK',
+                  icon: Icons.speed_rounded,
+                  onPressed: () => Navigator.pushNamed(context, '/benchmark'),
+                  color: const Color(0xFFFF6600), // Orange TRON color
+                  delay: const Duration(milliseconds: 800),
+                ),
 
                 const Spacer(flex: 3),
 

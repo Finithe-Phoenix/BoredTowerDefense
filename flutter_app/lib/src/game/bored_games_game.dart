@@ -90,6 +90,17 @@ class BoredGamesGame extends FlameGame
   int score = 0;
   bool _gameEnded = false;
   bool autoStartWaves = true;
+
+  /// Time scale for game speed (1.0 = normal, 2.0 = 2x, etc.)
+  double timeScale = 1.0;
+
+  /// Hide HUD for benchmark/screenshot mode
+  bool hideHud = false;
+
+  /// Last delta time for FPS calculation
+  double _lastDt = 0.016; // Default ~60fps
+  double get dt => _lastDt;
+
   double _autoWaveTimer = 0;
   bool _hasPlacedTower = false;
   static const double autoWaveDelay = 2.5;
@@ -282,32 +293,37 @@ class BoredGamesGame extends FlameGame
 
   @override
   void update(double dt) {
-    super.update(dt);
+    // Store raw dt for FPS calculation (before scaling)
+    _lastDt = dt;
+
+    // Apply time scale for speed control
+    final scaledDt = dt * timeScale;
+    super.update(scaledDt);
 
     // Update game time
-    gameTime += dt;
+    gameTime += scaledDt;
 
     // Update pulse cooldown
     if (_pulseCooldownTimer > 0) {
-      _pulseCooldownTimer -= dt;
+      _pulseCooldownTimer -= scaledDt;
     }
 
     // Update mine cooldown
     if (_mineCooldownTimer > 0) {
-      _mineCooldownTimer -= dt;
+      _mineCooldownTimer -= scaledDt;
     }
 
     if (_visualReady) {
-      visualDirector.update(dt);
+      visualDirector.update(scaledDt);
     }
 
-    _updateAutoWave(dt);
-    _updateQuality(dt);
-    _updateFxBudget(dt);
-    _updateThreatShake(dt);
-    _updateFocusFx(dt);
-    _updateFocusTimer(dt);
-    _updateLongPress(dt);
+    _updateAutoWave(scaledDt);
+    _updateQuality(scaledDt);
+    _updateFxBudget(scaledDt);
+    _updateThreatShake(scaledDt);
+    _updateFocusFx(scaledDt);
+    _updateFocusTimer(scaledDt);
+    _updateLongPress(scaledDt);
   }
 
   void _updateLongPress(double dt) {
@@ -359,6 +375,12 @@ class BoredGamesGame extends FlameGame
     super.onTapUp(event);
     _isLongPressing = false;
     if (_draggingPlacement) return;
+
+    // Check speed control tap first
+    if (hudComponent.handleSpeedTap(event.localPosition)) {
+      return;
+    }
+
     if (_sellMode) {
       if (_isInHudArea(event.localPosition)) {
         towerManager.updateGhost(null);
@@ -437,7 +459,6 @@ class BoredGamesGame extends FlameGame
     towerManager.updateGhost(null);
   }
 
-  @override
   void _handleLongPress(Vector2 screenPos) {
     if (_sellMode || _pendingAbility != PendingAbility.none) return;
 

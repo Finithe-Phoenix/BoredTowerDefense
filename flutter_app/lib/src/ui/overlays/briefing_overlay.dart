@@ -57,7 +57,7 @@ class _BriefingOverlayState extends State<BriefingOverlay> with SingleTickerProv
         color: Colors.black.withOpacity(0.85),
         child: Center(
           child: Container(
-            width: 400,
+            width: 450,
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
               color: NeonColors.darkBg,
@@ -73,9 +73,12 @@ class _BriefingOverlayState extends State<BriefingOverlay> with SingleTickerProv
                   children: [
                     const Icon(Icons.warning_amber_rounded, color: NeonColors.cyan, size: 28),
                     const SizedBox(width: 12),
-                    Text(
-                      'BRIEFING DE MISIÓN',
-                      style: NeonTextStyles.subtitle.copyWith(color: NeonColors.cyan, letterSpacing: 4),
+                    Expanded(
+                      child: Text(
+                        'BRIEFING DE MISIÓN',
+                        style: NeonTextStyles.subtitle.copyWith(color: NeonColors.cyan, letterSpacing: 4),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),

@@ -10,6 +10,7 @@ import 'src/ui/screens/game_screen.dart';
 import 'src/ui/screens/settings_screen.dart';
 import 'src/ui/screens/story_screen.dart';
 import 'src/ui/screens/upgrades_screen.dart';
+import 'src/ui/screens/benchmark_screen.dart';
 import 'src/ui/transitions/tron_page_route.dart';
 import 'src/ui/widgets/tron_materialization_widget.dart';
 
@@ -94,6 +95,15 @@ class NeonDefenseApp extends StatelessWidget {
                 secondaryColor: NeonColors.orange,
                 pattern: TronPattern.hexagonal,
                 transitionDuration: const Duration(milliseconds: 850),
+              );
+            case '/benchmark':
+              // Benchmark uses radial pattern with orange TRON color
+              return TronPageRoute(
+                builder: (_) => const BenchmarkScreen(),
+                primaryColor: const Color(0xFFFF6600),
+                secondaryColor: NeonColors.cyan,
+                pattern: TronPattern.radial,
+                transitionDuration: const Duration(milliseconds: 900),
               );
             default:
               return MaterialPageRoute(

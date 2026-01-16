@@ -23,6 +23,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   double _time = 0;
   final Map<String, _TextCache> _textCache = {};
+
+  // Speed control
+  static const List<double> speedOptions = [1.0, 2.0];
+  Rect? _speed1xRect;
+  Rect? _speed2xRect;
   TextPainter? _instructionPainter;
   String _instructionText = '';
   TowerType? _lastSelected;
@@ -380,6 +385,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   @override
   void renderTree(Canvas canvas) {
+    if (gameRef.hideHud) return; // Hide in benchmark mode
     if (gameRef.focusModeActive) return;
     super.renderTree(canvas);
   }
@@ -391,37 +397,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final screenWidth = gameRef.size.x;
     final screenHeight = gameRef.size.y;
 
+    if (gameRef.hideHud) return; // Hide HUD in benchmark/screenshot mode
     if (gameRef.focusModeActive) return; // Hide standard HUD in FPS mode
 
     _drawTopPanel(canvas, screenWidth);
     _drawBottomPanel(canvas, screenWidth, screenHeight);
 
-    if (!_isCompactHud(screenWidth, screenHeight)) {
-      _drawSelectionInfo(canvas, screenWidth);
-    }
-
-    // Instruction prompt
-    final instructionText = gameRef.isTouchLayout
-        ? 'Tap a tower, then drag to place it'
-        : 'Select a tower and drag to place it';
-    if (_instructionPainter == null || _instructionText != instructionText) {
-      _instructionText = instructionText;
-      _instructionPainter = _buildPainter(
-        instructionText,
-        const TextStyle(
-          color: Colors.white70,
-          fontSize: 11,
-          fontFamily: 'monospace',
-          letterSpacing: 0.8,
-        ),
-      );
-    }
-    if (!_isCompactHud(screenWidth, screenHeight)) {
-      _instructionPainter!.paint(
-        canvas,
-        Offset(24, screenHeight - bottomBarHeight - 26),
-      );
-    }
+    // No instruction prompt needed - modern HUD is self-explanatory
 
     _drawAbilityTargetHint(canvas, screenHeight);
     _drawFocusTimerOverlay(canvas, screenWidth, screenHeight);
@@ -576,50 +558,284 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _drawTopPanel(Canvas canvas, double screenWidth) {
     final compact = _isCompactHud(screenWidth, gameRef.size.y);
-    // Main panel background
-    final panelRect = Rect.fromLTWH(0, 0, screenWidth, topBarHeight);
+    final screenHeight = gameRef.size.y;
 
-    // Multi-layer background
-    _panelPaint.shader = _getTopPanelShader(panelRect);
-    canvas.drawRect(panelRect, _panelPaint);
+    // Modern gaming HUD - minimal top bar with gradient fade
+    final panelRect = Rect.fromLTWH(0, 0, screenWidth, topBarHeight + 20);
+    final gradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        const Color(0xFF000000).withOpacity(0.85),
+        const Color(0xFF000000).withOpacity(0.4),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.6, 1.0],
+    ).createShader(panelRect);
+    canvas.drawRect(panelRect, Paint()..shader = gradient);
 
-    if (!reduceFlicker) {
-      // Horizontal scan line effect
-      final scanX = ((_time * 200) % (screenWidth + 400)) - 200;
-      final scanGradient = LinearGradient(
-        colors: [
-          Colors.transparent,
-          const Color(0xFF00FFFF).withOpacity(0.03),
-          const Color(0xFF00FFFF).withOpacity(0.08),
-          const Color(0xFF00FFFF).withOpacity(0.03),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(scanX, 0, 400, topBarHeight));
-      canvas.drawRect(Rect.fromLTWH(scanX, 0, 400, topBarHeight), Paint()..shader = scanGradient);
-    }
+    // Left side: Gold & Lives (essential resources)
+    _drawModernStat(canvas, 16, 12, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700), Icons.monetization_on);
+    _drawModernStat(canvas, 16, 40, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466), Icons.favorite);
 
-    // Bottom edge - glowing line
-    _drawGlowingLine(canvas, 0, topBarHeight - 2, screenWidth, topBarHeight - 2, const Color(0xFF00FFFF), 0.6);
+    // Center: Wave indicator with progress
+    _drawWaveIndicator(canvas, screenWidth);
 
-    // Hexagonal accent patterns on sides
-    _drawHexPattern(canvas, 10, 10, 3, 0.15);
-    _drawHexPattern(canvas, screenWidth - 50, 10, 3, 0.15);
+    // Right side: Score
+    final scoreText = '${gameRef.score}';
+    final scorePainter = _getPainter(
+      'score-modern-$scoreText',
+      scoreText,
+      const TextStyle(
+        color: Color(0xFF00FF88),
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        fontFamily: 'monospace',
+        shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 12)],
+      ),
+    );
+    scorePainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 14));
 
-    // Draw resource panels
-    _drawResourcePanels(canvas, screenWidth);
+    final scoreLabelPainter = _getPainter(
+      'score-label-modern',
+      'SCORE',
+      TextStyle(
+        color: Colors.white.withOpacity(0.5),
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 2,
+      ),
+    );
+    scoreLabelPainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 44));
 
-    // Center title/logo area
-    if (!compact) {
-      _drawCenterLogo(canvas, screenWidth);
-    }
-
-    // Progress bars
-    if (!compact) {
-      _drawProgressBars(canvas, screenWidth);
-    }
+    // Speed controls (top right, below score)
+    _drawSpeedControls(canvas, screenWidth);
 
     // Wave alert (if active)
     _drawWaveAlert(canvas, screenWidth);
+  }
+
+  void _drawSpeedControls(Canvas canvas, double screenWidth) {
+    final currentSpeed = gameRef.timeScale;
+    final buttonWidth = 32.0;
+    final buttonHeight = 20.0;
+    final spacing = 4.0;
+    final totalWidth = buttonWidth * 2 + spacing;
+    final startX = screenWidth - totalWidth - 16;
+    final y = 56.0;
+
+    for (int i = 0; i < speedOptions.length; i++) {
+      final speed = speedOptions[i];
+      final isActive = (currentSpeed - speed).abs() < 0.01;
+      final x = startX + i * (buttonWidth + spacing);
+      final rect = Rect.fromLTWH(x, y, buttonWidth, buttonHeight);
+
+      // Store rects for tap detection
+      if (i == 0) {
+        _speed1xRect = rect;
+      } else {
+        _speed2xRect = rect;
+      }
+
+      final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
+
+      // Background
+      final bgColor = isActive
+          ? const Color(0xFF00FF88).withOpacity(0.25)
+          : const Color(0xFF0a0a18).withOpacity(0.6);
+      canvas.drawRRect(rrect, Paint()..color = bgColor);
+
+      // Border
+      final borderColor = isActive
+          ? const Color(0xFF00FF88).withOpacity(0.8)
+          : Colors.white.withOpacity(0.2);
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = borderColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = isActive ? 1.5 : 1,
+      );
+
+      // Glow when active
+      if (isActive) {
+        canvas.drawRRect(
+          rrect.inflate(2),
+          Paint()
+            ..color = const Color(0xFF00FF88).withOpacity(0.3)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+      }
+
+      // Label
+      final label = '${speed.toInt()}x';
+      final labelPainter = _getPainter(
+        'speed-$label-$isActive',
+        label,
+        TextStyle(
+          color: isActive ? const Color(0xFF00FF88) : Colors.white.withOpacity(0.5),
+          fontSize: 11,
+          fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
+          fontFamily: 'monospace',
+          shadows: isActive
+              ? [const Shadow(color: Color(0xFF00FF88), blurRadius: 4)]
+              : null,
+        ),
+      );
+      labelPainter.paint(
+        canvas,
+        Offset(
+          x + (buttonWidth - labelPainter.width) / 2,
+          y + (buttonHeight - labelPainter.height) / 2,
+        ),
+      );
+    }
+  }
+
+  /// Handle tap for speed controls, returns true if tap was consumed
+  bool handleSpeedTap(Vector2 tapPosition) {
+    if (gameRef.hideHud || gameRef.focusModeActive) return false;
+
+    if (_speed1xRect != null && _speed1xRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
+      gameRef.timeScale = speedOptions[0];
+      return true;
+    }
+    if (_speed2xRect != null && _speed2xRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
+      gameRef.timeScale = speedOptions[1];
+      return true;
+    }
+    return false;
+  }
+
+  void _drawModernStat(Canvas canvas, double x, double y, String label, String value, Color color, IconData icon) {
+    // Glowing background pill
+    final pillWidth = 100.0;
+    final pillHeight = 24.0;
+    final pillRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, pillWidth, pillHeight),
+      const Radius.circular(12),
+    );
+
+    // Background with color tint
+    canvas.drawRRect(
+      pillRect,
+      Paint()..color = color.withOpacity(0.15),
+    );
+
+    // Border glow
+    canvas.drawRRect(
+      pillRect,
+      Paint()
+        ..color = color.withOpacity(0.4)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Icon circle
+    canvas.drawCircle(
+      Offset(x + 14, y + pillHeight / 2),
+      8,
+      Paint()..color = color.withOpacity(0.3),
+    );
+    canvas.drawCircle(
+      Offset(x + 14, y + pillHeight / 2),
+      4,
+      Paint()..color = color,
+    );
+
+    // Value
+    final valuePainter = _getPainter(
+      'modern-$label-$value',
+      value,
+      TextStyle(
+        color: color,
+        fontSize: 14,
+        fontWeight: FontWeight.bold,
+        fontFamily: 'monospace',
+        shadows: [Shadow(color: color.withOpacity(0.8), blurRadius: 6)],
+      ),
+    );
+    valuePainter.paint(canvas, Offset(x + 28, y + (pillHeight - valuePainter.height) / 2));
+  }
+
+  void _drawWaveIndicator(Canvas canvas, double screenWidth) {
+    final centerX = screenWidth / 2;
+    final currentWave = gameRef.enemyManager.currentWave;
+    final totalWaves = gameRef.totalWaves <= 0 ? 1 : gameRef.totalWaves;
+    final waveProgress = gameRef.enemyManager.waveProgress.clamp(0.0, 1.0);
+    final isSpawning = gameRef.enemyManager.spawning;
+
+    // Wave number - large and prominent
+    final waveText = '$currentWave';
+    final wavePainter = _getPainter(
+      'wave-num-$waveText',
+      waveText,
+      TextStyle(
+        color: isSpawning ? const Color(0xFFFF00FF) : const Color(0xFF00FFFF),
+        fontSize: 32,
+        fontWeight: FontWeight.bold,
+        fontFamily: 'monospace',
+        shadows: [
+          Shadow(
+            color: isSpawning ? const Color(0xFFFF00FF) : const Color(0xFF00FFFF),
+            blurRadius: 16,
+          ),
+        ],
+      ),
+    );
+    wavePainter.paint(canvas, Offset(centerX - wavePainter.width / 2, 8));
+
+    // "WAVE" label
+    final labelPainter = _getPainter(
+      'wave-label-modern',
+      'WAVE',
+      TextStyle(
+        color: Colors.white.withOpacity(0.5),
+        fontSize: 10,
+        fontWeight: FontWeight.w500,
+        letterSpacing: 3,
+      ),
+    );
+    labelPainter.paint(canvas, Offset(centerX - labelPainter.width / 2, 42));
+
+    // Progress bar under wave
+    final barWidth = 80.0;
+    final barHeight = 3.0;
+    final barX = centerX - barWidth / 2;
+    final barY = 56.0;
+
+    // Background
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTWH(barX, barY, barWidth, barHeight),
+        const Radius.circular(2),
+      ),
+      Paint()..color = Colors.white.withOpacity(0.1),
+    );
+
+    // Progress fill
+    if (isSpawning && waveProgress > 0) {
+      final fillWidth = barWidth * waveProgress;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(barX, barY, fillWidth, barHeight),
+          const Radius.circular(2),
+        ),
+        Paint()..color = const Color(0xFFFF00FF),
+      );
+    }
+
+    // Wave count (e.g., "/10")
+    final countPainter = _getPainter(
+      'wave-count-$totalWaves',
+      '/$totalWaves',
+      TextStyle(
+        color: Colors.white.withOpacity(0.3),
+        fontSize: 12,
+        fontFamily: 'monospace',
+      ),
+    );
+    countPainter.paint(canvas, Offset(centerX + wavePainter.width / 2 + 2, 18));
   }
 
   void _drawResourcePanels(Canvas canvas, double screenWidth) {
@@ -1043,29 +1259,121 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   void _drawBottomPanel(Canvas canvas, double screenWidth, double screenHeight) {
-    final panelRect = Rect.fromLTWH(0, screenHeight - bottomBarHeight, screenWidth, bottomBarHeight);
+    // Modern gaming HUD - gradient fade from bottom
+    final panelRect = Rect.fromLTWH(0, screenHeight - bottomBarHeight - 20, screenWidth, bottomBarHeight + 20);
+    final gradient = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [
+        const Color(0xFF000000).withOpacity(0.9),
+        const Color(0xFF000000).withOpacity(0.5),
+        Colors.transparent,
+      ],
+      stops: const [0.0, 0.5, 1.0],
+    ).createShader(panelRect);
+    canvas.drawRect(panelRect, Paint()..shader = gradient);
 
-    // Multi-layer background
-    _panelPaint.shader = _getBottomPanelShader(panelRect);
-    canvas.drawRect(panelRect, _panelPaint);
+    // Subtle top line
+    final lineY = screenHeight - bottomBarHeight;
+    canvas.drawLine(
+      Offset(screenWidth * 0.1, lineY),
+      Offset(screenWidth * 0.9, lineY),
+      Paint()
+        ..color = const Color(0xFF00FFFF).withOpacity(0.2)
+        ..strokeWidth = 1,
+    );
 
-    // Top edge glow
-    _drawGlowingLine(canvas, 0, screenHeight - bottomBarHeight + 2, screenWidth, screenHeight - bottomBarHeight + 2, const Color(0xFF00FFFF), 0.5);
+    // Cost indicators above buttons (simplified)
+    _drawModernCostIndicators(canvas, screenWidth, screenHeight);
 
-    // Hexagonal accents
-    _drawHexPattern(canvas, 10, screenHeight - bottomBarHeight + 10, 3, 0.1);
-    _drawHexPattern(canvas, screenWidth - 50, screenHeight - bottomBarHeight + 10, 3, 0.1);
-
+    // Selected tower info (compact, bottom left)
     if (!_isCompactHud(screenWidth, screenHeight)) {
-      // Tower info panel (left side)
-      _drawTowerInfoPanel(canvas, screenHeight);
-
-      // Ability cooldowns (right side)
-      _drawAbilityCooldowns(canvas, screenWidth, screenHeight);
+      _drawSelectedTowerInfo(canvas, screenHeight);
     }
+  }
 
-    // Cost indicators above buttons
-    _drawCostIndicators(canvas, screenWidth, screenHeight);
+  void _drawSelectedTowerInfo(Canvas canvas, double screenHeight) {
+    final selected = gameRef.towerManager.selectedTowerType;
+    final panelX = 12.0;
+    final panelY = screenHeight - bottomBarHeight + 8;
+
+    // Tower name
+    final namePainter = _getPainter(
+      'selected-tower-${selected.name}',
+      selected.name.toUpperCase(),
+      TextStyle(
+        color: selected.color,
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1,
+        shadows: [Shadow(color: selected.color.withOpacity(0.5), blurRadius: 4)],
+      ),
+    );
+    namePainter.paint(canvas, Offset(panelX, panelY));
+
+    // Stats in one line
+    final damage = gameRef.towerDamage(selected).round();
+    final range = gameRef.towerRange(selected).round();
+    final fireRate = gameRef.towerFireRate(selected);
+    final statsText = 'DMG $damage  •  RNG $range  •  SPD ${fireRate.toStringAsFixed(1)}';
+    final statsPainter = _getPainter(
+      'selected-stats-$damage-$range-$fireRate',
+      statsText,
+      TextStyle(
+        color: Colors.white.withOpacity(0.5),
+        fontSize: 9,
+        fontFamily: 'monospace',
+      ),
+    );
+    statsPainter.paint(canvas, Offset(panelX, panelY + 14));
+  }
+
+  void _drawModernCostIndicators(Canvas canvas, double screenWidth, double screenHeight) {
+    final useTwoRows = _layoutTwoRows;
+    final buttonWidth = _layoutButtonWidth;
+    final spacing = _layoutSpacing;
+    final row1BaseY = useTwoRows ? _layoutRow1Y : _layoutSingleRowY;
+    final costY = row1BaseY - 14;
+
+    final unlockedTowers = LevelService.instance.getUnlockedTowers();
+    final startX = useTwoRows ? _layoutRow1StartX : _layoutStartX;
+
+    for (int i = 0; i < unlockedTowers.length && i < _towerButtons.length; i++) {
+      final type = unlockedTowers[i];
+      final cost = gameRef.towerCost(type);
+      final x = startX + i * (buttonWidth + spacing) + buttonWidth / 2;
+      final canAfford = gameRef.gold >= cost;
+
+      final costColor = canAfford ? type.color : const Color(0xFFFF4444);
+
+      // Small pill background
+      final pillWidth = 36.0;
+      final pillHeight = 12.0;
+      final pillRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(x - pillWidth / 2, costY, pillWidth, pillHeight),
+        const Radius.circular(6),
+      );
+
+      canvas.drawRRect(
+        pillRect,
+        Paint()..color = (canAfford ? type.color : const Color(0xFFFF4444)).withOpacity(0.2),
+      );
+
+      final costPainter = _getPainter(
+        'cost-modern-$cost-${costColor.value}',
+        '${cost}g',
+        TextStyle(
+          color: costColor,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+        ),
+      );
+      costPainter.paint(
+        canvas,
+        Offset(x - costPainter.width / 2, costY + (pillHeight - costPainter.height) / 2),
+      );
+    }
   }
 
   void _drawTowerInfoPanel(Canvas canvas, double screenHeight) {

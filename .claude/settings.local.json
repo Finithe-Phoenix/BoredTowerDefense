@@ -18,7 +18,9 @@
       "Bash(flutter test:*)",
       "Bash(python:*)",
       "Bash(find:*)",
-      "Bash(docker-compose run:*)"
+      "Bash(docker-compose run:*)",
+      "Bash(where flutter:*)",
+      "Bash(powershell:*)"
     ]
   }
 }
