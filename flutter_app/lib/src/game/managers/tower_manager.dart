@@ -146,6 +146,14 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     if (tower.manualTargeting) {
       gameRef.triggerFocusShot(tower);
     }
+    // Resonance Siphon doesn't fire bullets
+    if (tower.type == TowerType.resonanceSiphon) return;
+
+    if (tower.type == TowerType.teslaTerminal) {
+       _fireTeslaLightning(tower, target);
+       return;
+    }
+
     bulletManager?.fire(
       from: tower.centerPosition,
       to: targetPos,
@@ -154,6 +162,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       color: tower.color,
       target: target,
       onHit: (enemy, hitPosition, killed) {
+        if (tower.type == TowerType.neuralDisruptor && !killed && math.Random().nextDouble() < 0.25) {
+           enemy.applySlow(0.9, 1.5); // Neural disruption = heavy slow/stun
+        }
         gameRef.registerFocusHit(
           tower: tower,
           target: enemy,
@@ -166,8 +177,28 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       towerType: tower.type,
     );
 
-    // Play shoot sound
-    AudioService.instance.playShoot();
+    // Play shoot sound with tower type for specific variation
+    AudioService.instance.playShoot(type: tower.type);
+  }
+
+  void _fireTeslaLightning(Tower tower, Enemy target) {
+    // Tesla Terminal: Instant hit + chain to 2 nearby enemies
+    final damage = tower.damage;
+    target.takeDamage(damage);
+    
+    // Chain logic
+    final nearby = <Enemy>[];
+    enemyManager?.queryEnemiesInRange(target.position, 60, nearby);
+    int chained = 0;
+    for (final e in nearby) {
+       if (e != target && chained < 2) {
+           e.takeDamage(damage * 0.7);
+           chained++;
+       }
+    }
+    
+    // Visual feedback (Flash/Electric line could be added in Render path but for now instant damage)
+    AudioService.instance.playShoot(type: tower.type); 
   }
 
   void _showPlacementFeedback(String message, math.Point<int> cell) {
@@ -243,6 +274,27 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     _ghostPulse += dt * 3;
     if (_ghostPulse > math.pi * 2) {
       _ghostPulse -= math.pi * 2;
+    }
+
+    if (towerCount > 0 && (gameRef.gameTime * 2).toInt() % 10 == 0) {
+       _updateResonanceFields();
+    }
+  }
+
+  void _updateResonanceFields() {
+    // Clear all boosts first
+    for (final t in _towers) {
+       t.resetResonanceBoost();
+    }
+    
+    final siphons = _towers.where((t) => t.type == TowerType.resonanceSiphon).toList();
+    for (final siphon in siphons) {
+       for (final tower in _towers) {
+          if (tower == siphon) continue;
+          if (tower.position.distanceTo(siphon.position) < 100) {
+             tower.setResonanceBoost(true);
+          }
+       }
     }
   }
 

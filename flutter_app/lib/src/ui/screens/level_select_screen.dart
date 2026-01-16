@@ -1,10 +1,11 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
 import '../widgets/cyber_grid_background.dart';
-import '../widgets/epic_neon_button.dart';
 import '../widgets/epic_neon_title.dart';
+import '../widgets/tron_button.dart';
+import '../widgets/tron_card.dart';
 import '../widgets/universe_graph_widget.dart';
-import '../../game/balance/difficulty_curve.dart';
 import '../../models/level_config.dart';
 import '../../services/level_service.dart';
 
@@ -17,7 +18,11 @@ class LevelSelectScreen extends StatefulWidget {
 
 class _LevelSelectScreenState extends State<LevelSelectScreen>
     with TickerProviderStateMixin {
-  const int _levelsPerWorld = 10;
+  static const int _levelsPerWorld = 10;
+
+  // State for selected world and level view
+  int? _selectedWorldId;
+  bool _showingLevels = false;
 
   static const List<WorldInfo> _worlds = [
     WorldInfo(
@@ -94,23 +99,42 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
 
 
   void _handleWorldSelected(int worldId) {
-    final worldLevels = _levelsForWorld(worldId);
-    if (worldLevels.isEmpty) return;
+    setState(() {
+      _selectedWorldId = worldId;
+      _showingLevels = true;
+    });
+  }
 
-    // Find the first available level (either next locked or first level)
-    final targetLevel = worldLevels.firstWhere(
-      (level) => LevelService.instance.isLevelUnlocked(level.id),
-      orElse: () => worldLevels.first,
-    );
+  void _handleLevelSelected(int levelId) {
+    // Check if level is unlocked
+    if (!LevelService.instance.isLevelUnlocked(levelId)) {
+      // Show locked message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Level $levelId is locked. Complete previous levels first.',
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: NeonColors.magenta,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
 
-    // Play "Materialization" sequence start sound if any exists (planned)
-    
-    // Launch directly
+    // Launch game
     Navigator.pushNamed(
       context,
       '/game',
-      arguments: targetLevel.id,
+      arguments: levelId,
     );
+  }
+
+  void _handleBackFromLevels() {
+    setState(() {
+      _showingLevels = false;
+      _selectedWorldId = null;
+    });
   }
 
 
@@ -132,44 +156,754 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
       body: CyberGridBackground(
         backgroundColor: Colors.black,
         child: SafeArea(
-          child: Column(
-            children: [
-              const SizedBox(height: 40),
-              const EpicNeonTitle(
-                text: 'UNIVERSE SELECTION',
-                fontSize: 42,
-                primaryColor: NeonColors.cyan,
-                secondaryColor: NeonColors.magenta,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Select sector to materialize transmission.',
-                style: NeonTextStyles.body.copyWith(
-                  color: NeonColors.cyan.withOpacity(0.5),
-                  letterSpacing: 2,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 400),
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.1, 0),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
                 ),
-              ),
-              Expanded(
-                child: UniverseGraphWidget(
-                  worlds: _worlds,
-                  onWorldSelected: _handleWorldSelected,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 30),
-                child: EpicNeonButton(
-                  text: 'RETURN',
-                  width: 180,
-                  height: 44,
-                  onPressed: () => Navigator.pop(context),
-                  color: NeonColors.magenta,
-                ),
-              ),
-            ],
+              );
+            },
+            child: _showingLevels && _selectedWorldId != null
+                ? _buildLevelGrid()
+                : _buildWorldSelection(),
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildWorldSelection() {
+    return Column(
+      key: const ValueKey('world_selection'),
+      children: [
+        const SizedBox(height: 40),
+        const EpicNeonTitle(
+          text: 'UNIVERSE SELECTION',
+          fontSize: 42,
+          primaryColor: NeonColors.cyan,
+          secondaryColor: NeonColors.magenta,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Select sector to materialize transmission.',
+          style: NeonTextStyles.body.copyWith(
+            color: NeonColors.cyan.withOpacity(0.5),
+            letterSpacing: 2,
+          ),
+        ),
+        Expanded(
+          child: UniverseGraphWidget(
+            worlds: _worlds,
+            onWorldSelected: _handleWorldSelected,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 30),
+          child: TronButton(
+            text: 'RETURN',
+            width: 180,
+            height: 44,
+            onPressed: () => Navigator.pop(context),
+            color: NeonColors.magenta,
+            delay: const Duration(milliseconds: 300),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLevelGrid() {
+    final world = _worlds.firstWhere((w) => w.id == _selectedWorldId);
+    final levels = _levelsForWorld(_selectedWorldId!);
+
+    return Column(
+      key: const ValueKey('level_grid'),
+      children: [
+        const SizedBox(height: 40),
+        EpicNeonTitle(
+          text: world.name.toUpperCase(),
+          fontSize: 36,
+          primaryColor: world.accent,
+          secondaryColor: NeonColors.white,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          world.tagline,
+          textAlign: TextAlign.center,
+          style: NeonTextStyles.body.copyWith(
+            color: world.accent.withOpacity(0.6),
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 30),
+        Expanded(
+          child: GridView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 5, // 5 levels per row
+              mainAxisSpacing: 20,
+              crossAxisSpacing: 20,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: levels.length,
+            itemBuilder: (context, index) {
+              return _TronLevelCard(
+                level: levels[index],
+                accentColor: world.accent,
+                delay: Duration(milliseconds: 100 + index * 50),
+                onTap: () => _handleLevelSelected(levels[index].id),
+              );
+            },
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 30),
+          child: TronButton(
+            text: 'BACK',
+            width: 180,
+            height: 44,
+            onPressed: _handleBackFromLevels,
+            color: world.accent,
+            delay: const Duration(milliseconds: 200),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TronLevelCard extends StatefulWidget {
+  const _TronLevelCard({
+    required this.level,
+    required this.accentColor,
+    required this.delay,
+    required this.onTap,
+  });
+
+  final LevelConfig level;
+  final Color accentColor;
+  final Duration delay;
+  final VoidCallback onTap;
+
+  @override
+  State<_TronLevelCard> createState() => _TronLevelCardState();
+}
+
+class _TronLevelCardState extends State<_TronLevelCard>
+    with TickerProviderStateMixin {
+  late AnimationController _materializeController;
+  late AnimationController _pulseController;
+  late AnimationController _hoverController;
+  late Animation<double> _materializeAnimation;
+  late Animation<double> _pulseAnimation;
+
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _materializeController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _materializeAnimation = CurvedAnimation(
+      parent: _materializeController,
+      curve: Curves.easeOutCubic,
+    );
+
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
+      vsync: this,
+    );
+
+    _pulseAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
+    );
+
+    _hoverController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+
+    Future.delayed(widget.delay, () {
+      if (mounted) {
+        _materializeController.forward();
+        _pulseController.repeat(reverse: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _materializeController.dispose();
+    _pulseController.dispose();
+    _hoverController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isUnlocked = LevelService.instance.isLevelUnlocked(widget.level.id);
+    final progress = LevelService.instance.getProgress(widget.level.id);
+    final isCompleted = progress.completed;
+    final stars = progress.stars;
+    final effectiveColor = isUnlocked ? widget.accentColor : Colors.grey;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapUp: (_) {
+          setState(() => _isPressed = false);
+          if (isUnlocked) widget.onTap();
+        },
+        onTapCancel: () => setState(() => _isPressed = false),
+        child: AnimatedBuilder(
+          animation: Listenable.merge([_materializeAnimation, _pulseAnimation]),
+          builder: (context, child) {
+            final progress = _materializeAnimation.value;
+            final pulse = _pulseAnimation.value;
+            final scale = _isPressed ? 0.95 : (_isHovered ? 1.05 : 1.0);
+
+            return Transform.scale(
+              scale: scale,
+              child: CustomPaint(
+                painter: _EpicLevelCardPainter(
+                  progress: progress,
+                  pulseValue: pulse,
+                  primaryColor: effectiveColor,
+                  isHovered: _isHovered && isUnlocked,
+                  isCompleted: isCompleted,
+                  isLocked: !isUnlocked,
+                  levelNumber: widget.level.id,
+                  stars: stars,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _EpicLevelCardPainter extends CustomPainter {
+  _EpicLevelCardPainter({
+    required this.progress,
+    required this.pulseValue,
+    required this.primaryColor,
+    required this.isHovered,
+    required this.isCompleted,
+    required this.isLocked,
+    required this.levelNumber,
+    required this.stars,
+  });
+
+  final double progress;
+  final double pulseValue;
+  final Color primaryColor;
+  final bool isHovered;
+  final bool isCompleted;
+  final bool isLocked;
+  final int levelNumber;
+  final int stars;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final center = Offset(size.width / 2, size.height / 2);
+    final cornerRadius = 8.0;
+    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(cornerRadius));
+
+    // Background
+    _drawBackground(canvas, rrect);
+
+    // Circuit pattern
+    if (progress > 0.2) {
+      _drawCircuitPattern(canvas, size, center);
+    }
+
+    // Hex grid overlay
+    if (progress > 0.3 && !isLocked) {
+      _drawHexGrid(canvas, size);
+    }
+
+    // Border with glow
+    if (progress > 0.4) {
+      _drawBorder(canvas, rrect, size);
+    }
+
+    // Corner brackets
+    if (progress > 0.6) {
+      _drawCornerBrackets(canvas, size);
+    }
+
+    // Energy core (center circle)
+    if (progress > 0.5) {
+      _drawEnergyCore(canvas, center, size);
+    }
+
+    // Level number
+    if (progress > 0.7) {
+      _drawLevelNumber(canvas, center, size);
+    }
+
+    // Stars
+    if (isCompleted && stars > 0 && progress > 0.8) {
+      _drawStars(canvas, size);
+    }
+
+    // Lock overlay
+    if (isLocked && progress > 0.6) {
+      _drawLockOverlay(canvas, center, size);
+    }
+
+    // Completion badge
+    if (isCompleted && progress > 0.8) {
+      _drawCompletionBadge(canvas, size);
+    }
+
+    // Scan line effect when hovered
+    if (isHovered && !isLocked) {
+      _drawScanLine(canvas, size);
+    }
+  }
+
+  void _drawBackground(Canvas canvas, RRect rrect) {
+    final bgPaint = Paint()
+      ..color = Colors.black.withOpacity(0.8 * progress);
+    canvas.drawRRect(rrect, bgPaint);
+
+    // Inner glow
+    if (!isLocked && progress > 0.5) {
+      final glowPaint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            primaryColor.withOpacity(0.15 * progress),
+            Colors.transparent,
+          ],
+        ).createShader(rrect.outerRect);
+      canvas.drawRRect(rrect, glowPaint);
+    }
+  }
+
+  void _drawCircuitPattern(Canvas canvas, Size size, Offset center) {
+    final fadeIn = ((progress - 0.2) / 0.3).clamp(0.0, 1.0);
+    final fadeOut = isLocked ? 0.3 : (isHovered ? 1.0 : 0.5);
+    final opacity = fadeIn * fadeOut * 0.4;
+
+    final paint = Paint()
+      ..color = primaryColor.withOpacity(opacity)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    // Horizontal circuit lines
+    for (int i = 0; i < 3; i++) {
+      final y = size.height * 0.25 + i * size.height * 0.25;
+      final startX = i.isEven ? 0.0 : size.width * 0.1;
+      final endX = i.isEven ? size.width * 0.3 : size.width * 0.2;
+      canvas.drawLine(Offset(startX, y), Offset(endX, y), paint);
+      canvas.drawLine(
+          Offset(size.width - startX, y), Offset(size.width - endX, y), paint);
+    }
+
+    // Vertical circuit lines
+    for (int i = 0; i < 2; i++) {
+      final x = size.width * 0.2 + i * size.width * 0.6;
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height * 0.15), paint);
+      canvas.drawLine(
+          Offset(x, size.height), Offset(x, size.height * 0.85), paint);
+    }
+
+    // Circuit nodes (small circles at intersections)
+    final nodePaint = Paint()
+      ..color = primaryColor.withOpacity(opacity * 1.5)
+      ..style = PaintingStyle.fill;
+
+    final nodePositions = [
+      Offset(size.width * 0.2, size.height * 0.25),
+      Offset(size.width * 0.8, size.height * 0.25),
+      Offset(size.width * 0.2, size.height * 0.75),
+      Offset(size.width * 0.8, size.height * 0.75),
+    ];
+
+    for (final pos in nodePositions) {
+      canvas.drawCircle(pos, 2, nodePaint);
+    }
+  }
+
+  void _drawHexGrid(Canvas canvas, Size size) {
+    final fadeIn = ((progress - 0.3) / 0.3).clamp(0.0, 1.0);
+    final opacity = fadeIn * 0.1 * (isHovered ? 1.5 : 1.0);
+
+    final paint = Paint()
+      ..color = primaryColor.withOpacity(opacity)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke;
+
+    final hexSize = 15.0;
+    final rows = (size.height / (hexSize * 1.5)).ceil();
+    final cols = (size.width / (hexSize * 1.732)).ceil();
+
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final offsetX = col * hexSize * 1.732 + (row.isOdd ? hexSize * 0.866 : 0);
+        final offsetY = row * hexSize * 1.5;
+
+        if (offsetX < size.width && offsetY < size.height) {
+          _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.4, paint);
+        }
+      }
+    }
+  }
+
+  void _drawHexagon(Canvas canvas, Offset center, double radius, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60 - 30) * math.pi / 180;
+      final x = center.dx + radius * math.cos(angle);
+      final y = center.dy + radius * math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawBorder(Canvas canvas, RRect rrect, Size size) {
+    final borderFade = ((progress - 0.4) / 0.3).clamp(0.0, 1.0);
+    final glowIntensity = isHovered ? 1.0 : (0.4 + pulseValue * 0.3);
+
+    // Outer glow
+    final glowPaint = Paint()
+      ..color = primaryColor.withOpacity(glowIntensity * 0.5 * borderFade)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    canvas.drawRRect(rrect, glowPaint);
+
+    // Main border
+    final borderPaint = Paint()
+      ..color = primaryColor.withOpacity(borderFade * (isHovered ? 1.0 : 0.7))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = isHovered ? 2.5 : 1.5;
+    canvas.drawRRect(rrect, borderPaint);
+  }
+
+  void _drawCornerBrackets(Canvas canvas, Size size) {
+    final cornerFade = ((progress - 0.6) / 0.2).clamp(0.0, 1.0);
+    final bracketSize = 12.0 * cornerFade;
+
+    final paint = Paint()
+      ..color = primaryColor.withOpacity(cornerFade * (isHovered ? 1.0 : 0.8))
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round;
+
+    // Top-left
+    canvas.drawLine(Offset(4, 4 + bracketSize), const Offset(4, 4), paint);
+    canvas.drawLine(const Offset(4, 4), Offset(4 + bracketSize, 4), paint);
+
+    // Top-right
+    canvas.drawLine(
+        Offset(size.width - 4, 4 + bracketSize), Offset(size.width - 4, 4), paint);
+    canvas.drawLine(
+        Offset(size.width - 4, 4), Offset(size.width - 4 - bracketSize, 4), paint);
+
+    // Bottom-left
+    canvas.drawLine(
+        Offset(4, size.height - 4 - bracketSize), Offset(4, size.height - 4), paint);
+    canvas.drawLine(
+        Offset(4, size.height - 4), Offset(4 + bracketSize, size.height - 4), paint);
+
+    // Bottom-right
+    canvas.drawLine(Offset(size.width - 4, size.height - 4 - bracketSize),
+        Offset(size.width - 4, size.height - 4), paint);
+    canvas.drawLine(Offset(size.width - 4, size.height - 4),
+        Offset(size.width - 4 - bracketSize, size.height - 4), paint);
+
+    // Corner dots when hovered
+    if (isHovered && !isLocked) {
+      final dotPaint = Paint()
+        ..color = primaryColor
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
+      canvas.drawCircle(const Offset(4, 4), 3, dotPaint);
+      canvas.drawCircle(Offset(size.width - 4, 4), 3, dotPaint);
+      canvas.drawCircle(Offset(4, size.height - 4), 3, dotPaint);
+      canvas.drawCircle(Offset(size.width - 4, size.height - 4), 3, dotPaint);
+    }
+  }
+
+  void _drawEnergyCore(Canvas canvas, Offset center, Size size) {
+    if (isLocked) return;
+
+    final coreFade = ((progress - 0.5) / 0.3).clamp(0.0, 1.0);
+    final coreRadius = size.width * 0.18;
+    final pulseRadius = coreRadius * (1.0 + pulseValue * 0.1);
+
+    // Outer ring glow
+    final outerGlowPaint = Paint()
+      ..color = primaryColor.withOpacity(0.2 * coreFade * pulseValue)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+    canvas.drawCircle(center, pulseRadius * 1.5, outerGlowPaint);
+
+    // Energy ring
+    final ringPaint = Paint()
+      ..color = primaryColor.withOpacity(0.6 * coreFade)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawCircle(center, pulseRadius, ringPaint);
+
+    // Inner glow
+    final innerGlowPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          primaryColor.withOpacity(0.4 * coreFade),
+          primaryColor.withOpacity(0.1 * coreFade),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: coreRadius));
+    canvas.drawCircle(center, coreRadius, innerGlowPaint);
+
+    // Rotating segments when hovered
+    if (isHovered) {
+      final segmentPaint = Paint()
+        ..color = primaryColor.withOpacity(0.8 * coreFade)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round;
+
+      for (int i = 0; i < 4; i++) {
+        final startAngle = (i * 90 + pulseValue * 360) * math.pi / 180;
+        final sweepAngle = 45 * math.pi / 180;
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: pulseRadius + 4),
+          startAngle,
+          sweepAngle,
+          false,
+          segmentPaint,
+        );
+      }
+    }
+  }
+
+  void _drawLevelNumber(Canvas canvas, Offset center, Size size) {
+    final textFade = ((progress - 0.7) / 0.2).clamp(0.0, 1.0);
+
+    // Only show number if not locked (lock icon will be shown instead)
+    if (isLocked) return;
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: '$levelNumber',
+        style: TextStyle(
+          fontSize: size.width * 0.3,
+          fontWeight: FontWeight.bold,
+          color: primaryColor.withOpacity(textFade),
+          shadows: [
+            Shadow(
+              color: primaryColor.withOpacity(0.8 * textFade),
+              blurRadius: 12,
+            ),
+            Shadow(
+              color: Colors.white.withOpacity(0.3 * textFade),
+              blurRadius: 4,
+            ),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+
+    textPainter.layout();
+    textPainter.paint(
+      canvas,
+      Offset(
+        center.dx - textPainter.width / 2,
+        center.dy - textPainter.height / 2 - 5,
+      ),
+    );
+  }
+
+  void _drawStars(Canvas canvas, Size size) {
+    final starFade = ((progress - 0.8) / 0.2).clamp(0.0, 1.0);
+    final starSize = 14.0;
+    final starY = size.height - 20;
+    final startX = size.width / 2 - starSize * 1.5;
+
+    for (int i = 0; i < 3; i++) {
+      final x = startX + i * starSize * 1.2;
+      final isFilled = i < stars;
+
+      if (isFilled) {
+        // Glow
+        final glowPaint = Paint()
+          ..color = NeonColors.yellow.withOpacity(0.6 * starFade)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        _drawStarShape(canvas, Offset(x, starY), starSize * 0.5, glowPaint);
+
+        // Star
+        final starPaint = Paint()
+          ..color = NeonColors.yellow.withOpacity(starFade);
+        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, starPaint);
+      } else {
+        // Empty star outline
+        final emptyPaint = Paint()
+          ..color = Colors.grey.withOpacity(0.3 * starFade)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1;
+        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, emptyPaint);
+      }
+    }
+  }
+
+  void _drawStarShape(Canvas canvas, Offset center, double radius, Paint paint) {
+    final path = Path();
+    for (int i = 0; i < 5; i++) {
+      final outerAngle = (i * 72 - 90) * math.pi / 180;
+      final innerAngle = ((i * 72 + 36) - 90) * math.pi / 180;
+
+      final outerX = center.dx + radius * math.cos(outerAngle);
+      final outerY = center.dy + radius * math.sin(outerAngle);
+
+      final innerX = center.dx + radius * 0.4 * math.cos(innerAngle);
+      final innerY = center.dy + radius * 0.4 * math.sin(innerAngle);
+
+      if (i == 0) {
+        path.moveTo(outerX, outerY);
+      } else {
+        path.lineTo(outerX, outerY);
+      }
+      path.lineTo(innerX, innerY);
+    }
+    path.close();
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawLockOverlay(Canvas canvas, Offset center, Size size) {
+    final lockFade = ((progress - 0.6) / 0.2).clamp(0.0, 1.0);
+
+    // Darken overlay
+    final overlayPaint = Paint()
+      ..color = Colors.black.withOpacity(0.5 * lockFade);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), overlayPaint);
+
+    // Lock icon (simple representation)
+    final lockSize = size.width * 0.25;
+    final lockCenter = Offset(center.dx, center.dy - 5);
+
+    // Lock body
+    final bodyPaint = Paint()
+      ..color = Colors.grey.withOpacity(0.6 * lockFade)
+      ..style = PaintingStyle.fill;
+
+    final bodyRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(lockCenter.dx, lockCenter.dy + lockSize * 0.15),
+        width: lockSize * 0.7,
+        height: lockSize * 0.6,
+      ),
+      const Radius.circular(3),
+    );
+    canvas.drawRRect(bodyRect, bodyPaint);
+
+    // Lock shackle
+    final shacklePaint = Paint()
+      ..color = Colors.grey.withOpacity(0.6 * lockFade)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = lockSize * 0.12;
+
+    canvas.drawArc(
+      Rect.fromCenter(
+        center: Offset(lockCenter.dx, lockCenter.dy - lockSize * 0.1),
+        width: lockSize * 0.4,
+        height: lockSize * 0.4,
+      ),
+      3.14159,
+      3.14159,
+      false,
+      shacklePaint,
+    );
+
+    // Keyhole
+    final keyholePaint = Paint()
+      ..color = Colors.black.withOpacity(0.8 * lockFade);
+    canvas.drawCircle(
+      Offset(lockCenter.dx, lockCenter.dy + lockSize * 0.1),
+      lockSize * 0.08,
+      keyholePaint,
+    );
+  }
+
+  void _drawCompletionBadge(Canvas canvas, Size size) {
+    final badgeFade = ((progress - 0.8) / 0.2).clamp(0.0, 1.0);
+    final badgePos = Offset(size.width - 16, 16);
+
+    // Glow
+    final glowPaint = Paint()
+      ..color = NeonColors.green.withOpacity(0.6 * badgeFade)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawCircle(badgePos, 12, glowPaint);
+
+    // Badge background
+    final bgPaint = Paint()
+      ..color = NeonColors.green.withOpacity(0.8 * badgeFade);
+    canvas.drawCircle(badgePos, 8, bgPaint);
+
+    // Checkmark
+    final checkPaint = Paint()
+      ..color = Colors.white.withOpacity(badgeFade)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path()
+      ..moveTo(badgePos.dx - 4, badgePos.dy)
+      ..lineTo(badgePos.dx - 1, badgePos.dy + 3)
+      ..lineTo(badgePos.dx + 4, badgePos.dy - 3);
+    canvas.drawPath(path, checkPaint);
+  }
+
+  void _drawScanLine(Canvas canvas, Size size) {
+    final scanY = (pulseValue * size.height * 1.5) - size.height * 0.25;
+
+    final scanPaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          primaryColor.withOpacity(0.3),
+          primaryColor.withOpacity(0.5),
+          primaryColor.withOpacity(0.3),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, scanY - 10, size.width, 20));
+
+    canvas.drawRect(Rect.fromLTWH(0, scanY - 10, size.width, 20), scanPaint);
+  }
+
+  @override
+  bool shouldRepaint(_EpicLevelCardPainter oldDelegate) {
+    return progress != oldDelegate.progress ||
+        pulseValue != oldDelegate.pulseValue ||
+        isHovered != oldDelegate.isHovered;
   }
 }
 

@@ -6,6 +6,7 @@ import '../theme/neon_theme.dart';
 import '../widgets/animated_grid_background.dart';
 import '../widgets/epic_neon_button.dart';
 import '../widgets/epic_neon_title.dart';
+import '../widgets/glitch_text.dart';
 
 class StoryScreen extends StatelessWidget {
   const StoryScreen({super.key});
@@ -15,111 +16,70 @@ class StoryScreen extends StatelessWidget {
   static const List<_StoryChapter> _chapters = [
     _StoryChapter(
       worldId: 1,
-      title: 'Neon Frontier',
-      subtitle: 'Capitulo 1 - La primera chispa.',
+      title: 'NEON FRONTIER',
+      subtitle: 'ERROR_01: EL ORIGEN DEL VACÍO',
+      imagePath: 'assets/images/story_frontier.png',
       beats: [
-        'El Evento Resonancia apago la red central y las ciudades quedaron en modo supervivencia.',
-        'Eres la comandante Lira Kestrel, enviada a reactivar nodos y sostener la linea.',
-        'Cada torre ancla energia y corta el avance del ruido corrupto.',
+        'El "Decompiler" ha perforado el Sector 0. La realidad digital se desmorona en fragmentos de ruido.',
+        'Como el Arquitecto, tu misión es anclar la red antes de que la corrupción sea irreversible.',
+        'Cada torre es un cortafuegos. Cada disparo, una línea de código recuperada.',
       ],
       accent: NeonColors.cyan,
     ),
     _StoryChapter(
       worldId: 2,
-      title: 'Rift Wars',
-      subtitle: 'Capitulo 2 - Grietas en la malla.',
+      title: 'RIFT WARS',
+      subtitle: 'ERROR_02: CASCADA DE MEMORIA',
+      imagePath: 'assets/images/story_rifts.png',
       beats: [
-        'Las grietas abren rutas nuevas y los enjambres se filtran a velocidad rift.',
-        'Tus pulsos reescriben el flujo y las minas sellan pasos inestables.',
-        'La vanguardia mantiene el pulso mientras la historia se fractura.',
+        'El virus ha creado anomalías temporales. Los datos del pasado se filtran en el presente.',
+        'Las grietas de energía magenta son cicatrices en la malla. Debes sellarlas con pura potencia de fuego.',
+        'El ruido se vuelve más denso. La red grita pidiendo restauración.',
       ],
       accent: NeonColors.magenta,
     ),
     _StoryChapter(
       worldId: 3,
-      title: 'Signal Wastes',
-      subtitle: 'Capitulo 3 - Silencio y eco.',
+      title: 'SIGNAL WASTES',
+      subtitle: 'ERROR_03: ECO EN EL VACÍO',
+      imagePath: 'assets/images/story_wastes.png',
       beats: [
-        'Los desiertos de senal rompen el ritmo y obligan a defender pasillos largos.',
-        'Los enemigos aprenden a ocultarse en el vacio; tu vision debe ser total.',
-        'Si sostienes la luz, la red responde con fuerza renovada.',
+        'Desiertos de estática donde la señal muere. El Decompiler acecha en las sombras del código.',
+        'Sin visibilidad total, las torres son faros en una tormenta de bits perdidos.',
+        'Si la luz se apaga aquí, el Grid caerá en el silencio eterno.',
       ],
       accent: NeonColors.yellow,
     ),
     _StoryChapter(
       worldId: 4,
-      title: 'Ion Crown',
-      subtitle: 'Capitulo 4 - La corona de tormenta.',
+      title: 'ION CROWN',
+      subtitle: 'ERROR_04: LA CORONA DE TORMENTA',
+      imagePath: 'assets/images/story_crown.png',
       beats: [
-        'Tormentas ionicas recortan los carriles y obligan a cerrar brechas rapido.',
-        'Las oleadas pesan mas; cada decision define el pulso del mundo.',
-        'Sobrevivir aqui es ganar tiempo para que el Grid vuelva a latir.',
+        'La última línea de defensa antes del Núcleo Central. Tormentas iónicas azotan la infraestructura.',
+        'El enemigo ha movilizado a sus unidades de asedio más pesadas. El tiempo de corrección se agota.',
+        'Solo una voluntad de hierro puede sostener la corona de energía.',
       ],
       accent: NeonColors.green,
     ),
     _StoryChapter(
       worldId: 5,
-      title: 'Shard Vault',
-      subtitle: 'Capitulo 5 - La memoria perdida.',
+      title: 'SHARD VAULT',
+      subtitle: 'ERROR_05: MEMORIAS CORRUPTAS',
       beats: [
-        'Las bovedas antiguas guardan codigos de mejora y secretos de combate.',
-        'Tus torres absorben fragmentos de memoria y evolucionan en pleno asedio.',
-        'Cada nivel limpiado libera un nodo del pasado.',
+        'Bóvedas de seguridad donde se guardan las funciones raíz. El virus intenta borrarlas para siempre.',
+        'Recupera los fragmentos de memoria. Evoluciona tus sistemas. No permitas que el pasado desaparezca.',
       ],
       accent: NeonColors.red,
     ),
     _StoryChapter(
-      worldId: 6,
-      title: 'Arc Fortress',
-      subtitle: 'Capitulo 6 - El asedio.',
-      beats: [
-        'La fortaleza concentra ataques y obliga a defender multiples frentes.',
-        'Las oleadas llegan mas compactas; el control del mapa es vital.',
-        'Solo la disciplina mantiene la linea de Aegis.',
-      ],
-      accent: NeonColors.purple,
-    ),
-    _StoryChapter(
-      worldId: 7,
-      title: 'Core Hunt',
-      subtitle: 'Capitulo 7 - Caza al nucleo.',
-      beats: [
-        'El enemigo ignora todo menos el nucleo; cada error cuesta caro.',
-        'La precision manda: pulsa, mina y enfoca cada disparo.',
-        'El Grid tiembla, pero no se rinde.',
-      ],
-      accent: NeonColors.orange,
-    ),
-    _StoryChapter(
-      worldId: 8,
-      title: 'Omega Grid',
-      subtitle: 'Capitulo 8 - Bucle infinito.',
-      beats: [
-        'El Omega Grid repite patrones y castiga a quien no se adapta.',
-        'La presion es constante; solo la estrategia rompe el ciclo.',
-        'Cada victoria escribe una ruta nueva en la red.',
-      ],
-      accent: NeonColors.blue,
-    ),
-    _StoryChapter(
-      worldId: 9,
-      title: 'Storm Tower',
-      subtitle: 'Capitulo 9 - El filo del rayo.',
-      beats: [
-        'Los corredores se fracturan y el tiempo se vuelve enemigo.',
-        'Los rayos marcan el ritmo; tus torres deben responder al instante.',
-        'La vanguardia empieza a ver la salida.',
-      ],
-      accent: NeonColors.cyan,
-    ),
-    _StoryChapter(
       worldId: 10,
-      title: 'Final Gate',
-      subtitle: 'Capitulo 10 - El ultimo umbral.',
+      title: 'FINAL GATE',
+      subtitle: 'SYS_FINAL: EL ÚLTIMO UMBRAL',
       beats: [
-        'La ultima puerta resiste con su ultima energia.',
-        'Si la mantienes en pie, el Grid renace.',
-        'Un nuevo amanecer espera al otro lado del ruido.',
+        'Todo converger al Núcleo. El Decompiler está materializando su forma final.',
+        'Si la Puerta Final cae, el sistema entero será formateado al Vacío.',
+        'Es hora de ejecutar la secuencia final. Por el Grid.',
       ],
       accent: NeonColors.white,
     ),
@@ -164,21 +124,34 @@ class StoryScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 24),
                 const EpicNeonTitle(
-                  text: 'STORY MODE',
-                  fontSize: 42,
+                  text: 'THE ARCHITECT LOGS',
+                  fontSize: 38,
                   primaryColor: NeonColors.white,
-                  secondaryColor: NeonColors.magenta,
+                  secondaryColor: NeonColors.cyan,
                 ),
                 const SizedBox(height: 8),
-                Text(
-                  'La historia avanza con cada mundo. Cada victoria enciende un nodo mas.',
-                  textAlign: TextAlign.center,
-                  style: NeonTextStyles.body.copyWith(
-                    color: NeonColors.white.withOpacity(0.8),
-                    fontSize: 16,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: NeonColors.cyan.withOpacity(0.1),
+                    border: Border.all(color: NeonColors.cyan.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.security, color: NeonColors.cyan, size: 14),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GlitchText(
+                          text: 'ESTADO DEL SISTEMA: CRÍTICO - RECURSIVE_DECOMPILE_DETECTED',
+                          style: NeonTextStyles.small.copyWith(color: NeonColors.cyan, fontSize: 10),
+                          duration: const Duration(seconds: 3),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 Expanded(
                   child: ListView.separated(
                     padding: const EdgeInsets.only(bottom: 20),
@@ -216,6 +189,7 @@ class _StoryChapter {
     required this.subtitle,
     required this.beats,
     required this.accent,
+    this.imagePath,
   });
 
   final int worldId;
@@ -223,6 +197,7 @@ class _StoryChapter {
   final String subtitle;
   final List<String> beats;
   final Color accent;
+  final String? imagePath;
 }
 
 class _StoryCard extends StatelessWidget {
@@ -255,7 +230,7 @@ class _StoryCard extends StatelessWidget {
     final progressRatio =
         progress.total == 0 ? 0.0 : progress.completed / progress.total;
     return Container(
-      padding: const EdgeInsets.all(16),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: NeonColors.surfaceBg.withOpacity(0.85),
         borderRadius: BorderRadius.circular(12),
@@ -271,136 +246,190 @@ class _StoryCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Text(
-                'WORLD ${chapter.worldId}',
-                style: NeonTextStyles.small.copyWith(
-                  color: chapter.accent.withOpacity(0.85),
-                  letterSpacing: 1.3,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _statusColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _statusColor.withOpacity(0.6)),
-                ),
-                child: Text(
-                  _statusLabel,
-                  style: NeonTextStyles.small.copyWith(
-                    color: _statusColor,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${progress.completed}/${progress.total} NODES',
-                style: NeonTextStyles.small.copyWith(
-                  color: NeonColors.white.withOpacity(0.6),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Container(
-            height: 6,
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.35),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: progressRatio.clamp(0.0, 1.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      chapter.accent.withOpacity(0.9),
-                      chapter.accent.withOpacity(0.4),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(4),
-                  boxShadow: [
-                    BoxShadow(
-                      color: chapter.accent.withOpacity(0.5),
-                      blurRadius: 8,
-                      spreadRadius: -2,
+          if (chapter.imagePath != null && progress.unlocked)
+            Stack(
+              children: [
+                Image.asset(
+                  chapter.imagePath!,
+                  height: 140,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    height: 140,
+                    color: chapter.accent.withOpacity(0.1),
+                    child: Center(
+                      child: Icon(Icons.image_not_supported, color: chapter.accent),
                     ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Text(
-                chapter.title,
-                style: NeonTextStyles.title.copyWith(
-                  fontSize: 22,
-                  color: chapter.accent.withOpacity(opacity),
-                  letterSpacing: 1.3,
-                ),
-              ),
-              const Spacer(),
-              Container(
-                width: 6,
-                height: 40,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      chapter.accent.withOpacity(opacity),
-                      chapter.accent.withOpacity(0.3 * opacity),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
                   ),
-                  borderRadius: BorderRadius.circular(8),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            chapter.subtitle,
-            style: NeonTextStyles.body.copyWith(
-              color: NeonColors.white.withOpacity(0.7 * opacity),
-              fontSize: 14,
+                Positioned.fill(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          NeonColors.surfaceBg.withOpacity(0.2),
+                          NeonColors.surfaceBg,
+                        ],
+                        stops: const [0.0, 0.7, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                   top: 12,
+                   right: 12,
+                   child: Container(
+                     padding: const EdgeInsets.all(4),
+                     decoration: BoxDecoration(
+                       color: Colors.black54,
+                       borderRadius: BorderRadius.circular(4),
+                     ),
+                     child: Icon(Icons.emergency_recording_rounded, color: chapter.accent, size: 16),
+                   ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(height: 12),
-          ...chapter.beats.map((beat) => Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 4),
-                      width: 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: chapter.accent.withOpacity(opacity),
-                        shape: BoxShape.circle,
+                    Text(
+                      'WORLD ${chapter.worldId}',
+                      style: NeonTextStyles.small.copyWith(
+                        color: chapter.accent.withOpacity(0.85),
+                        letterSpacing: 1.3,
                       ),
                     ),
                     const SizedBox(width: 8),
-                    Expanded(
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: _statusColor.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: _statusColor.withOpacity(0.6)),
+                      ),
                       child: Text(
-                        beat,
-                        style: NeonTextStyles.body.copyWith(
-                          color: NeonColors.white.withOpacity(0.8 * opacity),
-                          fontSize: 13,
-                          height: 1.4,
+                        _statusLabel,
+                        style: NeonTextStyles.small.copyWith(
+                          color: _statusColor,
+                          letterSpacing: 1.2,
                         ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${progress.completed}/${progress.total} NODES',
+                      style: NeonTextStyles.small.copyWith(
+                        color: NeonColors.white.withOpacity(0.6),
                       ),
                     ),
                   ],
                 ),
-              )),
+                const SizedBox(height: 8),
+                Container(
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.35),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: progressRatio.clamp(0.0, 1.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            chapter.accent.withOpacity(0.9),
+                            chapter.accent.withOpacity(0.4),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: chapter.accent.withOpacity(0.5),
+                            blurRadius: 8,
+                            spreadRadius: -2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    GlitchText(
+                      text: chapter.title,
+                      style: NeonTextStyles.title.copyWith(
+                        fontSize: 22,
+                        color: chapter.accent.withOpacity(opacity),
+                        letterSpacing: 1.3,
+                      ),
+                    ),
+                    const Spacer(),
+                    Container(
+                      width: 6,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            chapter.accent.withOpacity(opacity),
+                            chapter.accent.withOpacity(0.3 * opacity),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  chapter.subtitle,
+                  style: NeonTextStyles.body.copyWith(
+                    color: NeonColors.white.withOpacity(0.7 * opacity),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ...chapter.beats.map((beat) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.only(top: 4),
+                            width: 6,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color: chapter.accent.withOpacity(opacity),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              beat,
+                              style: NeonTextStyles.body.copyWith(
+                                color: NeonColors.white.withOpacity(0.8 * opacity),
+                                fontSize: 13,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
+            ),
+          ),
         ],
       ),
     );

@@ -9,14 +9,12 @@ import '../entities/tower.dart';
 import '../../ui/theme/neon_theme.dart';
 import 'hud_button.dart';
 import 'boss_health_bar.dart';
+import '../../services/level_service.dart';
 
 /// Professional HUD with cyberpunk aesthetic
 class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Button references for state updates
-  late HudButton pulseArcherBtn;
-  late HudButton circuitCannonBtn;
-  late HudButton phaseMageBtn;
-  late HudButton glimmerFieldBtn;
+  final List<HudButton> _towerButtons = [];
   late HudButton pulseAbilityBtn;
   late HudButton mineAbilityBtn;
   late HudButton sellButton;
@@ -237,65 +235,36 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       _layoutSingleRowY = bottomBarTop + (bottomBarHeight - buttonHeight) / 2;
     }
 
-    pulseArcherBtn = HudButton(
-      label: 'ARCHER',
-      position: Vector2(
-        useTwoRows ? _layoutRow1StartX : _layoutStartX,
-        useTwoRows ? _layoutRow1Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutButtonWidth, buttonHeight),
-      color: TowerType.pulseArcher.color,
-      isSelected: true,
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.pulseArcher),
-    );
+    // Dynamic tower buttons based on unlocks
+    final unlockedTowers = LevelService.instance.getUnlockedTowers();
+    _towerButtons.clear();
 
-    circuitCannonBtn = HudButton(
-      label: 'CANNON',
-      position: Vector2(
-        (useTwoRows ? _layoutRow1StartX : _layoutStartX) +
-            _layoutButtonWidth +
-            _layoutSpacing,
-        useTwoRows ? _layoutRow1Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutButtonWidth, buttonHeight),
-      color: TowerType.circuitCannon.color,
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.circuitCannon),
-    );
+    for (int i = 0; i < unlockedTowers.length; i++) {
+        final type = unlockedTowers[i];
+        final x = (useTwoRows ? _layoutRow1StartX : _layoutStartX) + i * (_layoutButtonWidth + _layoutSpacing);
+        final y = useTwoRows ? _layoutRow1Y : _layoutSingleRowY;
+        
+        final btn = HudButton(
+            label: type.name.split(' ').last.toUpperCase(), // e.g. 'ARCHER' or 'SNIPER'
+            position: Vector2(x, y),
+            size: Vector2(_layoutButtonWidth, buttonHeight),
+            color: type.color,
+            isSelected: gameRef.towerManager.selectedTowerType == type,
+            reduceFlicker: reduceFlicker,
+            onPressed: () => gameRef.towerManager.setSelectedTowerType(type),
+        );
+        _towerButtons.add(btn);
+        add(btn);
+    }
 
-    phaseMageBtn = HudButton(
-      label: 'MAGE',
-      position: Vector2(
-        (useTwoRows ? _layoutRow1StartX : _layoutStartX) +
-            2 * (_layoutButtonWidth + _layoutSpacing),
-        useTwoRows ? _layoutRow1Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutButtonWidth, buttonHeight),
-      color: TowerType.phaseMage.color,
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.phaseMage),
-    );
-
-    glimmerFieldBtn = HudButton(
-      label: 'GLIMMER',
-      position: Vector2(
-        (useTwoRows ? _layoutRow1StartX : _layoutStartX) +
-            3 * (_layoutButtonWidth + _layoutSpacing),
-        useTwoRows ? _layoutRow1Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutButtonWidth, buttonHeight),
-      color: TowerType.glimmerField.color,
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.towerManager.setSelectedTowerType(TowerType.glimmerField),
-    );
+    final abilityStartX = useTwoRows 
+        ? _layoutRow2StartX 
+        : _layoutStartX + unlockedTowers.length * (_layoutButtonWidth + _layoutSpacing);
 
     pulseAbilityBtn = HudButton(
       label: 'PULSE',
       position: Vector2(
-        useTwoRows
-            ? _layoutRow2StartX
-            : _layoutStartX + 4 * (_layoutButtonWidth + _layoutSpacing),
+        abilityStartX,
         useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
       ),
       size: Vector2(_layoutAbilityWidth, buttonHeight),
@@ -307,33 +276,23 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     mineAbilityBtn = HudButton(
       label: 'MINE',
       position: Vector2(
-        useTwoRows
-            ? _layoutRow2StartX + _layoutAbilityWidth + _layoutSpacing
-            : _layoutStartX +
-                4 * (_layoutButtonWidth + _layoutSpacing) +
-                _layoutAbilityWidth +
-                _layoutSpacing,
+        abilityStartX + _layoutAbilityWidth + _layoutSpacing,
         useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
       ),
       size: Vector2(_layoutMineWidth, buttonHeight),
-      color: const Color(0xFFFF0066),
+      color: const Color(0xFFFFAA00),
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.deployMine(),
     );
 
+    final sellX = useTwoRows
+        ? _layoutRow2StartX + _layoutAbilityWidth + _layoutMineWidth + 2 * _layoutSpacing
+        : abilityStartX + _layoutAbilityWidth + _layoutMineWidth + 2 * _layoutSpacing;
+
     sellButton = HudButton(
       label: 'SELL',
       position: Vector2(
-        useTwoRows
-            ? _layoutRow2StartX +
-                _layoutAbilityWidth +
-                _layoutMineWidth +
-                2 * _layoutSpacing
-            : _layoutStartX +
-                4 * (_layoutButtonWidth + _layoutSpacing) +
-                _layoutAbilityWidth +
-                _layoutMineWidth +
-                2 * _layoutSpacing,
+        sellX,
         useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
       ),
       size: Vector2(_layoutSellWidth, buttonHeight),
@@ -341,47 +300,26 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.toggleSellMode(),
     );
-
     upgradeButton = HudButton(
-      label: 'UPGRADE',
+      label: 'UPGRADES',
       position: Vector2(
-        useTwoRows
-            ? _layoutRow2StartX +
-                _layoutAbilityWidth +
-                _layoutMineWidth +
-                _layoutSellWidth +
-                3 * _layoutSpacing
-            : _layoutStartX +
-                4 * (_layoutButtonWidth + _layoutSpacing) +
-                _layoutAbilityWidth +
-                _layoutMineWidth +
-                _layoutSellWidth +
-                3 * _layoutSpacing,
+        sellX + _layoutSellWidth + _layoutSpacing,
         useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
       ),
       size: Vector2(_layoutUpgradeWidth, buttonHeight),
-      color: NeonColors.purple,
+      color: const Color(0xFF9C27B0), // Purple
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.toggleRunUpgradeOverlay(),
     );
 
+    final waveX = useTwoRows
+        ? _layoutRow2StartX + _layoutAbilityWidth + _layoutMineWidth + _layoutSellWidth + _layoutUpgradeWidth + 4 * _layoutSpacing
+        : sellX + _layoutSellWidth + _layoutUpgradeWidth + 2 * _layoutSpacing;
+
     waveButton = HudButton(
       label: 'START WAVE',
       position: Vector2(
-        useTwoRows
-            ? _layoutRow2StartX +
-                _layoutAbilityWidth +
-                _layoutMineWidth +
-                _layoutSellWidth +
-                _layoutUpgradeWidth +
-                4 * _layoutSpacing
-            : _layoutStartX +
-                4 * (_layoutButtonWidth + _layoutSpacing) +
-                _layoutAbilityWidth +
-                _layoutMineWidth +
-                _layoutSellWidth +
-                _layoutUpgradeWidth +
-                4 * _layoutSpacing,
+        waveX,
         useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
       ),
       size: Vector2(_layoutWaveWidth, buttonHeight),
@@ -391,11 +329,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       enabled: !gameRef.enemyManager.spawning,
     );
 
+    addAll(_towerButtons);
     addAll([
-      pulseArcherBtn,
-      circuitCannonBtn,
-      phaseMageBtn,
-      glimmerFieldBtn,
       pulseAbilityBtn,
       mineAbilityBtn,
       sellButton,
@@ -422,10 +357,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _time += dt;
 
     final selected = gameRef.towerManager.selectedTowerType;
-    pulseArcherBtn.isSelected = selected == TowerType.pulseArcher;
-    circuitCannonBtn.isSelected = selected == TowerType.circuitCannon;
-    phaseMageBtn.isSelected = selected == TowerType.phaseMage;
-    glimmerFieldBtn.isSelected = selected == TowerType.glimmerField;
+    for (final btn in _towerButtons) {
+        final btnType = TowerType.values.firstWhere((t) => btn.label == t.name.split(' ').last.toUpperCase());
+        btn.isSelected = selected == btnType;
+    }
 
     waveButton.enabled = !gameRef.enemyManager.spawning;
     pulseAbilityBtn.isSelected =
@@ -444,11 +379,19 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   @override
+  void renderTree(Canvas canvas) {
+    if (gameRef.focusModeActive) return;
+    super.renderTree(canvas);
+  }
+
+  @override
   void render(Canvas canvas) {
     super.render(canvas);
 
     final screenWidth = gameRef.size.x;
     final screenHeight = gameRef.size.y;
+
+    if (gameRef.focusModeActive) return; // Hide standard HUD in FPS mode
 
     _drawTopPanel(canvas, screenWidth);
     _drawBottomPanel(canvas, screenWidth, screenHeight);
@@ -481,6 +424,48 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     _drawAbilityTargetHint(canvas, screenHeight);
+    _drawFocusTimerOverlay(canvas, screenWidth, screenHeight);
+  }
+
+  void _drawFocusTimerOverlay(Canvas canvas, double screenWidth, double screenHeight) {
+    if (!gameRef.focusModeActive) return;
+    
+    final timer = gameRef.focusModeTimer;
+    final max = gameRef.focusModeMaxDuration;
+    final progress = (timer / max).clamp(0.0, 1.0);
+    
+    final barWidth = 200.0;
+    final barHeight = 4.0;
+    final x = (screenWidth - barWidth) / 2;
+    final y = topBarHeight + 20;
+    
+    // Draw timer bar
+    canvas.drawRect(
+      Rect.fromLTWH(x, y, barWidth, barHeight),
+      Paint()..color = Colors.black45,
+    );
+    
+    final color = gameRef.focusTower?.color ?? const Color(0xFF00FFFF);
+    canvas.drawRect(
+      Rect.fromLTWH(x, y, barWidth * progress, barHeight),
+      Paint()
+        ..color = color
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+    
+    final labelPainter = _getPainter(
+      'focus-timer-label',
+      'OVERDRIVE ACTIVE - ${timer.toStringAsFixed(1)}s',
+      TextStyle(
+        color: color,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.2,
+        shadows: [Shadow(color: color, blurRadius: 4)],
+      ),
+    );
+    labelPainter.paint(canvas, Offset(x + (barWidth - labelPainter.width) / 2, y - 14));
   }
 
   void _drawAbilityTargetHint(Canvas canvas, double screenHeight) {
@@ -730,6 +715,47 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _drawResourceCard(canvas, screenWidth - 340, 8, 'WAVE', '${gameRef.enemyManager.currentWave}', const Color(0xFFFF00FF), 3);
     _drawResourceCard(canvas, screenWidth - 230, 8, 'ENEMIES', '${gameRef.enemyManager.aliveCount}', const Color(0xFFFF6644), 4);
     _drawResourceCard(canvas, screenWidth - 120, 8, 'TOWERS', '${gameRef.towerManager.towers.length}', const Color(0xFF44AAFF), 5);
+
+    // Overdrive (FPS) uses indicator
+    _drawOverdriveUses(canvas, screenWidth);
+  }
+
+  void _drawOverdriveUses(Canvas canvas, double screenWidth) {
+    if (_isCompactHud(screenWidth, gameRef.size.y)) return;
+    
+    final uses = gameRef.fpsUsesTotal;
+    final max = gameRef.maxFpsUsesMatch;
+    final remaining = (max - uses).clamp(0, max);
+    final color = remaining > 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF0066);
+    
+    final x = screenWidth / 2 - 145; // Below selection info or logo
+    final y = 70.0;
+    
+    // Draw small circles/dots for available uses
+    for (int i = 0; i < max; i++) {
+      final isUsed = i < uses;
+      final dotX = x + i * 20;
+      final dotPaint = Paint()
+        ..color = isUsed ? Colors.white12 : color.withOpacity(0.8)
+        ..maskFilter = isUsed ? null : const MaskFilter.blur(BlurStyle.normal, 2);
+      
+      canvas.drawCircle(Offset(dotX, y), 4, dotPaint);
+      if (!isUsed) {
+        canvas.drawCircle(Offset(dotX, y), 2, Paint()..color = Colors.white);
+      }
+    }
+    
+    final labelPainter = _getPainter(
+      'overdrive-label',
+      'OVERDRIVE USES',
+      TextStyle(
+        color: color.withOpacity(0.6),
+        fontSize: 8,
+        fontFamily: 'monospace',
+        letterSpacing: 1.0,
+      ),
+    );
+    labelPainter.paint(canvas, Offset(x - 2, y + 8));
   }
 
   void _drawResourceCard(

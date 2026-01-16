@@ -193,6 +193,21 @@ class ImpactEffect extends PositionComponent {
           ));
         }
         break;
+      case TowerType.ionSniper:
+      case TowerType.teslaTerminal:
+      case TowerType.resonanceSiphon:
+      case TowerType.neuralDisruptor:
+        // Default spark burst
+        final sparkCount = _scaledCount(10, allowZero: true);
+        for (int i = 0; i < sparkCount; i++) {
+          _sparks.add(_Spark(
+            angle: _random.nextDouble() * math.pi * 2,
+            speed: 100 + _random.nextDouble() * 50,
+            length: 10 + _random.nextDouble() * 5,
+            lifetime: 0.2,
+          ));
+        }
+        break;
     }
   }
 

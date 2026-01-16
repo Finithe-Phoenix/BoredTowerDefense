@@ -3,6 +3,7 @@
 import '../models/level_config.dart';
 import 'storage_service.dart';
 import 'upgrade_service.dart';
+import '../game/entities/tower.dart';
 
 /// Service to manage level configurations and progress
 class LevelService {
@@ -27,12 +28,48 @@ class LevelService {
     }
   }
 
+  /// Tower Unlocking Schedule
+  static final Map<int, TowerType> _towerUnlocks = {
+    1: TowerType.pulseArcher,
+    3: TowerType.circuitCannon,
+    5: TowerType.phaseMage,
+    7: TowerType.glimmerField,
+    9: TowerType.ionSniper,
+    10: TowerType.teslaTerminal,
+    11: TowerType.resonanceSiphon, // World 2 Lvl 1
+    13: TowerType.neuralDisruptor, // World 2 Lvl 3
+  };
+
+  /// Returns whether a specific tower type is unlocked based on progression
+  bool isTowerUnlocked(TowerType type) {
+    if (_unlockAllLevels) return true;
+    
+    // Pulse Archer is always unlocked
+    if (type == TowerType.pulseArcher) return true;
+
+    // Check progress
+    final storage = StorageService.instance;
+    for (final entry in _towerUnlocks.entries) {
+      if (entry.value == type) {
+        // Tower is unlocked if the level associated with it is unlocked
+        // (meaning user reached that level)
+        return isLevelUnlocked(entry.key);
+      }
+    }
+    
+    return false;
+  }
+
+  /// Get list of all unlocked towers for current progression
+  List<TowerType> getUnlockedTowers() {
+    return TowerType.values.where((t) => isTowerUnlocked(t)).toList();
+  }
+
   /// All available levels (hardcoded for now, could load from JSON)
   final List<LevelConfig> levels = const [
-
     LevelConfig(
       id: 1,
-      name: 'Grid Alpha',
+      name: 'Training Grounds',
       mapFile: 'maps/level1.tmx',
       waves: 5,
       difficulty: 1,

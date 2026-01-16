@@ -26,6 +26,7 @@ import 'entities/enemy.dart';
 import 'entities/tower.dart';
 import 'entities/projectile.dart';
 import 'fps/fps_view_component.dart';
+import 'fps/fps_background_component.dart';
 import 'hud/hud_component.dart';
 import 'managers/bullet_manager.dart';
 import 'managers/enemy_manager.dart';
@@ -37,11 +38,16 @@ import '../models/upgrade_data.dart';
 import '../services/audio_service.dart';
 import '../services/storage_service.dart';
 import '../services/upgrade_service.dart';
+import 'balance/difficulty_curve.dart';
+import '../ui/theme/neon_theme.dart';
+
+enum PendingAbility { none, pulse, mine }
 
 class BoredGamesGame extends FlameGame
     with
         HasCollisionDetection,
         TapCallbacks,
+
         DragCallbacks,
         KeyboardEvents {
   BoredGamesGame({
@@ -63,7 +69,7 @@ class BoredGamesGame extends FlameGame
   late final WorldUberShaderComponent worldShaderComponent;
   late final ParticleShaderComponent particleShaderComponent;
   late final ScreenPostProcessComponent screenPostProcessComponent;
-  final PositionComponent worldRoot = PositionComponent();
+  late final PerspectiveWorldRoot worldRoot;
   late final GameWorld worldLayer;
   late final EnemyManager enemyManager;
   late final TowerManager towerManager;
@@ -91,16 +97,38 @@ class BoredGamesGame extends FlameGame
   static const int runUpgradeInterval = 2;
 
   // FPS Mode properties
-  static const int maxFpsUsesPerWave = 3;
+  static const int maxFpsUsesPerMatch = 3;
   static const double fpsModeCostMultiplier = 1.5;
-  int _fpsUsesThisWave = 0;
+  int _fpsUsesTotal = 0;
   FpsViewComponent? _fpsViewComponent;
+  FpsBackgroundComponent? _fpsBackground;
+  double _focusModeTimer = 0;
+  static const double _focusModeMaxDuration = 10.0;
+  
+  // Manual Long Press
+  double _longPressTimer = 0;
+  bool _isLongPressing = false;
+  Vector2? _longPressOrigin;
+  static const double _longPressDuration = 0.5;
 
   // Neon Pulse ability
   static const int pulseCostBase = 30;
-  static const double pulseCooldownBase = 5.0;
+  static const double pulseCooldown = 15.0; // New constant
   double _pulseCooldownTimer = 0;
+
+  // Mine ability
+  static const int mineCostBase = 20; // Changed from 40
+  static const double mineCooldown = 10.0; // New constant
+  double _mineCooldownTimer = 0;
+  static const int maxActiveMinesBase = 5;
+  final List<NeonMine> _activeMines = [];
+
+  PendingAbility _pendingAbility = PendingAbility.none;
+  PendingAbility get pendingAbility => _pendingAbility;
+
   Vector2? _lastMousePosition;
+  Vector2? get mousePosition => _lastMousePosition;
+  Vector2 _lastWorldPosition = Vector2.zero(); // Changed to non-nullable and initialized
   Vector2? get lastPointer => _lastMousePosition;
   bool _draggingPlacement = false;
   double _worldScale = 1.0;
@@ -109,9 +137,6 @@ class BoredGamesGame extends FlameGame
   Tower? _focusTower;
   bool _focusMode = false;
   bool _sellMode = false;
-  Tower? _tapTower;
-  int _tapCount = 0;
-  double _tapTimer = 0;
   double _focusFxPulse = 0;
   final math.Random _threatShakeRandom = math.Random();
   double _threatShakeTimer = 0;
@@ -119,11 +144,7 @@ class BoredGamesGame extends FlameGame
   double _threatShakeIntensity = 0;
   Vector2 _threatShakeOffset = Vector2.zero();
   double _fxBudgetTimer = 0;
-  PendingAbility _pendingAbility = PendingAbility.none;
-  Vector2? _lastWorldPosition;
-  static const int _focusTapCount = 5;
-  static const double _tapResetDelay = 1.2;
-  static const double _focusZoom = 1.8;
+  static const double _focusZoom = 2.5;
   static const double sellRefundRate = 0.2;
   QualityLevel _quality = QualityLevel.high;
   bool autoQuality = true;
@@ -133,16 +154,10 @@ class BoredGamesGame extends FlameGame
   double _lowFpsTimer = 0;
   double _highFpsTimer = 0;
   double _qualitySampleTimer = 0;
-  static const double _qualitySampleInterval = 0.2;
-  static const double _qualityDownSeconds = 2.5;
-  static const double _qualityUpSeconds = 6.0;
+  static const double _qualitySampleInterval = 0.1; // More frequent sampling
+  static const double _qualityDownSeconds = 1.0; // Faster downgrade
+  static const double _qualityUpSeconds = 8.0; // Slower upgrade
 
-  // Mine ability
-  static const int mineCostBase = 40;
-  static const double mineCooldownBase = 8.0;
-  static const int maxActiveMinesBase = 5;
-  double _mineCooldownTimer = 0;
-  final List<NeonMine> _activeMines = [];
   UpgradeStats _metaStats = const UpgradeStats();
 
   // Game time for FPS view
@@ -195,6 +210,11 @@ class BoredGamesGame extends FlameGame
 
   double get focusFxPulse => _focusFxPulse;
 
+  double get focusModeTimer => _focusModeTimer;
+  double get focusModeMaxDuration => _focusModeMaxDuration;
+  int get fpsUsesTotal => _fpsUsesTotal;
+  int get maxFpsUsesMatch => maxFpsUsesPerMatch;
+
   bool get isTouchLayout {
     final platform = defaultTargetPlatform;
     if (platform == TargetPlatform.android || platform == TargetPlatform.iOS) {
@@ -221,15 +241,15 @@ class BoredGamesGame extends FlameGame
 
   int get pulseCost => math.max(1, (pulseCostBase * _upgradeStats.abilityCostMult).round());
 
-  double get pulseCooldown => pulseCooldownBase * _upgradeStats.pulseCooldownMult;
+  // double get pulseCooldown => pulseCooldownBase * _upgradeStats.pulseCooldownMult; // Removed, now a constant
 
   int get mineCost => math.max(1, (mineCostBase * _upgradeStats.abilityCostMult).round());
 
-  double get mineCooldown => mineCooldownBase * _upgradeStats.mineCooldownMult;
+  // double get mineCooldown => mineCooldownBase * _upgradeStats.mineCooldownMult; // Removed, now a constant
 
   int get maxActiveMines => maxActiveMinesBase + _upgradeStats.maxMinesBonus;
 
-  PendingAbility get pendingAbility => _pendingAbility;
+  // PendingAbility get pendingAbility => _pendingAbility; // Moved to field definition
 
   double towerRange(TowerType type) => type.range * _upgradeStats.towerRangeMult;
 
@@ -284,14 +304,37 @@ class BoredGamesGame extends FlameGame
     _updateAutoWave(dt);
     _updateQuality(dt);
     _updateFxBudget(dt);
-    _updateTapTimer(dt);
     _updateThreatShake(dt);
     _updateFocusFx(dt);
+    _updateFocusTimer(dt);
+    _updateLongPress(dt);
+  }
+
+  void _updateLongPress(double dt) {
+    if (!_isLongPressing) return;
+    _longPressTimer += dt;
+    if (_longPressTimer >= _longPressDuration) {
+      _isLongPressing = false; // Triggered
+      if (_longPressOrigin != null) {
+        _handleLongPress(_longPressOrigin!);
+      }
+    }
+  }
+
+  void _updateFocusTimer(double dt) {
+    if (!_focusMode) return;
+    _focusModeTimer -= dt;
+    if (_focusModeTimer <= 0) {
+      exitFocusMode();
+    }
   }
 
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
+    _isLongPressing = true;
+    _longPressTimer = 0;
+    _longPressOrigin = event.localPosition;
     final worldPos = event.localPosition;
     _lastMousePosition = worldPos;
     if (!_isInHudArea(worldPos)) {
@@ -314,6 +357,7 @@ class BoredGamesGame extends FlameGame
   @override
   void onTapUp(TapUpEvent event) {
     super.onTapUp(event);
+    _isLongPressing = false;
     if (_draggingPlacement) return;
     if (_sellMode) {
       if (_isInHudArea(event.localPosition)) {
@@ -386,12 +430,27 @@ class BoredGamesGame extends FlameGame
     final worldPos = _screenToWorld(event.localPosition);
     final tower = towerManager.towerAt(worldPos);
     if (tower != null) {
-      _registerTowerTap(tower);
       towerManager.updateGhost(null);
       return;
     }
     _attemptPlaceTower(event.localPosition);
     towerManager.updateGhost(null);
+  }
+
+  @override
+  void _handleLongPress(Vector2 screenPos) {
+    if (_sellMode || _pendingAbility != PendingAbility.none) return;
+
+    final worldPos = _screenToWorld(screenPos);
+    final tower = towerManager.towerAt(worldPos);
+
+    if (tower != null) {
+      if (_focusMode && _focusTower == tower) {
+        exitFocusMode();
+      } else {
+        _enterFocusMode(tower);
+      }
+    }
   }
 
   @override
@@ -414,6 +473,7 @@ class BoredGamesGame extends FlameGame
   @override
   void onDragStart(DragStartEvent event) {
     super.onDragStart(event);
+    _isLongPressing = false;
     _draggingPlacement = true;
     _lastMousePosition = event.localPosition;
     if (!_isInHudArea(event.localPosition)) {
@@ -622,6 +682,10 @@ class BoredGamesGame extends FlameGame
       TowerType.circuitCannon => 0.6,
       TowerType.phaseMage => 0.45,
       TowerType.glimmerField => 0.3,
+      TowerType.ionSniper => 0.8,
+      TowerType.teslaTerminal => 0.4,
+      TowerType.resonanceSiphon => 0.5,
+      TowerType.neuralDisruptor => 0.4,
     };
     _focusFxPulse = 1.0;
     _threatShakeIntensity = math.max(_threatShakeIntensity, 0.8 + base * 1.4);
@@ -663,9 +727,6 @@ class BoredGamesGame extends FlameGame
 
   void _onWaveComplete(int waveNumber) {
     if (_gameEnded) return;
-
-    // Reset FPS uses for the next wave
-    _fpsUsesThisWave = 0;
 
     // Bonus gold for completing wave
     gold += DifficultyCurve.waveClearBonus(
@@ -743,7 +804,7 @@ class BoredGamesGame extends FlameGame
 
   void toggleSellMode() {
     if (_focusMode) {
-      _exitFocusMode();
+      exitFocusMode();
     }
     _sellMode = !_sellMode;
     _draggingPlacement = false;
@@ -951,39 +1012,10 @@ class BoredGamesGame extends FlameGame
     closeRunUpgradeOverlay();
   }
 
-  void _updateTapTimer(double dt) {
-    if (_tapCount == 0) return;
-    _tapTimer += dt;
-    if (_tapTimer >= _tapResetDelay) {
-      _tapCount = 0;
-      _tapTower = null;
-      _tapTimer = 0;
-    }
-  }
-
-  void _registerTowerTap(Tower tower) {
-    if (_tapTower != tower) {
-      _tapTower = tower;
-      _tapCount = 0;
-    }
-    _tapCount += 1;
-    _tapTimer = 0;
-
-    if (_tapCount >= _focusTapCount) {
-      _tapCount = 0;
-      _tapTower = null;
-      if (_focusMode && _focusTower == tower) {
-        _exitFocusMode();
-      } else {
-        _enterFocusMode(tower);
-      }
-    }
-  }
-
   void _enterFocusMode(Tower tower) {
-    // --- New FPS Mode Logic ---
-    
     // 0. Check for Boss Presence
+    // DISABLED FOR TESTING
+    /*
     if (enemyManager.currentBoss == null) {
       add(FloatingText(
         position: Vector2(size.x / 2, HudComponent.topBarHeight + 12),
@@ -993,42 +1025,35 @@ class BoredGamesGame extends FlameGame
       ));
       return;
     }
+    */
 
     // 1. Check Usage Limit
-
-    // 2. Check Cost
-    final cost = (tower.buildCost * fpsModeCostMultiplier).round();
-    if (gold < cost) {
+    // DISABLED FOR TESTING
+    /*
+    if (_fpsUsesTotal >= maxFpsUsesPerMatch) {
       add(FloatingText(
         position: Vector2(size.x / 2, HudComponent.topBarHeight + 12),
-        text: 'INSUFFICIENT GOLD: $cost REQUIRED',
-        type: FloatingTextType.gold,
-        customColor: NeonColors.yellow,
+        text: 'OVERDRIVE EXHAUSTED FOR THIS MATCH',
+        type: FloatingTextType.damage,
+        customColor: NeonColors.magenta,
       ));
       return;
     }
+    */
+    if (_focusMode) return;
 
-    // 3. Deduct Cost and Increment Usage
-    gold -= cost;
-    _fpsUsesThisWave++;
-    
-    // If already in focus mode with another tower, exit first
-    if (_focusMode) {
-      _exitFocusMode(playSfx: false);
-    }
-
-    _focusTower = tower;
     _focusMode = true;
+    _focusTower = tower;
+    _focusModeTimer = _focusModeMaxDuration;
+    _fpsUsesTotal++;
 
-    // 4. Apply Boost to Tower
-    tower.enterFpsBoost(); 
+    // Add BACKGROUND (Behind world)
+    _fpsBackground = FpsBackgroundComponent();
+    add(_fpsBackground!);
 
-    // 5. Create and add the FpsViewComponent
+    // Add FOREGROUND (Cockpit)
     _fpsViewComponent = FpsViewComponent(tower: tower);
     add(_fpsViewComponent!);
-    
-    // Original notification logic is replaced by this
-    notifyTutorialFocusMode();
     towerManager.updateGhost(null);
     add(FloatingText(
       position: Vector2(size.x / 2, HudComponent.topBarHeight + 12),
@@ -1041,7 +1066,7 @@ class BoredGamesGame extends FlameGame
     ));
   }
 
-  void _exitFocusMode({bool playSfx = true}) {
+  void exitFocusMode({bool playSfx = true}) {
     if (!_focusMode) return;
     
     // Remove tower boost
@@ -1053,6 +1078,13 @@ class BoredGamesGame extends FlameGame
     // Remove the FpsViewComponent
     _fpsViewComponent?.removeFromParent();
     _fpsViewComponent = null;
+
+    // Remove the FpsBackgroundComponent
+    _fpsBackground?.removeFromParent();
+    _fpsBackground = null;
+
+    // Trigger Camera Reflow
+    _reflowWorld();
 
     if (playSfx) {
       add(FloatingText(
@@ -1071,11 +1103,6 @@ class BoredGamesGame extends FlameGame
     if (_focusTower == null) return;
     if (_isInHudArea(screenPos)) return;
     final worldPos = _screenToWorld(screenPos);
-    final tower = towerManager.towerAt(worldPos);
-    if (tower != null) {
-      _registerTowerTap(tower);
-      return;
-    }
     final enemy = _pickEnemy(worldPos);
     if (enemy == null) {
       _focusTower!.setManualTarget(null);
@@ -1279,55 +1306,51 @@ class BoredGamesGame extends FlameGame
 
   void _updateQuality(double dt) {
     if (!autoQuality) return;
-    if (dt <= 0) return;
-
     _qualitySampleTimer += dt;
     if (_qualitySampleTimer < _qualitySampleInterval) return;
     _qualitySampleTimer = 0;
 
-    final fps = 1 / dt;
-    _smoothedFps += (fps - _smoothedFps) * 0.1;
+    final currentFps = 1.0 / dt;
+    _smoothedFps = _smoothedFps * 0.9 + currentFps * 0.1;
 
-    final lowThreshold = switch (_quality) {
-      QualityLevel.high => 52.0,
-      QualityLevel.medium => 38.0,
-      QualityLevel.low => 0.0,
-    };
-    final highThreshold = switch (_quality) {
-      QualityLevel.high => double.infinity,
-      QualityLevel.medium => 55.0,
-      QualityLevel.low => 45.0,
-    };
+    // Emergency mode: force lowest quality if FPS is critically low
+    if (_smoothedFps < 20) {
+      _quality = QualityLevel.low;
+      enableWorldShader = false;
+      enableBackgroundParticles = false;
+      Tower.lowFx = true;
+      return;
+    }
 
-    if (_smoothedFps < lowThreshold) {
+    if (_smoothedFps < 40) {
       _lowFpsTimer += _qualitySampleInterval;
       _highFpsTimer = 0;
-    } else if (_smoothedFps > highThreshold) {
+      if (_lowFpsTimer >= _qualityDownSeconds) {
+        if (_quality == QualityLevel.high) {
+          _quality = QualityLevel.medium;
+          enableWorldShader = false;
+        } else if (_quality == QualityLevel.medium) {
+          _quality = QualityLevel.low;
+          enableBackgroundParticles = false;
+        }
+        _lowFpsTimer = 0;
+        Tower.lowFx = _quality != QualityLevel.high;
+      }
+    } else if (_smoothedFps > 50) {
       _highFpsTimer += _qualitySampleInterval;
       _lowFpsTimer = 0;
+      if (_highFpsTimer >= _qualityUpSeconds) {
+        if (_quality == QualityLevel.low) {
+          _quality = QualityLevel.medium;
+        } else if (_quality == QualityLevel.medium) {
+          _quality = QualityLevel.high;
+        }
+        _highFpsTimer = 0;
+        Tower.lowFx = _quality != QualityLevel.high;
+      }
     } else {
       _lowFpsTimer = 0;
       _highFpsTimer = 0;
-    }
-
-    if (_lowFpsTimer >= _qualityDownSeconds) {
-      _lowFpsTimer = 0;
-      _highFpsTimer = 0;
-      if (_quality == QualityLevel.high) {
-        _setQuality(QualityLevel.medium);
-      } else if (_quality == QualityLevel.medium) {
-        _setQuality(QualityLevel.low);
-      }
-    }
-
-    if (_highFpsTimer >= _qualityUpSeconds) {
-      _lowFpsTimer = 0;
-      _highFpsTimer = 0;
-      if (_quality == QualityLevel.low) {
-        _setQuality(QualityLevel.medium);
-      } else if (_quality == QualityLevel.medium) {
-        _setQuality(QualityLevel.high);
-      }
     }
   }
 
@@ -1456,6 +1479,8 @@ class BoredGamesGame extends FlameGame
 
     await StorageService.instance.initialize();
     await UpgradeService.instance.initialize();
+    await AudioService.instance.initialize();
+    
     _metaStats = UpgradeService.instance.metaStats;
     _upgradeStats = _metaStats;
     final levelId = levelConfig?.id ?? 1;
@@ -1481,6 +1506,7 @@ class BoredGamesGame extends FlameGame
       _applyDefaultQuality();
     }
 
+    worldRoot = PerspectiveWorldRoot();
     worldShaderComponent = WorldUberShaderComponent();
     particleShaderComponent = ParticleShaderComponent();
     shaderUniformController = ShaderUniformController();
@@ -1575,6 +1601,48 @@ class BoredGamesGame extends FlameGame
     _reflowWorld();
     if (_worldLayoutReady) {
       worldLayer.invalidateCache();
+    }
+  }
+
+  math.Point<int> screenToGrid(Vector2 pos, double tileSize) {
+    final worldPos = _screenToWorld(pos);
+    return math.Point(
+      (worldPos.x / tileSize).floor(),
+      (worldPos.y / tileSize).floor(),
+    );
+  }
+
+  Vector2 gridToWorld(math.Point<int> cell, double tileSize) {
+    return Vector2(
+      cell.x * tileSize,
+      cell.y * tileSize,
+    );
+  }
+}
+
+class PerspectiveWorldRoot extends PositionComponent with HasGameRef<BoredGamesGame> {
+  @override
+  void renderTree(Canvas canvas) {
+    if (gameRef.focusModeActive) {
+      canvas.save();
+      final halfW = gameRef.size.x / 2;
+      final halfH = gameRef.size.y / 2;
+      
+      // Perspective Transform
+      final matrix = Matrix4.identity()
+        ..setEntry(3, 2, 0.0015) // Perspective intensity
+        ..rotateX(1.1) // Tilt back ~63 degrees
+        ..translate(0.0, -200.0); // Adjust camera height
+
+      // Apply transform relative to center
+      canvas.translate(halfW, halfH);
+      canvas.transform(matrix.storage);
+      canvas.translate(-halfW, -halfH);
+      
+      super.renderTree(canvas);
+      canvas.restore();
+    } else {
+      super.renderTree(canvas);
     }
   }
 }

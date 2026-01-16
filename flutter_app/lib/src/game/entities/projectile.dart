@@ -102,6 +102,17 @@ class Projectile extends PositionComponent {
         size = Vector2.all(4); // Smaller but more particles
         _wobbleAmount = 0.1;
         break;
+      case TowerType.ionSniper:
+        _maxTrailLength = 20;
+        _particleCount = 4;
+        size = Vector2(12, 4);
+        break;
+      case TowerType.teslaTerminal:
+      case TowerType.resonanceSiphon:
+      case TowerType.neuralDisruptor:
+        _maxTrailLength = 12;
+        _particleCount = 8;
+        break;
     }
 
     if (lowFx) {
@@ -227,8 +238,8 @@ class Projectile extends PositionComponent {
           target!.applySlow(slowAmount, slowDuration);
         }
 
-        // Play hit sound
-        AudioService.instance.playHit();
+        // Play hit sound with tower type context
+        AudioService.instance.playHit(type: towerType);
 
         onHit?.call(target!, target!.position.clone(), killed);
 
@@ -303,6 +314,12 @@ class Projectile extends PositionComponent {
         break;
       case TowerType.glimmerField:
         _renderGlimmerField(canvas);
+        break;
+      case TowerType.ionSniper:
+      case TowerType.teslaTerminal:
+      case TowerType.resonanceSiphon:
+      case TowerType.neuralDisruptor:
+        _renderPulseArcher(canvas); // Fallback to basic for now
         break;
     }
   }
@@ -452,10 +469,10 @@ class Projectile extends PositionComponent {
         final baseX = startX + (math.cos(endAngle) * segment.length - startX) * progress;
         final baseY = startY + (math.sin(endAngle) * segment.length - startY) * progress;
 
-        final perpAngle = segment.angle + math.pi / 2;
+        final perpendicularAngle = segment.angle + math.pi / 2;
         final jitter = math.sin(_time * 20 + i * 2) * 3;
-        final jitterX = math.cos(perpAngle) * jitter;
-        final jitterY = math.sin(perpAngle) * jitter;
+        final jitterX = math.cos(perpendicularAngle) * jitter;
+        final jitterY = math.sin(perpendicularAngle) * jitter;
 
         arcPath.lineTo(baseX + jitterX, baseY + jitterY);
       }

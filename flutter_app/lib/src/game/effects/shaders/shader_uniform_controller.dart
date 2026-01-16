@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 
 import '../../bored_games_game.dart';
+import '../../../models/quality_level.dart';
 
 /// Collects tower / enemy positions and exposes them as Float32Lists for shaders.
 class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> {

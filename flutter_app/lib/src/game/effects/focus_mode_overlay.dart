@@ -262,6 +262,12 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
           );
         }
         break;
+      case TowerType.ionSniper:
+      case TowerType.teslaTerminal:
+      case TowerType.resonanceSiphon:
+      case TowerType.neuralDisruptor:
+        canvas.drawCircle(center, 25, paint);
+        break;
     }
   }
 

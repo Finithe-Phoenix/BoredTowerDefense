@@ -719,7 +719,7 @@ class _AuraParticle {
 
   Vector2 position = Vector2.zero();
   final Vector2 startOffset;
-  double _timer;
+  double _timer = 0;
 
   bool get isAlive => _timer < _lifetime;
   double get progress => (_timer / _lifetime).clamp(0.0, 1.0);
@@ -737,6 +737,6 @@ class _AuraParticle {
       ..color = color.withOpacity(opacity)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4);
 
-    canvas.drawCircle(position, size, paint);
+    canvas.drawCircle(position.toOffset(), size, paint);
   }
 }

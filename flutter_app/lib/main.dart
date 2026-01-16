@@ -10,6 +10,8 @@ import 'src/ui/screens/game_screen.dart';
 import 'src/ui/screens/settings_screen.dart';
 import 'src/ui/screens/story_screen.dart';
 import 'src/ui/screens/upgrades_screen.dart';
+import 'src/ui/transitions/tron_page_route.dart';
+import 'src/ui/widgets/tron_materialization_widget.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,29 +41,59 @@ class NeonDefenseApp extends StatelessWidget {
                 builder: (_) => const LoadingScreen(),
               );
             case '/menu':
-              return MaterialPageRoute(
+              // Main menu uses light cycle pattern for dramatic entry
+              return TronPageRoute(
                 builder: (_) => const MainMenuScreen(),
+                primaryColor: NeonColors.cyan,
+                secondaryColor: const Color(0xFFFF6600),
+                pattern: TronPattern.lightCycle,
+                transitionDuration: const Duration(milliseconds: 900),
               );
             case '/levels':
-              return MaterialPageRoute(
+              // Level select uses hexagonal pattern
+              return TronPageRoute(
                 builder: (_) => const LevelSelectScreen(),
+                primaryColor: NeonColors.magenta,
+                secondaryColor: NeonColors.cyan,
+                pattern: TronPattern.hexagonal,
+                transitionDuration: const Duration(milliseconds: 850),
               );
             case '/game':
               final levelId = settings.arguments as int? ?? 1;
-              return MaterialPageRoute(
+              // Game uses radial pattern for dramatic reveal
+              return TronPageRoute(
                 builder: (_) => GameScreen(levelId: levelId),
+                primaryColor: NeonColors.cyan,
+                secondaryColor: const Color(0xFFFF6600),
+                pattern: TronPattern.radial,
+                transitionDuration: const Duration(milliseconds: 1000),
               );
             case '/story':
-              return MaterialPageRoute(
+              // Story uses grid pattern
+              return TronPageRoute(
                 builder: (_) => const StoryScreen(),
+                primaryColor: NeonColors.purple,
+                secondaryColor: NeonColors.cyan,
+                pattern: TronPattern.grid,
+                transitionDuration: const Duration(milliseconds: 800),
               );
             case '/settings':
-              return MaterialPageRoute(
+              // Settings uses light cycle pattern
+              return TronPageRoute(
                 builder: (_) => const SettingsScreen(),
+                primaryColor: NeonColors.blue,
+                secondaryColor: NeonColors.cyan,
+                pattern: TronPattern.lightCycle,
+                transitionDuration: const Duration(milliseconds: 800),
               );
             case '/upgrades':
-              return MaterialPageRoute(
+              // Upgrades uses hexagonal pattern
+              return TronPageRoute(
                 builder: (_) => const UpgradesScreen(),
+                primaryColor: NeonColors.yellow,
+                secondaryColor: NeonColors.orange,
+                pattern: TronPattern.hexagonal,
+                transitionDuration: const Duration(milliseconds: 850),
               );
             default:
               return MaterialPageRoute(

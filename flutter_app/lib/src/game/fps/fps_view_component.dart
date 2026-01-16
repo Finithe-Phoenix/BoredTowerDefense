@@ -1,11 +1,12 @@
 import 'dart:math' as math;
 import 'dart:ui';
-import 'package:flame/components.dart';
+import 'package:flame/components.dart' hide Vector3;
 import 'package:flutter/material.dart';
 import '../entities/tower.dart';
-import '../entities/boss.dart';
 import '../entities/enemy.dart';
 import '../bored_games_game.dart';
+import 'fps_camera_3d.dart';
+import 'fps_tower_3d.dart';
 
 /// First-person view mode that provides unique interface for each tower type
 /// Activates BOOST mode when a boss is present
@@ -14,9 +15,27 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     required this.tower,
   }) : super(priority: 500) {
     _initializeForTowerType();
+    
+    // Initialize 3D camera
+    _camera = Camera3D(
+      position: Vector3(0, 150, -300), // Camera behind and above
+      lookAt: Vector3(0, 50, 0), // Looking at center
+      fov: 75.0,
+    );
   }
 
   final Tower tower;
+
+  // 3D Camera System
+  late final Camera3D _camera;
+  final List<Tower3D> _towers3d = [];
+  Tower3D? _hoveredTower;
+  Tower3D? _selectedTower;
+
+  // Performance optimizations
+  double _tower3dUpdateTimer = 0;
+  static const double _tower3dUpdateInterval = 0.1; // 10 veces/segundo
+  Vector2? _lastMousePosForRaycast;
 
   // Overdrive Timer
   double _remainingOverdriveTime = 10.0;
@@ -25,6 +44,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   // Boost mode visuals
   double _boostFlash = 0;
   final List<_BoostParticle> _boostParticles = [];
+  final List<_DataParticle> _dataParticles = [];
   
   // Cockpit visual effects
   double _glitchTimer = 0;
@@ -35,6 +55,32 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   late Color _secondaryColor;
   late String _towerName;
   late String _weaponType;
+
+  // Materialization Animation
+  double _introTime = 0;
+  static const double _phaseWireframe = 0.5;
+  static const double _phaseSolidify = 1.0;
+  static const double _phaseBoot = 1.6;
+  bool get _isWireframePhase => _introTime < _phaseSolidify;
+  bool get _isBootPhase => _introTime >= _phaseSolidify;
+  bool get _introComplete => _introTime >= _phaseBoot;
+  
+  // Real-time state
+  double _animationTime = 0;
+  bool _isBoostMode = false;
+  double _boostIntensity = 0;
+  double _recoilOffset = 0;
+  Enemy? _currentTarget;
+  double _targetLockProgress = 0;
+  double _crosshairPulse = 0;
+  double _crosshairRotation = 0;
+  double _reloadProgress = 0;
+
+  // Dynamic Tilt
+  final Vector2 _currentTilt = Vector2.zero();
+  final Vector2 _targetTilt = Vector2.zero();
+  static const double _tiltLerp = 4.0;
+  static const double _maxTilt = 40.0;
 
   void _initializeForTowerType() {
     switch (tower.type) {
@@ -62,6 +108,30 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         _towerName = 'GLIMMER FIELD';
         _weaponType = 'PRISMATIC ARRAY';
         break;
+      case TowerType.ionSniper:
+        _primaryColor = const Color(0xFF00E5FF);
+        _secondaryColor = const Color(0xFF00B2FF);
+        _towerName = 'ION SNIPER';
+        _weaponType = 'RAIL CANNON';
+        break;
+      case TowerType.teslaTerminal:
+        _primaryColor = const Color(0xFFFFFF00);
+        _secondaryColor = const Color(0xFFFFAA00);
+        _towerName = 'TESLA TERMINAL';
+        _weaponType = 'VOLTAIC COIL';
+        break;
+      case TowerType.resonanceSiphon:
+        _primaryColor = const Color(0xFFFF0066);
+        _secondaryColor = const Color(0xFFFF00CC);
+        _towerName = 'RESONANCE SIPHON';
+        _weaponType = 'ENERGY SYNERGIST';
+        break;
+      case TowerType.neuralDisruptor:
+        _primaryColor = const Color(0xFF00FF00);
+        _secondaryColor = const Color(0xFF88FF00);
+        _towerName = 'NEURAL DISRUPTOR';
+        _weaponType = 'SYNAPTIC BEAM';
+        break;
     }
   }
 
@@ -77,7 +147,8 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     super.update(dt);
 
     _animationTime += dt;
-
+    _introTime += dt;
+    
     // Check for boss to activate BOOST mode
     final boss = gameRef.enemyManager.currentBoss;
     _isBoostMode = boss != null && boss.isAlive;
@@ -133,10 +204,49 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
     _updateBoostParticles(dt);
 
+    if (_introTime > _phaseWireframe) {
+       // Spawn Data Particles (reduced in low quality)
+       final spawnChance = gameRef.reduceFx ? 0.05 : 0.3;
+       final maxParticles = gameRef.reduceFx ? 20 : 100;
+       
+       if (math.Random().nextDouble() < spawnChance) {
+          if (_dataParticles.length < maxParticles) {
+            _dataParticles.add(_DataParticle());
+          }
+       }
+       for(final p in _dataParticles) p.update(dt);
+       _dataParticles.removeWhere((p) => p.z >= 1.0 || p.life <= 0);
+    }
+
     // Boost flash decay
     if (_boostFlash > 0) {
       _boostFlash = math.max(0, _boostFlash - dt * 3);
     }
+
+    // Cockpit Tilt based on mouse position
+    final mousePos = gameRef.mousePosition;
+    final center = size / 2;
+    if (mousePos != null && center.x > 0 && center.y > 0) {
+      final delta = (mousePos - center);
+      _targetTilt.setValues(
+        (delta.x / center.x).clamp(-1.0, 1.0) * _maxTilt,
+        (delta.y / center.y).clamp(-1.0, 1.0) * _maxTilt,
+      );
+      
+      _currentTilt.setValues(
+        _currentTilt.x + (_targetTilt.x - _currentTilt.x) * dt * _tiltLerp,
+        _currentTilt.y + (_targetTilt.y - _currentTilt.y) * dt * _tiltLerp,
+      );
+    }
+
+    // Update 3D towers (throttled for performance)
+    _tower3dUpdateTimer += dt;
+    if (_tower3dUpdateTimer >= _tower3dUpdateInterval) {
+      _tower3dUpdateTimer = 0;
+      _updateTowers3D();
+    }
+    
+    _updateHoveredTower();
   }
 
   void _spawnBoostParticles(double dt) {
@@ -169,6 +279,100 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
   }
 
+  /// Update 3D tower positions and distances (optimized)
+  void _updateTowers3D() {
+    _towers3d.clear();
+    final allTowers = gameRef.towerManager.towers;
+    
+    // Limitar número de torres en bajo rendimiento
+    final maxTowers = gameRef.reduceFx ? 10 : 50;
+    int count = 0;
+    
+    for (final tower in allTowers) {
+      // Skip the tower we're controlling
+      if (tower == this.tower) continue;
+      if (count >= maxTowers) break;
+      
+      // Convert 2D world position to 3D camera space
+      final worldPos = tower.centerPosition;
+      final pos3d = _worldToCamera3D(worldPos);
+      
+      // Frustum culling: skip towers outside camera view
+      final screenPos = _camera.project(pos3d, size);
+      if (screenPos == null) continue; // Behind camera or outside frustum
+      
+      final tower3d = Tower3D(
+        tower: tower,
+        position3d: pos3d,
+        distanceToCamera: _camera.distanceTo(pos3d),
+      );
+      
+      _towers3d.add(tower3d);
+      count++;
+    }
+    
+    // Sort by distance (farthest first for proper rendering)
+    _towers3d.sort((a, b) => b.distanceToCamera.compareTo(a.distanceToCamera));
+  }
+
+  /// Update which tower is being hovered via raycasting (optimized)
+  void _updateHoveredTower() {
+    final mousePos = gameRef.mousePosition;
+    if (mousePos == null) {
+      _hoveredTower = null;
+      for (final t in _towers3d) {
+        t.isHovered = false;
+      }
+      return;
+    }
+    
+    // Only raycast if mouse moved significantly (performance optimization)
+    if (_lastMousePosForRaycast != null) {
+      final dist = (mousePos - _lastMousePosForRaycast!).length;
+      if (dist < 5.0) return; // Mouse barely moved, skip raycast
+    }
+    _lastMousePosForRaycast = mousePos.clone();
+    
+    final ray = _camera.createRayFromScreen(mousePos, size);
+    Tower3D? closest;
+    double closestDist = double.infinity;
+    
+    for (final tower3d in _towers3d) {
+      final (min, max) = tower3d.getBoundingBox();
+      final intersection = ray.intersectsAABB(min, max);
+      
+      if (intersection != null && intersection < closestDist) {
+        closestDist = intersection;
+        closest = tower3d;
+      }
+    }
+    
+    // Update hover states
+    _hoveredTower = closest;
+    for (final t in _towers3d) {
+      t.isHovered = (t == _hoveredTower);
+      t.isSelected = (t == _selectedTower);
+    }
+  }
+
+  /// Convert 2D world position to 3D camera space
+  Vector3 _worldToCamera3D(Vector2 worldPos) {
+    // Map world coordinates to 3D space
+    // Center the world around origin
+    final centerX = gameRef.size.x / 2;
+    final centerY = gameRef.size.y / 2;
+    
+    // X: left-right in world → left-right in 3D
+    // Y: up-down in world → depth (Z) in 3D
+    // Height: fixed Y in 3D
+    
+    return Vector3(
+      (worldPos.x - centerX) * 0.8, // X spread
+      0.0, // Ground level
+      (worldPos.y - centerY) * 0.8, // Z depth
+    );
+  }
+
   /// Trigger recoil effect when tower fires
   void triggerRecoil() {
     _recoilOffset = 20;
@@ -179,25 +383,35 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   void render(Canvas canvas) {
     super.render(canvas);
 
+    canvas.save();
+    // Apply reactive tilt (opposing movement for "parallax" feel)
+    canvas.translate(-_currentTilt.x, -_currentTilt.y);
+
     // Render boost mode background
     if (_boostIntensity > 0) {
       _renderBoostBackground(canvas);
     }
 
-    // Render cockpit glass/frame
-    _renderCockpitFrame(canvas);
+    // Draw Data Particles (Floating dust)
+    _renderDataParticles(canvas);
 
-    // Render boost particles
-    _renderBoostParticles(canvas);
+    // Render 3D towers
+    _renderTowers3D(canvas);
 
-    // Render overdrive timer
-    _renderOverdriveTimer(canvas);
+    // Draw 3D Cockpit Frame (Materializing)
+    _renderCockpit3D(canvas);
 
-    // Render weapon based on tower type
-    _renderWeapon(canvas);
+    // Remove old pillars, cockpit handles it now
 
-    // Render HUD overlay
-    _renderHUD(canvas);
+    // Render weapon based on tower type (only after wireframe starts solidifying)
+    if (_introTime > _phaseWireframe) {
+       _renderWeapon(canvas);
+    }
+
+    // Render HUD overlay (Slides in during Boot phase)
+    if (_introTime > _phaseWireframe) {
+      _renderHUD(canvas);
+    }
 
     // Render scanlines for CRT effect
     _renderScanlines(canvas);
@@ -214,6 +428,8 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     if (_boostFlash > 0) {
       _renderBoostFlash(canvas);
     }
+
+    canvas.restore();
   }
 
   void _renderBoostBackground(Canvas canvas) {
@@ -227,19 +443,19 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     final offset = (_animationTime * 50) % gridSize;
 
     // Vertical lines
-    for (double x = -offset; x < size.x + gridSize; x += gridSize) {
+    for (double x = -offset; x < size.x + gridSize + _maxTilt; x += gridSize) {
       canvas.drawLine(
-        Offset(x, 0),
-        Offset(x, size.y),
+        Offset(x, -_maxTilt),
+        Offset(x, size.y + _maxTilt),
         gridPaint,
       );
     }
 
     // Horizontal lines
-    for (double y = -offset; y < size.y + gridSize; y += gridSize) {
+    for (double y = -offset; y < size.y + gridSize + _maxTilt; y += gridSize) {
       canvas.drawLine(
-        Offset(0, y),
-        Offset(size.x, y),
+        Offset(-_maxTilt, y),
+        Offset(size.x + _maxTilt, y),
         gridPaint,
       );
     }
@@ -252,10 +468,10 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           _primaryColor.withOpacity(0.3 * _boostIntensity),
         ],
         stops: const [0.5, 1.0],
-      ).createShader(Rect.fromLTWH(0, 0, size.x, size.y));
+      ).createShader(Rect.fromLTWH(-_maxTilt, -_maxTilt, size.x + _maxTilt*2, size.y + _maxTilt*2));
 
     canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.x, size.y),
+      Rect.fromLTWH(-_maxTilt, -_maxTilt, size.x + _maxTilt*2, size.y + _maxTilt*2),
       vignettePaint,
     );
   }
@@ -276,7 +492,8 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
   void _renderWeapon(Canvas canvas) {
     canvas.save();
-    canvas.translate(size.x / 2, size.y - 100 + _recoilOffset);
+    // Reposition weapon to bottom-center/right for "True FPS" feel
+    canvas.translate(size.x / 2 + 100 + _currentTilt.x * 0.5, size.y - 80 + _recoilOffset + _currentTilt.y * 0.5);
 
     switch (tower.type) {
       case TowerType.pulseArcher:
@@ -290,6 +507,12 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         break;
       case TowerType.glimmerField:
         _renderGlimmerFieldWeapon(canvas);
+        break;
+      case TowerType.ionSniper:
+      case TowerType.teslaTerminal:
+      case TowerType.resonanceSiphon:
+      case TowerType.neuralDisruptor:
+        _renderPulseArcherWeapon(canvas); // Fallback
         break;
     }
 
@@ -579,27 +802,72 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   }
 
   void _renderHUD(Canvas canvas) {
-    // Top-left: Tower info
-    _renderTowerInfo(canvas);
+    // Parallax for HUD elements to feel 'projected'
+    canvas.save();
+    canvas.translate(_currentTilt.x * 0.5, _currentTilt.y * 0.5);
 
-    // Top-right: Stats
-    _renderStats(canvas);
-
-    // Bottom-left: Reload indicator
-    _renderReloadIndicator(canvas);
-
-    // Bottom-right: BOOST mode indicator
-    if (_isBoostMode) {
-      _renderBoostIndicator(canvas);
+    // Calculate transparency/slide based on boot phase
+    double hudAlpha = 1.0;
+    double slideOffset = 0.0;
+    
+    if (!_introComplete) {
+      final progress = ((_introTime - _phaseSolidify) / (_phaseBoot - _phaseSolidify)).clamp(0.0, 1.0);
+      hudAlpha = progress;
+      slideOffset = (1.0 - CurvedAnimation(parent: AlwaysStoppedAnimation(progress), curve: Curves.easeOutBack).value) * 100;
     }
+
+    if (hudAlpha > 0) {
+      // Top-left: Tower info
+      canvas.save();
+      canvas.translate(-slideOffset, 0);
+      _renderTowerInfo(canvas, hudAlpha);
+      canvas.restore();
+
+      // Top-right: Stats
+      canvas.save();
+      canvas.translate(slideOffset, 0);
+      _renderStats(canvas, hudAlpha);
+      canvas.restore();
+
+      // Bottom-left: Reload indicator
+      canvas.save();
+      canvas.translate(0, slideOffset);
+      _renderReloadIndicator(canvas, hudAlpha);
+      canvas.restore();
+
+      // Bottom-right: BOOST mode indicator
+      if (_isBoostMode) {
+        canvas.save();
+        canvas.translate(0, slideOffset);
+        _renderBoostIndicator(canvas, hudAlpha);
+        canvas.restore();
+      }
+      
+      // Top Center: Overdrive Timer
+      canvas.save();
+      canvas.translate(0, -slideOffset);
+      _renderOverdriveTimer(canvas, hudAlpha);
+      canvas.restore();
+    }
+    
+    canvas.restore();
   }
 
-  void _renderTowerInfo(Canvas canvas) {
+  void _renderTowerInfo(Canvas canvas, double alpha) {
+    // Typing text effect
+    final fullText = _towerName;
+    int visibleChars = fullText.length;
+    
+    if (!_introComplete) {
+       final progress = ((_introTime - _phaseSolidify) / (_phaseBoot - _phaseSolidify)).clamp(0.0, 1.0);
+       visibleChars = (fullText.length * progress).floor();
+    }
+    
     final namePainter = TextPainter(
       text: TextSpan(
-        text: _towerName,
+        text: fullText.substring(0, visibleChars),
         style: TextStyle(
-          color: _primaryColor,
+          color: _primaryColor.withOpacity(alpha),
           fontSize: 24,
           fontWeight: FontWeight.bold,
           letterSpacing: 2,
@@ -633,7 +901,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     weaponPainter.paint(canvas, const Offset(20, 50));
   }
 
-  void _renderStats(Canvas canvas) {
+  void _renderStats(Canvas canvas, double alpha) {
     final stats = [
       'DMG: ${tower.currentDamage.toInt()}',
       'RNG: ${tower.currentRange.toInt()}',
@@ -641,12 +909,19 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     ];
 
     double y = 20;
-    for (final stat in stats) {
+    for (int i = 0; i < stats.length; i++) {
+      // Staggered entry for stats
+      if (!_introComplete) {
+         final start = _phaseSolidify + (i * 0.1);
+         if (_introTime < start) continue;
+      }
+      
+      final stat = stats[i];
       final painter = TextPainter(
         text: TextSpan(
           text: stat,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.8),
+           style: TextStyle(
+            color: Colors.white.withOpacity(0.8 * alpha),
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
@@ -660,7 +935,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
   }
 
-  void _renderReloadIndicator(Canvas canvas) {
+  void _renderReloadIndicator(Canvas canvas, double alpha) {
     const barWidth = 200.0;
     const barHeight = 30.0;
     final barX = 20.0;
@@ -725,7 +1000,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     );
   }
 
-  void _renderBoostIndicator(Canvas canvas) {
+  void _renderBoostIndicator(Canvas canvas, double alpha) {
     final x = size.x - 250;
     final y = size.y - 80;
 
@@ -850,8 +1125,6 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Lock-on brackets around target
     if (_currentTarget == null) return;
 
-    // This would need to project 3D target position to screen
-    // For now, show indicator at top center
     final centerX = size.x / 2;
     final y = 120.0;
 
@@ -861,7 +1134,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       ..strokeWidth = 2;
 
     // Target brackets
-    final bracketSize = 20.0;
+    const bracketSize = 20.0;
 
     // Top-left
     canvas.drawLine(Offset(centerX - 40, y - 20), Offset(centerX - 40 + bracketSize, y - 20), lockPaint);
@@ -899,59 +1172,9 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     );
   }
 
-  void _renderCockpitFrame(Canvas canvas) {
-    final framePaint = Paint()
-      ..color = _primaryColor.withOpacity(0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 20;
 
-    // Outer frame bevel
-    canvas.drawRect(
-      Rect.fromLTWH(0, 0, size.x, size.y),
-      framePaint,
-    );
 
-    // Corner brackets
-    final cornerPaint = Paint()
-      ..color = _primaryColor.withOpacity(0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
-
-    const cornerSize = 100.0;
-    
-    // Top-Left
-    canvas.drawLine(const Offset(0, cornerSize), const Offset(0, 0), cornerPaint);
-    canvas.drawLine(const Offset(0, 0), const Offset(cornerSize, 0), cornerPaint);
-    
-    // Top-Right
-    canvas.drawLine(Offset(size.x - cornerSize, 0), Offset(size.x, 0), cornerPaint);
-    canvas.drawLine(Offset(size.x, 0), Offset(size.x, cornerSize), cornerPaint);
-    
-    // Bottom-Left
-    canvas.drawLine(Offset(0, size.y - cornerSize), Offset(0, size.y), cornerPaint);
-    canvas.drawLine(Offset(0, size.y), Offset(cornerSize, size.y), cornerPaint);
-    
-    // Bottom-Right
-    canvas.drawLine(Offset(size.x - cornerSize, size.y), Offset(size.x, size.y), cornerPaint);
-    canvas.drawLine(Offset(size.x, size.y), Offset(size.x, size.y - cornerSize), cornerPaint);
-
-    // Glass Reflection
-    final reflectionsPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Colors.white.withOpacity(0.05),
-          Colors.transparent,
-          Colors.white.withOpacity(0.02),
-        ],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromLTWH(0, 0, size.x, size.y));
-    
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), reflectionsPaint);
-  }
-
-  void _renderOverdriveTimer(Canvas canvas) {
+  void _renderOverdriveTimer(Canvas canvas, double alpha) {
     final centerX = size.x / 2;
     final y = size.y - 150;
     const barWidth = 300.0;
@@ -1022,6 +1245,318 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       flashPaint,
     );
   }
+
+
+
+  // REPLACING _renderCockpit3D with the EPIC version
+  void _renderCockpit3D(Canvas canvas) {
+    final w = size.x;
+    final h = size.y;
+    final progress = (_introTime / _phaseWireframe).clamp(0.0, 1.0);
+    
+    if (progress <= 0) return;
+    
+    // Scale for materialization effect
+    final entranceScale = math.min(1.0, progress * 1.5);
+    
+    // --- 1. SOLID PILLARS (The Structure) ---
+    final pillarWidth = w * 0.22;
+    
+    // Gradient for "Dark Industrial Metal"
+    final metalGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+         const Color(0xFF080815), // Deep dark blue-black
+         const Color(0xFF15152A), // Lighter metallic
+         const Color(0xFF05050A), // Black base
+      ],
+      stops: const [0.0, 0.4, 1.0],
+    );
+    
+    // Left Pillar Shape (Angular Cyberpunk)
+    final leftPillar = Path()
+      ..moveTo(0, 0)
+      ..lineTo(pillarWidth * entranceScale, 0)
+      ..lineTo(pillarWidth * 0.8 * entranceScale, h * 0.4)
+      ..lineTo(pillarWidth * 0.9 * entranceScale, h)
+      ..lineTo(0, h)
+      ..close();
+      
+    // Right Pillar Shape
+    final rightPillar = Path()
+       ..moveTo(w, 0)
+       ..lineTo(w - pillarWidth * entranceScale, 0)
+       ..lineTo(w - pillarWidth * 0.8 * entranceScale, h * 0.4)
+       ..lineTo(w - pillarWidth * 0.9 * entranceScale, h)
+       ..lineTo(w, h)
+       ..close();
+       
+    final metalPaint = Paint()..shader = metalGradient.createShader(Rect.fromLTWH(0,0,w,h));
+    
+    // Draw Pillars
+    canvas.drawPath(leftPillar, metalPaint);
+    canvas.drawPath(rightPillar, metalPaint);
+    
+    // Pillar Edges (Neon Highlight)
+    final edgePaint = Paint()
+      ..color = _primaryColor.withOpacity(0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2); // Subtle glow
+    
+    canvas.drawPath(leftPillar, edgePaint);
+    canvas.drawPath(rightPillar, edgePaint);
+    
+    // --- 2. NEON CORES (The Power) ---
+    // Only show if fully materialized
+    if (_introTime > _phaseWireframe) {
+        final neonPaint = Paint()
+          ..color = _primaryColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 6
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10); // STRONG BLUR
+          
+        final corePaint = Paint()
+           ..color = Colors.white
+           ..style = PaintingStyle.stroke
+           ..strokeWidth = 2;
+
+        // Vertical Neon Flow in Pillars
+        final leftLine = Path()..moveTo(pillarWidth * 0.4 * entranceScale, h * 0.2)..lineTo(pillarWidth * 0.5 * entranceScale, h * 0.8);
+        final rightLine = Path()..moveTo(w - pillarWidth * 0.4 * entranceScale, h * 0.2)..lineTo(w - pillarWidth * 0.5 * entranceScale, h * 0.8);
+        
+        // Render Glows
+        canvas.drawPath(leftLine, neonPaint);
+        canvas.drawPath(rightLine, neonPaint);
+        
+        // Render Cores
+        canvas.drawPath(leftLine, corePaint);
+        canvas.drawPath(rightLine, corePaint);
+    }
+    
+    // --- 3. GLASS CONTROL DECKS (The Interface) ---
+    if (_introTime > _phaseSolidify) {
+       _renderGlassDeck(canvas);
+    }
+  }
+
+  void _renderGlassDeck(Canvas canvas) {
+      final w = size.x;
+      final h = size.y;
+      
+      // Bottom Center Curved Deck
+      final deckPath = Path()
+         ..moveTo(w * 0.2, h)
+         ..lineTo(w * 0.25, h * 0.85)
+         ..quadraticBezierTo(w * 0.5, h * 0.82, w * 0.75, h * 0.85) // Curve up
+         ..lineTo(w * 0.8, h)
+         ..close();
+         
+      // Glass Shader (Reflective)
+      final glassGrad = LinearGradient(
+         begin: Alignment.topCenter,
+         end: Alignment.bottomCenter,
+         colors: [
+            _primaryColor.withOpacity(0.1),
+            _primaryColor.withOpacity(0.2),
+         ],
+      );
+      
+      canvas.drawPath(deckPath, Paint()..shader = glassGrad.createShader(Rect.fromLTWH(0, h*0.8, w, h*0.2)));
+      
+      // Deck Rim
+      canvas.drawPath(deckPath, Paint()..color = _primaryColor.withOpacity(0.8)..style=PaintingStyle.stroke..strokeWidth=2);
+      
+      // Holographic Graph Elements
+      final graphPaint = Paint()..color = _secondaryColor.withOpacity(0.8)..strokeWidth=2;
+      double gx = w * 0.3;
+      double gy = h * 0.95;
+      for(int i=0; i<15; i++) {
+         double hBar = 5.0 + math.Random().nextDouble() * 25.0; // Dynamic data
+         // Mirror effect
+         canvas.drawLine(Offset(gx + i * 15, gy), Offset(gx + i * 15, gy - hBar), graphPaint);
+         canvas.drawLine(Offset(w - (gx + i * 15), gy), Offset(w - (gx + i * 15), gy - hBar), graphPaint);
+      }
+  }
+  
+  void _renderMonitor(Canvas canvas, Rect rect, String label) {
+     final paint = Paint()
+       ..color = _primaryColor.withOpacity(0.1)
+       ..style = PaintingStyle.fill;
+     
+     final border = Paint()
+       ..color = _primaryColor.withOpacity(0.5)
+       ..style = PaintingStyle.stroke;
+       
+     canvas.drawRect(rect, paint);
+     canvas.drawRect(rect, border);
+     
+     // Scanline inside monitor
+     final lineP = Paint()..color = _primaryColor.withOpacity(0.2);
+     for(double y = rect.top; y < rect.bottom; y+= 5) {
+        canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), lineP);
+     }
+  }
+  
+  void _renderDataParticles(Canvas canvas) {
+    if (_introTime < _phaseWireframe) return;
+    
+    final center = size / 2;
+    for (final p in _dataParticles) {
+       if (p.z <= 0.05) continue;
+       final paint = Paint()..color = Colors.white.withOpacity(p.life * 0.7);
+       // Perspective scale
+       final scale = p.z * 3.0;
+       // Radial expansion
+       canvas.drawCircle(Offset(center.x + p.x * p.z, center.y + p.y * p.z), scale, paint);
+    }
+  }
+
+  /// Render all towers in 3D perspective (optimized)
+  void _renderTowers3D(Canvas canvas) {
+    if (_introTime < _phaseWireframe) return;
+    
+    // In low quality, render fewer towers
+    final maxRender = gameRef.reduceFx ? 8 : _towers3d.length;
+    
+    // Render towers from farthest to nearest (painter's algorithm)
+    for (int i = 0; i < math.min(maxRender, _towers3d.length); i++) {
+      final tower3d = _towers3d[i];
+      
+      // Simplify rendering for distant towers in low quality
+      if (gameRef.reduceFx && tower3d.distanceToCamera > 300) {
+        _renderSimpleTower(canvas, tower3d);
+      } else {
+        tower3d.render(canvas, _camera, size);
+      }
+    }
+    
+    // Render targeting reticle for hovered tower
+    if (_hoveredTower != null) {
+      _renderTargetingReticle(canvas, _hoveredTower!);
+    }
+  }
+
+  /// Simplified tower rendering for distant towers (performance)
+  void _renderSimpleTower(Canvas canvas, Tower3D tower3d) {
+    final screenPos = _camera.project(tower3d.position3d, size);
+    if (screenPos == null) return;
+
+    final scale = math.max(0.1, 1.0 / (tower3d.distanceToCamera * 0.01));
+    final renderSize = 20.0 * scale;
+
+    // Simple circle without gradients or shadows
+    final center = Offset(screenPos.x, screenPos.y);
+    
+    canvas.drawCircle(
+      center,
+      renderSize * 0.5,
+      Paint()..color = tower3d.tower.color.withOpacity(0.6),
+    );
+    
+    canvas.drawCircle(
+      center,
+      renderSize * 0.5,
+      Paint()
+        ..color = tower3d.tower.color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+  }
+
+  /// Render targeting reticle for selected tower
+  void _renderTargetingReticle(Canvas canvas, Tower3D tower3d) {
+    final screenPos = _camera.project(tower3d.position3d, size);
+    if (screenPos == null) return;
+
+    final center = Offset(screenPos.x, screenPos.y);
+    final color = tower3d.isSelected ? Colors.red : Colors.yellow;
+
+    // Animated crosshair
+    final pulse = math.sin(_animationTime * 4) * 0.5 + 0.5;
+    final crosshairPaint = Paint()
+      ..color = color.withOpacity(0.8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    // Horizontal line
+    canvas.drawLine(
+      Offset(center.dx - 20, center.dy),
+      Offset(center.dx + 20, center.dy),
+      crosshairPaint,
+    );
+
+    // Vertical line
+    canvas.drawLine(
+      Offset(center.dx, center.dy - 20),
+      Offset(center.dx, center.dy + 20),
+      crosshairPaint,
+    );
+
+    // Pulsing outer circle
+    canvas.drawCircle(
+      center,
+      15 + pulse * 5,
+      Paint()
+        ..color = color.withOpacity(0.4 + pulse * 0.3)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // Target lock text
+    if (tower3d.isHovered) {
+      final textPainter = TextPainter(
+        text: TextSpan(
+          text: 'Selecciona una torre para armarla.',
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            shadows: [
+              Shadow(
+                color: Colors.black.withOpacity(0.8),
+                blurRadius: 4,
+              ),
+            ],
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      );
+
+      textPainter.layout();
+      textPainter.paint(
+        canvas,
+        Offset(
+          center.dx - textPainter.width / 2,
+          center.dy + 40,
+        ),
+      );
+    }
+  }
+}
+
+class _DataParticle {
+  double x, y, z; 
+  double life;
+  double speed;
+  
+  _DataParticle() 
+     : x = (math.Random().nextDouble() - 0.5) * 5000, // Wide spread
+       y = (math.Random().nextDouble() - 0.5) * 2000,
+       z = 0.001,
+       life = 0.0, // Fade in
+       speed = 0.2 + math.Random().nextDouble() * 0.5;
+       
+  void update(double dt) {
+     z += dt * speed; // Move towards camera
+     life = math.min(life + dt * 2, 1.0); // Fade in
+     
+     // Fade out when close
+     if (z > 0.8) {
+        life = (1.0 - z) * 5.0;
+     }
+  }
 }
 
 class _BoostParticle {
@@ -1049,3 +1584,4 @@ class _BoostParticle {
     velocity.y -= 50 * dt; // Gravity
   }
 }
+

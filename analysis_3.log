@@ -1,0 +1,201 @@
+Analyzing flutter_app...                                        
+
+warning ??? The value of the field '_fpsUsesThisWave' isn't used ??? lib/src/game/bored_games_game.dart:100:7 ??? unused_field
+   info ??? The parameter name 'canvasSize' doesn't match the name 'size' in the overridden method ??? lib/src/game/bored_games_game.dart:1584:29 ??? avoid_renaming_method_parameters
+   info ??? The parameter name 'gameSize' doesn't match the name 'size' in the overridden method ??? lib/src/game/components/neon_grid_component.dart:86:29 ??? avoid_renaming_method_parameters
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/components/neon_grid_component.dart:185:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/components/neon_grid_component.dart:199:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/components/neon_grid_component.dart:205:7 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/components/neon_grid_component.dart:390:5 ??? prefer_const_declarations
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/components/neon_grid_component.dart:572:18 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/components/neon_mine.dart:243:9 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/components/neon_mine.dart:401:5 ??? prefer_const_declarations
+warning ??? The value of the field '_bossPosition' isn't used ??? lib/src/game/effects/boss_entrance_effect.dart:17:17 ??? unused_field
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/boss_entrance_effect.dart:146:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/boss_entrance_effect.dart:180:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/boss_entrance_effect.dart:196:7 ??? prefer_const_declarations
+   info ??? The declaration '_drawShockwave' isn't referenced ??? lib/src/game/effects/explosion_effect.dart:330:8 ??? unused_element
+   info ??? The declaration '_drawSecondaryShockwave' isn't referenced ??? lib/src/game/effects/explosion_effect.dart:359:8 ??? unused_element
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/effects/floating_text.dart:2:8 ??? unnecessary_import
+warning ??? The value of the field '_wobbleOffset' isn't used ??? lib/src/game/effects/floating_text.dart:84:15 ??? unused_field
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/focus_mode_overlay.dart:211:11 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/focus_mode_overlay.dart:212:11 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/focus_mode_overlay.dart:225:9 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/focus_mode_overlay.dart:250:11 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/focus_mode_overlay.dart:251:11 ??? prefer_const_declarations
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/effects/impact_effect.dart:2:8 ??? unnecessary_import
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/impact_effect.dart:353:9 ??? prefer_const_declarations
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/effects/particle_system.dart:2:8 ??? unnecessary_import
+   info ??? The private field _trail could be 'final' ??? lib/src/game/effects/particle_system.dart:73:18 ??? prefer_final_fields
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/effects/screen_effects.dart:2:8 ??? unnecessary_import
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/screen_effects.dart:180:5 ??? prefer_const_declarations
+warning ??? The value of the local variable 'borderPaint' isn't used ??? lib/src/game/effects/screen_effects.dart:270:11 ??? unused_local_variable
+   info ??? The parameter name 'gameSize' doesn't match the name 'size' in the overridden method ??? lib/src/game/effects/shaders/particle_shader_component.dart:34:29 ??? avoid_renaming_method_parameters
+   info ??? The parameter name 'gameSize' doesn't match the name 'size' in the overridden method ??? lib/src/game/effects/shaders/screen_post_process_component.dart:38:29 ??? avoid_renaming_method_parameters
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/effects/shaders/shader_presets.dart:28:29 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/shaders/shader_uniform_controller.dart:139:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/shaders/shader_uniform_controller.dart:140:5 ??? prefer_const_declarations
+warning ??? The value of the local variable 'height' isn't used ??? lib/src/game/effects/shaders/shader_uniform_controller.dart:140:11 ??? unused_local_variable
+warning ??? Unused import: 'shader_uniform_controller.dart' ??? lib/src/game/effects/shaders/world_uber_shader_component.dart:8:8 ??? unused_import
+   info ??? The parameter name 'gameSize' doesn't match the name 'size' in the overridden method ??? lib/src/game/effects/shaders/world_uber_shader_component.dart:34:29 ??? avoid_renaming_method_parameters
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/effects/tutorial_guide.dart:112:5 ??? prefer_const_declarations
+   info ??? The import of 'package:flame/components.dart' is unnecessary because all of the used elements are also provided by the import of 'package:flame/game.dart' ??? lib/src/game/effects/visual_director.dart:1:8 ??? unnecessary_import
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:471:18 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/entities/boss.dart:529:7 ??? prefer_const_declarations
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:532:19 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:535:36 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:553:19 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:556:36 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:575:36 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/entities/boss.dart:587:5 ??? prefer_const_declarations
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:599:36 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:616:19 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:625:21 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:638:17 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:639:34 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:647:19 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:686:17 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:687:34 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:693:17 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/boss.dart:738:22 ??? prefer_const_constructors
+   info ??? The private field _trailUpdateTimer could be 'final' ??? lib/src/game/entities/enemy.dart:100:10 ??? prefer_final_fields
+warning ??? The value of the field '_trailUpdateTimer' isn't used ??? lib/src/game/entities/enemy.dart:100:10 ??? unused_field
+warning ??? The value of the field '_trailUpdateInterval' isn't used ??? lib/src/game/entities/enemy.dart:101:23 ??? unused_field
+   info ??? The private field _wobbleOffset could be 'final' ??? lib/src/game/entities/enemy.dart:112:10 ??? prefer_final_fields
+   info ??? The private field _verticalBob could be 'final' ??? lib/src/game/entities/enemy.dart:113:10 ??? prefer_final_fields
+   info ??? The private field _lastPosition could be 'final' ??? lib/src/game/entities/enemy.dart:114:11 ??? prefer_final_fields
+   info ??? The private field _speedIndicator could be 'final' ??? lib/src/game/entities/enemy.dart:115:10 ??? prefer_final_fields
+   info ??? The private field _offscreenAccumulator could be 'final' ??? lib/src/game/entities/enemy.dart:116:10 ??? prefer_final_fields
+warning ??? The value of the field '_offscreenAccumulator' isn't used ??? lib/src/game/entities/enemy.dart:116:10 ??? unused_field
+warning ??? The value of the field '_lastHealth' isn't used ??? lib/src/game/entities/enemy.dart:124:10 ??? unused_field
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/entities/enemy.dart:475:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/entities/enemy.dart:745:9 ??? prefer_const_declarations
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:754:23 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:755:16 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:798:25 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:799:18 ??? curly_braces_in_flow_control_structures
+   info ??? The declaration '_createBodyPath' isn't referenced ??? lib/src/game/entities/enemy.dart:893:8 ??? unused_element
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:918:23 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:919:16 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:928:23 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:929:16 ??? curly_braces_in_flow_control_structures
+warning ??? The value of the local variable 't' isn't used ??? lib/src/game/entities/enemy.dart:1098:11 ??? unused_local_variable
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:1214:23 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:1215:16 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:1232:23 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/enemy.dart:1233:16 ??? curly_braces_in_flow_control_structures
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/entities/projectile.dart:465:7 ??? prefer_const_declarations
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/entities/tower.dart:2:8 ??? unnecessary_import
+   info ??? The declaration '_boostMultiplier' isn't referenced ??? lib/src/game/entities/tower.dart:228:14 ??? unused_element
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/tower.dart:274:18 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in an if should be enclosed in a block ??? lib/src/game/entities/tower.dart:275:10 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in a while should be enclosed in a block ??? lib/src/game/entities/tower.dart:406:29 ??? curly_braces_in_flow_control_structures
+   info ??? Statements in a while should be enclosed in a block ??? lib/src/game/entities/tower.dart:407:30 ??? curly_braces_in_flow_control_structures
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/entities/tower.dart:797:22 ??? prefer_const_constructors
+   info ??? Use 'const' literals as arguments to constructors of '@immutable' classes ??? lib/src/game/entities/tower.dart:798:21 ??? prefer_const_literals_to_create_immutables
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/fps/fps_view_component.dart:2:8 ??? unnecessary_import
+warning ??? Unused import: '../entities/boss.dart' ??? lib/src/game/fps/fps_view_component.dart:6:8 ??? unused_import
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/fps/fps_view_component.dart:261:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/fps/fps_view_component.dart:462:9 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/fps/fps_view_component.dart:523:7 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/fps/fps_view_component.dart:707:5 ??? prefer_const_declarations
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/fps/fps_view_component.dart:753:16 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/fps/fps_view_component.dart:897:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/fps/fps_view_component.dart:905:5 ??? prefer_const_declarations
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/hud/boss_health_bar.dart:2:8 ??? unnecessary_import
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/boss_health_bar.dart:227:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/boss_health_bar.dart:381:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/boss_health_bar.dart:382:5 ??? prefer_const_declarations
+   info ??? The private field _isHovered could be 'final' ??? lib/src/game/hud/hud_button.dart:41:8 ??? prefer_final_fields
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_button.dart:167:7 ??? prefer_const_declarations
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_button.dart:228:21 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_button.dart:228:52 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_button.dart:229:21 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_button.dart:229:45 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_button.dart:249:25 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_component.dart:480:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_component.dart:481:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_component.dart:483:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_component.dart:583:7 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_component.dart:786:5 ??? prefer_const_declarations
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_component.dart:820:7 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/game/hud/hud_component.dart:843:7 ??? prefer_const_constructors
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/hud/hud_component.dart:852:5 ??? prefer_const_declarations
+warning ??? The operand can't be null, so the condition is always 'false' ??? lib/src/game/managers/enemy_manager.dart:347:23 ??? unnecessary_null_comparison
+   info ??? The import of 'dart:ui' is unnecessary because all of the used elements are also provided by the import of 'package:flutter/material.dart' ??? lib/src/game/managers/tower_manager.dart:2:8 ??? unnecessary_import
+warning ??? Unused import: '../utils/path_check.dart' ??? lib/src/game/managers/tower_manager.dart:10:8 ??? unused_import
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:143:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:144:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:361:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:362:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:423:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:537:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:799:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:825:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/game/world/game_world.dart:1035:7 ??? prefer_const_declarations
+   info ??? The imported package 'audioplayers' isn't a dependency of the importing package ??? lib/src/services/audio_service.dart:6:8 ??? depend_on_referenced_packages
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/services/audio_service.dart:284:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/services/audio_service.dart:285:5 ??? prefer_const_declarations
+warning ??? The value of the local variable 'storage' isn't used ??? lib/src/services/level_service.dart:51:11 ??? unused_local_variable
+warning ??? Unused import: 'dart:async' ??? lib/src/ui/overlays/briefing_overlay.dart:1:8 ??? unused_import
+warning ??? Unused import: '../../game/balance/difficulty_curve.dart' ??? lib/src/ui/screens/level_select_screen.dart:7:8 ??? unused_import
+   info ??? Unnecessary override ??? lib/src/ui/screens/level_select_screen.dart:91:8 ??? unnecessary_overrides
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/loading_screen.dart:226:7 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/loading_screen.dart:229:16 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/loading_screen.dart:237:18 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/loading_screen.dart:246:18 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/loading_screen.dart:256:18 ??? prefer_const_constructors
+   info ??? Unnecessary cast ??? lib/src/ui/screens/main_menu_screen.dart:36:21 ??? unnecessary_cast
+   info ??? Unnecessary cast ??? lib/src/ui/screens/main_menu_screen.dart:37:19 ??? unnecessary_cast
+   info ??? Use 'const' literals as arguments to constructors of '@immutable' classes ??? lib/src/ui/screens/main_menu_screen.dart:262:21 ??? prefer_const_literals_to_create_immutables
+   info ??? Use a 'SizedBox' to add whitespace to a layout ??? lib/src/ui/screens/main_menu_screen.dart:416:9 ??? sized_box_for_whitespace
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/settings_screen.dart:52:27 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/settings_screen.dart:71:27 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? lib/src/ui/screens/settings_screen.dart:99:27 ??? prefer_const_constructors
+   info ??? Don't use 'BuildContext's across async gaps ??? lib/src/ui/screens/upgrades_screen.dart:39:28 ??? use_build_context_synchronously
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/ui/screens/upgrades_screen.dart:177:5 ??? prefer_const_declarations
+   info ??? Use 'const' for final variables initialized to a constant value ??? lib/src/ui/widgets/animated_tron_grid.dart:71:13 ??? prefer_const_declarations
+warning ??? Unused import: 'dart:math' ??? lib/src/ui/widgets/materialization_overlay.dart:1:8 ??? unused_import
+warning ??? The value of the local variable 'opacity' isn't used ??? lib/src/ui/widgets/materialization_overlay.dart:68:15 ??? unused_local_variable
+warning ??? The value of the local variable 'paint' isn't used ??? lib/src/ui/widgets/universe_graph_widget.dart:98:11 ??? unused_local_variable
+   info ??? The imported package 'fake_async' isn't a dependency of the importing package ??? test/audio_service_test.dart:1:8 ??? depend_on_referenced_packages
+warning ??? The value of the local variable 'game' isn't used ??? test/enemy_manager_boss_test.dart:22:25 ??? unused_local_variable
+warning ??? The value of the local variable 'enemyManager' isn't used ??? test/enemy_manager_boss_test.dart:23:23 ??? unused_local_variable
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:27:25 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:58:24 ??? prefer_const_constructors
+warning ??? The value of the local variable 'beforeBossCount' isn't used ??? test/enemy_manager_boss_test.dart:90:17 ??? unused_local_variable
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:102:24 ??? prefer_const_constructors
+warning ??? The value of the local variable 'expectedBoss' isn't used ??? test/enemy_manager_boss_test.dart:154:17 ??? unused_local_variable
+warning ??? The value of the local variable 'game' isn't used ??? test/enemy_manager_boss_test.dart:156:17 ??? unused_local_variable
+warning ??? The value of the local variable 'manager' isn't used ??? test/enemy_manager_boss_test.dart:166:17 ??? unused_local_variable
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:183:24 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:219:24 ??? prefer_const_constructors
+warning ??? The value of the local variable 'manager' isn't used ??? test/enemy_manager_boss_test.dart:251:15 ??? unused_local_variable
+warning ??? The value of the local variable 'lastAbility' isn't used ??? test/enemy_manager_boss_test.dart:347:18 ??? unused_local_variable
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:386:24 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/enemy_manager_boss_test.dart:467:24 ??? prefer_const_constructors
+   info ??? The local variable '_world' starts with an underscore ??? test/enemy_manager_test.dart:11:13 ??? no_leading_underscores_for_local_identifiers
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:278:15 ??? unused_local_variable
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:290:15 ??? unused_local_variable
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:302:15 ??? unused_local_variable
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:498:15 ??? unused_local_variable
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:511:15 ??? unused_local_variable
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:524:15 ??? unused_local_variable
+warning ??? The value of the local variable 'fpsView' isn't used ??? test/fps_view_test.dart:537:15 ??? unused_local_variable
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:16:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:54:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:93:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:134:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:170:22 ??? prefer_const_constructors
+warning ??? The value of the local variable 'initialGold' isn't used ??? test/integration/boss_system_integration_test.dart:179:15 ??? unused_local_variable
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:214:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:257:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:290:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:324:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:361:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:396:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:438:22 ??? prefer_const_constructors
+   info ??? Use 'const' with the constructor to improve performance ??? test/integration/boss_system_integration_test.dart:485:22 ??? prefer_const_constructors
+   info ??? The local variable '_makeProjectile' starts with an underscore ??? test/projectile_test.dart:10:14 ??? no_leading_underscores_for_local_identifiers
+warning ??? Unused import: 'package:flutter/material.dart' ??? test/widget_test.dart:8:8 ??? unused_import
+

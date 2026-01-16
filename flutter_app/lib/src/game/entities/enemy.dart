@@ -276,6 +276,12 @@ class Enemy extends PositionComponent {
       }
     }
 
+    // Slow effect decay
+    if (_slowDuration > 0) {
+      _slowDuration -= dt;
+      if (_slowDuration <= 0) {
+        _slowDuration = 0;
+        _slowFactor = 1.0;
       }
     }
 
@@ -284,6 +290,19 @@ class Enemy extends PositionComponent {
     _lastHealth = _health;
 
     _move(dt);
+  }
+
+  /// Apply slow effect to the enemy
+  void applySlow(double factor, double duration) {
+    // factor is 0.0 to 1.0 (e.g., 0.5 = 50% slow)
+    // _slowFactor is speed multiplier (e.g., 0.5 = 50% speed)
+    final newFactor = (1.0 - factor).clamp(0.1, 1.0);
+    if (newFactor < _slowFactor) {
+      _slowFactor = newFactor;
+    }
+    if (duration > _slowDuration) {
+      _slowDuration = duration;
+    }
   }
 
   void _updatePlasmaParticles(double dt) {
@@ -1324,4 +1343,3 @@ class _PlasmaParticle {
     if (opacity <= 0 || size <= 0) isActive = false;
   }
 }
-```

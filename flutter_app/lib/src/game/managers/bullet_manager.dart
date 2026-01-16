@@ -13,6 +13,33 @@ class BulletManager extends Component with HasGameRef<BoredGamesGame> {
   final int poolSize;
   //...
 
+  void fire({
+    required Vector2 from,
+    required Vector2 to,
+    required double speed,
+    required double damage,
+    required Color color,
+    Enemy? target,
+    void Function(Enemy target, Vector2 hitPosition, bool killed)? onHit,
+    double slowAmount = 0,
+    double slowDuration = 0,
+    TowerType towerType = TowerType.pulseArcher,
+  }) {
+    final projectile = Projectile(
+      startPosition: from,
+      targetPosition: to,
+      speed: speed,
+      damage: damage,
+      color: color,
+      target: target,
+      onHit: onHit,
+      slowAmount: slowAmount,
+      slowDuration: slowDuration,
+      towerType: towerType,
+    );
+    add(projectile);
+  }
+
   /// Fire a projectile for manual FPS mode
   void fireManualShot({
     required Vector2 from,
@@ -44,4 +71,5 @@ class BulletManager extends Component with HasGameRef<BoredGamesGame> {
     );
   }
   
-  //...
+  int get activeCount => children.whereType<Projectile>().length;
+}

@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
-import 'package:flutter/painting.dart' show RadialGradient;
+import 'package:flutter/material.dart';
 
 import 'enemy.dart';
 import '../managers/enemy_manager.dart';
@@ -61,6 +61,42 @@ enum TowerType {
     slowAmount: 0.3, // 70% slow
     slowDuration: 0.5,
     canDetectPhantom: false,
+  ),
+  ionSniper(
+    name: 'Ion Sniper',
+    damage: 180,
+    fireRate: 0.4,
+    range: 300,
+    cost: 250,
+    color: Color(0xFF00E5FF),
+    projectileSpeed: 800,
+  ),
+  teslaTerminal(
+    name: 'Tesla Terminal',
+    damage: 12,
+    fireRate: 3.5,
+    range: 150,
+    cost: 180,
+    color: Color(0xFFFFFF00),
+    projectileSpeed: 0, // Instant hit (lightning)
+  ),
+  resonanceSiphon(
+    name: 'Resonance Siphon',
+    damage: 0,
+    fireRate: 1.0,
+    range: 100,
+    cost: 150,
+    color: Color(0xFFFF0066),
+    projectileSpeed: 0,
+  ),
+  neuralDisruptor(
+    name: 'Neural Disruptor',
+    damage: 5,
+    fireRate: 2.0,
+    range: 130,
+    cost: 200,
+    color: Color(0xFF00FF00),
+    projectileSpeed: 450,
   );
 
   const TowerType({
@@ -134,7 +170,9 @@ class Tower extends PositionComponent {
   double _fireRateMultiplier;
   double _projectileSpeedMultiplier;
   double _slowMultiplier;
-  bool _isBoosted = false;
+  int _resonanceBoosters = 0;
+  bool get _isBoosted => _isManualBoosted || _resonanceBoosters > 0;
+  bool _isManualBoosted = false;
 
   Enemy? _currentTarget;
   Enemy? _manualTarget;
@@ -190,8 +228,8 @@ class Tower extends PositionComponent {
   double get _boostMultiplier => _isBoosted ? 1.2 : 1.0;
 
   /// Get tower stats from type
-  double get damage => type.damage * _damageMultiplier * _boostMultiplier;
-  double get fireRate => type.fireRate * _fireRateMultiplier * _boostMultiplier;
+  double get damage => type.damage * _damageMultiplier * (_isBoosted ? 2.2 : 1.0);
+  double get fireRate => type.fireRate * _fireRateMultiplier * (_isBoosted ? 2.2 : 1.0);
   double get range => type.range * _rangeMultiplier;
   Color get color => type.color;
   double get projectileSpeed => type.projectileSpeed * _projectileSpeedMultiplier;
@@ -225,11 +263,20 @@ class Tower extends PositionComponent {
   }
 
   void enterFpsBoost() {
-    _isBoosted = true;
+    _isManualBoosted = true;
   }
 
   void exitFpsBoost() {
-    _isBoosted = false;
+    _isManualBoosted = false;
+  }
+
+  void setResonanceBoost(bool boosted) {
+    if (boosted) _resonanceBoosters++;
+    else _resonanceBoosters = math.max(0, _resonanceBoosters - 1);
+  }
+
+  void resetResonanceBoost() {
+    _resonanceBoosters = 0;
   }
 
   bool get manualTargeting => _manualTargeting;
@@ -501,33 +548,7 @@ class Tower extends PositionComponent {
     }
 
     // Base hexagon shape with gradient
-    final hexPath = NeonEffects.createHexagonPath(center, size.x * 0.45);
-
-    // Dark fill with subtle gradient
-    final basePaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF151520),
-          const Color(0xFF0A0A0F),
-        ],
-      ).createShader(Rect.fromCircle(center: center, radius: size.x * 0.45));
-    canvas.drawPath(hexPath, basePaint);
-
-    // Hexagon border with glow
-    if (!reduceFx) {
-      final borderGlow = Paint()
-        ..color = color.withOpacity(0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawPath(hexPath, borderGlow);
-    }
-
-    final borderPaint = Paint()
-      ..color = color.withOpacity(0.6 + _pulseAnimation * 0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawPath(hexPath, borderPaint);
+    _renderMegaBase(canvas, center);
 
     // Type-specific core decoration
     _renderTypeDecoration(canvas, center);
@@ -540,8 +561,9 @@ class Tower extends PositionComponent {
     // Energy core with type-specific gradient
     _renderEnergyCore(canvas);
 
-    // Targeting line when has target
+    // Targeting line/focus lens when has target
     if (_currentTarget != null) {
+      _renderTargetingLens(canvas);
       _renderTargetingLine(canvas);
     }
 
@@ -710,6 +732,81 @@ class Tower extends PositionComponent {
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
         );
         break;
+
+      case TowerType.ionSniper:
+        // Slow energy accumulation
+        final chargeOffset = math.sin(_animationPhase * 2) * 4;
+        canvas.drawCircle(
+          center + Offset(0, chargeOffset),
+          size.x * 0.4,
+          Paint()
+            ..color = color.withOpacity(0.1)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1,
+        );
+        break;
+
+      case TowerType.teslaTerminal:
+        // Harmonic vibration
+        final scale = 1.0 + math.sin(_animationPhase * 10) * 0.05;
+        canvas.save();
+        canvas.translate(center.dx, center.dy);
+        canvas.scale(scale);
+        canvas.drawCircle(
+          Offset.zero,
+          size.x * 0.4,
+          Paint()
+            ..color = color.withOpacity(0.15)
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1.5,
+        );
+        canvas.restore();
+        break;
+      
+      case TowerType.resonanceSiphon:
+        // Expansion waves
+        final wave = (_animationPhase * 0.5) % 1.0;
+        canvas.drawCircle(
+          center,
+          size.x * 0.6 * wave,
+          Paint()
+            ..color = color.withOpacity(0.2 * (1 - wave))
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 2,
+        );
+        break;
+
+      case TowerType.neuralDisruptor:
+        // Static noise field
+        if (_random.nextDouble() < 0.2) {
+           canvas.drawRect(
+             Rect.fromCenter(center: center, width: size.x * 0.8, height: 2),
+             Paint()..color = color.withOpacity(0.3)
+           );
+        }
+        break;
+    }
+  }
+
+  void _renderMegaBase(Canvas canvas, Offset center) {
+    for (int i = 0; i < 2; i++) {
+        final radius = size.x * (0.45 - i * 0.1);
+        final hexPath = NeonEffects.createHexagonPath(center, radius);
+        
+        final basePaint = Paint()
+          ..shader = RadialGradient(
+            colors: [
+              const Color(0xFF151520),
+              const Color(0xFF0A0A0F),
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: radius));
+        canvas.drawPath(hexPath, basePaint);
+
+        final borderPaint = Paint()
+          ..color = color.withOpacity((0.6 - i * 0.2) + _pulseAnimation * 0.2)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 - i * 0.5;
+        canvas.drawPath(hexPath, borderPaint);
     }
   }
 
@@ -805,7 +902,52 @@ class Tower extends PositionComponent {
           );
         }
         break;
+
+      case TowerType.ionSniper:
+        // Long cooling fins
+        final pinPaint = Paint()..color = color.withOpacity(0.5)..strokeWidth = 2;
+        for (int i = 0; i < 4; i++) {
+           final angle = i * math.pi / 2 + math.pi/4;
+           canvas.drawLine(
+             center + Offset(math.cos(angle) * 10, math.sin(angle) * 10),
+             center + Offset(math.cos(angle) * 25, math.sin(angle) * 25),
+             pinPaint
+           );
+        }
+        break;
+
+      case TowerType.teslaTerminal:
+        // Coils
+        for (int i = 0; i < 3; i++) {
+            canvas.drawCircle(center, 10 + i * 5.0, Paint()..color = color.withOpacity(0.2)..style = PaintingStyle.stroke);
+        }
+        break;
+
+      case TowerType.resonanceSiphon:
+        // Siphon triangles
+        for (int i = 0; i < 3; i++) {
+            final angle = i * 2 * math.pi / 3 + _animationPhase;
+            final p1 = center + Offset(math.cos(angle) * 15, math.sin(angle) * 15);
+            canvas.drawCircle(p1, 3, Paint()..color = color);
+        }
+        break;
+      
+      case TowerType.neuralDisruptor:
+        // Binary patterns
+        if (_random.nextDouble() < 0.1) {
+            _drawBinaryBit(canvas, center);
+        }
+        break;
     }
+  }
+
+  void _drawBinaryBit(Canvas canvas, Offset center) {
+    final bit = _random.nextBool() ? "1" : "0";
+    final painter = TextPainter(
+      text: TextSpan(text: bit, style: TextStyle(color: color.withOpacity(0.5), fontSize: 10, fontFamily: 'monospace')),
+      textDirection: TextDirection.ltr
+    )..layout();
+    painter.paint(canvas, center + Offset((_random.nextDouble()-0.5)*20, (_random.nextDouble()-0.5)*20));
   }
 
   void _renderEnergyCore(Canvas canvas) {
@@ -841,6 +983,35 @@ class Tower extends PositionComponent {
       coreSize * 0.3,
       Paint()..color = const Color(0xFFFFFFFF).withOpacity(0.8 + _pulseAnimation * 0.2),
     );
+
+    // Rotating Energy Arms
+    final arms = switch(type) {
+        TowerType.ionSniper => 2,
+        TowerType.teslaTerminal => 4,
+        _ => 3
+    };
+    for (int i = 0; i < arms; i++) {
+        final angle = (i * 2 * math.pi / arms) + _animationPhase * 2;
+        canvas.drawLine(
+            Offset.zero,
+            Offset(math.cos(angle) * coreSize * 1.2, math.sin(angle) * coreSize * 1.2),
+            Paint()..color = color.withOpacity(0.6)..strokeWidth = 1.5
+        );
+    }
+  }
+
+  void _renderTargetingLens(Canvas canvas) {
+     final lensRadius = size.x * 0.15 * (1 + _chargeLevel * 0.2);
+     canvas.drawCircle(
+       Offset(size.x * 0.3, 0),
+       lensRadius,
+       Paint()..color = color.withOpacity(0.2)..style = PaintingStyle.fill
+     );
+     canvas.drawCircle(
+       Offset(size.x * 0.3, 0),
+       lensRadius,
+       Paint()..color = color.withOpacity(0.8)..style = PaintingStyle.stroke..strokeWidth = 1
+     );
   }
 
   void _renderTargetingLine(Canvas canvas) {
@@ -977,76 +1148,34 @@ class Tower extends PositionComponent {
           conePath,
           Paint()
             ..color = color.withOpacity(flashIntensity * 0.6)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
         );
         canvas.restore();
         break;
 
       case TowerType.circuitCannon:
-        // Heavy explosion with ring
+      case TowerType.ionSniper:
         canvas.drawCircle(
           center,
-          size.x * 0.5 * flashIntensity,
-          Paint()
-            ..color = color.withOpacity(flashIntensity * 0.8)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15),
-        );
-
-        // Shockwave ring
-        canvas.drawCircle(
-          center,
-          size.x * (0.4 + (1 - flashIntensity) * 0.4),
+          size.x * (0.3 + flashIntensity * 0.5),
           Paint()
             ..color = color.withOpacity(flashIntensity * 0.5)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
         );
         break;
 
       case TowerType.phaseMage:
-        // Mystical burst with symbols
+      case TowerType.glimmerField:
+      case TowerType.teslaTerminal:
+      case TowerType.resonanceSiphon:
+      case TowerType.neuralDisruptor:
         canvas.drawCircle(
           center,
-          size.x * 0.4 * flashIntensity,
+          size.x * flashIntensity,
           Paint()
-            ..color = color.withOpacity(flashIntensity * 0.7)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
+            ..color = color.withOpacity(flashIntensity * 0.4)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
         );
-
-        // Arcane symbols flash
-        for (int i = 0; i < 4; i++) {
-          final symbolAngle = i * math.pi / 2 + _rotationAngle;
-          final symbolDist = size.x * 0.35 * flashIntensity;
-          canvas.drawCircle(
-            Offset(
-              center.dx + math.cos(symbolAngle) * symbolDist,
-              center.dy + math.sin(symbolAngle) * symbolDist,
-            ),
-            4,
-            Paint()
-              ..color = color.withOpacity(flashIntensity * 0.6)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-          );
-        }
-        break;
-
-      case TowerType.glimmerField:
-        // Rapid sparkle burst
-        for (int i = 0; i < 8; i++) {
-          final sparkAngle = i * math.pi / 4 + _random.nextDouble() * 0.5;
-          final sparkDist = size.x * 0.3 * flashIntensity;
-          canvas.drawCircle(
-            Offset(
-              center.dx + math.cos(sparkAngle) * sparkDist,
-              center.dy + math.sin(sparkAngle) * sparkDist,
-            ),
-            2 + _random.nextDouble() * 2,
-            Paint()
-              ..color = color.withOpacity(flashIntensity * 0.8)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-          );
-        }
         break;
     }
 
@@ -1148,6 +1277,21 @@ class Tower extends PositionComponent {
           );
         }
         break;
+      case TowerType.ionSniper:
+        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 8, height: 2), symbolPaint);
+        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 2, height: 8), symbolPaint);
+        break;
+      case TowerType.teslaTerminal:
+        canvas.drawCircle(Offset.zero, 4, symbolPaint);
+        canvas.drawLine(const Offset(-4, -4), const Offset(4, 4), symbolPaint);
+        break;
+      case TowerType.resonanceSiphon:
+        canvas.drawCircle(Offset.zero, 5, symbolPaint);
+        canvas.drawCircle(Offset.zero, 2, symbolPaint);
+        break;
+      case TowerType.neuralDisruptor:
+        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 6, height: 6), symbolPaint);
+        break;
     }
 
     canvas.restore();
@@ -1177,6 +1321,10 @@ class _TowerParticle {
       TowerType.circuitCannon => 0.5,
       TowerType.phaseMage => 1.5,
       TowerType.glimmerField => 2.0,
+      TowerType.ionSniper => 0.4,
+      TowerType.teslaTerminal => 1.8,
+      TowerType.resonanceSiphon => 1.2,
+      TowerType.neuralDisruptor => 1.4,
     };
     angle += dt * speed * speedMultiplier;
   }

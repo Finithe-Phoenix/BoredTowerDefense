@@ -10,6 +10,7 @@ import '../overlays/game_over_overlay.dart';
 import '../overlays/victory_overlay.dart';
 import '../overlays/run_upgrade_overlay.dart';
 import '../widgets/materialization_overlay.dart';
+import '../overlays/briefing_overlay.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key, required this.levelId});
@@ -25,6 +26,7 @@ class _GameScreenState extends State<GameScreen> {
   late LevelConfig _levelConfig;
   bool _isPaused = false;
   bool _showMaterialization = true;
+  bool _showBriefing = false;
 
   @override
   void initState() {
@@ -188,7 +190,22 @@ class _GameScreenState extends State<GameScreen> {
                   onComplete: () {
                     setState(() {
                       _showMaterialization = false;
-                      // You could resume game here if you started it paused
+                      // Show briefing for level 1, 11, 21 (first levels of worlds)
+                      if ([1, 11, 21].contains(widget.levelId)) {
+                        _showBriefing = true;
+                        _game.paused = true;
+                      }
+                    });
+                  },
+                ),
+
+              if (_showBriefing)
+                BriefingOverlay(
+                  levelId: widget.levelId,
+                  onDismiss: () {
+                    setState(() {
+                      _showBriefing = false;
+                      _game.paused = false;
                     });
                   },
                 ),
