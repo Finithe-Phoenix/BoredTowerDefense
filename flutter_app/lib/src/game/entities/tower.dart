@@ -550,6 +550,10 @@ class Tower extends PositionComponent {
     // Base hexagon shape with gradient
     _renderMegaBase(canvas, center);
 
+    if (!reduceFx) {
+      _renderBaseTrim(canvas, center);
+    }
+
     // Type-specific core decoration
     _renderTypeDecoration(canvas, center);
 
@@ -560,6 +564,10 @@ class Tower extends PositionComponent {
 
     // Energy core with type-specific gradient
     _renderEnergyCore(canvas);
+
+    if (!reduceFx) {
+      _renderTurretHead(canvas);
+    }
 
     // Targeting line/focus lens when has target
     if (_currentTarget != null) {
@@ -810,6 +818,31 @@ class Tower extends PositionComponent {
     }
   }
 
+  void _renderBaseTrim(Canvas canvas, Offset center) {
+    final trimRadius = size.x * 0.52;
+    final dotPaint = Paint()
+      ..color = color.withOpacity(0.25 + _pulseAnimation * 0.1);
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3;
+      final dx = math.cos(angle) * trimRadius;
+      final dy = math.sin(angle) * trimRadius;
+      canvas.drawCircle(center + Offset(dx, dy), 1.6, dotPaint);
+    }
+
+    final panelPaint = Paint()
+      ..color = color.withOpacity(0.18 + _pulseAnimation * 0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+    for (int i = 0; i < 3; i++) {
+      final angle = i * math.pi / 3;
+      final inner = size.x * 0.22;
+      final outer = size.x * 0.38;
+      final start = center + Offset(math.cos(angle) * inner, math.sin(angle) * inner);
+      final end = center + Offset(math.cos(angle) * outer, math.sin(angle) * outer);
+      canvas.drawLine(start, end, panelPaint);
+    }
+  }
+
   void _renderOrbitParticles(Canvas canvas, Offset center) {
     for (final particle in _orbitParticles) {
       final px = center.dx + math.cos(particle.angle) * particle.radius;
@@ -997,6 +1030,138 @@ class Tower extends PositionComponent {
             Offset(math.cos(angle) * coreSize * 1.2, math.sin(angle) * coreSize * 1.2),
             Paint()..color = color.withOpacity(0.6)..strokeWidth = 1.5
         );
+    }
+  }
+
+  void _renderTurretHead(Canvas canvas) {
+    final s = size.x;
+    final fillPaint = Paint()..color = color.withOpacity(0.55);
+    final accentPaint = Paint()..color = Colors.white.withOpacity(0.35 + _pulseAnimation * 0.2);
+    final strokePaint = Paint()
+      ..color = color.withOpacity(0.9)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    switch (type) {
+      case TowerType.pulseArcher:
+        final prongPaint = Paint()
+          ..color = color.withOpacity(0.8)
+          ..strokeWidth = 2.0
+          ..strokeCap = StrokeCap.round;
+        final prongOffset = s * 0.12;
+        final prongEnd = s * 0.42;
+        canvas.drawLine(
+          Offset(s * 0.05, -prongOffset),
+          Offset(prongEnd, -prongOffset * 1.4),
+          prongPaint,
+        );
+        canvas.drawLine(
+          Offset(s * 0.05, prongOffset),
+          Offset(prongEnd, prongOffset * 1.4),
+          prongPaint,
+        );
+        final arrowPath = Path()
+          ..moveTo(s * 0.45, 0)
+          ..lineTo(s * 0.58, -s * 0.08)
+          ..lineTo(s * 0.58, s * 0.08)
+          ..close();
+        canvas.drawPath(arrowPath, fillPaint);
+        canvas.drawPath(arrowPath, strokePaint);
+        break;
+
+      case TowerType.circuitCannon:
+        final barrelRect = RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(s * 0.25, 0), width: s * 0.5, height: s * 0.18),
+          Radius.circular(s * 0.05),
+        );
+        canvas.drawRRect(barrelRect, fillPaint);
+        canvas.drawRRect(barrelRect, strokePaint);
+        final ringCenter = Offset(s * 0.5, 0);
+        canvas.drawCircle(ringCenter, s * 0.08, strokePaint);
+        canvas.drawCircle(ringCenter, s * 0.04, accentPaint);
+        final ventPaint = Paint()
+          ..color = color.withOpacity(0.6)
+          ..strokeWidth = 1.2;
+        canvas.drawLine(Offset(s * 0.05, -s * 0.06), Offset(s * 0.2, -s * 0.06), ventPaint);
+        canvas.drawLine(Offset(s * 0.05, s * 0.06), Offset(s * 0.2, s * 0.06), ventPaint);
+        break;
+
+      case TowerType.phaseMage:
+        final prismPaint = Paint()..color = color.withOpacity(0.45);
+        final prismPath = Path()
+          ..moveTo(s * 0.08, -s * 0.22)
+          ..lineTo(s * 0.48, 0)
+          ..lineTo(s * 0.08, s * 0.22)
+          ..close();
+        canvas.drawPath(prismPath, prismPaint);
+        canvas.drawPath(prismPath, strokePaint);
+        final ringCenter = Offset(s * 0.15, 0);
+        canvas.drawCircle(ringCenter, s * 0.12, strokePaint);
+        canvas.drawCircle(ringCenter, s * 0.05, accentPaint);
+        break;
+
+      case TowerType.glimmerField:
+        final petalPaint = Paint()..color = color.withOpacity(0.55);
+        for (int i = -1; i <= 1; i++) {
+          final angle = i * 0.35;
+          final dx = math.cos(angle) * s * 0.34;
+          final dy = math.sin(angle) * s * 0.34;
+          canvas.drawCircle(Offset(dx, dy), s * 0.06, petalPaint);
+          canvas.drawCircle(Offset(dx, dy), s * 0.06, strokePaint);
+        }
+        canvas.drawCircle(Offset(s * 0.12, 0), s * 0.04, accentPaint);
+        break;
+
+      case TowerType.ionSniper:
+        final railRect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(s * 0.02, -s * 0.05, s * 0.62, s * 0.1),
+          Radius.circular(s * 0.04),
+        );
+        canvas.drawRRect(railRect, fillPaint);
+        canvas.drawRRect(railRect, strokePaint);
+        final lensCenter = Offset(s * 0.58, 0);
+        canvas.drawCircle(lensCenter, s * 0.07, strokePaint);
+        canvas.drawCircle(lensCenter, s * 0.03, accentPaint);
+        break;
+
+      case TowerType.teslaTerminal:
+        final prongPaint = Paint()
+          ..color = color.withOpacity(0.8)
+          ..strokeWidth = 2.2
+          ..strokeCap = StrokeCap.round;
+        canvas.drawLine(
+          Offset(s * 0.05, -s * 0.2),
+          Offset(s * 0.32, -s * 0.3),
+          prongPaint,
+        );
+        canvas.drawLine(
+          Offset(s * 0.05, s * 0.2),
+          Offset(s * 0.32, s * 0.3),
+          prongPaint,
+        );
+        final coilCenter = Offset(s * 0.1, 0);
+        canvas.drawCircle(coilCenter, s * 0.12, strokePaint);
+        canvas.drawCircle(coilCenter, s * 0.05, accentPaint);
+        break;
+
+      case TowerType.resonanceSiphon:
+        final funnelPaint = Paint()..color = color.withOpacity(0.5);
+        final funnelPath = Path()
+          ..moveTo(s * 0.08, -s * 0.22)
+          ..lineTo(s * 0.5, 0)
+          ..lineTo(s * 0.08, s * 0.22)
+          ..close();
+        canvas.drawPath(funnelPath, funnelPaint);
+        canvas.drawPath(funnelPath, strokePaint);
+        canvas.drawCircle(Offset(s * 0.22, 0), s * 0.06, accentPaint);
+        break;
+
+      case TowerType.neuralDisruptor:
+        final boxRect = Rect.fromCenter(center: Offset(s * 0.22, 0), width: s * 0.24, height: s * 0.24);
+        canvas.drawRect(boxRect, fillPaint);
+        canvas.drawRect(boxRect, strokePaint);
+        canvas.drawRect(Rect.fromLTWH(s * 0.38, -s * 0.05, s * 0.12, s * 0.1), accentPaint);
+        break;
     }
   }
 

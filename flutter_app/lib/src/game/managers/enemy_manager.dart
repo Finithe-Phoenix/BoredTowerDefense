@@ -15,6 +15,8 @@ import '../../services/audio_service.dart';
 typedef EnemyKilledCallback = void Function(Enemy enemy, int goldReward);
 typedef EnemyLeakedCallback = void Function(Enemy enemy);
 typedef WaveCompleteCallback = void Function(int waveNumber);
+typedef BossSpawnCallback = void Function(String bossName);
+typedef BossPhaseCallback = void Function(String bossName, int phase);
 
 /// Wave modifier types
 enum WaveModifier {
@@ -32,6 +34,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     this.onEnemyKilled,
     this.onEnemyLeaked,
     this.onWaveComplete,
+    this.onBossSpawn,
+    this.onBossPhaseChange,
   }) : _spatialCellSize = tileSize;
 
   final double tileSize;
@@ -41,6 +45,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   EnemyKilledCallback? onEnemyKilled;
   EnemyLeakedCallback? onEnemyLeaked;
   WaveCompleteCallback? onWaveComplete;
+  BossSpawnCallback? onBossSpawn;
+  BossPhaseCallback? onBossPhaseChange;
 
   bool spawning = false;
   double _timer = 0;
@@ -69,7 +75,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   static const double baseSpeed = 60;
   static const int baseGold = 10;
   static const int minEnemyCount = 3;
-  static const int maxEnemyCount = 160;
+  static const int maxEnemyCount = 80;  // Reduced from 160 to prevent OOM
   static const int minGoldReward = 4;
   static const double _nearBaseThreshold = 0.82;
   static const double _threatPulseInterval = 0.7;
@@ -106,10 +112,39 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
   int _cellFor(double value) => (value / _spatialCellSize).floor();
 
+  // Pool of reusable bucket lists to avoid allocations
+  static final List<List<Enemy>> _bucketPool = [];
+  static const int _maxBucketPool = 50;
+
+  /// Clear the bucket pool to prevent memory accumulation between games
+  static void clearBucketPool() {
+    _bucketPool.clear();
+  }
+
+  List<Enemy> _getBucket(int key) {
+    var bucket = _enemyBuckets[key];
+    if (bucket == null) {
+      // Reuse from pool if available
+      if (_bucketPool.isNotEmpty) {
+        bucket = _bucketPool.removeLast();
+      } else {
+        bucket = <Enemy>[];
+      }
+      _enemyBuckets[key] = bucket;
+    }
+    return bucket;
+  }
+
   void rebuildSpatialIndex() {
+    // Return all buckets to pool instead of just clearing
     for (final bucket in _enemyBuckets.values) {
       bucket.clear();
+      if (_bucketPool.length < _maxBucketPool) {
+        _bucketPool.add(bucket);
+      }
     }
+    _enemyBuckets.clear();
+
     if (_activeEnemies.isEmpty) return;
 
     for (final enemy in _activeEnemies) {
@@ -117,8 +152,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       final cx = _cellFor(enemy.position.x);
       final cy = _cellFor(enemy.position.y);
       final key = _cellKey(cx, cy);
-      final bucket = _enemyBuckets.putIfAbsent(key, () => <Enemy>[]);
-      bucket.add(enemy);
+      _getBucket(key).add(enemy);
     }
   }
 
@@ -153,6 +187,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     super.update(dt);
     final threshold = gameRef.isTouchLayout ? 12 : 18;
     Enemy.lowFx = _aliveCount > threshold || gameRef.reduceFx;
+    Enemy.throttleOffscreen = Enemy.lowFx;
     _updateThreatPulse(dt);
     if (!spawning || world.waypoints.isEmpty || remaining <= 0) return;
 
@@ -197,25 +232,25 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
             .round()
             .clamp(minGoldReward, 9999);
 
-    // Determine enemy type based on wave modifier
+    // Determine enemy type based on wave modifier and current world
     EnemyType enemyType;
     switch (_currentModifier) {
       case WaveModifier.overload:
-        enemyType = EnemyType.overloaded;
+        enemyType = _getModifierEnemyType(WaveModifier.overload);
         break;
       case WaveModifier.juggernaut:
-        enemyType = EnemyType.juggernaut;
+        enemyType = _getModifierEnemyType(WaveModifier.juggernaut);
         break;
       case WaveModifier.phantom:
-        enemyType = EnemyType.phantom;
+        enemyType = _getModifierEnemyType(WaveModifier.phantom);
         break;
       case WaveModifier.mixed:
-        // Alternate between all types including phantom
-        final types = [EnemyType.runner, EnemyType.overloaded, EnemyType.juggernaut, EnemyType.phantom];
-        enemyType = types[_spawnIndex % types.length];
+        // Alternate between all available world-specific types
+        final pool = _getAvailableTypes();
+        enemyType = pool[_spawnIndex % pool.length];
         break;
       case WaveModifier.normal:
-        // Use progressive pool for normal and mixed waves
+        // Use progressive pool for normal waves with world-specific enemies
         final pool = _getAvailableTypes();
         enemyType = pool[_spawnIndex % pool.length];
     }
@@ -316,6 +351,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
     // Play boss music/sound
     AudioService.instance.playWaveStart();
+
+    // Notify game of boss spawn for battle dialogue
+    onBossSpawn?.call(boss.displayName);
   }
 
   BossType _getBossTypeForLevel(int levelId) {
@@ -337,6 +375,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   void _onBossPhaseChange(Boss boss, int phase) {
     // Trigger visual/audio effects for phase change
     AudioService.instance.playExplosion();
+
+    // Notify game for battle dialogue
+    onBossPhaseChange?.call(boss.displayName, phase);
   }
 
   void _onBossAbility(Boss boss, String abilityName) {
@@ -589,54 +630,126 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   }
 
   List<EnemyType> _getAvailableTypes() {
-    final pool = <EnemyType>[EnemyType.runner];
-    
-    // Progressive introduction in World 1
+    // Get world-specific enemies
+    final worldEnemies = EnemyType.getWorldEnemies(_levelWorld);
+
+    // If no world enemies (shouldn't happen), fallback to basic types
+    if (worldEnemies.isEmpty) {
+      return EnemyType.basicTypes;
+    }
+
+    // World 1: Progressive introduction
     if (_levelWorld == 1) {
+      final pool = <EnemyType>[EnemyType.runner];
       if (_localIndex >= 3) pool.add(EnemyType.overloaded);
       if (_localIndex >= 5) pool.add(EnemyType.juggernaut);
       if (_localIndex >= 7) pool.add(EnemyType.phantom);
-    } else {
-      // In higher worlds, everything is available but maybe differently balanced
-      pool.addAll([
-        EnemyType.overloaded,
-        EnemyType.juggernaut,
-        EnemyType.phantom,
-      ]);
+      return pool;
     }
-    
-    return pool;
+
+    // Other worlds: Progressive unlock of world-specific enemies
+    final pool = <EnemyType>[];
+
+    // Always add the first enemy type of the world (the "basic" one)
+    if (worldEnemies.isNotEmpty) {
+      pool.add(worldEnemies[0]);
+    }
+
+    // Level 2+: Add second enemy type
+    if (_localIndex >= 2 && worldEnemies.length > 1) {
+      pool.add(worldEnemies[1]);
+    }
+
+    // Level 4+: Add third enemy type
+    if (_localIndex >= 4 && worldEnemies.length > 2) {
+      pool.add(worldEnemies[2]);
+    }
+
+    // Level 7+: Add fourth (usually tank) enemy type
+    if (_localIndex >= 7 && worldEnemies.length > 3) {
+      pool.add(worldEnemies[3]);
+    }
+
+    return pool.isEmpty ? EnemyType.basicTypes : pool;
+  }
+
+  /// Get the appropriate enemy type for wave modifier in current world
+  EnemyType _getModifierEnemyType(WaveModifier modifier) {
+    final worldEnemies = EnemyType.getWorldEnemies(_levelWorld);
+    if (worldEnemies.isEmpty) {
+      // Fallback to basic types
+      switch (modifier) {
+        case WaveModifier.overload:
+          return EnemyType.overloaded;
+        case WaveModifier.juggernaut:
+          return EnemyType.juggernaut;
+        case WaveModifier.phantom:
+          return EnemyType.phantom;
+        default:
+          return EnemyType.runner;
+      }
+    }
+
+    // Find appropriate enemy type based on modifier characteristics
+    switch (modifier) {
+      case WaveModifier.overload:
+        // Fast enemy type (highest speed multiplier)
+        return worldEnemies.reduce((a, b) => a.speedMult > b.speedMult ? a : b);
+
+      case WaveModifier.juggernaut:
+        // Tank enemy type (highest health multiplier)
+        return worldEnemies.reduce((a, b) => a.healthMult > b.healthMult ? a : b);
+
+      case WaveModifier.phantom:
+        // Phantom type if available, otherwise fast phantom-like type
+        final phantoms = worldEnemies.where((e) => e.isPhantom).toList();
+        if (phantoms.isNotEmpty) return phantoms.first;
+        // Fallback to fastest for sneaky feel
+        return worldEnemies.reduce((a, b) => a.speedMult > b.speedMult ? a : b);
+
+      default:
+        return worldEnemies.first;
+    }
   }
 
   WaveModifier _selectModifierForWave(int wave) {
     final pool = _getAvailableTypes();
-    final canOverload = pool.contains(EnemyType.overloaded);
-    final canJuggernaut = pool.contains(EnemyType.juggernaut);
-    final canPhantom = pool.contains(EnemyType.phantom);
+
+    // Check if world has phantom-type enemies
+    final hasPhantom = pool.any((e) => e.isPhantom);
+
+    // Check if we have enough variety for special waves
+    final hasEnoughTypes = pool.length >= 2;
 
     if (_levelWorld <= 1) {
-      if (wave % 5 == 0 && canJuggernaut) return WaveModifier.juggernaut;
-      if (wave % 3 == 0 && canOverload) return WaveModifier.overload;
-      return WaveModifier.normal;
-    }
-    if (_levelWorld == 2) {
-      if (wave % 6 == 0 && canPhantom) return WaveModifier.phantom;
-      if (wave % 5 == 0 && canJuggernaut) return WaveModifier.juggernaut;
-      if (wave % 3 == 0 && canOverload) return WaveModifier.overload;
-      return WaveModifier.normal;
-    }
-    if (_levelWorld == 3) {
-      if (wave % 7 == 0) return WaveModifier.mixed;
-      if (wave % 4 == 0 && canPhantom) return WaveModifier.phantom;
-      if (wave % 5 == 0 && canJuggernaut) return WaveModifier.juggernaut;
-      if (wave % 3 == 0 && canOverload) return WaveModifier.overload;
+      // World 1: Progressive introduction
+      if (wave % 5 == 0 && pool.length >= 3) return WaveModifier.juggernaut;
+      if (wave % 3 == 0 && pool.length >= 2) return WaveModifier.overload;
       return WaveModifier.normal;
     }
 
-    if (wave % 8 == 0) return WaveModifier.mixed;
-    if (wave % 6 == 0) return WaveModifier.phantom;
-    if (wave % 5 == 0) return WaveModifier.juggernaut;
-    if (wave % 3 == 0) return WaveModifier.overload;
+    if (_levelWorld == 2) {
+      // World 2: Rift Wars - Phantom heavy
+      if (wave % 6 == 0 && hasPhantom) return WaveModifier.phantom;
+      if (wave % 5 == 0 && hasEnoughTypes) return WaveModifier.juggernaut;
+      if (wave % 3 == 0 && hasEnoughTypes) return WaveModifier.overload;
+      return WaveModifier.normal;
+    }
+
+    if (_levelWorld == 3) {
+      // World 3: Signal Wastes - Mixed corruption
+      if (wave % 7 == 0 && pool.length >= 3) return WaveModifier.mixed;
+      if (wave % 4 == 0 && hasPhantom) return WaveModifier.phantom;
+      if (wave % 5 == 0 && hasEnoughTypes) return WaveModifier.juggernaut;
+      if (wave % 3 == 0 && hasEnoughTypes) return WaveModifier.overload;
+      return WaveModifier.normal;
+    }
+
+    // Worlds 4-10: Full variety
+    if (wave % 8 == 0 && pool.length >= 3) return WaveModifier.mixed;
+    if (wave % 6 == 0 && hasPhantom) return WaveModifier.phantom;
+    if (wave % 5 == 0 && hasEnoughTypes) return WaveModifier.juggernaut;
+    if (wave % 3 == 0 && hasEnoughTypes) return WaveModifier.overload;
     return WaveModifier.normal;
   }
 }

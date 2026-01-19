@@ -14,16 +14,16 @@ enum FloatingTextType {
   combo,
 }
 
-/// Floating text that rises and fades out
+/// Floating text that rises and fades out - simplified version
 class FloatingText extends PositionComponent {
   FloatingText._internal({
     required Vector2 position,
     required String text,
     FloatingTextType type = FloatingTextType.damage,
     Color? customColor,
-    double fontSize = 14,
-    double duration = 0.8,
-    double riseSpeed = 40,
+    double fontSize = 12,
+    double duration = 0.6,
+    double riseSpeed = 35,
   }) : _random = math.Random() {
     _reset(
       position: position,
@@ -41,9 +41,9 @@ class FloatingText extends PositionComponent {
     required String text,
     FloatingTextType type = FloatingTextType.damage,
     Color? customColor,
-    double fontSize = 14,
-    double duration = 0.8,
-    double riseSpeed = 40,
+    double fontSize = 12,
+    double duration = 0.6,
+    double riseSpeed = 35,
   }) {
     if (_pool.isNotEmpty) {
       final instance = _pool.removeLast();
@@ -69,20 +69,35 @@ class FloatingText extends PositionComponent {
     );
   }
 
-  static const int maxPool = 60;
+  static const int maxPool = 20;
   static final List<FloatingText> _pool = [];
+
+  /// Clear the static pool to prevent memory accumulation between games
+  static void clearPool() {
+    // CRITICAL: Dispose all cached TextPainters before clearing pool
+    for (final item in _pool) {
+      item._cachedPainter?.dispose();
+      item._cachedPainter = null;
+    }
+    _pool.clear();
+  }
 
   String text = '';
   FloatingTextType type = FloatingTextType.damage;
   Color? customColor;
-  double fontSize = 14;
-  double duration = 0.8;
-  double riseSpeed = 40;
+  double fontSize = 12;
+  double duration = 0.6;
+  double riseSpeed = 35;
 
   double _timer = 0;
   final math.Random _random;
   late double _wobbleOffset;
   bool _inPool = false;
+
+  // Cached TextPainter to avoid per-frame allocations
+  TextPainter? _cachedPainter;
+  String _cachedText = '';
+  double _cachedFontSize = 0;
 
   void _reset({
     required Vector2 position,
@@ -102,7 +117,7 @@ class FloatingText extends PositionComponent {
     this.duration = duration;
     this.riseSpeed = riseSpeed;
     _timer = 0;
-    _wobbleOffset = (_random.nextDouble() - 0.5) * 20;
+    _wobbleOffset = (_random.nextDouble() - 0.5) * 12;
     _inPool = false;
   }
 
@@ -111,17 +126,17 @@ class FloatingText extends PositionComponent {
   Color _getTypeColor() {
     switch (type) {
       case FloatingTextType.damage:
-        return const Color(0xFFFF0066); // Neon red/magenta
+        return const Color(0xFFFF0066);
       case FloatingTextType.gold:
-        return const Color(0xFFFFDD00); // Gold
+        return const Color(0xFFFFDD00);
       case FloatingTextType.heal:
-        return const Color(0xFF00FF88); // Neon green
+        return const Color(0xFF00FF88);
       case FloatingTextType.critical:
-        return const Color(0xFFFFFFFF); // White
+        return const Color(0xFFFFFFFF);
       case FloatingTextType.levelUp:
-        return const Color(0xFF00FFFF); // Cyan
+        return const Color(0xFF00FFFF);
       case FloatingTextType.combo:
-        return const Color(0xFFFF00FF); // Magenta
+        return const Color(0xFFFF00FF);
     }
   }
 
@@ -130,15 +145,15 @@ class FloatingText extends PositionComponent {
       case FloatingTextType.damage:
         return 1.0;
       case FloatingTextType.gold:
-        return 1.1;
+        return 1.0;
       case FloatingTextType.heal:
         return 1.0;
       case FloatingTextType.critical:
-        return 1.4;
-      case FloatingTextType.levelUp:
-        return 1.3;
-      case FloatingTextType.combo:
         return 1.2;
+      case FloatingTextType.levelUp:
+        return 1.1;
+      case FloatingTextType.combo:
+        return 1.1;
     }
   }
 
@@ -152,9 +167,8 @@ class FloatingText extends PositionComponent {
       return;
     }
 
-    // Rise upward with slight horizontal drift
+    // Simple rise upward
     position.y -= riseSpeed * dt;
-    position.x += math.sin(_timer * 5) * dt * 10;
   }
 
   void _recycle() {
@@ -162,6 +176,13 @@ class FloatingText extends PositionComponent {
       removeFromParent();
     }
     if (_inPool) return;
+
+    // CRITICAL: Dispose TextPainter to free native resources
+    _cachedPainter?.dispose();
+    _cachedPainter = null;
+    _cachedText = '';
+    _cachedFontSize = 0;
+
     if (_pool.length < maxPool) {
       _inPool = true;
       _pool.add(this);
@@ -175,161 +196,71 @@ class FloatingText extends PositionComponent {
     final progress = _timer / duration;
     final alpha = (1 - progress).clamp(0.0, 1.0);
 
-    // Scale animation - pop in then shrink out
+    // Simple scale animation
     double scale;
-    if (progress < 0.1) {
-      scale = progress / 0.1 * 1.2; // Pop in
-    } else if (progress < 0.2) {
-      scale = 1.2 - (progress - 0.1) / 0.1 * 0.2; // Settle
+    if (progress < 0.15) {
+      scale = progress / 0.15 * 1.1;
     } else {
-      scale = 1.0 - (progress - 0.2) / 0.8 * 0.3; // Shrink
+      scale = 1.1 - progress * 0.2;
     }
     scale *= _scaleMult;
 
-    // Render glow behind text
-    _renderTextGlow(canvas, scale, alpha);
-
-    // Render main text
-    _renderText(canvas, scale, alpha);
-
-    // Type-specific effects
-    _renderTypeEffects(canvas, progress, alpha);
-  }
-
-  void _renderTextGlow(Canvas canvas, double scale, double alpha) {
-    final textStyle = TextStyle(
-      color: _color.withOpacity(alpha * 0.5),
-      fontSize: fontSize * scale,
-      fontFamily: 'monospace',
-      fontWeight: FontWeight.bold,
-    );
-
-    final textPainter = TextPainter(
-      text: TextSpan(text: text, style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    // Draw multiple times for glow effect
-    for (int i = 0; i < 3; i++) {
-      final offset = i * 2.0;
-      textPainter.paint(
-        canvas,
-        Offset(-textPainter.width / 2 - offset / 2, -textPainter.height / 2 - offset / 2),
-      );
+    // Cache TextPainter - only recreate if text changed
+    if (_cachedPainter == null || _cachedText != text || _cachedFontSize != fontSize) {
+      _cachedText = text;
+      _cachedFontSize = fontSize;
+      _cachedPainter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            color: _color,
+            fontSize: fontSize,
+            fontFamily: 'monospace',
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
     }
-  }
 
-  void _renderText(Canvas canvas, double scale, double alpha) {
-    final textStyle = TextStyle(
-      color: _color.withOpacity(alpha),
-      fontSize: fontSize * scale,
-      fontFamily: 'monospace',
-      fontWeight: FontWeight.bold,
-      shadows: [
-        Shadow(
-          color: _color.withOpacity(alpha * 0.8),
-          blurRadius: 8,
-        ),
-        Shadow(
-          color: Colors.black.withOpacity(alpha * 0.5),
-          blurRadius: 4,
-          offset: const Offset(1, 1),
-        ),
-      ],
-    );
+    // Apply alpha and scale via canvas transform
+    canvas.save();
+    canvas.scale(scale, scale);
 
-    final textPainter = TextPainter(
-      text: TextSpan(text: text, style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    textPainter.paint(
+    // Draw shadow manually (cheaper than TextStyle shadows)
+    _cachedPainter!.paint(
       canvas,
-      Offset(-textPainter.width / 2, -textPainter.height / 2),
+      Offset(-_cachedPainter!.width / 2 + 1 / scale, -_cachedPainter!.height / 2 + 1 / scale),
     );
-  }
 
-  void _renderTypeEffects(Canvas canvas, double progress, double alpha) {
-    switch (type) {
-      case FloatingTextType.critical:
-        // Starburst behind critical hits
-        if (progress < 0.3) {
-          final burstProgress = progress / 0.3;
-          final burstAlpha = (1 - burstProgress) * alpha;
-          final burstRadius = 20 + burstProgress * 15;
+    // Draw main text with alpha
+    final paint = Paint()..color = _color.withOpacity(alpha);
+    canvas.saveLayer(null, paint);
+    _cachedPainter!.paint(
+      canvas,
+      Offset(-_cachedPainter!.width / 2, -_cachedPainter!.height / 2),
+    );
+    canvas.restore();
 
-          for (int i = 0; i < 8; i++) {
-            final angle = i * math.pi / 4 + progress * 5;
-            final lineLength = burstRadius;
-
-            canvas.drawLine(
-              Offset.zero,
-              Offset(math.cos(angle) * lineLength, math.sin(angle) * lineLength),
-              Paint()
-                ..color = _color.withOpacity(burstAlpha * 0.5)
-                ..strokeWidth = 2
-                ..strokeCap = StrokeCap.round
-                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-            );
-          }
-        }
-        break;
-
-      case FloatingTextType.gold:
-        // Gold sparkles
-        for (int i = 0; i < 4; i++) {
-          final sparklePhase = _timer * 8 + i * math.pi / 2;
-          final sparkleAlpha = alpha * (0.5 + math.sin(sparklePhase) * 0.5);
-          final sparkleX = math.cos(sparklePhase) * 15;
-          final sparkleY = math.sin(sparklePhase * 0.5) * 8;
-
-          canvas.drawCircle(
-            Offset(sparkleX, sparkleY),
-            2,
-            Paint()
-              ..color = _color.withOpacity(sparkleAlpha)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-          );
-        }
-        break;
-
-      case FloatingTextType.combo:
-        // Combo ring effect
-        final ringRadius = 15 + progress * 10;
-        final ringAlpha = alpha * 0.4;
-
-        canvas.drawCircle(
-          Offset.zero,
-          ringRadius,
-          Paint()
-            ..color = _color.withOpacity(ringAlpha)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-        );
-        break;
-
-      default:
-        break;
-    }
+    canvas.restore();
   }
 }
 
-/// Resource popup that appears when gaining/losing resources
+/// Resource popup that appears when gaining/losing resources - simplified
 class ResourcePopup extends PositionComponent {
   ResourcePopup({
     required Vector2 position,
     required this.amount,
     required this.icon,
     this.isGain = true,
-    this.duration = 1.2,
+    this.duration = 0.8,
   }) : _timer = 0 {
     this.position = position;
     anchor = Anchor.center;
   }
 
   final int amount;
-  final String icon; // Emoji or symbol
+  final String icon;
   final bool isGain;
   final double duration;
 
@@ -345,8 +276,7 @@ class ResourcePopup extends PositionComponent {
       return;
     }
 
-    // Float upward
-    position.y -= 30 * dt;
+    position.y -= 25 * dt;
   }
 
   @override
@@ -356,50 +286,42 @@ class ResourcePopup extends PositionComponent {
     final progress = _timer / duration;
     final alpha = (1 - progress).clamp(0.0, 1.0);
 
-    // Scale animation
+    // Simple scale
     double scale;
     if (progress < 0.15) {
-      scale = progress / 0.15 * 1.3; // Pop in
-    } else if (progress < 0.25) {
-      scale = 1.3 - (progress - 0.15) / 0.1 * 0.3; // Settle
+      scale = progress / 0.15 * 1.1;
     } else {
-      scale = 1.0;
+      scale = 1.1 - progress * 0.15;
     }
 
     final color = isGain
-        ? const Color(0xFF00FF88) // Green for gain
-        : const Color(0xFFFF0066); // Red for loss
+        ? const Color(0xFF00FF88)
+        : const Color(0xFFFF0066);
 
     final prefix = isGain ? '+' : '-';
     final text = '$prefix$amount';
 
-    // Render icon
+    // Icon
     final iconPainter = TextPainter(
       text: TextSpan(
         text: icon,
         style: TextStyle(
-          fontSize: 16 * scale,
+          fontSize: 14 * scale,
           color: Colors.white.withOpacity(alpha),
         ),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
 
-    // Render amount
+    // Amount
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           color: color.withOpacity(alpha),
-          fontSize: 14 * scale,
+          fontSize: 12 * scale,
           fontFamily: 'monospace',
           fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(
-              color: color.withOpacity(alpha * 0.8),
-              blurRadius: 6,
-            ),
-          ],
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -409,24 +331,15 @@ class ResourcePopup extends PositionComponent {
 
     iconPainter.paint(canvas, Offset(-totalWidth / 2, -iconPainter.height / 2));
     textPainter.paint(canvas, Offset(-totalWidth / 2 + iconPainter.width + 4, -textPainter.height / 2));
-
-    // Glow effect
-    canvas.drawCircle(
-      Offset.zero,
-      20 * scale,
-      Paint()
-        ..color = color.withOpacity(alpha * 0.2)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
   }
 }
 
-/// Kill streak notification
+/// Kill streak notification - simplified (mostly unused now, kept for compatibility)
 class KillStreakNotification extends PositionComponent {
   KillStreakNotification({
     required Vector2 position,
     required this.streakCount,
-    this.duration = 1.5,
+    this.duration = 1.0,
   }) : _timer = 0 {
     this.position = position;
     anchor = Anchor.center;
@@ -438,17 +351,17 @@ class KillStreakNotification extends PositionComponent {
   double _timer;
 
   String get _streakText {
-    if (streakCount >= 10) return 'MASSACRE!';
-    if (streakCount >= 7) return 'UNSTOPPABLE!';
-    if (streakCount >= 5) return 'KILLING SPREE!';
-    if (streakCount >= 3) return 'MULTI-KILL!';
-    return 'DOUBLE KILL!';
+    if (streakCount >= 10) return 'UNSTOPPABLE';
+    if (streakCount >= 7) return 'RAMPAGE';
+    if (streakCount >= 5) return 'SPREE';
+    if (streakCount >= 3) return 'TRIPLE';
+    return 'DOUBLE';
   }
 
   Color get _color {
-    if (streakCount >= 10) return const Color(0xFFFF0000);
-    if (streakCount >= 7) return const Color(0xFFFF00FF);
-    if (streakCount >= 5) return const Color(0xFFFFDD00);
+    if (streakCount >= 10) return const Color(0xFFFF00FF);
+    if (streakCount >= 7) return const Color(0xFFFF6600);
+    if (streakCount >= 5) return const Color(0xFFFFCC00);
     if (streakCount >= 3) return const Color(0xFF00FFFF);
     return const Color(0xFF00FF88);
   }
@@ -469,50 +382,33 @@ class KillStreakNotification extends PositionComponent {
     super.render(canvas);
 
     final progress = _timer / duration;
-    final alpha = progress < 0.8 ? 1.0 : (1 - (progress - 0.8) / 0.2);
+    final alpha = progress < 0.7 ? 1.0 : (1 - (progress - 0.7) / 0.3);
 
-    // Scale animation with bounce
+    // Simple scale
     double scale;
     if (progress < 0.1) {
-      scale = progress / 0.1 * 1.5;
-    } else if (progress < 0.2) {
-      scale = 1.5 - (progress - 0.1) / 0.1 * 0.3;
-    } else if (progress < 0.3) {
-      scale = 1.2 + (progress - 0.2) / 0.1 * 0.1;
+      scale = progress / 0.1 * 1.1;
     } else {
-      scale = 1.3 - (progress - 0.3) / 0.7 * 0.3;
+      scale = 1.1 - progress * 0.1;
     }
 
-    // Glow background
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset.zero, width: 160 * scale, height: 40 * scale),
-        const Radius.circular(20),
-      ),
-      Paint()
-        ..color = _color.withOpacity(alpha * 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15),
+    // Minimal pill background
+    final pillRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(center: Offset.zero, width: 80 * scale, height: 22 * scale),
+      const Radius.circular(11),
     );
 
-    // Background
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset.zero, width: 140 * scale, height: 30 * scale),
-        const Radius.circular(15),
-      ),
-      Paint()..color = Colors.black.withOpacity(alpha * 0.7),
+      pillRect,
+      Paint()..color = const Color(0xFF0a0a18).withOpacity(alpha * 0.85),
     );
 
-    // Border
     canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset.zero, width: 140 * scale, height: 30 * scale),
-        const Radius.circular(15),
-      ),
+      pillRect,
       Paint()
-        ..color = _color.withOpacity(alpha)
+        ..color = _color.withOpacity(alpha * 0.5)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+        ..strokeWidth = 1,
     );
 
     // Text
@@ -521,16 +417,10 @@ class KillStreakNotification extends PositionComponent {
         text: _streakText,
         style: TextStyle(
           color: _color.withOpacity(alpha),
-          fontSize: 14 * scale,
+          fontSize: 10 * scale,
           fontFamily: 'monospace',
           fontWeight: FontWeight.bold,
-          letterSpacing: 2,
-          shadows: [
-            Shadow(
-              color: _color.withOpacity(alpha * 0.8),
-              blurRadius: 8,
-            ),
-          ],
+          letterSpacing: 1,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -539,24 +429,6 @@ class KillStreakNotification extends PositionComponent {
     textPainter.paint(
       canvas,
       Offset(-textPainter.width / 2, -textPainter.height / 2),
-    );
-
-    // Streak count
-    final countPainter = TextPainter(
-      text: TextSpan(
-        text: 'x$streakCount',
-        style: TextStyle(
-          color: Colors.white.withOpacity(alpha),
-          fontSize: 10 * scale,
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    countPainter.paint(
-      canvas,
-      Offset(50 * scale, -countPainter.height / 2),
     );
   }
 }

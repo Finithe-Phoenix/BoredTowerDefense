@@ -11,6 +11,7 @@ import 'src/ui/screens/settings_screen.dart';
 import 'src/ui/screens/story_screen.dart';
 import 'src/ui/screens/upgrades_screen.dart';
 import 'src/ui/screens/benchmark_screen.dart';
+import 'src/ui/screens/codex_screen.dart';
 import 'src/ui/transitions/tron_page_route.dart';
 import 'src/ui/widgets/tron_materialization_widget.dart';
 
@@ -104,6 +105,15 @@ class NeonDefenseApp extends StatelessWidget {
                 secondaryColor: NeonColors.cyan,
                 pattern: TronPattern.radial,
                 transitionDuration: const Duration(milliseconds: 900),
+              );
+            case '/codex':
+              // Codex/Lore uses grid pattern with mysterious colors
+              return TronPageRoute(
+                builder: (_) => const CodexScreen(),
+                primaryColor: NeonColors.magenta,
+                secondaryColor: NeonColors.cyan,
+                pattern: TronPattern.grid,
+                transitionDuration: const Duration(milliseconds: 850),
               );
             default:
               return MaterialPageRoute(

@@ -123,6 +123,39 @@ class Boss extends Enemy {
     return 3.0 + (bossLevel / 20); // Scales with level
   }
 
+  @override
+  bool get isBoss => true;
+
+  @override
+  String get displayName => _getBossDisplayName();
+
+  String _getBossDisplayName() {
+    switch (bossType) {
+      case BossType.miniBoss:
+        return 'ELITE GUARD';
+      case BossType.citadelCore:
+        return 'CITADEL CORE';
+      case BossType.abyssGate:
+        return 'ABYSS GATE';
+      case BossType.voidlineApex:
+        return 'VOIDLINE APEX';
+      case BossType.shardVault:
+        return 'SHARD VAULT';
+      case BossType.arcFortress:
+        return 'ARC FORTRESS';
+      case BossType.coreHunter:
+        return 'CORE HUNTER';
+      case BossType.omegaGrid:
+        return 'OMEGA GRID';
+      case BossType.stormTower:
+        return 'STORM TOWER';
+      case BossType.finalGate:
+        return 'FINAL GATE';
+      case BossType.omegaNexus:
+        return 'OMEGA NEXUS';
+    }
+  }
+
   /// Boss phases (health thresholds)
   int get currentPhase {
     final healthPercent = health / maxHealth;

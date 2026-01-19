@@ -17,7 +17,8 @@ dependencies:
   equatable: ^2.0.5
   vector_math: ^2.1.4
   shared_preferences: ^2.2.2
-  audioplayers: ^5.2.1
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:
@@ -29,7 +30,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/tiles/maps/
-    - assets/images/
     - assets/config/shader_presets.json
   shaders:
     - assets/shaders/world_uber_shader.frag

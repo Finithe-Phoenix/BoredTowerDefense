@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
 import '../../services/audio_service.dart';
+import '../../services/procedural_music_service.dart';
+import '../../services/sprite_cache_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/level_service.dart';
 
@@ -69,14 +71,30 @@ class _LoadingScreenState extends State<LoadingScreen>
     await AudioService.instance.initialize();
     await Future.delayed(const Duration(milliseconds: 200));
 
-    // Stage 4: Assets
+    // Stage 4: Music System
+    setState(() {
+      _loadingText = 'INITIALIZING MUSIC';
+      _progress = 0.80;
+    });
+    await ProceduralMusicService.instance.initialize();
+    await Future.delayed(const Duration(milliseconds: 200));
+
+    // Stage 5: Sprite Cache (pre-render sprites for performance)
+    setState(() {
+      _loadingText = 'PRE-RENDERING SPRITES';
+      _progress = 0.90;
+    });
+    await SpriteCacheService.instance.initialize();
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    // Stage 6: Final Assets
     setState(() {
       _loadingText = 'LOADING ASSETS';
-      _progress = 0.9;
+      _progress = 0.95;
     });
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 200));
 
-    // Stage 4: Complete
+    // Stage 7: Complete
     setState(() {
       _loadingText = 'READY';
       _progress = 1.0;

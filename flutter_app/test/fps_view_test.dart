@@ -3,12 +3,41 @@ import 'package:flame_test/flame_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bored_games/src/game/fps/fps_view_component.dart';
 import 'package:bored_games/src/game/entities/tower.dart';
-import 'package:bored_games/src/game/entities/boss.dart';
 import 'package:bored_games/src/game/bored_games_game.dart';
+import 'package:bored_games/src/models/level_config.dart';
+import 'helpers/fake_audioplayers_platform.dart';
 
 void main() {
   // Initialize Flutter bindings for tests that need asset loading
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    registerFakeAudioplayersPlatform();
+  });
+
+  BoredGamesGame _createBossGame() {
+    return BoredGamesGame(
+      tileSize: 32,
+      levelConfig: LevelConfig(
+        id: 1,
+        name: 'Test',
+        mapFile: 'maps/level1.tmx',
+        waves: 1,
+        difficulty: 1,
+      ),
+    );
+  }
+
+  void _spawnBoss(BoredGamesGame game) {
+    game.enemyManager.startWave(count: 5);
+    game.enemyManager.remaining = 2;
+    game.enemyManager.update(2.0);
+  }
+
+  Future<FpsViewComponent> _attachView(BoredGamesGame game, Tower tower) async {
+    final fpsView = FpsViewComponent(tower: tower);
+    await game.add(fpsView);
+    return fpsView;
+  }
 
   group('FpsViewComponent', () {
     late Tower testTower;
@@ -102,7 +131,7 @@ void main() {
 
       testWithGame(
         'BOOST mode on when boss active',
-        BoredGamesGame.new,
+        _createBossGame,
         (game) async {
           final tower = Tower(
             position: Vector2(100, 100),
@@ -113,15 +142,7 @@ void main() {
           final fpsView = FpsViewComponent(tower: tower);
           await game.add(fpsView);
 
-          // Create and add a boss to enemy manager
-          final boss = Boss(
-            path: [Vector2(0, 0), Vector2(100, 0)],
-            bossType: BossType.citadelCore,
-            bossLevel: 10,
-            maxHealth: 1000,
-          );
-
-          await game.enemyManager.add(boss);
+          _spawnBoss(game);
 
           fpsView.update(0.1);
 
@@ -141,51 +162,67 @@ void main() {
         expect(fpsView, isNotNull);
       });
 
-      test('recoil decays over time', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'recoil decays over time',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        fpsView.triggerRecoil();
+          fpsView.triggerRecoil();
 
-        // Update multiple times
-        for (int i = 0; i < 10; i++) {
-          fpsView.update(0.1);
-        }
+          // Update multiple times
+          for (int i = 0; i < 10; i++) {
+            fpsView.update(0.1);
+          }
 
-        // Recoil should have decayed
-        expect(fpsView, isNotNull);
-      });
+          // Recoil should have decayed
+          expect(fpsView, isNotNull);
+        },
+      );
     });
 
     group('Animation Updates', () {
-      test('updates animation time', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'updates animation time',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        fpsView.update(0.1);
-        fpsView.update(0.1);
-
-        // Animation time should increase
-        expect(fpsView, isNotNull);
-      });
-
-      test('updates crosshair rotation', () {
-        final fpsView = FpsViewComponent(tower: testTower);
-
-        for (int i = 0; i < 10; i++) {
           fpsView.update(0.1);
-        }
+          fpsView.update(0.1);
 
-        // Crosshair should rotate
-        expect(fpsView, isNotNull);
-      });
+          // Animation time should increase
+          expect(fpsView, isNotNull);
+        },
+      );
 
-      test('updates reload progress', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'updates crosshair rotation',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        fpsView.update(1.0); // 1 second
+          for (int i = 0; i < 10; i++) {
+            fpsView.update(0.1);
+          }
 
-        // Reload progress should update based on tower fire rate
-        expect(fpsView, isNotNull);
-      });
+          // Crosshair should rotate
+          expect(fpsView, isNotNull);
+        },
+      );
+
+      testWithGame(
+        'updates reload progress',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
+
+          fpsView.update(1.0); // 1 second
+
+          // Reload progress should update based on tower fire rate
+          expect(fpsView, isNotNull);
+        },
+      );
     });
 
     group('Target Tracking', () {
@@ -209,22 +246,26 @@ void main() {
         },
       );
 
-      test('updates target lock progress', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'updates target lock progress',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        // No target, progress should decrease
-        for (int i = 0; i < 5; i++) {
-          fpsView.update(0.1);
-        }
+          // No target, progress should decrease
+          for (int i = 0; i < 5; i++) {
+            fpsView.update(0.1);
+          }
 
-        expect(fpsView, isNotNull);
-      });
+          expect(fpsView, isNotNull);
+        },
+      );
     });
 
     group('BOOST Particles', () {
       testWithGame(
         'spawns particles during BOOST mode',
-        BoredGamesGame.new,
+        _createBossGame,
         (game) async {
           final tower = Tower(
             position: Vector2(100, 100),
@@ -235,15 +276,7 @@ void main() {
           final fpsView = FpsViewComponent(tower: tower);
           await game.add(fpsView);
 
-          // Add boss to activate BOOST
-          final boss = Boss(
-            path: [Vector2(0, 0), Vector2(100, 0)],
-            bossType: BossType.citadelCore,
-            bossLevel: 10,
-            maxHealth: 1000,
-          );
-
-          await game.enemyManager.add(boss);
+          _spawnBoss(game);
 
           // Update to spawn particles
           for (int i = 0; i < 50; i++) {
@@ -254,17 +287,21 @@ void main() {
         },
       );
 
-      test('limits particle count', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'limits particle count',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        // Force many particle spawns
-        for (int i = 0; i < 200; i++) {
-          fpsView.update(0.1);
-        }
+          // Force many particle spawns
+          for (int i = 0; i < 200; i++) {
+            fpsView.update(0.1);
+          }
 
-        // Particles should be limited (tested internally)
-        expect(fpsView, isNotNull);
-      });
+          // Particles should be limited (tested internally)
+          expect(fpsView, isNotNull);
+        },
+      );
     });
 
     group('HUD Stats', () {
@@ -306,61 +343,77 @@ void main() {
     });
 
     group('Weapon Rendering', () {
-      test('renders Pulse Archer weapon without crashing', () {
-        final tower = Tower(
-          position: Vector2(0, 0),
-          size: 32,
-          type: TowerType.pulseArcher,
-        );
+      testWithGame(
+        'renders Pulse Archer weapon without crashing',
+        BoredGamesGame.new,
+        (game) async {
+          final tower = Tower(
+            position: Vector2(0, 0),
+            size: 32,
+            type: TowerType.pulseArcher,
+          );
 
-        final fpsView = FpsViewComponent(tower: tower);
+          final fpsView = await _attachView(game, tower);
 
-        expect(() {
-          fpsView.update(0.1);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(0.1);
+          }, returnsNormally);
+        },
+      );
 
-      test('renders Circuit Cannon weapon without crashing', () {
-        final tower = Tower(
-          position: Vector2(0, 0),
-          size: 32,
-          type: TowerType.circuitCannon,
-        );
+      testWithGame(
+        'renders Circuit Cannon weapon without crashing',
+        BoredGamesGame.new,
+        (game) async {
+          final tower = Tower(
+            position: Vector2(0, 0),
+            size: 32,
+            type: TowerType.circuitCannon,
+          );
 
-        final fpsView = FpsViewComponent(tower: tower);
+          final fpsView = await _attachView(game, tower);
 
-        expect(() {
-          fpsView.update(0.1);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(0.1);
+          }, returnsNormally);
+        },
+      );
 
-      test('renders Phase Mage weapon without crashing', () {
-        final tower = Tower(
-          position: Vector2(0, 0),
-          size: 32,
-          type: TowerType.phaseMage,
-        );
+      testWithGame(
+        'renders Phase Mage weapon without crashing',
+        BoredGamesGame.new,
+        (game) async {
+          final tower = Tower(
+            position: Vector2(0, 0),
+            size: 32,
+            type: TowerType.phaseMage,
+          );
 
-        final fpsView = FpsViewComponent(tower: tower);
+          final fpsView = await _attachView(game, tower);
 
-        expect(() {
-          fpsView.update(0.1);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(0.1);
+          }, returnsNormally);
+        },
+      );
 
-      test('renders Glimmer Field weapon without crashing', () {
-        final tower = Tower(
-          position: Vector2(0, 0),
-          size: 32,
-          type: TowerType.glimmerField,
-        );
+      testWithGame(
+        'renders Glimmer Field weapon without crashing',
+        BoredGamesGame.new,
+        (game) async {
+          final tower = Tower(
+            position: Vector2(0, 0),
+            size: 32,
+            type: TowerType.glimmerField,
+          );
 
-        final fpsView = FpsViewComponent(tower: tower);
+          final fpsView = await _attachView(game, tower);
 
-        expect(() {
-          fpsView.update(0.1);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(0.1);
+          }, returnsNormally);
+        },
+      );
     });
 
     group('Screen Resize', () {
@@ -385,7 +438,7 @@ void main() {
     group('BOOST Intensity Transition', () {
       testWithGame(
         'smoothly transitions BOOST intensity',
-        BoredGamesGame.new,
+        _createBossGame,
         (game) async {
           final tower = Tower(
             position: Vector2(100, 100),
@@ -399,15 +452,7 @@ void main() {
           // No boss initially
           fpsView.update(0.1);
 
-          // Add boss
-          final boss = Boss(
-            path: [Vector2(0, 0), Vector2(100, 0)],
-            bossType: BossType.citadelCore,
-            bossLevel: 10,
-            maxHealth: 1000,
-          );
-
-          await game.enemyManager.add(boss);
+          _spawnBoss(game);
 
           // Update to transition
           for (int i = 0; i < 10; i++) {
@@ -420,71 +465,95 @@ void main() {
     });
 
     group('Performance', () {
-      test('updates efficiently', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'updates efficiently',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        final stopwatch = Stopwatch()..start();
+          final stopwatch = Stopwatch()..start();
 
-        for (int i = 0; i < 100; i++) {
-          fpsView.update(0.016); // ~60 FPS
-        }
+          for (int i = 0; i < 100; i++) {
+            fpsView.update(0.016); // ~60 FPS
+          }
 
-        stopwatch.stop();
+          stopwatch.stop();
 
-        // Should complete in reasonable time
-        expect(stopwatch.elapsedMilliseconds, lessThan(100));
-      });
+          // Should complete in reasonable time
+          expect(stopwatch.elapsedMilliseconds, lessThan(100));
+        },
+      );
 
-      test('handles many particles efficiently', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'handles many particles efficiently',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        final stopwatch = Stopwatch()..start();
+          final stopwatch = Stopwatch()..start();
 
-        // Spawn many particles
-        for (int i = 0; i < 200; i++) {
-          fpsView.update(0.1);
-        }
+          // Spawn many particles
+          for (int i = 0; i < 200; i++) {
+            fpsView.update(0.1);
+          }
 
-        stopwatch.stop();
+          stopwatch.stop();
 
-        expect(stopwatch.elapsedMilliseconds, lessThan(200));
-      });
+          expect(stopwatch.elapsedMilliseconds, lessThan(200));
+        },
+      );
     });
 
     group('Edge Cases', () {
-      test('handles null target gracefully', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'handles null target gracefully',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        expect(() {
-          fpsView.update(0.1);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(0.1);
+          }, returnsNormally);
+        },
+      );
 
-      test('handles very fast updates', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'handles very fast updates',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        expect(() {
-          for (int i = 0; i < 1000; i++) {
-            fpsView.update(0.001);
-          }
-        }, returnsNormally);
-      });
+          expect(() {
+            for (int i = 0; i < 1000; i++) {
+              fpsView.update(0.001);
+            }
+          }, returnsNormally);
+        },
+      );
 
-      test('handles negative delta time', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'handles negative delta time',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        expect(() {
-          fpsView.update(-0.1);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(-0.1);
+          }, returnsNormally);
+        },
+      );
 
-      test('handles zero delta time', () {
-        final fpsView = FpsViewComponent(tower: testTower);
+      testWithGame(
+        'handles zero delta time',
+        BoredGamesGame.new,
+        (game) async {
+          final fpsView = await _attachView(game, testTower);
 
-        expect(() {
-          fpsView.update(0.0);
-        }, returnsNormally);
-      });
+          expect(() {
+            fpsView.update(0.0);
+          }, returnsNormally);
+        },
+      );
     });
 
     group('Tower Type Colors', () {

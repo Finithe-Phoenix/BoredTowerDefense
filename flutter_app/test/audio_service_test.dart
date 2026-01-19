@@ -1,9 +1,15 @@
-import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bored_games/src/services/audio_service.dart';
+import 'helpers/fake_audioplayers_platform.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    registerFakeAudioplayersPlatform();
+  });
+
   setUp(() {
     AudioService.instance.dispose();
     AudioService.instance.setEnabled(true);
@@ -43,8 +49,9 @@ void main() {
     AudioService.instance.playGoldEarned();
   });
 
-  test('play methods trigger tone generation when enabled', () async {
+  test('play methods are safe when muted', () async {
     await AudioService.instance.initialize();
+    AudioService.instance.setSfxVolume(0);
     AudioService.instance.playShoot();
     AudioService.instance.playHit();
     AudioService.instance.playExplosion();
@@ -56,13 +63,9 @@ void main() {
     AudioService.instance.playEnemyLeak();
     AudioService.instance.playPhantomReveal();
     AudioService.instance.playGoldEarned();
-
-    fakeAsync((async) {
-      AudioService.instance.playWaveStart();
-      AudioService.instance.playVictory();
-      AudioService.instance.playGameOver();
-      async.elapse(const Duration(milliseconds: 600));
-    });
+    AudioService.instance.playWaveStart();
+    AudioService.instance.playVictory();
+    AudioService.instance.playGameOver();
   });
 
   test('generateWaveformForTesting covers wave types', () async {

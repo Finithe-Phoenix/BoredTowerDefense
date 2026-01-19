@@ -23,6 +23,104 @@ class ScreenEffects extends PositionComponent {
   bool reduceFx = false;
   bool allowBlur = true;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED SHADERS - Avoid per-frame gradient.createShader() allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  Shader? _vignetteShader;
+  Shader? _cornerShader0; // top-left
+  Shader? _cornerShader1; // top-right
+  Shader? _cornerShader2; // bottom-left
+  Shader? _cornerShader3; // bottom-right
+  Size? _lastCachedSize;
+
+  // Cached Paint objects for scanlines and borders
+  final Paint _scanlinePaint = Paint()..color = const Color(0x14000000); // 0.08 opacity
+  final Paint _brightScanlinePaint = Paint()
+    ..color = const Color(0x08FFFFFF) // 0.03 opacity
+    ..strokeWidth = 2;
+  final Paint _flickerPaint = Paint();
+  final Paint _neonBorderPaint = Paint();
+  final Paint _chromaticRedPaint = Paint()..color = const Color(0x1AFF0000); // 0.1 opacity
+  final Paint _chromaticCyanPaint = Paint()..color = const Color(0x1A00FFFF); // 0.1 opacity
+
+  void _invalidateShaderCache() {
+    _vignetteShader = null;
+    _cornerShader0 = null;
+    _cornerShader1 = null;
+    _cornerShader2 = null;
+    _cornerShader3 = null;
+    _lastCachedSize = null;
+  }
+
+  void _ensureShadersValid(Size size) {
+    if (_lastCachedSize == size) return;
+
+    // Cache vignette shader
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.max(size.width, size.height) * 0.7;
+    _vignetteShader = const RadialGradient(
+      colors: [
+        Colors.transparent,
+        Colors.transparent,
+        Color(0x4D000000), // 0.3 opacity
+        Color(0x99000000), // 0.6 opacity
+      ],
+      stops: [0.0, 0.5, 0.8, 1.0],
+    ).createShader(Rect.fromCircle(center: center, radius: radius));
+
+    // Cache corner shaders
+    final cornerRadius = size.width * 0.4;
+    const cornerDarkness = 0.15;
+    final cornerGradient = RadialGradient(
+      colors: [
+        Colors.black.withOpacity(cornerDarkness),
+        Colors.transparent,
+      ],
+    );
+
+    // Top-left
+    _cornerShader0 = RadialGradient(
+      center: const Alignment(-1, -1),
+      radius: 0.8,
+      colors: [
+        Colors.black.withOpacity(cornerDarkness),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromCircle(center: Offset.zero, radius: cornerRadius));
+
+    // Top-right
+    _cornerShader1 = RadialGradient(
+      center: const Alignment(1, -1),
+      radius: 0.8,
+      colors: [
+        Colors.black.withOpacity(cornerDarkness),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromCircle(center: Offset(size.width, 0), radius: cornerRadius));
+
+    // Bottom-left
+    _cornerShader2 = RadialGradient(
+      center: const Alignment(-1, 1),
+      radius: 0.8,
+      colors: [
+        Colors.black.withOpacity(cornerDarkness),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromCircle(center: Offset(0, size.height), radius: cornerRadius));
+
+    // Bottom-right
+    _cornerShader3 = RadialGradient(
+      center: const Alignment(1, 1),
+      radius: 0.8,
+      colors: [
+        Colors.black.withOpacity(cornerDarkness),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromCircle(center: Offset(size.width, size.height), radius: cornerRadius));
+
+    _lastCachedSize = size;
+  }
+
   // Screen shake
   double _shakeIntensity = 0;
   double _shakeDuration = 0;
@@ -144,6 +242,9 @@ class ScreenEffects extends PositionComponent {
 
     final screenRect = Rect.fromLTWH(0, 0, gameSize.x, gameSize.y);
 
+    // Ensure shaders are cached for current size
+    _ensureShadersValid(Size(gameSize.x, gameSize.y));
+
     // Draw CRT effects
     if (enableCRT && !reduceFx) {
       _renderCRTEffect(canvas, screenRect);
@@ -176,88 +277,74 @@ class ScreenEffects extends PositionComponent {
   }
 
   void _renderCRTEffect(Canvas canvas, Rect screenRect) {
-    // Subtle CRT curvature effect at corners
-    final cornerDarkness = 0.15;
+    // Subtle CRT curvature effect at corners - using cached shaders
+    final cornerRadius = gameSize.x * 0.4;
 
     // Top-left corner
-    _drawCornerShadow(canvas, screenRect.topLeft, cornerDarkness);
+    if (_cornerShader0 != null) {
+      canvas.drawCircle(
+        screenRect.topLeft,
+        cornerRadius,
+        Paint()..shader = _cornerShader0,
+      );
+    }
     // Top-right corner
-    _drawCornerShadow(canvas, screenRect.topRight, cornerDarkness);
+    if (_cornerShader1 != null) {
+      canvas.drawCircle(
+        screenRect.topRight,
+        cornerRadius,
+        Paint()..shader = _cornerShader1,
+      );
+    }
     // Bottom-left corner
-    _drawCornerShadow(canvas, screenRect.bottomLeft, cornerDarkness);
+    if (_cornerShader2 != null) {
+      canvas.drawCircle(
+        screenRect.bottomLeft,
+        cornerRadius,
+        Paint()..shader = _cornerShader2,
+      );
+    }
     // Bottom-right corner
-    _drawCornerShadow(canvas, screenRect.bottomRight, cornerDarkness);
+    if (_cornerShader3 != null) {
+      canvas.drawCircle(
+        screenRect.bottomRight,
+        cornerRadius,
+        Paint()..shader = _cornerShader3,
+      );
+    }
 
-    // Subtle flicker effect
+    // Subtle flicker effect - reuse cached paint
     final flickerIntensity = math.sin(_crtTime * 60) * 0.01 + 0.01;
     if (flickerIntensity > 0.015) {
-      canvas.drawRect(
-        screenRect,
-        Paint()..color = Colors.white.withOpacity(flickerIntensity),
-      );
+      _flickerPaint.color = Colors.white.withOpacity(flickerIntensity);
+      canvas.drawRect(screenRect, _flickerPaint);
     }
   }
 
-  void _drawCornerShadow(Canvas canvas, Offset corner, double intensity) {
-    final gradient = RadialGradient(
-      center: Alignment(
-        corner.dx < gameSize.x / 2 ? -1 : 1,
-        corner.dy < gameSize.y / 2 ? -1 : 1,
-      ),
-      radius: 0.8,
-      colors: [
-        Colors.black.withOpacity(intensity),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromCircle(center: corner, radius: gameSize.x * 0.4));
-
-    canvas.drawCircle(
-      corner,
-      gameSize.x * 0.4,
-      Paint()..shader = gradient,
-    );
-  }
-
   void _renderScanlines(Canvas canvas, Rect screenRect) {
-    // Draw horizontal scanlines
-    final scanlinePaint = Paint()
-      ..color = Colors.black.withOpacity(0.08);
-
+    // Draw horizontal scanlines - using cached paint
     for (double y = _scanlineOffset; y < screenRect.height; y += 4) {
       canvas.drawLine(
         Offset(0, y),
         Offset(screenRect.width, y),
-        scanlinePaint,
+        _scanlinePaint,
       );
     }
 
-    // Occasional brighter scanline (moving)
+    // Occasional brighter scanline (moving) - using cached paint
     final brightScanlineY = ((_crtTime * 30) % screenRect.height);
     canvas.drawLine(
       Offset(0, brightScanlineY),
       Offset(screenRect.width, brightScanlineY),
-      Paint()
-        ..color = Colors.white.withOpacity(0.03)
-        ..strokeWidth = 2,
+      _brightScanlinePaint,
     );
   }
 
   void _renderVignette(Canvas canvas, Rect screenRect) {
-    // Radial gradient vignette
-    final center = Offset(screenRect.width / 2, screenRect.height / 2);
-    final radius = math.max(screenRect.width, screenRect.height) * 0.7;
-
-    final gradient = RadialGradient(
-      colors: [
-        Colors.transparent,
-        Colors.transparent,
-        Colors.black.withOpacity(0.3),
-        Colors.black.withOpacity(0.6),
-      ],
-      stops: const [0.0, 0.5, 0.8, 1.0],
-    ).createShader(Rect.fromCircle(center: center, radius: radius));
-
-    canvas.drawRect(screenRect, Paint()..shader = gradient);
+    // Radial gradient vignette - using cached shader
+    if (_vignetteShader != null) {
+      canvas.drawRect(screenRect, Paint()..shader = _vignetteShader);
+    }
 
     // Neon border glow
     _renderNeonBorder(canvas, screenRect);
@@ -265,48 +352,35 @@ class ScreenEffects extends PositionComponent {
 
   void _renderNeonBorder(Canvas canvas, Rect screenRect) {
     final borderPulse = 0.3 + math.sin(_crtTime * 2) * 0.1;
+    final borderAlpha = borderPulse * 0.5;
 
-    // Cyan glow at edges
-    final borderPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0xFF00FFFF).withOpacity(borderPulse),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, screenRect.width, 10));
+    // Reuse cached paint, only update color/maskFilter
+    _neonBorderPaint
+      ..color = Color.fromRGBO(0, 255, 255, borderAlpha)
+      ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null;
 
     // Top border
     canvas.drawRect(
       Rect.fromLTWH(0, 0, screenRect.width, 3),
-      Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
+      _neonBorderPaint,
     );
 
     // Bottom border
     canvas.drawRect(
       Rect.fromLTWH(0, screenRect.height - 3, screenRect.width, 3),
-      Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
+      _neonBorderPaint,
     );
 
     // Left border
     canvas.drawRect(
       Rect.fromLTWH(0, 0, 3, screenRect.height),
-      Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
+      _neonBorderPaint,
     );
 
     // Right border
     canvas.drawRect(
       Rect.fromLTWH(screenRect.width - 3, 0, 3, screenRect.height),
-      Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(borderPulse * 0.5)
-        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 5) : null,
+      _neonBorderPaint,
     );
   }
 
@@ -347,12 +421,19 @@ class ScreenEffects extends PositionComponent {
     // Draw subtle color separation at edges during shake
     final aberrationAmount = _chromaticAberration;
 
+    // Update cached paints with blur if allowed
+    if (allowBlur) {
+      _chromaticRedPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      _chromaticCyanPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+    } else {
+      _chromaticRedPaint.maskFilter = null;
+      _chromaticCyanPaint.maskFilter = null;
+    }
+
     // Red channel shift (left edge)
     canvas.drawRect(
       Rect.fromLTWH(0, 0, aberrationAmount * 2, screenRect.height),
-      Paint()
-        ..color = Colors.red.withOpacity(0.1)
-        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null,
+      _chromaticRedPaint,
     );
 
     // Cyan channel shift (right edge)
@@ -363,9 +444,7 @@ class ScreenEffects extends PositionComponent {
         aberrationAmount * 2,
         screenRect.height,
       ),
-      Paint()
-        ..color = Colors.cyan.withOpacity(0.1)
-        ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null,
+      _chromaticCyanPaint,
     );
   }
 }

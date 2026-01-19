@@ -346,6 +346,8 @@ void main() {
         final initialX = boss.position.x;
         final initialY = boss.position.y;
 
+        // First update advances to the next waypoint if already on the first.
+        boss.update(0.1);
         boss.update(0.1);
 
         // Check if position changed (either x or y)

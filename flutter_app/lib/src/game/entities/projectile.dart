@@ -7,6 +7,7 @@ import 'package:flutter/painting.dart' show RadialGradient;
 import 'enemy.dart';
 import 'tower.dart';
 import '../../services/audio_service.dart';
+import '../../services/sprite_cache_service.dart';
 import '../effects/impact_effect.dart';
 import '../managers/bullet_manager.dart';
 
@@ -28,6 +29,30 @@ class Projectile extends PositionComponent {
     // Nivel 1: reduce trails pero mantiene glow
     // Nivel 2: reduce todo (lowFx = true)
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _simplePaint = Paint();
+  static final Paint _glowPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _strokePaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _trailGlowPaint = Paint();
+  static final Paint _trailCorePaint = Paint();
+  static final Paint _trailLinePaint = Paint()..strokeCap = StrokeCap.round;
+  static final Paint _particlePaint = Paint();
+  static final Paint _arcPaint = Paint()
+    ..strokeWidth = 1.5
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _circuitLinePaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+
+  // Reusable paths to avoid per-frame allocations
+  static final Path _reusableArrowPath = Path();
+  static final Path _reusableArcPath = Path();
+  static final Path _reusableRunePath = Path();
+  static final Path _reusableStarPath = Path();
 
   Projectile({
     required Vector2 startPosition,
@@ -226,15 +251,15 @@ class Projectile extends PositionComponent {
 
     _time += dt;
 
-    // Lifetime máximo (5 segundos) - evita balas zombies
-    if (_time > 5.0) {
+    // Lifetime máximo (3 segundos) - evita balas zombies
+    if (_time > 3.0) {
       deactivate();
       return;
     }
 
     // Bounds check - elimina balas fuera del mundo
-    const maxBound = 1500.0;
-    const minBound = -200.0;
+    const maxBound = 1200.0;
+    const minBound = -100.0;
     if (position.x < minBound || position.x > maxBound ||
         position.y < minBound || position.y > maxBound) {
       deactivate();
@@ -333,16 +358,13 @@ class Projectile extends PositionComponent {
     if (!_active) return;
     super.render(canvas);
 
-    if (lowFx) {
-      canvas.drawCircle(
-        Offset.zero,
-        size.x * 0.4,
-        Paint()..color = color.withOpacity(0.85),
-      );
+    // Use cached sprites for maximum performance in high-stress mode
+    if (lowFx || stressLevel >= 1) {
+      _renderCachedSprite(canvas);
       return;
     }
 
-    // Draw type-specific effects
+    // Draw type-specific effects (full quality)
     switch (towerType) {
       case TowerType.pulseArcher:
         _renderPulseArcher(canvas);
@@ -365,6 +387,49 @@ class Projectile extends PositionComponent {
     }
   }
 
+  /// High-performance rendering using pre-cached sprites
+  void _renderCachedSprite(Canvas canvas) {
+    final spriteCache = SpriteCacheService.instance;
+
+    // Try to get cached glow sprite
+    final glowSprite = spriteCache.getProjectileGlowSprite(color);
+    if (glowSprite != null && stressLevel < 2) {
+      // Draw glow from cache
+      final glowScale = size.x / 16.0;
+      canvas.save();
+      canvas.scale(glowScale, glowScale);
+      canvas.drawImage(
+        glowSprite,
+        Offset(-glowSprite.width / 2, -glowSprite.height / 2),
+        _simplePaint,
+      );
+      canvas.restore();
+    }
+
+    // Try to get cached projectile sprite
+    final sprite = spriteCache.getProjectileSprite(color);
+    if (sprite != null) {
+      // Draw with rotation toward target
+      final direction = targetPosition - position;
+      final angle = direction.length > 0 ? math.atan2(direction.y, direction.x) : 0.0;
+      final spriteScale = size.x / 12.0;
+
+      canvas.save();
+      canvas.rotate(angle);
+      canvas.scale(spriteScale, spriteScale);
+      canvas.drawImage(
+        sprite,
+        Offset(-sprite.width / 2, -sprite.height / 2),
+        _simplePaint,
+      );
+      canvas.restore();
+    } else {
+      // Fallback to simple circle if cache not ready
+      _simplePaint.color = color.withOpacity(0.85);
+      canvas.drawCircle(Offset.zero, size.x * 0.4, _simplePaint);
+    }
+  }
+
   void _renderPulseArcher(Canvas canvas) {
     // Sleek arrow-like projectile
     if (allowTrails) {
@@ -382,35 +447,22 @@ class Projectile extends PositionComponent {
     }
 
     // Arrow shape glow
-    final arrowPath = Path()
-      ..moveTo(size.x * 0.8, 0)
-      ..lineTo(-size.x * 0.4, -size.x * 0.3)
-      ..lineTo(-size.x * 0.2, 0)
-      ..lineTo(-size.x * 0.4, size.x * 0.3)
-      ..close();
+    _reusableArrowPath.reset();
+    _reusableArrowPath.moveTo(size.x * 0.8, 0);
+    _reusableArrowPath.lineTo(-size.x * 0.4, -size.x * 0.3);
+    _reusableArrowPath.lineTo(-size.x * 0.2, 0);
+    _reusableArrowPath.lineTo(-size.x * 0.4, size.x * 0.3);
+    _reusableArrowPath.close();
 
-    canvas.drawPath(
-      arrowPath,
-      Paint()
-        ..color = color.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
+    _glowPaint.color = color.withOpacity(0.3);
+    canvas.drawPath(_reusableArrowPath, _glowPaint);
 
-    canvas.drawPath(
-      arrowPath,
-      Paint()
-        ..color = color.withOpacity(0.8)
-        ..style = PaintingStyle.fill,
-    );
+    _simplePaint.color = color.withOpacity(0.8);
+    canvas.drawPath(_reusableArrowPath, _simplePaint);
 
     // Bright tip
-    canvas.drawCircle(
-      Offset(size.x * 0.6, 0),
-      size.x * 0.2 * pulseScale,
-      Paint()
-        ..color = const Color(0xFFFFFFFF)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-    );
+    _glowPaint.color = const Color(0xFFFFFFFF);
+    canvas.drawCircle(Offset(size.x * 0.6, 0), size.x * 0.2 * pulseScale, _glowPaint);
 
     canvas.restore();
 
@@ -427,15 +479,11 @@ class Projectile extends PositionComponent {
     final pulseScale = 1.0 + math.sin(_pulsePhase * 0.5) * 0.2;
 
     // Outer shockwave ring
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.9 * pulseScale,
-      Paint()
-        ..color = color.withOpacity(0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-    );
+    _strokePaint
+      ..color = color.withOpacity(0.2)
+      ..strokeWidth = 3
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.drawCircle(Offset.zero, size.x * 0.9 * pulseScale, _strokePaint);
 
     // Heavy core with gradient
     final coreGradient = RadialGradient(
@@ -447,25 +495,21 @@ class Projectile extends PositionComponent {
       stops: const [0.0, 0.4, 1.0],
     ).createShader(Rect.fromCircle(center: Offset.zero, radius: size.x * 0.6));
 
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.6 * pulseScale,
-      Paint()..shader = coreGradient,
-    );
+    _simplePaint.shader = coreGradient;
+    canvas.drawCircle(Offset.zero, size.x * 0.6 * pulseScale, _simplePaint);
+    _simplePaint.shader = null;
 
     // Outer glow
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.7 * pulseScale,
-      Paint()
-        ..color = color.withOpacity(0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
+    _glowPaint
+      ..color = color.withOpacity(0.5)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    canvas.drawCircle(Offset.zero, size.x * 0.7 * pulseScale, _glowPaint);
 
     // Rotating circuit lines
     canvas.save();
     canvas.rotate(_rotationAngle * 0.5);
 
+    _circuitLinePaint.color = color.withOpacity(0.6);
     for (int i = 0; i < 4; i++) {
       final angle = i * math.pi / 2;
       final startX = math.cos(angle) * size.x * 0.3;
@@ -473,14 +517,7 @@ class Projectile extends PositionComponent {
       final endX = math.cos(angle) * size.x * 0.7;
       final endY = math.sin(angle) * size.x * 0.7;
 
-      canvas.drawLine(
-        Offset(startX, startY),
-        Offset(endX, endY),
-        Paint()
-          ..color = color.withOpacity(0.6)
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round,
-      );
+      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _circuitLinePaint);
     }
 
     canvas.restore();
@@ -495,15 +532,19 @@ class Projectile extends PositionComponent {
     final pulseScale = 1.0 + math.sin(_pulsePhase) * 0.15;
 
     // Electric arcs around projectile
+    _arcPaint
+      ..color = color.withOpacity(0.7)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
     for (final segment in _electricSegments) {
       final startX = math.cos(segment.angle) * size.x * 0.3;
       final startY = math.sin(segment.angle) * size.x * 0.3;
 
-      // Create zigzag path
-      final arcPath = Path();
-      arcPath.moveTo(startX, startY);
+      // Create zigzag path using reusable path
+      _reusableArcPath.reset();
+      _reusableArcPath.moveTo(startX, startY);
 
-      final steps = 4;
+      const steps = 4;
       for (int i = 1; i <= steps; i++) {
         final progress = i / steps;
         final endAngle = segment.angle + segment.offset;
@@ -515,28 +556,17 @@ class Projectile extends PositionComponent {
         final jitterX = math.cos(perpendicularAngle) * jitter;
         final jitterY = math.sin(perpendicularAngle) * jitter;
 
-        arcPath.lineTo(baseX + jitterX, baseY + jitterY);
+        _reusableArcPath.lineTo(baseX + jitterX, baseY + jitterY);
       }
 
-      canvas.drawPath(
-        arcPath,
-        Paint()
-          ..color = color.withOpacity(0.7)
-          ..strokeWidth = 1.5
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-      );
+      canvas.drawPath(_reusableArcPath, _arcPaint);
     }
 
     // Mystical core with inner glow
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.5 * pulseScale,
-      Paint()
-        ..color = color.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
-    );
+    _glowPaint
+      ..color = color.withOpacity(0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+    canvas.drawCircle(Offset.zero, size.x * 0.5 * pulseScale, _glowPaint);
 
     // Spiraling rune ring
     canvas.save();
@@ -548,35 +578,27 @@ class Projectile extends PositionComponent {
       final runeY = math.sin(runeAngle) * size.x * 0.4;
       final runeAlpha = 0.5 + math.sin(_pulsePhase + i) * 0.3;
 
-      // Diamond rune
-      final runePath = Path()
-        ..moveTo(runeX, runeY - 2)
-        ..lineTo(runeX + 1.5, runeY)
-        ..lineTo(runeX, runeY + 2)
-        ..lineTo(runeX - 1.5, runeY)
-        ..close();
+      // Diamond rune using reusable path
+      _reusableRunePath.reset();
+      _reusableRunePath.moveTo(runeX, runeY - 2);
+      _reusableRunePath.lineTo(runeX + 1.5, runeY);
+      _reusableRunePath.lineTo(runeX, runeY + 2);
+      _reusableRunePath.lineTo(runeX - 1.5, runeY);
+      _reusableRunePath.close();
 
-      canvas.drawPath(
-        runePath,
-        Paint()..color = color.withOpacity(runeAlpha),
-      );
+      _simplePaint.color = color.withOpacity(runeAlpha);
+      canvas.drawPath(_reusableRunePath, _simplePaint);
     }
 
     canvas.restore();
 
     // Core
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.25 * pulseScale,
-      Paint()..color = color,
-    );
+    _simplePaint.color = color;
+    canvas.drawCircle(Offset.zero, size.x * 0.25 * pulseScale, _simplePaint);
 
     // Inner bright
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.12 * pulseScale,
-      Paint()..color = const Color(0xFFFFFFFF).withOpacity(0.9),
-    );
+    _simplePaint.color = const Color(0xFFFFFFFF).withOpacity(0.9);
+    canvas.drawCircle(Offset.zero, size.x * 0.12 * pulseScale, _simplePaint);
   }
 
   void _renderGlimmerField(Canvas canvas) {
@@ -602,58 +624,43 @@ class Projectile extends PositionComponent {
     }
 
     // Central burst
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.4 * pulseScale,
-      Paint()
-        ..color = color.withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
+    _glowPaint.color = color.withOpacity(0.4);
+    canvas.drawCircle(Offset.zero, size.x * 0.4 * pulseScale, _glowPaint);
 
     // Flickering core
     final flickerIntensity = 0.7 + _random.nextDouble() * 0.3;
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.25 * pulseScale,
-      Paint()..color = color.withOpacity(flickerIntensity),
-    );
+    _simplePaint.color = color.withOpacity(flickerIntensity);
+    canvas.drawCircle(Offset.zero, size.x * 0.25 * pulseScale, _simplePaint);
 
     // Bright center
-    canvas.drawCircle(
-      Offset.zero,
-      size.x * 0.12 * pulseScale,
-      Paint()..color = const Color(0xFFFFFFFF),
-    );
+    _simplePaint.color = const Color(0xFFFFFFFF);
+    canvas.drawCircle(Offset.zero, size.x * 0.12 * pulseScale, _simplePaint);
 
     // Extra particles
     _drawParticles(canvas);
   }
 
   void _drawStar(Canvas canvas, Offset center, double radius, Color starColor) {
-    final starPath = Path();
+    _reusableStarPath.reset();
     for (int i = 0; i < 4; i++) {
       final angle = i * math.pi / 2 + _spiralPhase;
       final x = center.dx + math.cos(angle) * radius;
       final y = center.dy + math.sin(angle) * radius;
       if (i == 0) {
-        starPath.moveTo(x, y);
+        _reusableStarPath.moveTo(x, y);
       } else {
-        starPath.lineTo(x, y);
+        _reusableStarPath.lineTo(x, y);
       }
       // Inner point
       final innerAngle = angle + math.pi / 4;
       final innerX = center.dx + math.cos(innerAngle) * radius * 0.4;
       final innerY = center.dy + math.sin(innerAngle) * radius * 0.4;
-      starPath.lineTo(innerX, innerY);
+      _reusableStarPath.lineTo(innerX, innerY);
     }
-    starPath.close();
+    _reusableStarPath.close();
 
-    canvas.drawPath(
-      starPath,
-      Paint()
-        ..color = starColor
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-    );
+    _glowPaint.color = starColor;
+    canvas.drawPath(_reusableStarPath, _glowPaint);
   }
 
   void _drawTrail(Canvas canvas) {
@@ -668,34 +675,22 @@ class Projectile extends PositionComponent {
 
       // Trail glow
       if (allowGlow) {
-        final glowPaint = Paint()
+        _trailGlowPaint
           ..color = color.withOpacity(alpha * 0.3)
           ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 + i * 0.5);
-        canvas.drawCircle(
-          Offset(trailOffset.x, trailOffset.y),
-          trailSize * 1.5,
-          glowPaint,
-        );
+        canvas.drawCircle(Offset(trailOffset.x, trailOffset.y), trailSize * 1.5, _trailGlowPaint);
       }
 
       // Trail core
-      final trailPaint = Paint()
-        ..color = color.withOpacity(alpha * 0.6);
-      canvas.drawCircle(
-        Offset(trailOffset.x, trailOffset.y),
-        trailSize,
-        trailPaint,
-      );
+      _trailCorePaint.color = color.withOpacity(alpha * 0.6);
+      canvas.drawCircle(Offset(trailOffset.x, trailOffset.y), trailSize, _trailCorePaint);
     }
 
     // Draw connecting line between trail points
-    final linePaint = Paint()
+    _trailLinePaint
       ..color = color.withOpacity(0.4)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
-    if (allowGlow) {
-      linePaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    }
+      ..maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
 
     for (int i = 0; i < _trailPositions.length - 1; i++) {
       if (_trailAlphas[i] < 0.1 || _trailAlphas[i + 1] < 0.1) continue;
@@ -703,12 +698,8 @@ class Projectile extends PositionComponent {
       final start = _trailPositions[i] - position;
       final end = _trailPositions[i + 1] - position;
 
-      linePaint.color = color.withOpacity(_trailAlphas[i] * 0.3);
-      canvas.drawLine(
-        Offset(start.x, start.y),
-        Offset(end.x, end.y),
-        linePaint,
-      );
+      _trailLinePaint.color = color.withOpacity(_trailAlphas[i] * 0.3);
+      canvas.drawLine(Offset(start.x, start.y), Offset(end.x, end.y), _trailLinePaint);
     }
   }
 
@@ -717,14 +708,14 @@ class Projectile extends PositionComponent {
       final px = math.cos(particle.angle + _time * particle.speed * 0.1) * particle.offset.x;
       final py = math.sin(particle.angle + _time * particle.speed * 0.1) * particle.offset.y;
 
-      final particlePaint = Paint()
-        ..color =
-            color.withOpacity(particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3));
+      _particlePaint.color = color.withOpacity(particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3));
       if (allowGlow) {
-        particlePaint.maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size);
+        _particlePaint.maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size);
+      } else {
+        _particlePaint.maskFilter = null;
       }
 
-      canvas.drawCircle(Offset(px, py), particle.size, particlePaint);
+      canvas.drawCircle(Offset(px, py), particle.size, _particlePaint);
     }
   }
 }

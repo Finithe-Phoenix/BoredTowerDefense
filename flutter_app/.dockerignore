@@ -1,0 +1,27 @@
+# Build outputs
+build/
+.dart_tool/
+.packages
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Android build
+android/.gradle/
+android/app/build/
+android/local.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+
+# Flutter generated
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Misc
+*.log
+*.lock
+!pubspec.lock

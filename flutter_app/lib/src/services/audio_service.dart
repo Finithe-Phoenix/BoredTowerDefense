@@ -275,12 +275,70 @@ class AudioService {
     return 1.0 - ((progress - decayStart) / (1.0 - decayStart));
   }
 
+  /// Reset all audio players between game sessions
+  /// Stops all playing sounds without disposing players
+  void reset() {
+    for (final player in _playerPool) {
+      player.stop();
+    }
+    _currentPlayerIndex = 0;
+
+    if (kDebugMode) {
+      debugPrint('AudioService reset');
+    }
+  }
+
+  /// Refresh player pool - dispose and recreate all players
+  /// Call this every 5 levels to prevent resource accumulation
+  Future<void> refresh() async {
+    if (!_initialized) return;
+
+    // Stop and dispose all existing players
+    for (final player in _playerPool) {
+      await player.stop();
+      await player.dispose();
+    }
+    _playerPool.clear();
+
+    // Recreate player pool
+    for (int i = 0; i < _poolSize; i++) {
+      _playerPool.add(AudioPlayer());
+    }
+    _currentPlayerIndex = 0;
+
+    if (kDebugMode) {
+      debugPrint('AudioService refreshed player pool');
+    }
+  }
+
   void dispose() {
     for (final player in _playerPool) {
       player.dispose();
     }
     _playerPool.clear();
+    _sfxCache.clear();
     _initialized = false;
+
+    if (kDebugMode) {
+      debugPrint('AudioService disposed');
+    }
+  }
+
+  /// Expose waveform generation for testing purposes only
+  Float32List generateWaveformForTesting({
+    required double frequency,
+    required double duration,
+    required WaveType type,
+    double frequencySlide = 0,
+    double volume = 0.8,
+  }) {
+    return _generateWaveform(
+      frequency: frequency,
+      duration: duration,
+      type: type,
+      frequencySlide: frequencySlide,
+      volume: volume,
+    );
   }
 }
 

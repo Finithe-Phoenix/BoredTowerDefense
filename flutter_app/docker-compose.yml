@@ -1,0 +1,33 @@
+services:
+  flutter-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    container_name: bored-games-web
+
+  # Development mode with hot reload (optional)
+  flutter-dev:
+    image: ghcr.io/cirruslabs/flutter:stable
+    working_dir: /app
+    volumes:
+      - .:/app
+    ports:
+      - "3000:3000"
+    command: flutter run -d web-server --web-port=3000 --web-hostname=0.0.0.0
+    container_name: bored-games-dev
+    profiles:
+      - dev
+
+  # Build APK for Android
+  flutter-apk:
+    build:
+      context: .
+      dockerfile: Dockerfile.apk
+    volumes:
+      - ./build-output:/output-host
+    command: sh -c "cp /output/*.apk /output-host/ && ls -la /output-host/"
+    container_name: bored-games-apk
+    profiles:
+      - apk

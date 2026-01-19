@@ -8,12 +8,14 @@ import '../entities/projectile.dart';
 import '../entities/tower.dart';
 
 class BulletManager extends Component with HasGameRef<BoredGamesGame> {
-  BulletManager({this.poolSize = 150});
+  BulletManager({this.poolSize = 300});
 
   final int poolSize;
 
   // Object pool para reutilizar proyectiles
-  static const int maxActiveProjectiles = 500;
+  // Reduced limits to prevent OOM crashes in late game
+  static const int maxActiveProjectiles = 200;
+  static const int maxPoolSize = 150;
   static final List<Projectile> _pool = [];
   static int _activeCount = 0;
 
@@ -23,7 +25,7 @@ class BulletManager extends Component with HasGameRef<BoredGamesGame> {
   /// Devuelve un proyectil al pool para reutilización
   static void returnToPool(Projectile p) {
     if (_activeCount > 0) _activeCount--;
-    if (_pool.length < 150) {
+    if (_pool.length < maxPoolSize) {
       _pool.add(p);
     }
     // Actualizar nivel de estrés
@@ -32,9 +34,9 @@ class BulletManager extends Component with HasGameRef<BoredGamesGame> {
 
   /// Actualiza el nivel de estrés basado en cantidad de balas
   static void _updateStressLevel() {
-    if (_activeCount < 200) {
+    if (_activeCount < 80) {
       Projectile.setStressLevel(0);
-    } else if (_activeCount < 400) {
+    } else if (_activeCount < 150) {
       Projectile.setStressLevel(1);
     } else {
       Projectile.setStressLevel(2);

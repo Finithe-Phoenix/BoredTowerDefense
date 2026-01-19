@@ -24,6 +24,24 @@ class ExplosionEffect extends PositionComponent {
   static final List<ExplosionEffect> _pool = [];
   static int _activeCount = 0;
   static double fxScale = 1.0;
+  static int get activeCount => _activeCount;
+  static final Map<int, MaskFilter> _blurCache = {};
+
+  static MaskFilter _blur(double sigma) {
+    var key = sigma.round();
+    if (key < 1) key = 1;
+    if (key > 40) key = 40;
+    return _blurCache.putIfAbsent(
+      key,
+      () => MaskFilter.blur(BlurStyle.normal, key.toDouble()),
+    );
+  }
+
+  /// Clear the static pool to prevent memory accumulation between games
+  static void clearPool() {
+    _pool.clear();
+    _activeCount = 0;
+  }
 
   static ExplosionEffect? spawn({
     required Vector2 position,
@@ -79,6 +97,56 @@ class ExplosionEffect extends PositionComponent {
 
   // Screen shake intensity (can be read by parent)
   double get shakeIntensity => _coreFlashIntensity * 0.8;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  final Paint _shockwaveGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 8
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  final Paint _secondaryShockwavePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  final Paint _shockwaveRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  final Paint _shockwaveInnerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _arcPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  final Paint _particleTrailPaint = Paint()
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  final Paint _particleGlowPaint = Paint();
+  final Paint _particleCorePaint = Paint();
+  final Paint _coreOuterGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
+  final Paint _coreMidGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  final Paint _coreInnerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  final Paint _sparkPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  final Paint _sparkLinePaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  final Paint _debrisPaint = Paint();
+  final Paint _debrisGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  final Paint _debrisLinePaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  final Paint _smokePaint = Paint();
+  final Paint _smokeInnerPaint = Paint();
+  final Paint _heatDistortionPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  final Path _reusablePath = Path();
 
   void _markActive() {
     if (_counted) return;
@@ -301,59 +369,33 @@ class ExplosionEffect extends PositionComponent {
 
     if (alpha <= 0) return;
 
-    // Outer glow
-    final glowPaint = Paint()
-      ..color = color.withOpacity(alpha * 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    // Outer glow - use cached paint
+    _shockwaveGlowPaint.color = color.withOpacity(alpha * 0.3);
+    canvas.drawCircle(Offset.zero, radius, _shockwaveGlowPaint);
 
-    canvas.drawCircle(Offset.zero, radius, glowPaint);
+    // Main ring - use cached paint
+    _shockwaveRingPaint.color = color.withOpacity(alpha);
+    canvas.drawCircle(Offset.zero, radius, _shockwaveRingPaint);
 
-    // Main ring
-    final ringPaint = Paint()
-      ..color = color.withOpacity(alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-
-    canvas.drawCircle(Offset.zero, radius, ringPaint);
-
-    // Inner bright ring
-    final innerPaint = Paint()
-      ..color = Colors.white.withOpacity(alpha * 0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-
-    canvas.drawCircle(Offset.zero, radius * 0.95, innerPaint);
+    // Inner bright ring - use cached paint
+    _shockwaveInnerPaint.color = Colors.white.withOpacity(alpha * 0.8);
+    canvas.drawCircle(Offset.zero, radius * 0.95, _shockwaveInnerPaint);
   }
 
   void _drawShockwave(Canvas canvas) {
     if (_shockwaveAlpha <= 0) return;
 
-    // Outer glow
-    final glowPaint = Paint()
-      ..color = color.withOpacity(_shockwaveAlpha * 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 8
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    // Outer glow - use cached paint
+    _shockwaveGlowPaint.color = color.withOpacity(_shockwaveAlpha * 0.3);
+    canvas.drawCircle(Offset.zero, _shockwaveRadius, _shockwaveGlowPaint);
 
-    canvas.drawCircle(Offset.zero, _shockwaveRadius, glowPaint);
+    // Main ring - use cached paint
+    _shockwaveRingPaint.color = color.withOpacity(_shockwaveAlpha);
+    canvas.drawCircle(Offset.zero, _shockwaveRadius, _shockwaveRingPaint);
 
-    // Main ring
-    final ringPaint = Paint()
-      ..color = color.withOpacity(_shockwaveAlpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-
-    canvas.drawCircle(Offset.zero, _shockwaveRadius, ringPaint);
-
-    // Inner bright ring
-    final innerPaint = Paint()
-      ..color = Colors.white.withOpacity(_shockwaveAlpha * 0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-
-    canvas.drawCircle(Offset.zero, _shockwaveRadius * 0.9, innerPaint);
+    // Inner bright ring - use cached paint
+    _shockwaveInnerPaint.color = Colors.white.withOpacity(_shockwaveAlpha * 0.8);
+    canvas.drawCircle(Offset.zero, _shockwaveRadius * 0.9, _shockwaveInnerPaint);
   }
 
   void _drawSecondaryShockwave(Canvas canvas, double delayedProgress) {
@@ -362,13 +404,8 @@ class ExplosionEffect extends PositionComponent {
 
     if (alpha <= 0) return;
 
-    final paint = Paint()
-      ..color = color.withOpacity(alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-    canvas.drawCircle(Offset.zero, radius, paint);
+    _secondaryShockwavePaint.color = color.withOpacity(alpha);
+    canvas.drawCircle(Offset.zero, radius, _secondaryShockwavePaint);
   }
 
   void _drawEnergyArcs(Canvas canvas) {
@@ -376,15 +413,14 @@ class ExplosionEffect extends PositionComponent {
       if (!arc.isAlive) continue;
 
       final alpha = arc.alphaValue;
-      final arcPaint = Paint()
+      _arcPaint
         ..color = color.withOpacity(alpha)
         ..strokeWidth = arc.width
-        ..style = PaintingStyle.stroke
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+        ..style = PaintingStyle.stroke;
 
       // Draw lightning-style arc
-      final path = Path();
-      path.moveTo(0, 0);
+      _reusablePath.reset();
+      _reusablePath.moveTo(0, 0);
 
       final endX = math.cos(arc.angle) * arc.length;
       final endY = math.sin(arc.angle) * arc.length;
@@ -400,16 +436,16 @@ class ExplosionEffect extends PositionComponent {
         final perpX = -math.sin(arc.angle) * (i == segments ? 0 : (_random.nextDouble() - 0.5) * 10);
         final perpY = math.cos(arc.angle) * (i == segments ? 0 : (_random.nextDouble() - 0.5) * 10);
 
-        path.lineTo(baseX + perpX, baseY + perpY);
+        _reusablePath.lineTo(baseX + perpX, baseY + perpY);
       }
 
-      canvas.drawPath(path, arcPaint);
+      canvas.drawPath(_reusablePath, _arcPaint);
 
       // Glow on arc
-      arcPaint
+      _arcPaint
         ..color = Colors.white.withOpacity(alpha * 0.5)
         ..strokeWidth = arc.width * 0.5;
-      canvas.drawPath(path, arcPaint);
+      canvas.drawPath(_reusablePath, _arcPaint);
     }
   }
 
@@ -423,11 +459,9 @@ class ExplosionEffect extends PositionComponent {
 
       // Draw particle trail
       if (particle.trailLength > 0) {
-        final trailPaint = Paint()
+        _particleTrailPaint
           ..color = color.withOpacity(alpha * 0.5)
-          ..strokeWidth = particle.currentSize * 0.7
-          ..strokeCap = StrokeCap.round
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+          ..strokeWidth = particle.currentSize * 0.7;
 
         final trailStartX = math.cos(particle.angle) * (particle.distance - particle.trailLength * 8);
         final trailStartY = math.sin(particle.angle) * (particle.distance - particle.trailLength * 8);
@@ -435,22 +469,20 @@ class ExplosionEffect extends PositionComponent {
         canvas.drawLine(
           Offset(trailStartX, trailStartY),
           Offset(x, y),
-          trailPaint,
+          _particleTrailPaint,
         );
       }
 
       // Particle glow
-      final glowPaint = Paint()
+      _particleGlowPaint
         ..color = color.withOpacity(alpha * 0.4)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, particle.currentSize * 2);
-
-      canvas.drawCircle(Offset(x, y), particle.currentSize * 1.5, glowPaint);
+        ..maskFilter = _blur(particle.currentSize * 2);
+      canvas.drawCircle(Offset(x, y), particle.currentSize * 1.5, _particleGlowPaint);
 
       // Particle core
-      final corePaint = Paint()
+      _particleCorePaint
         ..color = (particle.isDebris ? color : Colors.white).withOpacity(alpha);
-
-      canvas.drawCircle(Offset(x, y), particle.currentSize, corePaint);
+      canvas.drawCircle(Offset(x, y), particle.currentSize, _particleCorePaint);
     }
   }
 
@@ -458,25 +490,16 @@ class ExplosionEffect extends PositionComponent {
     if (_coreFlashIntensity <= 0) return;
 
     // Large soft glow
-    final outerGlow = Paint()
-      ..color = color.withOpacity(_coreFlashIntensity * 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
-
-    canvas.drawCircle(Offset.zero, explosionSize * _coreFlashIntensity, outerGlow);
+    _coreOuterGlowPaint.color = color.withOpacity(_coreFlashIntensity * 0.3);
+    canvas.drawCircle(Offset.zero, explosionSize * _coreFlashIntensity, _coreOuterGlowPaint);
 
     // Medium glow
-    final midGlow = Paint()
-      ..color = color.withOpacity(_coreFlashIntensity * 0.6)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-
-    canvas.drawCircle(Offset.zero, explosionSize * 0.5 * _coreFlashIntensity, midGlow);
+    _coreMidGlowPaint.color = color.withOpacity(_coreFlashIntensity * 0.6);
+    canvas.drawCircle(Offset.zero, explosionSize * 0.5 * _coreFlashIntensity, _coreMidGlowPaint);
 
     // Bright core
-    final coreGlow = Paint()
-      ..color = Colors.white.withOpacity(_coreFlashIntensity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-
-    canvas.drawCircle(Offset.zero, explosionSize * 0.2 * _coreFlashIntensity, coreGlow);
+    _coreInnerGlowPaint.color = Colors.white.withOpacity(_coreFlashIntensity);
+    canvas.drawCircle(Offset.zero, explosionSize * 0.2 * _coreFlashIntensity, _coreInnerGlowPaint);
   }
 
   void _drawImpactSparks(Canvas canvas, double progress) {
@@ -489,9 +512,7 @@ class ExplosionEffect extends PositionComponent {
       final angle = (i / sparkCount) * math.pi * 2 + _time * 5;
       final radius = explosionSize * 0.3 + progress * explosionSize * 0.5;
 
-      final sparkPaint = Paint()
-        ..color = Colors.white.withOpacity(sparkAlpha * 0.8)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      _sparkPaint.color = Colors.white.withOpacity(sparkAlpha * 0.8);
 
       final x = math.cos(angle) * radius;
       final y = math.sin(angle) * radius;
@@ -504,13 +525,11 @@ class ExplosionEffect extends PositionComponent {
       canvas.drawLine(
         Offset(streakEndX, streakEndY),
         Offset(x, y),
-        Paint()
-          ..color = color.withOpacity(sparkAlpha * 0.5)
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round,
+        _sparkLinePaint
+          ..color = color.withOpacity(sparkAlpha * 0.5),
       );
 
-      canvas.drawCircle(Offset(x, y), 2, sparkPaint);
+      canvas.drawCircle(Offset(x, y), 2, _sparkPaint);
     }
   }
 
@@ -526,12 +545,8 @@ class ExplosionEffect extends PositionComponent {
       canvas.translate(x, y);
       canvas.rotate(chunk.currentRotation);
 
-      final paint = Paint()
-        ..color = color.withOpacity(alpha * 0.8);
-
-      final glowPaint = Paint()
-        ..color = color.withOpacity(alpha * 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      _debrisPaint.color = color.withOpacity(alpha * 0.8);
+      _debrisGlowPaint.color = color.withOpacity(alpha * 0.3);
 
       switch (chunk.shape) {
         case 0: // Square
@@ -540,28 +555,26 @@ class ExplosionEffect extends PositionComponent {
             width: chunk.size,
             height: chunk.size,
           );
-          canvas.drawRect(rect, glowPaint);
-          canvas.drawRect(rect, paint);
+          canvas.drawRect(rect, _debrisGlowPaint);
+          canvas.drawRect(rect, _debrisPaint);
           break;
 
         case 1: // Triangle
-          final path = Path()
-            ..moveTo(0, -chunk.size / 2)
-            ..lineTo(-chunk.size / 2, chunk.size / 2)
-            ..lineTo(chunk.size / 2, chunk.size / 2)
-            ..close();
-          canvas.drawPath(path, glowPaint);
-          canvas.drawPath(path, paint);
+          _reusablePath.reset();
+          _reusablePath.moveTo(0, -chunk.size / 2);
+          _reusablePath.lineTo(-chunk.size / 2, chunk.size / 2);
+          _reusablePath.lineTo(chunk.size / 2, chunk.size / 2);
+          _reusablePath.close();
+          canvas.drawPath(_reusablePath, _debrisGlowPaint);
+          canvas.drawPath(_reusablePath, _debrisPaint);
           break;
 
         case 2: // Line
           canvas.drawLine(
             Offset(-chunk.size / 2, 0),
             Offset(chunk.size / 2, 0),
-            Paint()
-              ..color = color.withOpacity(alpha * 0.6)
-              ..strokeWidth = 2
-              ..strokeCap = StrokeCap.round,
+            _debrisLinePaint
+              ..color = color.withOpacity(alpha * 0.6),
           );
           break;
       }
@@ -580,19 +593,18 @@ class ExplosionEffect extends PositionComponent {
       final currentSize = puff.currentSize;
 
       // Draw smoke puff with gradient
-      final smokePaint = Paint()
+      _smokePaint
         ..color = Colors.grey.withOpacity(alpha * 0.3)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, currentSize / 2);
-
-      canvas.drawCircle(Offset(x, y), currentSize, smokePaint);
+        ..maskFilter = _blur(currentSize / 2);
+      canvas.drawCircle(Offset(x, y), currentSize, _smokePaint);
 
       // Inner darker smoke
       canvas.drawCircle(
         Offset(x, y),
         currentSize * 0.6,
-        Paint()
+        _smokeInnerPaint
           ..color = Colors.grey.shade800.withOpacity(alpha * 0.2)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, currentSize / 3),
+          ..maskFilter = _blur(currentSize / 3),
       );
     }
   }
@@ -611,11 +623,7 @@ class ExplosionEffect extends PositionComponent {
       canvas.drawCircle(
         Offset.zero,
         ringRadius,
-        Paint()
-          ..color = Colors.white.withOpacity(ringAlpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        _heatDistortionPaint..color = Colors.white.withOpacity(ringAlpha),
       );
     }
   }

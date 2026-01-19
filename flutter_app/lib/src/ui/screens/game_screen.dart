@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 import '../../game/bored_games_game.dart';
 import '../../models/level_config.dart';
 import '../../services/level_service.dart';
+import '../../services/procedural_music_service.dart';
+import '../../services/audio_service.dart';
 import '../overlays/pause_menu_overlay.dart';
 import '../overlays/game_over_overlay.dart';
 import '../overlays/victory_overlay.dart';
@@ -22,27 +24,42 @@ class GameScreen extends StatefulWidget {
 }
 
 class _GameScreenState extends State<GameScreen> {
+  static int _sessionCount = 0;
   late BoredGamesGame _game;
   late LevelConfig _levelConfig;
   bool _isPaused = false;
   bool _showMaterialization = true;
   bool _showBriefing = false;
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     final level = LevelService.instance.getLevel(widget.levelId);
     _levelConfig = level ?? LevelService.instance.levels.first;
+    _focusNode.requestFocus();
 
     _game = BoredGamesGame(
       levelConfig: _levelConfig,
       onGameOver: _handleGameOver,
       onVictory: _handleVictory,
     );
+
+    // Start procedural music for this world
+    _startMusic();
+  }
+
+  Future<void> _startMusic() async {
+    // Determine world from level ID (1-10 = world 1, 11-20 = world 2, etc.)
+    final worldId = ((_levelConfig.id - 1) ~/ 10) + 1;
+    await ProceduralMusicService.instance.playWorldMusic(worldId);
   }
 
   void _handleGameOver() {
     _game.paused = true;
+
+    // Play defeat music
+    ProceduralMusicService.instance.playDefeat();
 
     // Save partial progress (best wave reached, high score if better)
     LevelService.instance.updateProgress(
@@ -63,6 +80,9 @@ class _GameScreenState extends State<GameScreen> {
 
   void _handleVictory() {
     _game.paused = true;
+
+    // Play victory music
+    ProceduralMusicService.instance.playVictory();
 
     // Update and persist progress
     LevelService.instance.updateProgress(
@@ -87,8 +107,10 @@ class _GameScreenState extends State<GameScreen> {
       _game.paused = _isPaused;
       if (_isPaused) {
         _game.overlays.add('pause');
+        ProceduralMusicService.instance.pause();
       } else {
         _game.overlays.remove('pause');
+        ProceduralMusicService.instance.resume();
       }
     });
   }
@@ -98,10 +120,14 @@ class _GameScreenState extends State<GameScreen> {
       _isPaused = false;
       _game.paused = false;
       _game.overlays.remove('pause');
+      ProceduralMusicService.instance.resume();
     });
   }
 
   void _restartLevel() {
+    // CRITICAL: Cleanup old game before creating new one
+    _game.onRemove();
+
     _game.overlays.clear();
     setState(() {
       _isPaused = false;
@@ -111,27 +137,55 @@ class _GameScreenState extends State<GameScreen> {
         onVictory: _handleVictory,
       );
     });
+    // Restart music for this world
+    _startMusic();
   }
 
   void _quitToMenu() {
+    // CRITICAL: Cleanup game resources before navigation
+    _game.onRemove();
+    ProceduralMusicService.instance.stop();
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   void _nextLevel() {
+    // CRITICAL: Cleanup current game before navigation
+    _game.onRemove();
+    ProceduralMusicService.instance.stop();
+
     final nextLevelId = _levelConfig.id + 1;
     final nextLevel = LevelService.instance.getLevel(nextLevelId);
 
     if (nextLevel != null) {
       Navigator.pushReplacementNamed(context, '/game', arguments: nextLevelId);
     } else {
-      _quitToMenu();
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
+  @override
+  void dispose() {
+    // CRITICAL: Ensure game resources are cleaned up when screen is disposed
+    _game.onRemove();
+    ProceduralMusicService.instance.stop();
+    AudioService.instance.reset();
+    ProceduralMusicService.instance.reset();
+    _refreshAudioIfNeeded();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _refreshAudioIfNeeded() {
+    _sessionCount += 1;
+    if (_sessionCount % 5 == 0) {
+      AudioService.instance.refresh();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return KeyboardListener(
-      focusNode: FocusNode()..requestFocus(),
+      focusNode: _focusNode,
       onKeyEvent: (event) {
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape) {

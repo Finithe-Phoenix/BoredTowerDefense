@@ -4,10 +4,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bored_games/src/game/bored_games_game.dart';
 import 'package:bored_games/src/game/entities/boss.dart';
 import 'package:bored_games/src/models/level_config.dart';
+import '../helpers/fake_audioplayers_platform.dart';
 
 /// Integration tests for the complete boss system
 /// Tests the interaction between Boss, EnemyManager, HUD, and Game
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
+    registerFakeAudioplayersPlatform();
+  });
+
+  Future<Boss> _spawnBoss(BoredGamesGame game) async {
+    await game.ready();
+    game.enemyManager.startWave(count: 5);
+    game.enemyManager.remaining = 2;
+    game.enemyManager.update(2.0);
+    game.update(0);
+    final boss = game.enemyManager.currentBoss;
+    expect(boss, isNotNull);
+    return boss!;
+  }
+
   group('Boss System Integration', () {
     testWithGame(
       'complete boss encounter - level 10',
@@ -25,7 +42,6 @@ void main() {
       ),
       (game) async {
         // Initialize game
-        await game.onLoad();
         await game.ready();
 
         // Start final wave
@@ -54,34 +70,24 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
-        await game.onLoad();
-        await game.ready();
-
-        // Create and add boss directly for testing
-        final boss = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 1000,
-        );
-
-        await game.enemyManager.add(boss);
-        game.update(0.1);
+        final boss = await _spawnBoss(game);
+        game.enemyManager.spawning = false;
+        game.enemyManager.remaining = 0;
 
         // HUD should track boss
         expect(game.enemyManager.currentBoss, equals(boss));
 
         // Damage boss
-        boss.takeDamage(500);
+        boss.takeDamage(boss.maxHealth * 0.4);
         game.update(0.1);
 
-        expect(boss.healthPercent, 0.5);
+        expect(boss.healthPercent, closeTo(0.6, 0.01));
         expect(boss.currentPhase, 2);
       },
     );
@@ -93,36 +99,31 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
         int phaseChanges = 0;
-        await game.onLoad();
-        await game.ready();
+        game.enemyManager.onBossPhaseChange = (_, __) {
+          phaseChanges++;
+        };
 
-        final boss = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 1000,
-          onPhaseChange: (boss, phase) {
-            phaseChanges++;
-          },
-        );
-
-        await game.enemyManager.add(boss);
+        final boss = await _spawnBoss(game);
+        final phaseDamage = boss.maxHealth * 0.26;
 
         // Damage through all phases
-        boss.takeDamage(260); // Phase 2
+        boss.takeDamage(phaseDamage); // Phase 2
+        boss.update(0.016);
         expect(phaseChanges, 1);
 
-        boss.takeDamage(250); // Phase 3
+        boss.takeDamage(phaseDamage); // Phase 3
+        boss.update(0.016);
         expect(phaseChanges, 2);
 
-        boss.takeDamage(250); // Phase 4
+        boss.takeDamage(phaseDamage); // Phase 4
+        boss.update(0.016);
         expect(phaseChanges, 3);
       },
     );
@@ -134,28 +135,16 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
-        await game.onLoad();
-        await game.ready();
-
         // No boss initially
         expect(game.enemyManager.currentBoss, isNull);
 
-        // Add boss
-        final boss = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 1000,
-        );
-
-        await game.enemyManager.add(boss);
-        game.update(0.1);
+        await _spawnBoss(game);
 
         // Boss should be tracked
         expect(game.enemyManager.currentBoss, isNotNull);
@@ -170,40 +159,29 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
         final initialGold = game.gold;
         int goldRewarded = 0;
-        await game.onLoad();
-        await game.ready();
 
         // Setup enemy killed callback
         game.enemyManager.onEnemyKilled = (enemy, gold) {
           goldRewarded += gold;
         };
 
-        final boss = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 1000,
-          goldReward: 1000,
-          onDeath: (enemy) {
-            game.enemyManager.onEnemyKilled?.call(enemy, enemy.goldReward);
-          },
-        );
-
-        await game.enemyManager.add(boss);
+        final boss = await _spawnBoss(game);
+        game.enemyManager.spawning = false;
+        game.enemyManager.remaining = 0;
 
         // Kill boss
-        boss.takeDamage(1000);
+        boss.takeDamage(boss.maxHealth * 2);
         game.update(0.1);
 
-        expect(goldRewarded, 1000);
+        expect(goldRewarded, boss.goldReward);
       },
     );
 
@@ -214,7 +192,7 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
+          mapFile: 'maps/level1.tmx',
           waves: 3,
           difficulty: 1,
         ),
@@ -257,26 +235,16 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
-        await game.onLoad();
-        await game.ready();
-
         final initialChildCount = game.enemyManager.children.length;
 
-        final boss = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 1000,
-        );
-
-        await game.enemyManager.add(boss);
-        game.update(0.1);
+        await _spawnBoss(game);
+        await game.ready();
 
         // Should have additional children (boss + entrance effect)
         expect(game.enemyManager.children.length, greaterThan(initialChildCount));
@@ -290,30 +258,16 @@ void main() {
         levelConfig: LevelConfig(
           id: 5, // Not a multiple of 10
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
-        await game.onLoad();
-        await game.ready();
-
-        game.enemyManager.startWave(count: 5);
-
-        // Spawn all enemies until boss
-        while (game.enemyManager.remaining > 0) {
-          game.update(2.0);
-        }
+        final boss = await _spawnBoss(game);
 
         // Should spawn mini-boss
-        expect(game.enemyManager.currentBoss, isNotNull);
-        if (game.enemyManager.currentBoss != null) {
-          expect(
-            game.enemyManager.currentBoss?.bossType,
-            BossType.miniBoss,
-          );
-        }
+        expect(boss.bossType, BossType.miniBoss);
       },
     );
 
@@ -324,7 +278,7 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
+          mapFile: 'maps/level1.tmx',
           waves: 3,
           difficulty: 1,
         ),
@@ -361,7 +315,7 @@ void main() {
         levelConfig: LevelConfig(
           id: 1,
           name: 'Test',
-          mapFile: 'test.tmx',
+          mapFile: 'maps/level1.tmx',
           waves: 1,
           difficulty: 1,
         ),
@@ -380,7 +334,7 @@ void main() {
         );
 
         // Update for extended time to cycle mechanics
-        for (int i = 0; i < 120; i++) {
+        for (int i = 0; i < 220; i++) {
           boss.update(0.1);
         }
 
@@ -396,35 +350,24 @@ void main() {
         levelConfig: LevelConfig(
           id: 10,
           name: 'Test',
-          mapFile: 'test.tmx',
-          waves: 3,
+          mapFile: 'maps/level1.tmx',
+          waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
         bool waveCompleted = false;
-        await game.onLoad();
-        await game.ready();
 
         game.enemyManager.onWaveComplete = (wave) {
           waveCompleted = true;
         };
 
-        final boss = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 100,
-          onDeath: (enemy) {
-            game.enemyManager.onEnemyKilled?.call(enemy, enemy.goldReward);
-          },
-        );
-
-        await game.enemyManager.add(boss);
+        final boss = await _spawnBoss(game);
         game.enemyManager.spawning = false;
+        game.enemyManager.remaining = 0;
 
         // Kill boss
-        boss.takeDamage(100);
+        boss.takeDamage(boss.maxHealth * 2);
         game.update(0.1);
 
         expect(waveCompleted, true);
@@ -438,43 +381,27 @@ void main() {
         levelConfig: LevelConfig(
           id: 1,
           name: 'Test',
-          mapFile: 'test.tmx',
+          mapFile: 'maps/level1.tmx',
           waves: 1,
           difficulty: 1,
         ),
       ),
       (game) async {
-        await game.onLoad();
-        await game.ready();
-
         // Boss 1
-        final boss1 = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.citadelCore,
-          bossLevel: 10,
-          maxHealth: 100,
-        );
-
-        await game.enemyManager.add(boss1);
-        expect(game.enemyManager.currentBoss, equals(boss1));
+        final boss1 = await _spawnBoss(game);
 
         // Kill boss 1
-        boss1.takeDamage(100);
+        boss1.takeDamage(boss1.maxHealth * 2);
         game.update(0.1);
+        game.enemyManager.reset();
 
         // Boss 2
-        final boss2 = Boss(
-          path: game.enemyManager.world.waypoints,
-          bossType: BossType.abyssGate,
-          bossLevel: 20,
-          maxHealth: 200,
-        );
-
-        await game.enemyManager.add(boss2);
+        final boss2 = await _spawnBoss(game);
 
         // Should track new boss
         expect(boss1.isAlive, false);
         expect(boss2.isAlive, true);
+        expect(game.enemyManager.currentBoss, equals(boss2));
       },
     );
 
@@ -485,7 +412,7 @@ void main() {
         levelConfig: LevelConfig(
           id: 1,
           name: 'Test',
-          mapFile: 'test.tmx',
+          mapFile: 'maps/level1.tmx',
           waves: 1,
           difficulty: 1,
         ),

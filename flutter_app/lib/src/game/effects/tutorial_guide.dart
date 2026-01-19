@@ -11,22 +11,25 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
     anchor = Anchor.topCenter;
   }
 
+  // Icons for each step (using unicode symbols)
+  static const List<String> _stepIcons = ['◆', '▶', '⚡', '✦', '⊕', '◈'];
+
   static const List<String> _touchMessages = [
-    'Toca una torre para armarla.',
-    'Arrastra a una casilla verde para colocar.',
-    'Las olas inician solas tras tu primera torre.',
-    'Toca PULSE o MINE y luego el campo para activar.',
-    'Toca una torre 5x para Focus Mode y toca un enemigo.',
-    'Toca SELL para recuperar 20% del oro.',
+    'Toca una torre para armarla',
+    'Arrastra a una casilla verde',
+    'Las olas inician automáticamente',
+    'Activa PULSE o MINE en el campo',
+    'Toca 5x una torre para Focus Mode',
+    'Usa SELL para recuperar oro',
   ];
 
   static const List<String> _desktopMessages = [
-    'Selecciona una torre para armarla.',
-    'Arrastra a una casilla verde para colocar.',
-    'Las olas inician solas tras tu primera torre.',
-    'Presiona SPACE/M o toca Pulse/Mine y luego el campo.',
-    'Clic 5x en una torre para Focus Mode y selecciona objetivo.',
-    'Usa SELL para recuperar 20% del oro.',
+    'Selecciona una torre para armarla',
+    'Arrastra a una casilla verde',
+    'Las olas inician automáticamente',
+    'Presiona SPACE/M para habilidades',
+    'Clic 5x en torre para Focus Mode',
+    'Usa SELL para recuperar oro',
   ];
 
   static const List<double> _autoAdvanceDelays = [
@@ -41,9 +44,12 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   int _step = 0;
   bool _hidden = false;
   double _stepTimer = 0;
+  double _animTime = 0;
+  double _fadeIn = 0;
 
   void _advance() {
     _stepTimer = 0;
+    _fadeIn = 0;
     if (_step < _activeMessages.length - 1) {
       _step++;
     } else {
@@ -78,6 +84,9 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   @override
   void update(double dt) {
     super.update(dt);
+    _animTime += dt;
+    _fadeIn = (_fadeIn + dt * 3).clamp(0.0, 1.0);
+
     if (_hidden) return;
     if (_step < 0 || _step >= _activeMessages.length) {
       _hidden = true;
@@ -95,41 +104,165 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   void render(Canvas canvas) {
     super.render(canvas);
     if (_hidden || gameRef.size.y == 0) return;
-    if (gameRef.hideHud) return; // Hide in benchmark mode
+    if (gameRef.hideHud) return;
 
-    final width = math.min(360.0, gameRef.size.x - 32);
+    final screenWidth = gameRef.size.x;
+    final opacity = _fadeIn;
+
+    // Determine accent color based on step
+    final accentColor = _getStepColor(_step);
+
+    // Calculate dimensions
+    final message = _activeMessages[_step];
+    final icon = _stepIcons[_step];
+
     final textPainter = TextPainter(
       text: TextSpan(
-        text: _activeMessages[_step],
-        style: NeonTextStyles.body.copyWith(
-          color: Colors.white,
-          fontSize: 14,
+        text: message,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.95 * opacity),
+          fontSize: 12,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.w500,
+          letterSpacing: 0.5,
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout(maxWidth: width - 32);
-    final height = math.max(56.0, textPainter.height + 20);
-    final x = (gameRef.size.x - width) / 2;
-    final y = 32.0;
-    final rect = Rect.fromLTWH(x, y, width, height);
-    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(12));
+    )..layout();
 
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = Colors.black.withOpacity(0.65)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    final iconPainter = TextPainter(
+      text: TextSpan(
+        text: icon,
+        style: TextStyle(
+          color: accentColor.withOpacity(opacity),
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          shadows: [Shadow(color: accentColor.withOpacity(0.8 * opacity), blurRadius: 6)],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // Minimal pill design - positioned below wave indicator
+    final contentWidth = iconPainter.width + 10 + textPainter.width;
+    final pillWidth = contentWidth + 28;
+    final pillHeight = 32.0;
+    final x = (screenWidth - pillWidth) / 2;
+    final y = 115.0; // Below wave indicator
+
+    final pillRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, pillWidth, pillHeight),
+      const Radius.circular(16),
     );
 
+    // Background with gradient
+    final bgGradient = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        const Color(0xFF0a0a18).withOpacity(0.92 * opacity),
+        const Color(0xFF0f0f1a).withOpacity(0.88 * opacity),
+      ],
+    ).createShader(pillRect.outerRect);
+
+    canvas.drawRRect(pillRect, Paint()..shader = bgGradient);
+
+    // Animated border glow
+    final pulseIntensity = 0.3 + math.sin(_animTime * 2) * 0.15;
     canvas.drawRRect(
-      rrect,
+      pillRect.inflate(2),
       Paint()
-        ..color = NeonColors.cyan.withOpacity(0.5)
+        ..color = accentColor.withOpacity(pulseIntensity * opacity)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+
+    // Border
+    canvas.drawRRect(
+      pillRect,
+      Paint()
+        ..color = accentColor.withOpacity(0.5 * opacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 1.2,
     );
 
-    textPainter.paint(canvas, Offset(x + 16, y + (height - textPainter.height) / 2));
+    // Left accent line
+    final accentLineY = y + pillHeight / 2;
+    canvas.drawLine(
+      Offset(x + 8, accentLineY - 6),
+      Offset(x + 8, accentLineY + 6),
+      Paint()
+        ..color = accentColor.withOpacity(0.8 * opacity)
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // Icon
+    iconPainter.paint(canvas, Offset(x + 16, y + (pillHeight - iconPainter.height) / 2));
+
+    // Text
+    textPainter.paint(
+      canvas,
+      Offset(x + 16 + iconPainter.width + 10, y + (pillHeight - textPainter.height) / 2),
+    );
+
+    // Step indicator dots
+    _drawStepDots(canvas, screenWidth, y + pillHeight + 8, opacity, accentColor);
+  }
+
+  void _drawStepDots(Canvas canvas, double screenWidth, double y, double opacity, Color activeColor) {
+    final totalSteps = _activeMessages.length;
+    const dotSize = 4.0;
+    const dotSpacing = 10.0;
+    final totalWidth = totalSteps * dotSize + (totalSteps - 1) * (dotSpacing - dotSize);
+    final startX = (screenWidth - totalWidth) / 2;
+
+    for (int i = 0; i < totalSteps; i++) {
+      final isActive = i == _step;
+      final isPast = i < _step;
+      final dotX = startX + i * dotSpacing;
+
+      if (isActive) {
+        // Active dot with glow
+        canvas.drawCircle(
+          Offset(dotX, y),
+          dotSize + 1,
+          Paint()
+            ..color = activeColor.withOpacity(0.4 * opacity)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+        canvas.drawCircle(
+          Offset(dotX, y),
+          dotSize,
+          Paint()..color = activeColor.withOpacity(opacity),
+        );
+      } else if (isPast) {
+        // Completed dot
+        canvas.drawCircle(
+          Offset(dotX, y),
+          dotSize * 0.7,
+          Paint()..color = activeColor.withOpacity(0.5 * opacity),
+        );
+      } else {
+        // Future dot
+        canvas.drawCircle(
+          Offset(dotX, y),
+          dotSize * 0.5,
+          Paint()..color = Colors.white.withOpacity(0.2 * opacity),
+        );
+      }
+    }
+  }
+
+  Color _getStepColor(int step) {
+    switch (step) {
+      case 0: return const Color(0xFF00FFFF); // Cyan - tower selection
+      case 1: return const Color(0xFF00FF88); // Green - placement
+      case 2: return const Color(0xFFFF00FF); // Magenta - waves
+      case 3: return const Color(0xFFFFAA00); // Orange - abilities
+      case 4: return const Color(0xFF00FFFF); // Cyan - focus mode
+      case 5: return const Color(0xFFFFD700); // Gold - sell
+      default: return NeonColors.cyan;
+    }
   }
 }
 

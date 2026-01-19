@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../../services/sprite_cache_service.dart';
 import '../entities/tower.dart';
 
 /// Visual effect spawned when a projectile hits an enemy
@@ -22,11 +23,49 @@ class ImpactEffect extends PositionComponent {
     );
   }
 
-  static const int maxPool = 60;
-  static const int maxActive = 80;
+  static const int maxPool = 30;
+  static const int maxActive = 40;
   static final List<ImpactEffect> _pool = [];
   static int _activeCount = 0;
   static double fxScale = 1.0;
+  static int get activeCount => _activeCount;
+
+  /// Use cached sprites when active count is high for better performance
+  static bool get _useCachedSprites => _activeCount > 20;
+
+  /// Clear the static pool to prevent memory accumulation between games
+  static void clearPool() {
+    _pool.clear();
+    _activeCount = 0;
+  }
+
+  // Cached Paint objects to avoid per-frame allocations
+  final Paint _ringGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  final Paint _ringCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  final Paint _particleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  final Paint _particleCorePaint = Paint();
+  final Paint _sparkGlowPaint = Paint()
+    ..strokeWidth = 3
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  final Paint _sparkCorePaint = Paint()
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round;
+  final Paint _electricPaint = Paint()
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  final Paint _starPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  final Paint _spritePaint = Paint();
+  final Path _reusablePath = Path();
 
   static ImpactEffect? spawn({
     required Vector2 position,
@@ -252,7 +291,13 @@ class ImpactEffect extends PositionComponent {
     final progress = (_timer / duration).clamp(0.0, 1.0);
     final fadeOut = 1.0 - progress;
 
-    // Draw rings
+    // Use cached sprites under high stress for better performance
+    if (_useCachedSprites) {
+      _renderCachedSprite(canvas, fadeOut);
+      return;
+    }
+
+    // Draw rings (using cached paints)
     for (final ring in _rings) {
       if (!ring.isActive) continue;
 
@@ -261,28 +306,15 @@ class ImpactEffect extends PositionComponent {
       final alpha = (1 - ringProgress) * fadeOut;
 
       // Ring glow
-      canvas.drawCircle(
-        Offset.zero,
-        radius,
-        Paint()
-          ..color = color.withOpacity(alpha * 0.3)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      _ringGlowPaint.color = color.withOpacity(alpha * 0.3);
+      canvas.drawCircle(Offset.zero, radius, _ringGlowPaint);
 
       // Ring core
-      canvas.drawCircle(
-        Offset.zero,
-        radius,
-        Paint()
-          ..color = color.withOpacity(alpha * 0.6)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
+      _ringCorePaint.color = color.withOpacity(alpha * 0.6);
+      canvas.drawCircle(Offset.zero, radius, _ringCorePaint);
     }
 
-    // Draw particles
+    // Draw particles (using cached paints and reusable path)
     for (final particle in _particles) {
       if (!particle.isActive) continue;
 
@@ -295,47 +327,33 @@ class ImpactEffect extends PositionComponent {
       canvas.rotate(particle.rotation);
 
       if (particle.isRune) {
-        // Draw diamond rune
-        final runePath = Path()
-          ..moveTo(0, -particle.size)
-          ..lineTo(particle.size * 0.7, 0)
-          ..lineTo(0, particle.size)
-          ..lineTo(-particle.size * 0.7, 0)
-          ..close();
+        // Draw diamond rune using reusable path
+        _reusablePath.reset();
+        _reusablePath.moveTo(0, -particle.size);
+        _reusablePath.lineTo(particle.size * 0.7, 0);
+        _reusablePath.lineTo(0, particle.size);
+        _reusablePath.lineTo(-particle.size * 0.7, 0);
+        _reusablePath.close();
 
-        canvas.drawPath(
-          runePath,
-          Paint()
-            ..color = color.withOpacity(alpha * 0.5)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-        );
-        canvas.drawPath(
-          runePath,
-          Paint()..color = color.withOpacity(alpha),
-        );
+        _particleGlowPaint.color = color.withOpacity(alpha * 0.5);
+        canvas.drawPath(_reusablePath, _particleGlowPaint);
+        _particleCorePaint.color = color.withOpacity(alpha);
+        canvas.drawPath(_reusablePath, _particleCorePaint);
       } else if (particle.isStar) {
         // Draw star
         _drawStar(canvas, Offset.zero, particle.size, color.withOpacity(alpha));
       } else {
         // Draw circle particle
-        canvas.drawCircle(
-          Offset.zero,
-          particle.size,
-          Paint()
-            ..color = color.withOpacity(alpha * 0.4)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-        );
-        canvas.drawCircle(
-          Offset.zero,
-          particle.size * 0.6,
-          Paint()..color = color.withOpacity(alpha),
-        );
+        _particleGlowPaint.color = color.withOpacity(alpha * 0.4);
+        canvas.drawCircle(Offset.zero, particle.size, _particleGlowPaint);
+        _particleCorePaint.color = color.withOpacity(alpha);
+        canvas.drawCircle(Offset.zero, particle.size * 0.6, _particleCorePaint);
       }
 
       canvas.restore();
     }
 
-    // Draw sparks
+    // Draw sparks (using cached paints)
     for (final spark in _sparks) {
       if (!spark.isActive) continue;
 
@@ -346,51 +364,39 @@ class ImpactEffect extends PositionComponent {
       final endY = math.sin(spark.angle) * (spark.distance + spark.length);
 
       if (spark.isElectric) {
-        // Draw zigzag electric spark
-        final arcPath = Path();
-        arcPath.moveTo(startX, startY);
+        // Draw zigzag electric spark using reusable path
+        _reusablePath.reset();
+        _reusablePath.moveTo(startX, startY);
 
-        final steps = 3;
+        const steps = 3;
         for (int i = 1; i <= steps; i++) {
-          final progress = i / steps;
-          final baseX = startX + (endX - startX) * progress;
-          final baseY = startY + (endY - startY) * progress;
+          final stepProgress = i / steps;
+          final baseX = startX + (endX - startX) * stepProgress;
+          final baseY = startY + (endY - startY) * stepProgress;
 
           final perpAngle = spark.angle + math.pi / 2;
           final jitter = math.sin(_timer * 30 + i * 2) * 3;
           final jitterX = math.cos(perpAngle) * jitter;
           final jitterY = math.sin(perpAngle) * jitter;
 
-          arcPath.lineTo(baseX + jitterX, baseY + jitterY);
+          _reusablePath.lineTo(baseX + jitterX, baseY + jitterY);
         }
 
-        canvas.drawPath(
-          arcPath,
-          Paint()
-            ..color = color.withOpacity(alpha)
-            ..strokeWidth = 2
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-        );
+        _electricPaint.color = color.withOpacity(alpha);
+        canvas.drawPath(_reusablePath, _electricPaint);
       } else {
         // Draw straight spark
+        _sparkGlowPaint.color = color.withOpacity(alpha * 0.4);
         canvas.drawLine(
           Offset(startX, startY),
           Offset(endX, endY),
-          Paint()
-            ..color = color.withOpacity(alpha * 0.4)
-            ..strokeWidth = 3
-            ..strokeCap = StrokeCap.round
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+          _sparkGlowPaint,
         );
+        _sparkCorePaint.color = color.withOpacity(alpha);
         canvas.drawLine(
           Offset(startX, startY),
           Offset(endX, endY),
-          Paint()
-            ..color = color.withOpacity(alpha)
-            ..strokeWidth = 1.5
-            ..strokeCap = StrokeCap.round,
+          _sparkCorePaint,
         );
       }
     }
@@ -398,31 +404,71 @@ class ImpactEffect extends PositionComponent {
     // Central flash removed to reduce hit strobing.
   }
 
+  /// Renders using pre-cached sprites for high-performance mode
+  void _renderCachedSprite(Canvas canvas, double fadeOut) {
+    final spriteCache = SpriteCacheService.instance;
+
+    // Try to get cached impact sprite
+    final impactSprite = spriteCache.getImpactSprite(color);
+    if (impactSprite != null) {
+      final scale = 0.5 + fadeOut * 0.5; // Shrink as it fades
+      _spritePaint.color = Color.fromRGBO(255, 255, 255, fadeOut);
+
+      canvas.save();
+      canvas.scale(scale, scale);
+      canvas.drawImage(
+        impactSprite,
+        Offset(-impactSprite.width / 2, -impactSprite.height / 2),
+        _spritePaint,
+      );
+      canvas.restore();
+    }
+
+    // Try to get cached ring sprite for expanding ring effect
+    if (_rings.isNotEmpty) {
+      final ringSprite = spriteCache.getImpactRingSprite(color);
+      if (ringSprite != null) {
+        for (final ring in _rings) {
+          if (!ring.isActive) continue;
+
+          final ringScale = ring.currentRadius / 20; // Scale based on ring size
+          final ringAlpha = (1 - ring.progress) * fadeOut;
+          _spritePaint.color = Color.fromRGBO(255, 255, 255, ringAlpha);
+
+          canvas.save();
+          canvas.scale(ringScale, ringScale);
+          canvas.drawImage(
+            ringSprite,
+            Offset(-ringSprite.width / 2, -ringSprite.height / 2),
+            _spritePaint,
+          );
+          canvas.restore();
+        }
+      }
+    }
+  }
+
   void _drawStar(Canvas canvas, Offset center, double radius, Color starColor) {
-    final starPath = Path();
+    _reusablePath.reset();
     for (int i = 0; i < 4; i++) {
       final angle = i * math.pi / 2 + _timer * 5;
       final x = center.dx + math.cos(angle) * radius;
       final y = center.dy + math.sin(angle) * radius;
       if (i == 0) {
-        starPath.moveTo(x, y);
+        _reusablePath.moveTo(x, y);
       } else {
-        starPath.lineTo(x, y);
+        _reusablePath.lineTo(x, y);
       }
       // Inner point
       final innerAngle = angle + math.pi / 4;
       final innerX = center.dx + math.cos(innerAngle) * radius * 0.4;
       final innerY = center.dy + math.sin(innerAngle) * radius * 0.4;
-      starPath.lineTo(innerX, innerY);
+      _reusablePath.lineTo(innerX, innerY);
     }
-    starPath.close();
+    _reusablePath.close();
 
-    canvas.drawPath(
-      starPath,
-      Paint()
-        ..color = starColor
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-    );
+    _starPaint.color = starColor;
+    canvas.drawPath(_reusablePath, _starPaint);
   }
 
   void _recycle() {

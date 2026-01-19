@@ -1,25 +1,22 @@
 {
   "presets": {
-    "Ultra": {
-      "gridIterations": 3,
-      "glowIntensity": 1.0,
-      "scanlineFrequency": 1.0,
-      "particleIntensity": 1.0,
-      "chromaIntensity": 1.0
+    "default": {
+      "bloom_intensity": 0.5,
+      "glow_radius": 8.0,
+      "neon_saturation": 1.2,
+      "scan_line_intensity": 0.1
     },
-    "Balanced": {
-      "gridIterations": 2,
-      "glowIntensity": 0.7,
-      "scanlineFrequency": 0.7,
-      "particleIntensity": 0.7,
-      "chromaIntensity": 0.6
+    "high_performance": {
+      "bloom_intensity": 0.3,
+      "glow_radius": 4.0,
+      "neon_saturation": 1.0,
+      "scan_line_intensity": 0.05
     },
-    "Eco": {
-      "gridIterations": 1,
-      "glowIntensity": 0.4,
-      "scanlineFrequency": 0.4,
-      "particleIntensity": 0.3,
-      "chromaIntensity": 0.3
+    "ultra": {
+      "bloom_intensity": 0.8,
+      "glow_radius": 12.0,
+      "neon_saturation": 1.5,
+      "scan_line_intensity": 0.15
     }
   }
 }

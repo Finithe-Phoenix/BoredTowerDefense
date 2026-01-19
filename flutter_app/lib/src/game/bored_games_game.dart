@@ -28,6 +28,11 @@ import 'entities/projectile.dart';
 import 'fps/fps_view_component.dart';
 import 'fps/fps_background_component.dart';
 import 'hud/hud_component.dart';
+import 'hud/kill_combo_display.dart';
+import 'hud/minimap_component.dart';
+import 'hud/game_event_feed.dart';
+import 'hud/ability_panel.dart';
+import 'hud/battle_dialogue_component.dart';
 import 'managers/bullet_manager.dart';
 import 'managers/enemy_manager.dart';
 import 'managers/tower_manager.dart';
@@ -36,6 +41,7 @@ import '../models/level_config.dart';
 import '../models/quality_level.dart';
 import '../models/upgrade_data.dart';
 import '../services/audio_service.dart';
+import '../services/procedural_music_service.dart';
 import '../services/storage_service.dart';
 import '../services/upgrade_service.dart';
 import 'balance/difficulty_curve.dart';
@@ -76,6 +82,11 @@ class BoredGamesGame extends FlameGame
   late final BulletManager bulletManager;
   late final HudComponent hudComponent;
   late final FocusModeOverlay focusOverlay;
+  late final KillComboDisplay killComboDisplay;
+  late final MinimapComponent minimapComponent;
+  late final GameEventFeed gameEventFeed;
+  late final AbilityPanel abilityPanel;
+  late final BattleDialogueComponent battleDialogue;
   late final ParticleEmitter particleEmitter;
   late final ScreenEffects screenEffects;
   late final VisualDirector visualDirector;
@@ -100,6 +111,11 @@ class BoredGamesGame extends FlameGame
   /// Last delta time for FPS calculation
   double _lastDt = 0.016; // Default ~60fps
   double get dt => _lastDt;
+  double _perfTimer = 0;
+  double _perfAccumDt = 0;
+  double _perfWorstDt = 0;
+  int _perfFrames = 0;
+  final bool _perfLogEnabled = kDebugMode;
 
   double _autoWaveTimer = 0;
   bool _hasPlacedTower = false;
@@ -234,6 +250,15 @@ class BoredGamesGame extends FlameGame
     return size.x < 720 || size.y < 520;
   }
 
+  /// World bounds for minimap calculations
+  Vector2 get worldBounds {
+    if (!_worldLayoutReady) return Vector2(800, 600);
+    return Vector2(
+      worldLayer.mapWidth * tileSize,
+      worldLayer.mapHeight * tileSize,
+    );
+  }
+
   double get shaderScale {
     return switch (_quality) {
       QualityLevel.high => 1.0,
@@ -299,6 +324,7 @@ class BoredGamesGame extends FlameGame
     // Apply time scale for speed control
     final scaledDt = dt * timeScale;
     super.update(scaledDt);
+    _updatePerfStats(dt);
 
     // Update game time
     gameTime += scaledDt;
@@ -343,6 +369,36 @@ class BoredGamesGame extends FlameGame
     if (_focusModeTimer <= 0) {
       exitFocusMode();
     }
+  }
+
+  void _updatePerfStats(double rawDt) {
+    if (!_perfLogEnabled || !_visualReady) return;
+
+    _perfTimer += rawDt;
+    _perfAccumDt += rawDt;
+    _perfFrames += 1;
+    if (rawDt > _perfWorstDt) {
+      _perfWorstDt = rawDt;
+    }
+
+    if (_perfTimer < 2.0) return;
+
+    final avgFps = _perfFrames / _perfAccumDt;
+    final worstMs = _perfWorstDt * 1000;
+    debugPrint(
+      'perf fps=${avgFps.toStringAsFixed(1)} '
+      'worstMs=${worstMs.toStringAsFixed(1)} '
+      'enemies=${enemyManager.aliveCount} '
+      'bullets=${bulletManager.activeCount} '
+      'towers=${towerManager.towerCount} '
+      'impacts=${ImpactEffect.activeCount} '
+      'explosions=${ExplosionEffect.activeCount}',
+    );
+
+    _perfTimer = 0;
+    _perfAccumDt = 0;
+    _perfFrames = 0;
+    _perfWorstDt = 0;
   }
 
   @override
@@ -569,6 +625,10 @@ class BoredGamesGame extends FlameGame
     _pendingAbility = PendingAbility.none;
     notifyTutorialAbilityUsed();
 
+    // Notify event feed and battle dialogue
+    gameEventFeed.abilityUsed('NEON PULSE');
+    battleDialogue.onAbilityUsed('NEON PULSE');
+
     final pulse = NeonPulse(
       center: worldPos,
       radius: 100,
@@ -636,6 +696,10 @@ class BoredGamesGame extends FlameGame
     _pendingAbility = PendingAbility.none;
     notifyTutorialAbilityUsed();
 
+    // Notify event feed and battle dialogue
+    gameEventFeed.abilityUsed('NEON MINE');
+    battleDialogue.onAbilityUsed('NEON MINE');
+
     final mine = NeonMine(
       position: minePos,
       enemies: () => enemyManager.activeEnemies,
@@ -664,6 +728,33 @@ class BoredGamesGame extends FlameGame
     score += 10;
     AudioService.instance.playGoldEarned();
 
+    // Register kill in combo display
+    killComboDisplay.registerKill(
+      isCritical: enemy.isBoss,
+      isMultiKill: false,
+    );
+
+    // Notify event feed for boss kills or big gold rewards
+    if (enemy.isBoss) {
+      gameEventFeed.bossDefeated(enemy.displayName);
+      battleDialogue.onBossDefeated(enemy.displayName);
+
+      // Check if this was the final boss
+      final wasFinalBoss = enemy.displayName.toLowerCase().contains('decompiler') ||
+          enemy.displayName.toLowerCase().contains('void') ||
+          (levelConfig?.id ?? 0) >= 50;
+
+      if (wasFinalBoss) {
+        // Stop the epic final boss music
+        ProceduralMusicService.instance.stopFinalBossMusic();
+      } else {
+        // Return music to normal intensity after regular boss is defeated
+        ProceduralMusicService.instance.triggerNormalMode();
+      }
+    } else if (reward >= 50) {
+      gameEventFeed.goldEarned(reward);
+    }
+
     _applyVisual(() => visualDirector.handleEnemyKill(enemy, reward));
   }
 
@@ -672,11 +763,45 @@ class BoredGamesGame extends FlameGame
     lives -= 1;
     AudioService.instance.playEnemyLeak();
     _applyVisual(() => visualDirector.handleEnemyLeak(enemy));
+
+    // Low health warning
+    if (lives > 0 && lives <= 3) {
+      gameEventFeed.lowHealth();
+      battleDialogue.onLowHealth(lives);
+    }
+
     if (lives <= 0) {
       lives = 0;
       _gameEnded = true;
       AudioService.instance.playGameOver();
       onGameOver?.call();
+    }
+  }
+
+  void _onBossSpawn(String bossName) {
+    // Notify event feed and battle dialogue
+    gameEventFeed.bossSpawned(bossName);
+    battleDialogue.onBossSpawn(bossName);
+
+    // Check if this is the final boss (Decompiler) - play epic theme
+    final isFinalBoss = bossName.toLowerCase().contains('decompiler') ||
+        bossName.toLowerCase().contains('void') ||
+        (levelConfig?.id ?? 0) >= 50; // Level 50+ is final boss territory
+
+    if (isFinalBoss) {
+      // Play the epic "BROKEN GRID" final boss theme
+      ProceduralMusicService.instance.playFinalBossMusic();
+      battleDialogue.onDecompilerTaunt();
+    } else {
+      // Regular boss - just intensify the music
+      ProceduralMusicService.instance.triggerBossMode();
+    }
+  }
+
+  void _onBossPhaseChange(String bossName, int phase) {
+    // Phase 2 = 50% health (triggers at 75% -> 50% transition)
+    if (phase == 2) {
+      battleDialogue.onBossHalfHealth(bossName);
     }
   }
 
@@ -757,6 +882,9 @@ class BoredGamesGame extends FlameGame
     );
     score += 50 * waveNumber;
 
+    // Notify event feed
+    gameEventFeed.waveComplete(waveNumber);
+
     // Check for victory
     if (waveNumber >= _totalWaves) {
       _gameEnded = true;
@@ -774,6 +902,16 @@ class BoredGamesGame extends FlameGame
     enemyManager.startWave(count: count);
     _applyVisual(() => visualDirector.notifyWaveStart(enemyManager.currentWave, enemyManager.currentModifier));
     notifyTutorialWaveStart();
+
+    // Notify event feed
+    gameEventFeed.waveStarted(enemyManager.currentWave);
+
+    // Battle dialogue for big waves
+    battleDialogue.onBigWaveStart(enemyManager.currentWave);
+
+    // Reset combo on new wave
+    killComboDisplay.reset();
+
     add(FloatingText(
       position: Vector2(size.x / 2, 60),
       text: 'Wave ${enemyManager.currentWave} launched!',
@@ -1208,8 +1346,17 @@ class BoredGamesGame extends FlameGame
     final placed = towerManager.placeTower(placementPos);
     if (placed) {
       gold -= cost;
+      final wasFirstTower = !_hasPlacedTower;
       _hasPlacedTower = true;
       _autoWaveTimer = 0;
+
+      // Notify event feed
+      gameEventFeed.towerBuilt(towerManager.selectedTowerType.name.toUpperCase());
+
+      // Battle dialogue for first tower
+      if (wasFirstTower) {
+        battleDialogue.onFirstTowerPlaced();
+      }
     }
   }
 
@@ -1555,6 +1702,15 @@ class BoredGamesGame extends FlameGame
       tileSize: tileSize,
       mapFile: mapFile,
     );
+
+    // Clear static pools and caches to prevent memory accumulation between games
+    BulletManager.clearPool();
+    ImpactEffect.clearPool();
+    FloatingText.clearPool();
+    ExplosionEffect.clearPool();
+    Enemy.clearBlurCache();
+    EnemyManager.clearBucketPool();
+
     bulletManager = BulletManager();
 
     enemyManager = EnemyManager(
@@ -1563,6 +1719,8 @@ class BoredGamesGame extends FlameGame
       onEnemyKilled: _onEnemyKilled,
       onEnemyLeaked: _onEnemyLeaked,
       onWaveComplete: _onWaveComplete,
+      onBossSpawn: _onBossSpawn,
+      onBossPhaseChange: _onBossPhaseChange,
     );
 
     towerManager = TowerManager(
@@ -1575,6 +1733,11 @@ class BoredGamesGame extends FlameGame
 
     hudComponent = HudComponent();
     focusOverlay = FocusModeOverlay();
+    killComboDisplay = KillComboDisplay();
+    minimapComponent = MinimapComponent();
+    gameEventFeed = GameEventFeed();
+    abilityPanel = AbilityPanel();
+    battleDialogue = BattleDialogueComponent();
 
     // Particle system
     particleEmitter = ParticleEmitter(position: Vector2.zero(), maxParticles: 200);
@@ -1591,6 +1754,11 @@ class BoredGamesGame extends FlameGame
     _reflowWorld();
     await add(focusOverlay);
     await add(hudComponent);
+    await add(killComboDisplay);
+    await add(minimapComponent);
+    await add(gameEventFeed);
+    await add(abilityPanel);
+    await add(battleDialogue);
 
     screenEffects = ScreenEffects(
       gameSize: size,

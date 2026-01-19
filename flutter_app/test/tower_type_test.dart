@@ -9,7 +9,17 @@ void main() {
       expect(type.cost, greaterThan(0));
       expect(type.range, greaterThan(0));
       expect(type.fireRate, greaterThan(0));
-      expect(type.projectileSpeed, greaterThan(0));
+      expect(type.damage, greaterThanOrEqualTo(0));
+      expect(type.projectileSpeed, greaterThanOrEqualTo(0));
+      if (type.damage == 0) {
+        expect(type, TowerType.resonanceSiphon);
+      }
+      if (type.projectileSpeed == 0) {
+        expect(
+          type == TowerType.teslaTerminal || type == TowerType.resonanceSiphon,
+          isTrue,
+        );
+      }
     }
   });
 

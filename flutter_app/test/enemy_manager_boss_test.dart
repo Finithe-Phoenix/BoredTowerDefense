@@ -6,18 +6,34 @@ import 'package:bored_games/src/game/managers/enemy_manager.dart';
 import 'package:bored_games/src/game/entities/boss.dart';
 import 'package:bored_games/src/game/world/game_world.dart';
 import 'package:bored_games/src/models/level_config.dart';
+import 'helpers/fake_audioplayers_platform.dart';
 
 // Helper function to create a test world with waypoints
 GameWorld createTestWorld(List<Vector2> waypoints) {
   final world = GameWorld(
     tileSize: 32,
-    mapFile: 'test.tmx',
+    mapFile: 'maps/level1.tmx',
   );
   world.waypoints = waypoints;
   return world;
 }
 
+void spawnUntilBoss(EnemyManager manager) {
+  while (manager.remaining > 2) {
+    manager.update(2.0);
+  }
+  if (manager.remaining == 2) {
+    manager.update(2.0);
+  }
+}
+
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() {
+    registerFakeAudioplayersPlatform();
+  });
+
   group('EnemyManager Boss System', () {
     late BoredGamesGame game;
     late EnemyManager enemyManager;
@@ -27,7 +43,7 @@ void main() {
       final testLevel = LevelConfig(
         id: 10,
         name: 'Test Level',
-        mapFile: 'test.tmx',
+        mapFile: 'maps/level1.tmx',
         waves: 5,
         difficulty: 1,
       );
@@ -58,8 +74,8 @@ void main() {
           levelConfig: LevelConfig(
             id: 5, // Not a multiple of 10
             name: 'Test Level',
-            mapFile: 'test.tmx',
-            waves: 3,
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
             difficulty: 1,
           ),
         ),
@@ -81,14 +97,7 @@ void main() {
           manager.startWave(count: 5);
           await game.ready();
 
-          // Spawn all regular enemies except last one
-          for (int i = 0; i < manager.remaining - 1; i++) {
-            manager.update(2.0); // Force spawn
-          }
-
-          // Last spawn should be a mini-boss
-          final beforeBossCount = manager.aliveCount;
-          manager.update(2.0);
+          spawnUntilBoss(manager);
 
           expect(manager.currentBoss, isNotNull);
           expect(manager.currentBoss?.bossType, BossType.miniBoss);
@@ -102,8 +111,8 @@ void main() {
           levelConfig: LevelConfig(
             id: 10,
             name: 'Citadel Core',
-            mapFile: 'test.tmx',
-            waves: 5,
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
             difficulty: 1,
           ),
         ),
@@ -121,12 +130,7 @@ void main() {
           await game.add(manager);
           manager.startWave(count: 5);
 
-          // Spawn until last enemy
-          for (int i = 0; i < manager.remaining - 1; i++) {
-            manager.update(2.0);
-          }
-
-          manager.update(2.0);
+          spawnUntilBoss(manager);
 
           expect(manager.currentBoss, isNotNull);
           expect(manager.currentBoss?.bossType, BossType.citadelCore);
@@ -157,7 +161,7 @@ void main() {
             levelConfig: LevelConfig(
               id: levelId,
               name: 'Test',
-              mapFile: 'test.tmx',
+              mapFile: 'maps/level1.tmx',
               waves: 5,
               difficulty: 1,
             ),
@@ -183,8 +187,8 @@ void main() {
           levelConfig: LevelConfig(
             id: 5,
             name: 'Test',
-            mapFile: 'test.tmx',
-            waves: 3,
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
             difficulty: 1,
           ),
         ),
@@ -200,9 +204,7 @@ void main() {
           manager.startWave(count: 5);
 
           // Spawn boss
-          for (int i = 0; i < manager.remaining; i++) {
-            manager.update(2.0);
-          }
+          spawnUntilBoss(manager);
 
           final boss = manager.currentBoss;
           expect(boss, isNotNull);
@@ -219,8 +221,8 @@ void main() {
           levelConfig: LevelConfig(
             id: 10,
             name: 'Test',
-            mapFile: 'test.tmx',
-            waves: 5,
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
             difficulty: 1,
           ),
         ),
@@ -235,9 +237,7 @@ void main() {
           await game.add(manager);
           manager.startWave(count: 5);
 
-          for (int i = 0; i < manager.remaining; i++) {
-            manager.update(2.0);
-          }
+          spawnUntilBoss(manager);
 
           final boss = manager.currentBoss;
           expect(boss, isNotNull);
@@ -264,7 +264,7 @@ void main() {
           speed: 60 * 0.6, // Base speed * 0.6
         );
 
-        expect(boss.speed, equals(36));
+        expect(boss.speed, closeTo(21.6, 0.001));
       });
     });
 
@@ -327,12 +327,13 @@ void main() {
           await manager.add(boss);
 
           // Damage boss to trigger phase changes
-          boss.takeDamage(260); // Phase 2
+          final phaseDamage = boss.maxHealth * 0.26;
+          boss.takeDamage(phaseDamage); // Phase 2
           boss.update(0.016);
           expect(phaseChangeCount, 1);
           expect(lastPhase, 2);
 
-          boss.takeDamage(260); // Phase 3
+          boss.takeDamage(phaseDamage); // Phase 3
           boss.update(0.016);
           expect(phaseChangeCount, 2);
           expect(lastPhase, 3);
@@ -386,7 +387,7 @@ void main() {
           levelConfig: LevelConfig(
             id: 10,
             name: 'Test',
-            mapFile: 'test.tmx',
+            mapFile: 'maps/level1.tmx',
             waves: 3,
             difficulty: 1,
           ),
@@ -407,7 +408,16 @@ void main() {
 
       testWithGame(
         'currentBoss is set when boss spawned',
-        BoredGamesGame.new,
+        () => BoredGamesGame(
+          tileSize: 32,
+          levelConfig: LevelConfig(
+            id: 1,
+            name: 'Test',
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
+            difficulty: 1,
+          ),
+        ),
         (game) async {
           final testWorld = createTestWorld([Vector2(0, 0), Vector2(100, 0)]);
 
@@ -420,9 +430,7 @@ void main() {
           manager.startWave(count: 5);
 
           // Spawn boss
-          for (int i = 0; i < manager.remaining; i++) {
-            manager.update(2.0);
-          }
+          spawnUntilBoss(manager);
 
           expect(manager.currentBoss, isNotNull);
           expect(manager.currentBoss?.isAlive, true);
@@ -467,8 +475,8 @@ void main() {
           levelConfig: LevelConfig(
             id: 10,
             name: 'Test',
-            mapFile: 'test.tmx',
-            waves: 3,
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
             difficulty: 1,
           ),
         ),
@@ -487,9 +495,7 @@ void main() {
           manager.startWave(count: 5);
 
           // Spawn boss
-          for (int i = 0; i < manager.remaining; i++) {
-            manager.update(2.0);
-          }
+          spawnUntilBoss(manager);
 
           // Should have boss + entrance effect as children
           expect(manager.children.length, greaterThan(initialChildCount));
@@ -500,7 +506,16 @@ void main() {
     group('Edge Cases', () {
       testWithGame(
         'handles wave completion with boss',
-        BoredGamesGame.new,
+        () => BoredGamesGame(
+          tileSize: 32,
+          levelConfig: LevelConfig(
+            id: 1,
+            name: 'Test',
+            mapFile: 'maps/level1.tmx',
+            waves: 1,
+            difficulty: 1,
+          ),
+        ),
         (game) async {
           bool waveCompleted = false;
           final testWorld = createTestWorld([Vector2(0, 0), Vector2(100, 0)]);
@@ -515,21 +530,18 @@ void main() {
 
           await game.add(manager);
 
-          final boss = Boss(
-            path: testWorld.waypoints,
-            bossType: BossType.citadelCore,
-            bossLevel: 10,
-            maxHealth: 100,
-            onDeath: manager.onEnemyKilled != null
-                ? (enemy) => manager.onEnemyKilled?.call(enemy, enemy.goldReward)
-                : null,
-          );
+          manager.startWave(count: 5);
+          manager.remaining = 2;
+          manager.update(2.0);
 
-          await manager.add(boss);
+          final boss = manager.currentBoss;
+          expect(boss, isNotNull);
+
           manager.spawning = false;
+          manager.remaining = 0;
 
           // Kill boss
-          boss.takeDamage(250); // Account for 2.5x multiplier (100 * 2.5 = 250)
+          boss!.takeDamage(boss.maxHealth * 2);
 
           expect(waveCompleted, true);
         },

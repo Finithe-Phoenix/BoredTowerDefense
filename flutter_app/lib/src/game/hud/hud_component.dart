@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../bored_games_game.dart';
 import '../entities/tower.dart';
+import '../managers/enemy_manager.dart' show WaveModifier;
 import '../../ui/theme/neon_theme.dart';
 import 'hud_button.dart';
 import 'boss_health_bar.dart';
@@ -23,6 +24,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   double _time = 0;
   final Map<String, _TextCache> _textCache = {};
+  static const int _maxTextCacheSize = 100; // Limit cache to prevent memory leak
 
   // Speed control
   static const List<double> speedOptions = [1.0, 2.0];
@@ -42,6 +44,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   int _lastWave = -1;
   int _lastEnemies = -1;
   int _lastTowers = -1;
+
+  // Wave transition animation state
+  double _waveTransitionTimer = 0;
+  int _waveTransitionFrom = 0;
+  bool _waveTransitionActive = false;
+  static const double _waveTransitionDuration = 1.2;
   Rect? _topPanelRect;
   Shader? _topPanelShader;
   Rect? _bottomPanelRect;
@@ -105,7 +113,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   // Layout constants
   static double topBarHeight = 60.0;
-  static double bottomBarHeight = 100.0;
+  static double bottomBarHeight = 20.0; // Reduced since buttons are now on sides
   static double buttonHeight = 44.0;
   static double buttonSpacing = 12.0;
   static const bool reduceFlicker = true;
@@ -126,12 +134,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       buttonSpacing = 12.0;
     }
 
-    final twoRows = width < 780;
-    final rowSpacing = compact ? 8.0 : 10.0;
-    final minBottom = twoRows
-        ? (buttonHeight * 2 + rowSpacing + 22)
-        : (buttonHeight + 46);
-    bottomBarHeight = math.max(compact ? 90.0 : 100.0, minBottom);
+    // New side-panel layout doesn't need a large bottom bar
+    bottomBarHeight = 20.0;
   }
 
   @override
@@ -171,108 +175,119 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       height: screenHeight,
       compact: compact,
     );
-    final bottomBarTop = screenHeight - bottomBarHeight;
-    final useTwoRows = _useTwoRowLayout(screenWidth);
-    _layoutTwoRows = useTwoRows;
+    _layoutTwoRows = false;
 
-    // Tower buttons - centered with better spacing
-    const baseButtonWidth = 100.0;
-    const baseAbilityWidth = 110.0;
-    const baseMineWidth = 90.0;
-    const baseSellWidth = 90.0;
-    const baseUpgradeWidth = 110.0;
-    const baseWaveWidth = 100.0;
-    final availableWidth = screenWidth - 24;
-    final baseSpacing = buttonSpacing;
-    final row1Width =
-        4 * baseButtonWidth + 3 * baseSpacing;
-    final row2Width =
-        baseAbilityWidth +
-        baseMineWidth +
-        baseSellWidth +
-        baseUpgradeWidth +
-        baseWaveWidth +
-        4 * baseSpacing;
-    final baseTotalWidth =
-        4 * baseButtonWidth +
-        baseAbilityWidth +
-        baseMineWidth +
-        baseSellWidth +
-        baseUpgradeWidth +
-        baseWaveWidth +
-        8 * baseSpacing;
-    final targetWidth = useTwoRows ? math.max(row1Width, row2Width) : baseTotalWidth;
-    final scale = (availableWidth / targetWidth).clamp(0.64, 1.0);
-    _layoutButtonWidth = baseButtonWidth * scale;
-    _layoutAbilityWidth = baseAbilityWidth * scale;
-    _layoutMineWidth = baseMineWidth * scale;
-    _layoutSellWidth = baseSellWidth * scale;
-    _layoutUpgradeWidth = baseUpgradeWidth * scale;
-    _layoutWaveWidth = baseWaveWidth * scale;
-    _layoutSpacing = baseSpacing * scale;
+    // ═══════════════════════════════════════════════════════════════════════
+    // RESPONSIVE LAYOUT: Adapts to screen size
+    // ═══════════════════════════════════════════════════════════════════════
 
-    if (useTwoRows) {
-      final rowSpacing = compact ? 8.0 : 10.0;
-      final rowsHeight = buttonHeight * 2 + rowSpacing;
-      _layoutRow1Y = bottomBarTop + (bottomBarHeight - rowsHeight) / 2;
-      _layoutRow2Y = _layoutRow1Y + buttonHeight + rowSpacing;
-      final row1Total =
-          4 * _layoutButtonWidth + 3 * _layoutSpacing;
-      final row2Total =
-          _layoutAbilityWidth +
-          _layoutMineWidth +
-          _layoutSellWidth +
-          _layoutUpgradeWidth +
-          _layoutWaveWidth +
-          4 * _layoutSpacing;
-      _layoutRow1StartX = math.max(8.0, (screenWidth - row1Total) / 2);
-      _layoutRow2StartX = math.max(8.0, (screenWidth - row2Total) / 2);
-    } else {
-      final totalWidth =
-          4 * _layoutButtonWidth +
-          _layoutAbilityWidth +
-          _layoutMineWidth +
-          _layoutSellWidth +
-          _layoutUpgradeWidth +
-          _layoutWaveWidth +
-          8 * _layoutSpacing;
-      _layoutStartX = math.max(8.0, (screenWidth - totalWidth) / 2);
-      _layoutSingleRowY = bottomBarTop + (bottomBarHeight - buttonHeight) / 2;
-    }
+    // Calculate scale factor based on screen size
+    final baseWidth = 1920.0;
+    final baseHeight = 1080.0;
+    final scaleX = (screenWidth / baseWidth).clamp(0.5, 1.2);
+    final scaleY = (screenHeight / baseHeight).clamp(0.5, 1.2);
+    final scale = math.min(scaleX, scaleY);
+
+    // Responsive dimensions
+    final leftPanelX = 12.0 * scale;
+    final leftButtonWidth = (100.0 * scale).clamp(70.0, 120.0);
+    final leftButtonHeight = (36.0 * scale).clamp(28.0, 44.0);
+    final leftButtonSpacing = (5.0 * scale).clamp(3.0, 8.0);
+
+    // Calculate available height for left panel
+    final topOffset = topBarHeight + 100 * scale; // Below top bar and wave indicator
+    final availableHeight = screenHeight - topOffset - 20;
 
     // Dynamic tower buttons based on unlocks
     final unlockedTowers = LevelService.instance.getUnlockedTowers();
     _towerButtons.clear();
+    _layoutButtonWidth = leftButtonWidth;
 
-    for (int i = 0; i < unlockedTowers.length; i++) {
-        final type = unlockedTowers[i];
-        final x = (useTwoRows ? _layoutRow1StartX : _layoutStartX) + i * (_layoutButtonWidth + _layoutSpacing);
-        final y = useTwoRows ? _layoutRow1Y : _layoutSingleRowY;
-        
-        final btn = HudButton(
-            label: type.name.split(' ').last.toUpperCase(), // e.g. 'ARCHER' or 'SNIPER'
-            position: Vector2(x, y),
-            size: Vector2(_layoutButtonWidth, buttonHeight),
-            color: type.color,
-            isSelected: gameRef.towerManager.selectedTowerType == type,
-            reduceFlicker: reduceFlicker,
-            onPressed: () => gameRef.towerManager.setSelectedTowerType(type),
-        );
-        _towerButtons.add(btn);
-        add(btn);
+    // Calculate total buttons needed (towers + sell + upgrades + wave)
+    final totalLeftButtons = unlockedTowers.length + 3;
+    final totalButtonsHeight = totalLeftButtons * leftButtonHeight + (totalLeftButtons - 1) * leftButtonSpacing;
+
+    // Adjust button height if needed to fit
+    var adjustedButtonHeight = leftButtonHeight;
+    var adjustedSpacing = leftButtonSpacing;
+    if (totalButtonsHeight > availableHeight) {
+      final ratio = availableHeight / totalButtonsHeight;
+      adjustedButtonHeight = (leftButtonHeight * ratio).clamp(24.0, leftButtonHeight);
+      adjustedSpacing = (leftButtonSpacing * ratio).clamp(2.0, leftButtonSpacing);
     }
 
-    final abilityStartX = useTwoRows 
-        ? _layoutRow2StartX 
-        : _layoutStartX + unlockedTowers.length * (_layoutButtonWidth + _layoutSpacing);
+    final leftPanelStartY = topOffset;
+
+    for (int i = 0; i < unlockedTowers.length; i++) {
+      final type = unlockedTowers[i];
+      final y = leftPanelStartY + i * (adjustedButtonHeight + adjustedSpacing);
+
+      final btn = HudButton(
+        label: type.name.split(' ').last.toUpperCase(),
+        position: Vector2(leftPanelX, y),
+        size: Vector2(leftButtonWidth, adjustedButtonHeight),
+        color: type.color,
+        isSelected: gameRef.towerManager.selectedTowerType == type,
+        reduceFlicker: reduceFlicker,
+        onPressed: () => gameRef.towerManager.setSelectedTowerType(type),
+      );
+      _towerButtons.add(btn);
+      add(btn);
+    }
+
+    // Action buttons below tower buttons
+    final actionButtonsStartY = leftPanelStartY + unlockedTowers.length * (adjustedButtonHeight + adjustedSpacing) + adjustedSpacing * 2;
+
+    sellButton = HudButton(
+      label: 'SELL',
+      position: Vector2(leftPanelX, actionButtonsStartY),
+      size: Vector2(leftButtonWidth, adjustedButtonHeight),
+      color: const Color(0xFFFFAA00),
+      reduceFlicker: reduceFlicker,
+      onPressed: () => gameRef.toggleSellMode(),
+    );
+
+    upgradeButton = HudButton(
+      label: 'UPGRADES',
+      position: Vector2(leftPanelX, actionButtonsStartY + adjustedButtonHeight + adjustedSpacing),
+      size: Vector2(leftButtonWidth, adjustedButtonHeight),
+      color: const Color(0xFF9C27B0),
+      reduceFlicker: reduceFlicker,
+      onPressed: () => gameRef.toggleRunUpgradeOverlay(),
+    );
+
+    waveButton = HudButton(
+      label: 'START WAVE',
+      position: Vector2(leftPanelX, actionButtonsStartY + 2 * (adjustedButtonHeight + adjustedSpacing)),
+      size: Vector2(leftButtonWidth, adjustedButtonHeight),
+      color: const Color(0xFF00FF88),
+      reduceFlicker: reduceFlicker,
+      onPressed: () => gameRef.startWave(count: 6),
+      enabled: !gameRef.enemyManager.spawning,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // RIGHT SIDE: Minimap is handled separately, abilities below it
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Minimap dimensions (from MinimapComponent)
+    final minimapSize = (130.0 * scale).clamp(90.0, 140.0);
+    final minimapPadding = 12.0 * scale;
+    final minimapY = 120.0 * scale; // Below top bar
+
+    // Right panel positioning - below minimap
+    final rightButtonWidth = (100.0 * scale).clamp(70.0, 120.0);
+    final rightButtonHeight = (40.0 * scale).clamp(30.0, 48.0);
+    final rightButtonSpacing = (6.0 * scale).clamp(4.0, 10.0);
+
+    // Position abilities below minimap with gap
+    final rightPanelX = screenWidth - rightButtonWidth - minimapPadding;
+    final rightAbilitiesY = minimapY + minimapSize + 30 * scale;
 
     pulseAbilityBtn = HudButton(
       label: 'PULSE',
-      position: Vector2(
-        abilityStartX,
-        useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutAbilityWidth, buttonHeight),
+      position: Vector2(rightPanelX, rightAbilitiesY),
+      size: Vector2(rightButtonWidth, rightButtonHeight),
       color: const Color(0xFF00FFFF),
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.activateNeonPulse(),
@@ -280,59 +295,26 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     mineAbilityBtn = HudButton(
       label: 'MINE',
-      position: Vector2(
-        abilityStartX + _layoutAbilityWidth + _layoutSpacing,
-        useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutMineWidth, buttonHeight),
-      color: const Color(0xFFFFAA00),
+      position: Vector2(rightPanelX, rightAbilitiesY + rightButtonHeight + rightButtonSpacing),
+      size: Vector2(rightButtonWidth, rightButtonHeight),
+      color: const Color(0xFFFF0066),
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.deployMine(),
     );
 
-    final sellX = useTwoRows
-        ? _layoutRow2StartX + _layoutAbilityWidth + _layoutMineWidth + 2 * _layoutSpacing
-        : abilityStartX + _layoutAbilityWidth + _layoutMineWidth + 2 * _layoutSpacing;
+    // Store layout values for cost indicators
+    _layoutStartX = leftPanelX;
+    _layoutSingleRowY = leftPanelStartY;
+    _layoutSpacing = adjustedSpacing;
+    _layoutButtonWidth = leftButtonWidth;
 
-    sellButton = HudButton(
-      label: 'SELL',
-      position: Vector2(
-        sellX,
-        useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutSellWidth, buttonHeight),
-      color: const Color(0xFFFFAA00),
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.toggleSellMode(),
-    );
-    upgradeButton = HudButton(
-      label: 'UPGRADES',
-      position: Vector2(
-        sellX + _layoutSellWidth + _layoutSpacing,
-        useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutUpgradeWidth, buttonHeight),
-      color: const Color(0xFF9C27B0), // Purple
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.toggleRunUpgradeOverlay(),
-    );
-
-    final waveX = useTwoRows
-        ? _layoutRow2StartX + _layoutAbilityWidth + _layoutMineWidth + _layoutSellWidth + _layoutUpgradeWidth + 4 * _layoutSpacing
-        : sellX + _layoutSellWidth + _layoutUpgradeWidth + 2 * _layoutSpacing;
-
-    waveButton = HudButton(
-      label: 'START WAVE',
-      position: Vector2(
-        waveX,
-        useTwoRows ? _layoutRow2Y : _layoutSingleRowY,
-      ),
-      size: Vector2(_layoutWaveWidth, buttonHeight),
-      color: const Color(0xFF00FF88),
-      reduceFlicker: reduceFlicker,
-      onPressed: () => gameRef.startWave(count: 6),
-      enabled: !gameRef.enemyManager.spawning,
-    );
+    // Store right panel info for other renders
+    _rightPanelX = rightPanelX;
+    _rightAbilitiesY = rightAbilitiesY;
+    _rightButtonWidth = rightButtonWidth;
+    _rightButtonHeight = rightButtonHeight;
+    _rightButtonSpacing = rightButtonSpacing;
+    _currentScale = scale;
 
     addAll(_towerButtons);
     addAll([
@@ -343,6 +325,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       waveButton,
     ]);
   }
+
+  // Layout variables for right panel
+  double _rightPanelX = 0;
+  double _rightAbilitiesY = 0;
+  double _rightButtonWidth = 100;
+  double _rightButtonHeight = 40;
+  double _rightButtonSpacing = 6;
+  double _currentScale = 1.0;
 
   void _invalidateLayoutCaches() {
     _topPanelRect = null;
@@ -360,6 +350,22 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   void update(double dt) {
     super.update(dt);
     _time += dt;
+
+    // Wave transition animation
+    final currentWave = gameRef.enemyManager.currentWave;
+    if (currentWave != _waveTransitionFrom && currentWave > 0) {
+      if (_waveTransitionFrom > 0 && currentWave > _waveTransitionFrom) {
+        _waveTransitionActive = true;
+        _waveTransitionTimer = 0;
+      }
+      _waveTransitionFrom = currentWave;
+    }
+    if (_waveTransitionActive) {
+      _waveTransitionTimer += dt;
+      if (_waveTransitionTimer >= _waveTransitionDuration) {
+        _waveTransitionActive = false;
+      }
+    }
 
     final selected = gameRef.towerManager.selectedTowerType;
     for (final btn in _towerButtons) {
@@ -407,6 +413,92 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     _drawAbilityTargetHint(canvas, screenHeight);
     _drawFocusTimerOverlay(canvas, screenWidth, screenHeight);
+
+    // ═══ WAVE TRANSITION FLASH - EPIC SCREEN EFFECT ═══
+    if (_waveTransitionActive && !reduceFlicker) {
+      final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+
+      // Flash intensity - peaks early then fades
+      double flashAlpha = 0.0;
+      if (t < 0.1) {
+        // Explosive white flash
+        flashAlpha = (t / 0.1) * 0.6;
+      } else if (t < 0.25) {
+        // Rapid fade
+        flashAlpha = 0.6 - ((t - 0.1) / 0.15) * 0.5;
+      } else if (t < 0.5) {
+        // Lingering glow
+        flashAlpha = 0.1 - ((t - 0.25) / 0.25) * 0.1;
+      }
+
+      if (flashAlpha > 0.01) {
+        // Main flash - white core
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, screenHeight),
+          Paint()..color = Colors.white.withOpacity(flashAlpha * 0.5),
+        );
+
+        // Cyberpunk color overlay - cyan/magenta
+        final colorFlash = t < 0.15
+            ? const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.3)
+            : const Color(0xFFFF00FF).withOpacity(flashAlpha * 0.2);
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, screenHeight),
+          Paint()..color = colorFlash,
+        );
+
+        // Horizontal scan lines during flash
+        if (t < 0.3) {
+          final scanCount = 8;
+          for (int i = 0; i < scanCount; i++) {
+            final scanY = (screenHeight / scanCount) * i + (_time * 500 % (screenHeight / scanCount));
+            canvas.drawLine(
+              Offset(0, scanY),
+              Offset(screenWidth, scanY),
+              Paint()
+                ..color = const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.4)
+                ..strokeWidth = 2,
+            );
+          }
+        }
+      }
+
+      // Edge glow effect - borders light up
+      if (t < 0.4) {
+        final edgeAlpha = t < 0.1 ? (t / 0.1) : (1 - (t - 0.1) / 0.3);
+        const edgeWidth = 4.0;
+        final edgeColor = const Color(0xFFFF00FF).withOpacity(edgeAlpha * 0.6);
+
+        // Top edge
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, edgeWidth),
+          Paint()
+            ..color = edgeColor
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
+        // Bottom edge
+        canvas.drawRect(
+          Rect.fromLTWH(0, screenHeight - edgeWidth, screenWidth, edgeWidth),
+          Paint()
+            ..color = edgeColor
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
+        // Left edge
+        canvas.drawRect(
+          Rect.fromLTWH(0, 0, edgeWidth, screenHeight),
+          Paint()
+            ..color = edgeColor
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
+        // Right edge
+        canvas.drawRect(
+          Rect.fromLTWH(screenWidth - edgeWidth, 0, edgeWidth, screenHeight),
+          Paint()
+            ..color = edgeColor
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+        );
+      }
+    }
   }
 
   void _drawFocusTimerOverlay(Canvas canvas, double screenWidth, double screenHeight) {
@@ -484,11 +576,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       ),
     );
 
-    final x = button.position.x + (button.size.x - painter.width) / 2;
-    final y = math.max(
-      button.position.y - painter.height - 6,
-      screenHeight - bottomBarHeight + 6,
-    );
+    // Position hint to the left of the ability button (new right-side layout)
+    final x = button.position.x - painter.width - 18;
+    final y = button.position.y + (button.size.y - painter.height) / 2;
+
     final rect = RRect.fromRectAndRadius(
       Rect.fromLTWH(x - 6, y - 2, painter.width + 12, painter.height + 4),
       const Radius.circular(6),
@@ -560,59 +651,90 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final compact = _isCompactHud(screenWidth, gameRef.size.y);
     final screenHeight = gameRef.size.y;
 
-    // Modern gaming HUD - minimal top bar with gradient fade
-    final panelRect = Rect.fromLTWH(0, 0, screenWidth, topBarHeight + 20);
+    // Modern gaming HUD - slim top bar with gradient fade
+    final panelRect = Rect.fromLTWH(0, 0, screenWidth, 50);
     final gradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        const Color(0xFF000000).withOpacity(0.85),
-        const Color(0xFF000000).withOpacity(0.4),
+        const Color(0xFF000000).withOpacity(0.9),
+        const Color(0xFF000000).withOpacity(0.5),
         Colors.transparent,
       ],
-      stops: const [0.0, 0.6, 1.0],
+      stops: const [0.0, 0.7, 1.0],
     ).createShader(panelRect);
     canvas.drawRect(panelRect, Paint()..shader = gradient);
 
-    // Left side: Gold & Lives (essential resources)
-    _drawModernStat(canvas, 16, 12, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700), Icons.monetization_on);
-    _drawModernStat(canvas, 16, 40, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466), Icons.favorite);
+    // ═══ LEFT SIDE: Gold & Lives (horizontal layout) ═══
+    _drawCompactStat(canvas, 16, 14, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700));
+    _drawCompactStat(canvas, 110, 14, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466));
 
-    // Center: Wave indicator with progress
-    _drawWaveIndicator(canvas, screenWidth);
+    // ═══ CENTER: Speed controls ═══
+    _drawSpeedControls(canvas, screenWidth);
 
-    // Right side: Score
+    // ═══ RIGHT SIDE: Score ═══
     final scoreText = '${gameRef.score}';
     final scorePainter = _getPainter(
       'score-modern-$scoreText',
       scoreText,
       const TextStyle(
         color: Color(0xFF00FF88),
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: FontWeight.bold,
         fontFamily: 'monospace',
-        shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 12)],
+        shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 10)],
       ),
     );
-    scorePainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 14));
+    scorePainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 8));
 
     final scoreLabelPainter = _getPainter(
       'score-label-modern',
       'SCORE',
       TextStyle(
         color: Colors.white.withOpacity(0.5),
-        fontSize: 10,
+        fontSize: 9,
         fontWeight: FontWeight.w500,
         letterSpacing: 2,
       ),
     );
-    scoreLabelPainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 44));
+    scoreLabelPainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 32));
 
-    // Speed controls (top right, below score)
-    _drawSpeedControls(canvas, screenWidth);
+    // ═══ WAVE INDICATOR - Below top bar, centered ═══
+    _drawWaveIndicator(canvas, screenWidth);
 
     // Wave alert (if active)
     _drawWaveAlert(canvas, screenWidth);
+  }
+
+  /// Compact stat display for top bar (horizontal)
+  void _drawCompactStat(Canvas canvas, double x, double y, String label, String value, Color color) {
+    // Label
+    final labelPainter = _getPainter(
+      'compact-label-$label',
+      label,
+      TextStyle(
+        color: color.withOpacity(0.7),
+        fontSize: 9,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.w500,
+        letterSpacing: 1.2,
+      ),
+    );
+    labelPainter.paint(canvas, Offset(x, y));
+
+    // Value
+    final valuePainter = _getPainter(
+      'compact-value-$label-$value',
+      value,
+      TextStyle(
+        color: color,
+        fontSize: 16,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        shadows: [Shadow(color: color.withOpacity(0.6), blurRadius: 6)],
+      ),
+    );
+    valuePainter.paint(canvas, Offset(x + labelPainter.width + 8, y - 2));
   }
 
   void _drawSpeedControls(Canvas canvas, double screenWidth) {
@@ -621,8 +743,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final buttonHeight = 20.0;
     final spacing = 4.0;
     final totalWidth = buttonWidth * 2 + spacing;
-    final startX = screenWidth - totalWidth - 16;
-    final y = 56.0;
+    // Center the speed controls
+    final startX = (screenWidth - totalWidth) / 2;
+    final y = 12.0;
 
     for (int i = 0; i < speedOptions.length; i++) {
       final speed = speedOptions[i];
@@ -764,45 +887,129 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final totalWaves = gameRef.totalWaves <= 0 ? 1 : gameRef.totalWaves;
     final waveProgress = gameRef.enemyManager.waveProgress.clamp(0.0, 1.0);
     final isSpawning = gameRef.enemyManager.spawning;
+    final enemiesAlive = gameRef.enemyManager.aliveCount;
 
-    // Wave number - large and prominent
+    // ═══════════════════════════════════════════════════════════════════════
+    // CLEAN WAVE INDICATOR - Below top bar
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Animation for wave transition
+    double transitionScale = 1.0;
+    double shakeX = 0.0;
+    double shakeY = 0.0;
+    if (_waveTransitionActive) {
+      final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+      if (t < 0.2) {
+        transitionScale = 1.0 + (t / 0.2) * 0.3;
+        shakeX = math.sin(t * 60) * 4 * (1 - t / 0.2);
+        shakeY = math.cos(t * 40) * 2 * (1 - t / 0.2);
+      } else {
+        transitionScale = 1.3 - ((t - 0.2) / 0.8) * 0.3;
+      }
+    }
+
+    // Colors
+    const cyanColor = Color(0xFF00FFFF);
+    const magentaColor = Color(0xFFFF00FF);
+    final primaryColor = isSpawning ? magentaColor : cyanColor;
+
+    // Container dimensions - compact, positioned below top bar
+    const containerWidth = 160.0;
+    const containerHeight = 56.0;
+    final containerX = centerX - containerWidth / 2;
+    const containerY = 45.0; // Below the top bar
+
+    // ═══ CLEAN BACKGROUND ═══
+    final bgPath = Path();
+    const cut = 10.0;
+    bgPath.moveTo(containerX + cut, containerY);
+    bgPath.lineTo(containerX + containerWidth - cut, containerY);
+    bgPath.lineTo(containerX + containerWidth, containerY + cut);
+    bgPath.lineTo(containerX + containerWidth, containerY + containerHeight - cut);
+    bgPath.lineTo(containerX + containerWidth - cut, containerY + containerHeight);
+    bgPath.lineTo(containerX + cut, containerY + containerHeight);
+    bgPath.lineTo(containerX, containerY + containerHeight - cut);
+    bgPath.lineTo(containerX, containerY + cut);
+    bgPath.close();
+
+    // Dark background
+    final bgGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        const Color(0xFF0a0a18).withOpacity(0.92),
+        const Color(0xFF12061a).withOpacity(0.88),
+      ],
+    ).createShader(Rect.fromLTWH(containerX, containerY, containerWidth, containerHeight));
+    canvas.drawPath(bgPath, Paint()..shader = bgGradient);
+
+    // Border
+    canvas.drawPath(
+      bgPath,
+      Paint()
+        ..color = primaryColor.withOpacity(0.5)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
+
+    // Subtle glow
+    canvas.drawPath(
+      bgPath,
+      Paint()
+        ..color = primaryColor.withOpacity(0.2)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+
+    // ═══ WAVE NUMBER ═══
     final waveText = '$currentWave';
+    final numberY = containerY + 4;
+
+    canvas.save();
+    canvas.translate(centerX + shakeX, numberY + 16 + shakeY);
+    canvas.scale(transitionScale, transitionScale);
+    canvas.translate(-(centerX + shakeX), -(numberY + 16 + shakeY));
+
+    // Main number with glow
     final wavePainter = _getPainter(
-      'wave-num-$waveText',
+      'wave-num-clean-$waveText-$isSpawning',
       waveText,
       TextStyle(
-        color: isSpawning ? const Color(0xFFFF00FF) : const Color(0xFF00FFFF),
-        fontSize: 32,
-        fontWeight: FontWeight.bold,
+        color: Colors.white,
+        fontSize: 36,
+        fontWeight: FontWeight.w900,
         fontFamily: 'monospace',
         shadows: [
-          Shadow(
-            color: isSpawning ? const Color(0xFFFF00FF) : const Color(0xFF00FFFF),
-            blurRadius: 16,
-          ),
+          Shadow(color: primaryColor, blurRadius: 16),
+          Shadow(color: primaryColor.withOpacity(0.6), blurRadius: 32),
         ],
       ),
     );
-    wavePainter.paint(canvas, Offset(centerX - wavePainter.width / 2, 8));
+    wavePainter.paint(canvas, Offset(centerX - wavePainter.width / 2, numberY));
+    canvas.restore();
 
-    // "WAVE" label
-    final labelPainter = _getPainter(
-      'wave-label-modern',
-      'WAVE',
+    // ═══ SUBTITLE ═══
+    final subtitleY = containerY + 40;
+    final subtitleText = 'WAVE $currentWave / $totalWaves';
+    final subtitlePainter = _getPainter(
+      'wave-subtitle-clean-$currentWave-$totalWaves',
+      subtitleText,
       TextStyle(
-        color: Colors.white.withOpacity(0.5),
+        color: primaryColor.withOpacity(0.85),
         fontSize: 10,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 3,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.5,
+        fontFamily: 'monospace',
       ),
     );
-    labelPainter.paint(canvas, Offset(centerX - labelPainter.width / 2, 42));
+    subtitlePainter.paint(canvas, Offset(centerX - subtitlePainter.width / 2, subtitleY));
 
-    // Progress bar under wave
-    final barWidth = 80.0;
-    final barHeight = 3.0;
+    // ═══ PROGRESS BAR ═══
+    const barWidth = 140.0;
+    const barHeight = 3.0;
     final barX = centerX - barWidth / 2;
-    final barY = 56.0;
+    final barY = containerY + containerHeight - 8;
 
     // Background
     canvas.drawRRect(
@@ -814,28 +1021,95 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
 
     // Progress fill
-    if (isSpawning && waveProgress > 0) {
+    if (waveProgress > 0) {
       final fillWidth = barWidth * waveProgress;
+      final fillGradient = LinearGradient(
+        colors: [cyanColor, magentaColor],
+      ).createShader(Rect.fromLTWH(barX, barY, fillWidth, barHeight));
+
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(barX, barY, fillWidth, barHeight),
           const Radius.circular(2),
         ),
-        Paint()..color = const Color(0xFFFF00FF),
+        Paint()..shader = fillGradient,
+      );
+
+      // Glow on progress
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(barX, barY - 1, fillWidth, barHeight + 2),
+          const Radius.circular(2),
+        ),
+        Paint()
+          ..shader = fillGradient
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
       );
     }
 
-    // Wave count (e.g., "/10")
-    final countPainter = _getPainter(
-      'wave-count-$totalWaves',
-      '/$totalWaves',
-      TextStyle(
-        color: Colors.white.withOpacity(0.3),
-        fontSize: 12,
-        fontFamily: 'monospace',
-      ),
-    );
-    countPainter.paint(canvas, Offset(centerX + wavePainter.width / 2 + 2, 18));
+    // ═══ ENEMY COUNT (compact) ═══
+    if (isSpawning && enemiesAlive > 0) {
+      final enemyText = '$enemiesAlive';
+      final urgentColor = enemiesAlive > 20
+          ? const Color(0xFFFF0044)
+          : (enemiesAlive > 10 ? const Color(0xFFFFFF00) : magentaColor);
+      final enemyPainter = _getPainter(
+        'wave-enemies-clean-$enemiesAlive',
+        enemyText,
+        TextStyle(
+          color: urgentColor,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+          shadows: [Shadow(color: urgentColor, blurRadius: 4)],
+        ),
+      );
+      // Draw enemy icon and count to the right of the container
+      final iconX = containerX + containerWidth + 8;
+      final iconY = containerY + containerHeight / 2 - 6;
+
+      // Small enemy indicator
+      canvas.drawCircle(
+        Offset(iconX + 4, iconY + 6),
+        4,
+        Paint()..color = urgentColor.withOpacity(0.3),
+      );
+      canvas.drawCircle(
+        Offset(iconX + 4, iconY + 6),
+        2,
+        Paint()..color = urgentColor,
+      );
+      enemyPainter.paint(
+        canvas,
+        Offset(centerX - enemyPainter.width / 2, containerY + containerHeight + 4),
+      );
+    }
+
+    // ═══ WAVE TRANSITION - SUBTLE EFFECT ═══
+    if (_waveTransitionActive) {
+      final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+      final transitionAlpha = t < 0.4 ? t * 2.5 : (1 - t) * 1.67;
+      if (transitionAlpha > 0.05) {
+        final incomingPainter = _getPainter(
+          'wave-incoming',
+          'WAVE $currentWave INCOMING',
+          TextStyle(
+            color: magentaColor.withOpacity(transitionAlpha * 0.8),
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+            fontFamily: 'monospace',
+            shadows: [
+              Shadow(color: magentaColor.withOpacity(transitionAlpha * 0.5), blurRadius: 8),
+            ],
+          ),
+        );
+        incomingPainter.paint(
+          canvas,
+          Offset(centerX - incomingPainter.width / 2, containerY + containerHeight + 10),
+        );
+      }
+    }
   }
 
   void _drawResourcePanels(Canvas canvas, double screenWidth) {
@@ -1219,77 +1493,301 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   void _drawWaveAlert(Canvas canvas, double screenWidth) {
-    final modifier = gameRef.enemyManager.waveDescription;
-    if (modifier.isEmpty) return;
+    final modifier = gameRef.enemyManager.currentModifier;
+    if (modifier == WaveModifier.normal) return;
 
-    final alertX = screenWidth / 2;
-    final pulseAlpha = reduceFlicker ? 0.8 : 0.8 + math.sin(_time * 8) * 0.2;
-    final pulseScale = reduceFlicker ? 1.0 : 1.0 + math.sin(_time * 6) * 0.02;
+    final centerX = screenWidth / 2;
 
-    // Alert background
-    final alertBg = Paint()
-      ..color = const Color(0xFFFF0066).withOpacity(0.15)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(alertX, 48), width: 120 * pulseScale, height: 20),
-        const Radius.circular(4),
+    // ═══════════════════════════════════════════════════════════════════════
+    // CYBERPUNK AGRESIVO - WAVE MODIFIER ALERT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Glitch and pulse effects
+    final glitchCycle = (_time * 4).floor() % 5;
+    final isGlitching = glitchCycle == 0;
+    final glitchOffset = isGlitching ? math.sin(_time * 60) * 4 : 0.0;
+    final pulseAlpha = reduceFlicker ? 0.95 : 0.8 + math.sin(_time * 6) * 0.2;
+    final pulseScale = reduceFlicker ? 1.0 : 1.0 + math.sin(_time * 5) * 0.05;
+    final dangerPulse = 0.7 + math.sin(_time * 8) * 0.3;
+
+    // Get modifier-specific styling
+    final (icon, label, color) = _getModifierStyle(modifier);
+
+    // Badge dimensions - WIDER, more aggressive
+    const badgeY = 78.0;
+    const badgeHeight = 32.0;
+    const iconSize = 18.0;
+
+    // Calculate badge width based on text
+    final labelPainter = _getPainter(
+      'modifier-label-cyber-$label',
+      label,
+      TextStyle(
+        color: color,
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 3,
+        fontFamily: 'monospace',
       ),
-      alertBg,
+    );
+    final badgeWidth = iconSize + labelPainter.width + 40;
+    final badgeX = centerX - badgeWidth / 2 + glitchOffset;
+
+    // ═══ FRAGMENTED CONTAINER - Cut corners ═══
+    final alertPath = Path();
+    const cut = 8.0;
+    alertPath.moveTo(badgeX + cut, badgeY);
+    alertPath.lineTo(badgeX + badgeWidth - cut, badgeY);
+    alertPath.lineTo(badgeX + badgeWidth, badgeY + cut);
+    alertPath.lineTo(badgeX + badgeWidth, badgeY + badgeHeight - cut);
+    alertPath.lineTo(badgeX + badgeWidth - cut, badgeY + badgeHeight);
+    alertPath.lineTo(badgeX + cut, badgeY + badgeHeight);
+    alertPath.lineTo(badgeX, badgeY + badgeHeight - cut);
+    alertPath.lineTo(badgeX, badgeY + cut);
+    alertPath.close();
+
+    // Danger glow - INTENSE
+    canvas.drawPath(
+      alertPath,
+      Paint()
+        ..color = color.withOpacity(0.5 * dangerPulse)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
     );
 
-    final alertPainter = TextPainter(
-      text: TextSpan(
-        text: 'ALERT $modifier',
-        style: TextStyle(
-          color: const Color(0xFFFF0066).withOpacity(pulseAlpha),
-          fontSize: 12,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-          shadows: [
-            Shadow(color: const Color(0xFFFF0066).withOpacity(0.9), blurRadius: 12),
-          ],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    alertPainter.paint(canvas, Offset(alertX - alertPainter.width / 2, 40));
-  }
-
-  void _drawBottomPanel(Canvas canvas, double screenWidth, double screenHeight) {
-    // Modern gaming HUD - gradient fade from bottom
-    final panelRect = Rect.fromLTWH(0, screenHeight - bottomBarHeight - 20, screenWidth, bottomBarHeight + 20);
-    final gradient = LinearGradient(
-      begin: Alignment.bottomCenter,
-      end: Alignment.topCenter,
-      colors: [
-        const Color(0xFF000000).withOpacity(0.9),
-        const Color(0xFF000000).withOpacity(0.5),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.5, 1.0],
-    ).createShader(panelRect);
-    canvas.drawRect(panelRect, Paint()..shader = gradient);
-
-    // Subtle top line
-    final lineY = screenHeight - bottomBarHeight;
-    canvas.drawLine(
-      Offset(screenWidth * 0.1, lineY),
-      Offset(screenWidth * 0.9, lineY),
+    // Secondary glow layer
+    canvas.drawPath(
+      alertPath,
       Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(0.2)
+        ..color = color.withOpacity(0.3 * pulseAlpha)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+    );
+
+    // Dark background with gradient
+    final alertGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        color.withOpacity(0.15),
+        const Color(0xFF0a0a18).withOpacity(0.95),
+      ],
+    ).createShader(Rect.fromLTWH(badgeX, badgeY, badgeWidth, badgeHeight));
+    canvas.drawPath(alertPath, Paint()..shader = alertGradient);
+
+    // ═══ GLITCH SCANLINES ═══
+    if (!reduceFlicker) {
+      for (int i = 0; i < 4; i++) {
+        final scanY = badgeY + (i * 8) + (_time * 30 % 8);
+        if (scanY < badgeY + badgeHeight) {
+          canvas.drawLine(
+            Offset(badgeX, scanY),
+            Offset(badgeX + badgeWidth, scanY),
+            Paint()
+              ..color = color.withOpacity(isGlitching ? 0.15 : 0.05)
+              ..strokeWidth = 1,
+          );
+        }
+      }
+    }
+
+    // Border - AGGRESSIVE double line
+    canvas.drawPath(
+      alertPath,
+      Paint()
+        ..color = color.withOpacity(0.9 * pulseAlpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2,
+    );
+
+    // Inner border for depth
+    final innerPath = Path();
+    const innerCut = 6.0;
+    const inset = 2.0;
+    innerPath.moveTo(badgeX + inset + innerCut, badgeY + inset);
+    innerPath.lineTo(badgeX + badgeWidth - inset - innerCut, badgeY + inset);
+    innerPath.lineTo(badgeX + badgeWidth - inset, badgeY + inset + innerCut);
+    innerPath.lineTo(badgeX + badgeWidth - inset, badgeY + badgeHeight - inset - innerCut);
+    innerPath.lineTo(badgeX + badgeWidth - inset - innerCut, badgeY + badgeHeight - inset);
+    innerPath.lineTo(badgeX + inset + innerCut, badgeY + badgeHeight - inset);
+    innerPath.lineTo(badgeX + inset, badgeY + badgeHeight - inset - innerCut);
+    innerPath.lineTo(badgeX + inset, badgeY + inset + innerCut);
+    innerPath.close();
+    canvas.drawPath(
+      innerPath,
+      Paint()
+        ..color = color.withOpacity(0.3)
+        ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
 
-    // Cost indicators above buttons (simplified)
+    // ═══ CORNER DANGER POINTS ═══
+    final alertCorners = [
+      Offset(badgeX + cut, badgeY),
+      Offset(badgeX + badgeWidth - cut, badgeY),
+      Offset(badgeX + badgeWidth, badgeY + cut),
+      Offset(badgeX + badgeWidth, badgeY + badgeHeight - cut),
+      Offset(badgeX + badgeWidth - cut, badgeY + badgeHeight),
+      Offset(badgeX + cut, badgeY + badgeHeight),
+      Offset(badgeX, badgeY + badgeHeight - cut),
+      Offset(badgeX, badgeY + cut),
+    ];
+    for (int i = 0; i < alertCorners.length; i++) {
+      final corner = alertCorners[i];
+      final cornerPulse = 0.5 + math.sin(_time * 6 + i * 0.9) * 0.5;
+      canvas.drawCircle(
+        corner,
+        3,
+        Paint()
+          ..color = color.withOpacity(cornerPulse)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      );
+      canvas.drawCircle(corner, 1.5, Paint()..color = Colors.white);
+    }
+
+    // ═══ WARNING ICON with glitch ═══
+    final iconCenterY = badgeY + badgeHeight / 2;
+
+    // Icon glow
+    canvas.drawCircle(
+      Offset(badgeX + 20 + glitchOffset * 0.3, iconCenterY),
+      12,
+      Paint()
+        ..color = color.withOpacity(0.4 * dangerPulse)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+
+    // Glitch layers for icon
+    if (isGlitching) {
+      final redIconPainter = _getPainter(
+        'modifier-icon-red-$icon',
+        icon,
+        TextStyle(
+          color: const Color(0xFFFF0044).withOpacity(0.6),
+          fontSize: iconSize,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      redIconPainter.paint(
+        canvas,
+        Offset(badgeX + 14 - 2, iconCenterY - iconSize / 2),
+      );
+
+      final cyanIconPainter = _getPainter(
+        'modifier-icon-cyan-$icon',
+        icon,
+        TextStyle(
+          color: const Color(0xFF00FFFF).withOpacity(0.6),
+          fontSize: iconSize,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      cyanIconPainter.paint(
+        canvas,
+        Offset(badgeX + 14 + 2, iconCenterY - iconSize / 2),
+      );
+    }
+
+    // Main icon
+    final iconPainter = _getPainter(
+      'modifier-icon-main-$icon',
+      icon,
+      TextStyle(
+        color: color.withOpacity(pulseAlpha),
+        fontSize: iconSize,
+        fontWeight: FontWeight.bold,
+        shadows: [Shadow(color: color, blurRadius: 8)],
+      ),
+    );
+    iconPainter.paint(
+      canvas,
+      Offset(badgeX + 14, iconCenterY - iconSize / 2),
+    );
+
+    // ═══ LABEL with aggressive styling ═══
+    // Glitch effect on label
+    if (isGlitching) {
+      final glitchLabelPainter = _getPainter(
+        'modifier-glitch-$label',
+        label,
+        TextStyle(
+          color: const Color(0xFFFF0044).withOpacity(0.5),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 3,
+          fontFamily: 'monospace',
+        ),
+      );
+      glitchLabelPainter.paint(
+        canvas,
+        Offset(badgeX + 36 - 1, iconCenterY - labelPainter.height / 2 - 1),
+      );
+    }
+
+    // Main label with glow
+    final mainLabelPainter = _getPainter(
+      'modifier-main-$label',
+      label,
+      TextStyle(
+        color: color,
+        fontSize: 12,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 3,
+        fontFamily: 'monospace',
+        shadows: [
+          Shadow(color: color, blurRadius: 6),
+          Shadow(color: color.withOpacity(0.5), blurRadius: 12),
+        ],
+      ),
+    );
+    mainLabelPainter.paint(
+      canvas,
+      Offset(badgeX + 36, iconCenterY - mainLabelPainter.height / 2),
+    );
+
+    // ═══ DANGER DECORATORS ═══
+    // Left and right chevrons
+    final chevronPaint = Paint()
+      ..color = color.withOpacity(0.6 * dangerPulse)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    // Left chevron
+    final leftChevron = Path();
+    leftChevron.moveTo(badgeX - 12, iconCenterY - 6);
+    leftChevron.lineTo(badgeX - 6, iconCenterY);
+    leftChevron.lineTo(badgeX - 12, iconCenterY + 6);
+    canvas.drawPath(leftChevron, chevronPaint);
+
+    // Right chevron
+    final rightChevron = Path();
+    rightChevron.moveTo(badgeX + badgeWidth + 12, iconCenterY - 6);
+    rightChevron.lineTo(badgeX + badgeWidth + 6, iconCenterY);
+    rightChevron.lineTo(badgeX + badgeWidth + 12, iconCenterY + 6);
+    canvas.drawPath(rightChevron, chevronPaint);
+  }
+
+  /// Returns (icon, label, color) for wave modifier
+  (String, String, Color) _getModifierStyle(WaveModifier modifier) {
+    switch (modifier) {
+      case WaveModifier.overload:
+        return ('⚡', 'FAST SPAWN', const Color(0xFFFFDD00));
+      case WaveModifier.juggernaut:
+        return ('◆', 'HEAVY ARMOR', const Color(0xFFFF6600));
+      case WaveModifier.phantom:
+        return ('◎', 'STEALTH', const Color(0xFFAA00FF));
+      case WaveModifier.mixed:
+        return ('✦', 'MIXED TYPES', const Color(0xFFFF00FF));
+      case WaveModifier.normal:
+        return ('', '', Colors.white);
+    }
+  }
+
+  void _drawBottomPanel(Canvas canvas, double screenWidth, double screenHeight) {
+    // With the new side-panel layout, we only need a minimal bottom area
+    // Draw cost indicators next to the tower buttons on the left
     _drawModernCostIndicators(canvas, screenWidth, screenHeight);
 
-    // Selected tower info (compact, bottom left)
-    if (!_isCompactHud(screenWidth, screenHeight)) {
-      _drawSelectedTowerInfo(canvas, screenHeight);
-    }
+    // Draw ability cooldowns on the right side
+    _drawAbilityCooldowns(canvas, screenWidth, screenHeight);
   }
 
   void _drawSelectedTowerInfo(Canvas canvas, double screenHeight) {
@@ -1329,29 +1827,26 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   void _drawModernCostIndicators(Canvas canvas, double screenWidth, double screenHeight) {
-    final useTwoRows = _layoutTwoRows;
-    final buttonWidth = _layoutButtonWidth;
-    final spacing = _layoutSpacing;
-    final row1BaseY = useTwoRows ? _layoutRow1Y : _layoutSingleRowY;
-    final costY = row1BaseY - 14;
-
+    // Use responsive layout - get positions from tower buttons
     final unlockedTowers = LevelService.instance.getUnlockedTowers();
-    final startX = useTwoRows ? _layoutRow1StartX : _layoutStartX;
 
     for (int i = 0; i < unlockedTowers.length && i < _towerButtons.length; i++) {
       final type = unlockedTowers[i];
       final cost = gameRef.towerCost(type);
-      final x = startX + i * (buttonWidth + spacing) + buttonWidth / 2;
+      final button = _towerButtons[i];
       final canAfford = gameRef.gold >= cost;
 
       final costColor = canAfford ? type.color : const Color(0xFFFF4444);
 
-      // Small pill background
-      final pillWidth = 36.0;
-      final pillHeight = 12.0;
+      // Position cost to the right of the button (responsive)
+      final pillWidth = (36.0 * _currentScale).clamp(28.0, 44.0);
+      final pillHeight = (12.0 * _currentScale).clamp(10.0, 16.0);
+      final costX = button.position.x + button.size.x + 4 * _currentScale;
+      final costY = button.position.y + (button.size.y - pillHeight) / 2;
+
       final pillRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x - pillWidth / 2, costY, pillWidth, pillHeight),
-        const Radius.circular(6),
+        Rect.fromLTWH(costX, costY, pillWidth, pillHeight),
+        Radius.circular(pillHeight / 2),
       );
 
       canvas.drawRRect(
@@ -1359,19 +1854,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         Paint()..color = (canAfford ? type.color : const Color(0xFFFF4444)).withOpacity(0.2),
       );
 
+      final fontSize = (9.0 * _currentScale).clamp(7.0, 11.0);
       final costPainter = _getPainter(
-        'cost-modern-$cost-${costColor.value}',
+        'cost-modern-$cost-${costColor.value}-$fontSize',
         '${cost}g',
         TextStyle(
           color: costColor,
-          fontSize: 9,
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
           fontFamily: 'monospace',
         ),
       );
       costPainter.paint(
         canvas,
-        Offset(x - costPainter.width / 2, costY + (pillHeight - costPainter.height) / 2),
+        Offset(costX + (pillWidth - costPainter.width) / 2, costY + (pillHeight - costPainter.height) / 2),
       );
     }
   }
@@ -1430,37 +1926,39 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _drawAbilityCooldowns(Canvas canvas, double screenWidth, double screenHeight) {
     if (_isCompactHud(screenWidth, screenHeight)) return;
-    final barY = screenHeight - bottomBarHeight + 8;
-    const barWidth = 85.0;
-    const barHeight = 22.0;
-    const spacing = 6.0;
+
+    // Use responsive layout variables
+    final barWidth = _rightButtonWidth;
+    final barHeight = (16.0 * _currentScale).clamp(12.0, 20.0);
     final showHotkeys = _shouldShowHotkeys();
 
-    // Pulse cooldown
+    // Pulse cooldown - below pulse button
+    final pulseBarY = _rightAbilitiesY + _rightButtonHeight + 2;
     _drawCooldownBar(
       canvas,
-      x: screenWidth - 195,
-      y: barY,
+      x: _rightPanelX,
+      y: pulseBarY,
       width: barWidth,
       height: barHeight,
       ready: gameRef.pulseReady,
       progress: gameRef.pulseReady ? 1.0 : (1.0 - gameRef.pulseCooldownPercent),
       color: const Color(0xFF00FFFF),
-      label: 'PULSE',
+      label: '',
       hotkey: showHotkeys ? '[SPACE]' : '',
     );
 
-    // Mine cooldown
+    // Mine cooldown - below mine button
+    final mineBarY = _rightAbilitiesY + _rightButtonHeight + _rightButtonSpacing + _rightButtonHeight + 2;
     _drawCooldownBar(
       canvas,
-      x: screenWidth - 195 + barWidth + spacing,
-      y: barY,
+      x: _rightPanelX,
+      y: mineBarY,
       width: barWidth,
       height: barHeight,
       ready: gameRef.mineReady,
       progress: gameRef.mineReady ? 1.0 : (1.0 - gameRef.mineCooldownPercent),
       color: const Color(0xFFFF0066),
-      label: 'MINE',
+      label: '',
       hotkey: showHotkeys ? '[M]' : '',
       count: '${gameRef.activeMineCount}/${gameRef.maxActiveMines}',
     );
@@ -1918,6 +2416,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       return cached.painter;
     }
     final painter = _buildPainter(text, style);
+    // Evict oldest entries if cache is full to prevent memory leak
+    if (_textCache.length >= _maxTextCacheSize) {
+      // Remove first 20 entries (oldest) to make room
+      final keysToRemove = _textCache.keys.take(20).toList();
+      for (final k in keysToRemove) {
+        _textCache.remove(k);
+      }
+    }
     _textCache[key] = _TextCache(text, painter);
     return painter;
   }

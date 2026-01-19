@@ -19,6 +19,38 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
   final List<_HitMarker> _hitMarkers = [];
   double _time = 0;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  Shader? _vignetteShader;
+  Size? _lastVignetteSize;
+  double? _lastVignetteIntensity;
+
+  // Cached TextPainter for "FOCUS MODE" label
+  TextPainter? _focusLabelPainter;
+  Color? _lastLabelColor;
+
+  // Cached Paint objects
+  final Paint _vignettePaint = Paint();
+  final Paint _edgePaint = Paint();
+  final Paint _linePaint = Paint()
+    ..strokeWidth = 1.2
+    ..strokeCap = StrokeCap.round;
+  final Paint _blinkPaint = Paint()..strokeWidth = 2.0;
+  final Paint _ringPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.6;
+  final Paint _innerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0;
+  final Paint _crossPaint = Paint()
+    ..strokeWidth = 1.4
+    ..strokeCap = StrokeCap.square;
+  final Paint _blurPaint = Paint();
+  final Paint _chromaPaint = Paint()
+    ..strokeWidth = 1.6
+    ..strokeCap = StrokeCap.round;
+
   void registerHit(Vector2 screenPos, {required bool critical}) {
     if (_hitMarkers.length >= 6) {
       _hitMarkers.removeAt(0);
@@ -74,30 +106,37 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     bool reduceFx,
   ) {
     final intensity = reduceFx ? 0.35 : 0.55;
+    final currentSize = Size(width, height);
     final rect = Rect.fromLTWH(0, 0, width, height);
-    final gradient = RadialGradient(
-      colors: [
-        Colors.transparent,
-        Colors.black.withOpacity(0.35 * intensity),
-        Colors.black.withOpacity(0.75 * intensity),
-      ],
-      stops: const [0.0, 0.55, 1.0],
-    ).createShader(rect);
-    canvas.drawRect(rect, Paint()..shader = gradient);
+
+    // Only recreate shader if size or intensity changed
+    if (_vignetteShader == null ||
+        _lastVignetteSize != currentSize ||
+        _lastVignetteIntensity != intensity) {
+      _vignetteShader = RadialGradient(
+        colors: [
+          Colors.transparent,
+          Colors.black.withOpacity(0.35 * intensity),
+          Colors.black.withOpacity(0.75 * intensity),
+        ],
+        stops: const [0.0, 0.55, 1.0],
+      ).createShader(rect);
+      _lastVignetteSize = currentSize;
+      _lastVignetteIntensity = intensity;
+    }
+
+    _vignettePaint.shader = _vignetteShader;
+    canvas.drawRect(rect, _vignettePaint);
 
     final edgeAlpha = reduceFx ? 0.08 : 0.12;
-    final edgePaint = Paint()
-      ..color = accent.withOpacity(edgeAlpha);
-    canvas.drawRect(Rect.fromLTWH(0, 0, width, 2), edgePaint);
-    canvas.drawRect(Rect.fromLTWH(0, height - 2, width, 2), edgePaint);
+    _edgePaint.color = accent.withOpacity(edgeAlpha);
+    canvas.drawRect(Rect.fromLTWH(0, 0, width, 2), _edgePaint);
+    canvas.drawRect(Rect.fromLTWH(0, height - 2, width, 2), _edgePaint);
   }
 
   void _drawSpeedLines(Canvas canvas, Offset center, Color accent) {
     final pulse = 0.4 + math.sin(_time * 2.4) * 0.2;
-    final linePaint = Paint()
-      ..color = accent.withOpacity(0.18 + pulse * 0.2)
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
+    _linePaint.color = accent.withOpacity(0.18 + pulse * 0.2);
 
     for (int i = 0; i < _streakAngles.length; i++) {
       final angle = _streakAngles[i] + math.sin(_time * 0.6 + i) * 0.2;
@@ -112,13 +151,11 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
         center.dx + math.cos(angle) * (base + length),
         center.dy + math.sin(angle) * (base + length),
       );
-      canvas.drawLine(start, end, linePaint);
+      canvas.drawLine(start, end, _linePaint);
     }
 
     if (_random.nextDouble() < 0.12) {
-      final blinkPaint = Paint()
-        ..color = accent.withOpacity(0.3)
-        ..strokeWidth = 2.0;
+      _blinkPaint.color = accent.withOpacity(0.3);
       final angle = _random.nextDouble() * math.pi * 2;
       final burst = 110 + _random.nextDouble() * 40;
       final start = Offset(
@@ -129,48 +166,40 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
         center.dx + math.cos(angle) * (burst + 24),
         center.dy + math.sin(angle) * (burst + 24),
       );
-      canvas.drawLine(start, end, blinkPaint);
+      canvas.drawLine(start, end, _blinkPaint);
     }
   }
 
   void _drawReticle(Canvas canvas, Offset center, Color accent, bool reduceFx) {
     final pulse = 0.65 + math.sin(_time * 3.0) * 0.1;
     final ringRadius = 36 + math.sin(_time * 2.2) * 2;
-    final ringPaint = Paint()
-      ..color = accent.withOpacity(0.6 * pulse)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-    canvas.drawCircle(center, ringRadius, ringPaint);
 
-    final innerPaint = Paint()
-      ..color = accent.withOpacity(0.35)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    canvas.drawCircle(center, ringRadius * 0.55, innerPaint);
+    _ringPaint.color = accent.withOpacity(0.6 * pulse);
+    canvas.drawCircle(center, ringRadius, _ringPaint);
 
-    final crossPaint = Paint()
-      ..color = accent.withOpacity(0.8 * pulse)
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.square;
+    _innerPaint.color = accent.withOpacity(0.35);
+    canvas.drawCircle(center, ringRadius * 0.55, _innerPaint);
+
+    _crossPaint.color = accent.withOpacity(0.8 * pulse);
     canvas.drawLine(
       Offset(center.dx - 18, center.dy),
       Offset(center.dx - 6, center.dy),
-      crossPaint,
+      _crossPaint,
     );
     canvas.drawLine(
       Offset(center.dx + 6, center.dy),
       Offset(center.dx + 18, center.dy),
-      crossPaint,
+      _crossPaint,
     );
     canvas.drawLine(
       Offset(center.dx, center.dy - 18),
       Offset(center.dx, center.dy - 6),
-      crossPaint,
+      _crossPaint,
     );
     canvas.drawLine(
       Offset(center.dx, center.dy + 6),
       Offset(center.dx, center.dy + 18),
-      crossPaint,
+      _crossPaint,
     );
 
     if (!reduceFx) {
@@ -281,14 +310,12 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     if (pulse <= 0) return;
     final intensity = pulse * (reduceFx ? 0.25 : 0.55);
     final radius = 140 + pulse * 80;
-    final blurPaint = Paint()
+
+    _blurPaint
       ..color = accent.withOpacity(0.08 * intensity)
       ..maskFilter = reduceFx ? null : const MaskFilter.blur(BlurStyle.normal, 16);
-    canvas.drawCircle(center, radius, blurPaint);
+    canvas.drawCircle(center, radius, _blurPaint);
 
-    final chromaPaint = Paint()
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.round;
     for (int i = 0; i < 6; i++) {
       final angle = _streakAngles[i] + _time * 0.7;
       final start = Offset(
@@ -299,12 +326,10 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
         center.dx + math.cos(angle) * (radius * 0.75),
         center.dy + math.sin(angle) * (radius * 0.75),
       );
-      chromaPaint.color =
-          NeonColors.red.withOpacity(0.25 * intensity);
-      canvas.drawLine(start.translate(-2, 0), end.translate(-2, 0), chromaPaint);
-      chromaPaint.color =
-          NeonColors.cyan.withOpacity(0.25 * intensity);
-      canvas.drawLine(start, end, chromaPaint);
+      _chromaPaint.color = NeonColors.red.withOpacity(0.25 * intensity);
+      canvas.drawLine(start.translate(-2, 0), end.translate(-2, 0), _chromaPaint);
+      _chromaPaint.color = NeonColors.cyan.withOpacity(0.25 * intensity);
+      canvas.drawLine(start, end, _chromaPaint);
     }
   }
 
@@ -450,21 +475,43 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
 
   void _drawFocusLabel(Canvas canvas, double width, Color accent) {
     final pulse = 0.7 + math.sin(_time * 3.2) * 0.2;
-    final painter = TextPainter(
-      text: TextSpan(
-        text: 'FOCUS MODE',
-        style: NeonTextStyles.small.copyWith(
-          color: accent.withOpacity(pulse),
-          fontSize: 11,
-          letterSpacing: 2,
+    final labelColor = accent.withOpacity(pulse);
+
+    // Only recreate TextPainter when color changes significantly
+    if (_focusLabelPainter == null || _lastLabelColor != accent) {
+      _focusLabelPainter?.dispose();
+      _focusLabelPainter = TextPainter(
+        text: TextSpan(
+          text: 'FOCUS MODE',
+          style: NeonTextStyles.small.copyWith(
+            color: labelColor,
+            fontSize: 11,
+            letterSpacing: 2,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    painter.paint(
-      canvas,
-      Offset(width / 2 - painter.width / 2, 6),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      _lastLabelColor = accent;
+    }
+
+    // Apply opacity via saveLayer for cached painter
+    canvas.saveLayer(
+      null,
+      Paint()..color = Color.fromRGBO(255, 255, 255, pulse),
     );
+    _focusLabelPainter!.paint(
+      canvas,
+      Offset(width / 2 - _focusLabelPainter!.width / 2, 6),
+    );
+    canvas.restore();
+  }
+
+  @override
+  void onRemove() {
+    // Dispose cached resources
+    _focusLabelPainter?.dispose();
+    _focusLabelPainter = null;
+    super.onRemove();
   }
 }
 
