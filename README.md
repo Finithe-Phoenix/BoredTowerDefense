@@ -132,6 +132,26 @@ flutter test test/boss_test.dart
 flutter test --coverage
 ```
 
+### Coverage Summary + HTML (Docker Friendly)
+
+PowerShell summary + HTML report (prints total, passed, failed, skipped, and success %):
+
+```powershell
+.\scripts\coverage.ps1
+```
+
+Docker-only run (no local Flutter install). This generates `flutter_app/coverage/lcov.info`:
+
+```bash
+docker compose -f flutter_app/docker-compose.yml run --rm flutter-dev flutter test --coverage --machine > flutter_app/coverage/test-machine.jsonl
+```
+
+Generate HTML locally if you have `genhtml` (from `lcov`) installed:
+
+```bash
+genhtml flutter_app/coverage/lcov.info -o flutter_app/coverage/html
+```
+
 ### Boss System
 
 See [BOSS_GUIDE.md](flutter_app/docs/BOSS_GUIDE.md) for details on all 10 world bosses and their mechanics.
