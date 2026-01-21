@@ -93,6 +93,23 @@ void main() {
     expect(remaining, isEmpty);
   });
 
+  testWidgets('playFinalBossMusic generates epic track', (tester) async {
+    final service = ProceduralMusicService.instance;
+
+    await tester.runAsync(() async {
+      await service.playFinalBossMusic();
+    });
+
+    expect(service.isPlaying, isTrue);
+
+    final musicDir = Directory('${tempDir.path}/neon_music');
+    expect(File('${musicDir.path}/final_boss.wav').existsSync(), isTrue);
+
+    await tester.runAsync(() async {
+      await service.stopFinalBossMusic();
+    });
+  });
+
   testWidgets('playVictory and playDefeat write stingers', (tester) async {
     final service = ProceduralMusicService.instance;
 

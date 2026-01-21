@@ -1674,16 +1674,31 @@ class ProceduralMusicService {
     // CRITICAL: Delete all temp files to free disk space
     await cleanupTempFiles();
 
-    _bassPlayer?.dispose();
-    _leadPlayer?.dispose();
-    _padPlayer?.dispose();
-    _drumPlayer?.dispose();
-    _arpeggioPlayer?.dispose();
-    _finalBossPlayer?.dispose();
+    await _safeDisposePlayer(_bassPlayer);
+    await _safeDisposePlayer(_leadPlayer);
+    await _safeDisposePlayer(_padPlayer);
+    await _safeDisposePlayer(_drumPlayer);
+    await _safeDisposePlayer(_arpeggioPlayer);
+    await _safeDisposePlayer(_finalBossPlayer);
+    _bassPlayer = null;
+    _leadPlayer = null;
+    _padPlayer = null;
+    _drumPlayer = null;
+    _arpeggioPlayer = null;
+    _finalBossPlayer = null;
     _initialized = false;
 
     if (kDebugMode) {
       debugPrint('ProceduralMusicService disposed');
+    }
+  }
+
+  Future<void> _safeDisposePlayer(AudioPlayer? player) async {
+    if (player == null) return;
+    try {
+      await player.dispose();
+    } catch (_) {
+      // Best effort cleanup; ignore double-dispose errors.
     }
   }
 }

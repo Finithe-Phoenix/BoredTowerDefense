@@ -90,4 +90,21 @@ void main() {
     expect(sine.isNotEmpty, isTrue);
     expect(tri.isNotEmpty, isTrue);
   });
+
+  testWidgets('timed SFX schedule without errors', (tester) async {
+    await AudioService.instance.initialize();
+    AudioService.instance.playWaveStart();
+    AudioService.instance.playGameOver();
+    AudioService.instance.playVictory();
+
+    await tester.pump(const Duration(milliseconds: 400));
+  });
+
+  test('refresh and dispose reset the player pool', () async {
+    await AudioService.instance.initialize();
+    await AudioService.instance.refresh();
+    AudioService.instance.dispose();
+    await AudioService.instance.initialize();
+    expect(AudioService.instance.enabled, isTrue);
+  });
 }
