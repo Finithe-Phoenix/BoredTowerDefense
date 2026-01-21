@@ -85,7 +85,7 @@ if (Test-Path $machineLog) {
             continue
         }
 
-        if ($evt.type -eq "testDone") {
+        if ($evt.PSObject.Properties["type"] -and $evt.type -eq "testDone") {
             $total++
             switch ($evt.result) {
                 "success" { $passed++ }
@@ -133,7 +133,7 @@ if (-not $NoHtml) {
             $coveragePath = (Resolve-Path $coverageDir).Path
             Write-Host "Generating HTML coverage with docker..."
             $htmlProcess = Start-Process -FilePath "docker" -ArgumentList @(
-                "run", "--rm", "-v", "$coveragePath:/cov", "ubuntu:22.04",
+                "run", "--rm", "-v", "$($coveragePath):/cov", "ubuntu:22.04",
                 "bash", "-lc", "apt-get update >/dev/null && apt-get install -y lcov >/dev/null && genhtml /cov/lcov.info -o /cov/html"
             ) -NoNewWindow -PassThru -Wait
             if ($htmlProcess.ExitCode -eq 0) {

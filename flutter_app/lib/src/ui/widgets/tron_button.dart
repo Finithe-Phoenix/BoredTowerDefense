@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -52,6 +53,9 @@ class _TronButtonState extends State<TronButton>
   bool _isMaterialized = false;
   bool _showGlitch = false;
   double _glitchOffset = 0;
+
+  Timer? _materializeTimer;
+  Timer? _glitchTimer;
 
   final _random = math.Random();
   List<_EnergyParticle> _particles = [];
@@ -115,7 +119,7 @@ class _TronButtonState extends State<TronButton>
     });
 
     // Start materialization after delay
-    Future.delayed(widget.delay, () {
+    _materializeTimer = Timer(widget.delay, () {
       if (mounted) {
         _materializeController.forward();
         _pulseController.repeat(reverse: true);
@@ -125,7 +129,8 @@ class _TronButtonState extends State<TronButton>
   }
 
   void _triggerRandomGlitch() {
-    Future.delayed(Duration(milliseconds: 3000 + _random.nextInt(5000)), () {
+    _glitchTimer?.cancel();
+    _glitchTimer = Timer(Duration(milliseconds: 3000 + _random.nextInt(5000)), () {
       if (mounted && _isMaterialized) {
         setState(() {
           _showGlitch = true;
@@ -189,6 +194,8 @@ class _TronButtonState extends State<TronButton>
 
   @override
   void dispose() {
+    _materializeTimer?.cancel();
+    _glitchTimer?.cancel();
     _materializeController.dispose();
     _pulseController.dispose();
     _hoverController.dispose();
