@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -36,6 +37,7 @@ class _GameOverOverlayState extends State<GameOverOverlay>
   bool _showGlitch = false;
   bool _showHeavyGlitch = false;
   int _glitchFrame = 0;
+  Timer? _glitchTimer;
 
   @override
   void initState() {
@@ -62,7 +64,7 @@ class _GameOverOverlayState extends State<GameOverOverlay>
     )..repeat();
 
     // Start aggressive glitch cycle
-    Future.delayed(const Duration(milliseconds: 200), _triggerGlitchCycle);
+    _glitchTimer = Timer(const Duration(milliseconds: 200), _triggerGlitchCycle);
 
     _fadeAnimation = CurvedAnimation(
       parent: _mainController,
@@ -91,7 +93,8 @@ class _GameOverOverlayState extends State<GameOverOverlay>
     if (!mounted) return;
     _glitchController.forward(from: 0).then((_) {
       if (mounted) {
-        Future.delayed(
+        _glitchTimer?.cancel();
+        _glitchTimer = Timer(
           Duration(milliseconds: 800 + _random.nextInt(1500)),
           _triggerGlitchCycle,
         );
@@ -101,6 +104,7 @@ class _GameOverOverlayState extends State<GameOverOverlay>
 
   @override
   void dispose() {
+    _glitchTimer?.cancel();
     _mainController.dispose();
     _glitchController.dispose();
     _pulseController.dispose();

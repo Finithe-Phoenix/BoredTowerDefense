@@ -22,4 +22,10 @@ void main() {
     expect(all, allWorldChronicles);
     expect(all.isNotEmpty, isTrue);
   });
+
+  test('WorldChronicles.getChronicle proxies lookup', () {
+    final chronicle = WorldChronicles.getChronicle(1);
+    expect(chronicle, isNotNull);
+    expect(chronicle?.worldId, 1);
+  });
 }

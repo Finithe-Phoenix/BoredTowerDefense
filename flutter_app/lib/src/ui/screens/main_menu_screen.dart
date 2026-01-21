@@ -109,141 +109,157 @@ class _MainMenuScreenState extends State<MainMenuScreen>
             // Main content
             if (_showContent)
               SafeArea(
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Spacer(flex: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 24),
 
-                      // Animated Title Entry
-                      FadeTransition(
-                        opacity: CurvedAnimation(
+                    // Animated Title Entry
+                    FadeTransition(
+                      opacity: CurvedAnimation(
+                        parent: _fadeController,
+                        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+                      ),
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, -0.3),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
                           parent: _fadeController,
-                          curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-                        ),
-                        child: SlideTransition(
-                          position: Tween<Offset>(
-                            begin: const Offset(0, -0.3),
-                            end: Offset.zero,
-                          ).animate(CurvedAnimation(
-                            parent: _fadeController,
-                            curve: const Interval(0.0, 0.5, curve: Curves.easeOutCubic),
-                          )),
-                          child: Column(
-                            children: [
-                              // Decorative line above title
-                              _AnimatedDecorativeLine(
-                                fadeController: _fadeController,
-                                color: NeonColors.cyan,
-                              ),
-                              const SizedBox(height: 16),
-                              const EpicNeonTitle(
-                                text: 'NEON DEFENSE',
-                                fontSize: 52,
-                                primaryColor: NeonColors.cyan,
-                                secondaryColor: NeonColors.magenta,
-                              ),
-                              const SizedBox(height: 8),
-                              const _SubtitleWidget(),
-                              const SizedBox(height: 16),
-                              // Decorative line below title
-                              _AnimatedDecorativeLine(
-                                fadeController: _fadeController,
-                                color: NeonColors.magenta,
-                                reverse: true,
-                              ),
-                            ],
-                          ),
+                          curve: const Interval(0.0, 0.5, curve: Curves.easeOutCubic),
+                        )),
+                        child: Column(
+                          children: [
+                            // Decorative line above title
+                            _AnimatedDecorativeLine(
+                              fadeController: _fadeController,
+                              color: NeonColors.cyan,
+                            ),
+                            const SizedBox(height: 16),
+                            const EpicNeonTitle(
+                              text: 'NEON DEFENSE',
+                              fontSize: 52,
+                              primaryColor: NeonColors.cyan,
+                              secondaryColor: NeonColors.magenta,
+                            ),
+                            const SizedBox(height: 8),
+                            const _SubtitleWidget(),
+                            const SizedBox(height: 16),
+                            // Decorative line below title
+                            _AnimatedDecorativeLine(
+                              fadeController: _fadeController,
+                              color: NeonColors.magenta,
+                              reverse: true,
+                            ),
+                          ],
                         ),
                       ),
+                    ),
 
-                      const Spacer(flex: 2),
+                    const SizedBox(height: 24),
 
-                      // Staggered TRON Buttons with built-in materialization
-                      TronButton(
-                        text: 'CAMPAIGN',
-                        icon: Icons.play_arrow_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/levels'),
-                        color: NeonColors.cyan,
-                        delay: const Duration(milliseconds: 300),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return SingleChildScrollView(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    // Staggered TRON Buttons with built-in materialization
+                                    TronButton(
+                                      text: 'CAMPAIGN',
+                                      icon: Icons.play_arrow_rounded,
+                                      onPressed: () => Navigator.pushNamed(context, '/levels'),
+                                      color: NeonColors.cyan,
+                                      delay: const Duration(milliseconds: 300),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'STORY',
+                                      icon: Icons.auto_stories_rounded,
+                                      onPressed: () => Navigator.pushNamed(context, '/story'),
+                                      color: NeonColors.yellow,
+                                      delay: const Duration(milliseconds: 400),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'CODEX',
+                                      icon: Icons.library_books_rounded,
+                                      onPressed: () => Navigator.pushNamed(context, '/codex'),
+                                      color: NeonColors.magenta,
+                                      delay: const Duration(milliseconds: 450),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'UPGRADES',
+                                      icon: Icons.auto_awesome_rounded,
+                                      onPressed: () => Navigator.pushNamed(context, '/upgrades'),
+                                      color: NeonColors.cyan,
+                                      delay: const Duration(milliseconds: 500),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'QUICK PLAY',
+                                      icon: Icons.bolt_rounded,
+                                      onPressed: () =>
+                                          Navigator.pushNamed(context, '/game', arguments: 1),
+                                      color: NeonColors.green,
+                                      delay: const Duration(milliseconds: 550),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'SETTINGS',
+                                      icon: Icons.tune_rounded,
+                                      onPressed: () => Navigator.pushNamed(context, '/settings'),
+                                      color: NeonColors.purple,
+                                      delay: const Duration(milliseconds: 600),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'CREDITS',
+                                      icon: Icons.auto_awesome_rounded,
+                                      onPressed: () => _showCreditsDialog(context),
+                                      color: NeonColors.yellow,
+                                      delay: const Duration(milliseconds: 650),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    TronButton(
+                                      text: 'BENCHMARK',
+                                      icon: Icons.speed_rounded,
+                                      onPressed: () => Navigator.pushNamed(context, '/benchmark'),
+                                      color: const Color(0xFFFF6600),
+                                      delay: const Duration(milliseconds: 700),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(height: 16),
+                    ),
 
-                      TronButton(
-                        text: 'STORY',
-                        icon: Icons.auto_stories_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/story'),
-                        color: NeonColors.yellow,
-                        delay: const Duration(milliseconds: 400),
+                    // Version info with fade
+                    FadeTransition(
+                      opacity: CurvedAnimation(
+                        parent: _fadeController,
+                        curve: const Interval(0.7, 1.0, curve: Curves.easeOut),
                       ),
-                      const SizedBox(height: 16),
-
-                      TronButton(
-                        text: 'CODEX',
-                        icon: Icons.library_books_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/codex'),
-                        color: NeonColors.magenta,
-                        delay: const Duration(milliseconds: 450),
-                      ),
-                      const SizedBox(height: 16),
-
-                      TronButton(
-                        text: 'UPGRADES',
-                        icon: Icons.auto_awesome_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/upgrades'),
-                        color: NeonColors.cyan,
-                        delay: const Duration(milliseconds: 500),
-                      ),
-                      const SizedBox(height: 16),
-
-                      TronButton(
-                        text: 'QUICK PLAY',
-                        icon: Icons.bolt_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/game', arguments: 1),
-                        color: NeonColors.green,
-                        delay: const Duration(milliseconds: 550),
-                      ),
-                      const SizedBox(height: 16),
-
-                      TronButton(
-                        text: 'SETTINGS',
-                        icon: Icons.tune_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/settings'),
-                        color: NeonColors.purple,
-                        delay: const Duration(milliseconds: 600),
-                      ),
-                      const SizedBox(height: 16),
-
-                      TronButton(
-                        text: 'CREDITS',
-                        icon: Icons.auto_awesome_rounded,
-                        onPressed: () => _showCreditsDialog(context),
-                        color: NeonColors.yellow,
-                        delay: const Duration(milliseconds: 650),
-                      ),
-                      const SizedBox(height: 16),
-
-                      TronButton(
-                        text: 'BENCHMARK',
-                        icon: Icons.speed_rounded,
-                        onPressed: () => Navigator.pushNamed(context, '/benchmark'),
-                        color: const Color(0xFFFF6600),
-                        delay: const Duration(milliseconds: 700),
-                      ),
-
-                      const Spacer(flex: 3),
-
-                      // Version info with fade
-                      FadeTransition(
-                        opacity: CurvedAnimation(
-                          parent: _fadeController,
-                          curve: const Interval(0.7, 1.0, curve: Curves.easeOut),
-                        ),
-                        child: const _VersionBadge(),
-                      ),
-                      const SizedBox(height: 20),
-                    ],
-                  ),
+                      child: const _VersionBadge(),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                 ),
               ),
 

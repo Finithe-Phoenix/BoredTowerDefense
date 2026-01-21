@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
@@ -42,6 +43,8 @@ class _EpicNeonTitleState extends State<EpicNeonTitle>
   bool _showCorruption = false;
   int _corruptedCharIndex = -1;
   final _random = math.Random();
+  Timer? _glitchTimer;
+  Timer? _corruptionTimer;
 
   // Electric arc points
   List<_ElectricArc> _arcs = [];
@@ -122,8 +125,11 @@ class _EpicNeonTitleState extends State<EpicNeonTitle>
   }
 
   void _triggerRandomGlitch() {
-    Future.delayed(Duration(milliseconds: 1500 + _random.nextInt(3500)), () {
-      if (mounted) {
+    _glitchTimer?.cancel();
+    _glitchTimer = Timer(
+      Duration(milliseconds: 1500 + _random.nextInt(3500)),
+      () {
+        if (!mounted) return;
         setState(() {
           _showGlitch = true;
           _glitchOffset = (_random.nextDouble() - 0.5) * 12;
@@ -131,21 +137,24 @@ class _EpicNeonTitleState extends State<EpicNeonTitle>
         });
         _glitchController.forward(from: 0);
         _triggerRandomGlitch();
-      }
-    });
+      },
+    );
   }
 
   void _triggerRandomCorruption() {
-    Future.delayed(Duration(milliseconds: 800 + _random.nextInt(2000)), () {
-      if (mounted) {
+    _corruptionTimer?.cancel();
+    _corruptionTimer = Timer(
+      Duration(milliseconds: 800 + _random.nextInt(2000)),
+      () {
+        if (!mounted) return;
         setState(() {
           _showCorruption = true;
           _corruptedCharIndex = _random.nextInt(widget.text.length);
         });
         _corruptionController.forward(from: 0);
         _triggerRandomCorruption();
-      }
-    });
+      },
+    );
   }
 
   void _generateArcs() {
@@ -166,6 +175,8 @@ class _EpicNeonTitleState extends State<EpicNeonTitle>
 
   @override
   void dispose() {
+    _glitchTimer?.cancel();
+    _corruptionTimer?.cancel();
     _pulseController.dispose();
     _glitchController.dispose();
     _scanController.dispose();
@@ -566,6 +577,7 @@ class _HologramScanlinesPainter extends CustomPainter {
           color.withOpacity(0.1 * intensity),
           Colors.transparent,
         ],
+        const [0.0, 0.5, 1.0],
       );
     canvas.drawRect(
       Rect.fromLTWH(0, bandY - 5, size.width, 10),
@@ -610,6 +622,7 @@ class _OuterGlowPainter extends CustomPainter {
           secondaryColor.withOpacity(0.1 * intensity),
           primaryColor.withOpacity(0.0),
         ],
+        const [0.0, 0.25, 0.5, 0.75, 1.0],
       )
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
 

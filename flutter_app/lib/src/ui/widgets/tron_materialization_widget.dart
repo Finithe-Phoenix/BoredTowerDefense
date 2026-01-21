@@ -396,7 +396,11 @@ class _TronMaterializationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     // Fade out effect for lines after materialization completes
-    final lineFadeOut = progress > 0.7 ? 1.0 - ((progress - 0.7) / 0.3) : 1.0;
+    final lineFadeOut = (progress > 0.7
+            ? 1.0 - ((progress - 0.7) / 0.3)
+            : 1.0)
+        .clamp(0.0, 1.0)
+        .toDouble();
 
     // Draw wireframe lines
     for (final line in lines) {

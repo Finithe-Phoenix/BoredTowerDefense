@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
@@ -34,6 +35,7 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
   final List<_FloatingParticle> _particles = [];
   final List<_DataStream> _dataStreams = [];
   final math.Random _random = math.Random();
+  Timer? _glitchTimer;
 
   double _glitchIntensity = 0.0;
   double _glitchOffsetX = 0.0;
@@ -119,12 +121,16 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
   }
 
   void _scheduleNextGlitch() {
-    if (!mounted) return;
-    Future.delayed(Duration(milliseconds: 2000 + _random.nextInt(5000)), () {
-      if (!mounted) return;
-      _triggerGlitch();
-      _scheduleNextGlitch();
-    });
+    if (!mounted || !widget.enableGlitch) return;
+    _glitchTimer?.cancel();
+    _glitchTimer = Timer(
+      Duration(milliseconds: 2000 + _random.nextInt(5000)),
+      () {
+        if (!mounted) return;
+        _triggerGlitch();
+        _scheduleNextGlitch();
+      },
+    );
   }
 
   void _triggerGlitch() {
@@ -148,6 +154,7 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
 
   @override
   void dispose() {
+    _glitchTimer?.cancel();
     _gridController.dispose();
     _pulseController.dispose();
     _particleController.dispose();
@@ -301,7 +308,9 @@ class _CyberGridPainter extends CustomPainter {
     for (int i = 0; i < 100; i++) {
       final x = random.nextDouble() * size.width;
       final y = random.nextDouble() * size.height * 0.5;
-      final twinkle = 0.3 + 0.7 * math.sin(particleAnimation * math.pi * 2 + i);
+      final twinkle = (0.3 + 0.7 * math.sin(particleAnimation * math.pi * 2 + i))
+          .clamp(0.0, 1.0)
+          .toDouble();
       final starSize = 0.5 + random.nextDouble() * 1.5;
 
       starPaint.color = Colors.white.withOpacity(0.2 * twinkle);

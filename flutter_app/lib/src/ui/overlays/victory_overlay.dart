@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -37,6 +38,7 @@ class _VictoryOverlayState extends State<VictoryOverlay>
   final _random = math.Random();
   double _glitchOffset = 0;
   bool _showGlitch = false;
+  Timer? _glitchTimer;
 
   @override
   void initState() {
@@ -67,7 +69,7 @@ class _VictoryOverlayState extends State<VictoryOverlay>
     )..repeat(reverse: true);
 
     // Trigger glitch periodically
-    Future.delayed(const Duration(milliseconds: 500), _triggerGlitchCycle);
+    _glitchTimer = Timer(const Duration(milliseconds: 500), _triggerGlitchCycle);
 
     _scaleAnimation = CurvedAnimation(
       parent: _mainController,
@@ -83,7 +85,8 @@ class _VictoryOverlayState extends State<VictoryOverlay>
     if (!mounted) return;
     _glitchController.forward(from: 0).then((_) {
       if (mounted) {
-        Future.delayed(
+        _glitchTimer?.cancel();
+        _glitchTimer = Timer(
           Duration(milliseconds: 2000 + _random.nextInt(3000)),
           _triggerGlitchCycle,
         );
@@ -93,6 +96,7 @@ class _VictoryOverlayState extends State<VictoryOverlay>
 
   @override
   void dispose() {
+    _glitchTimer?.cancel();
     _mainController.dispose();
     _glitchController.dispose();
     _pulseController.dispose();
@@ -552,22 +556,28 @@ class _HexagonalStarsContainer extends StatelessWidget {
                 duration: Duration(milliseconds: 500 + i * 300),
                 curve: Curves.elasticOut,
                 builder: (context, value, child) {
+                  final safeValue = value.isFinite ? value : 0.0;
+                  final clampedValue = safeValue.clamp(0.0, 1.0).toDouble();
+                  final glowOpacity = (clampedValue * 0.8).clamp(0.0, 1.0).toDouble();
+                  final flareOpacity = (clampedValue * 0.5).clamp(0.0, 1.0).toDouble();
+                  final scaleValue = earned ? 0.5 + clampedValue * 0.7 : 1.0;
+
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 8),
                     child: Transform.scale(
-                      scale: earned ? 0.5 + value * 0.7 : 1.0,
+                      scale: scaleValue,
                       child: Icon(
                         earned ? Icons.star : Icons.star_border,
-                        color: NeonColors.yellow.withOpacity(earned ? value : 0.2),
+                        color: NeonColors.yellow.withOpacity(earned ? clampedValue : 0.2),
                         size: 52,
                         shadows: earned
                             ? [
                                 Shadow(
-                                  color: NeonColors.yellow.withOpacity(value * 0.8),
+                                  color: NeonColors.yellow.withOpacity(glowOpacity),
                                   blurRadius: 25,
                                 ),
                                 Shadow(
-                                  color: NeonColors.orange.withOpacity(value * 0.5),
+                                  color: NeonColors.orange.withOpacity(flareOpacity),
                                   blurRadius: 40,
                                 ),
                               ]

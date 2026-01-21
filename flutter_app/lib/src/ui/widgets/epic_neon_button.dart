@@ -175,7 +175,8 @@ class _EpicNeonButtonState extends State<EpicNeonButton>
                       // Button content
                       Center(
                         child: Row(
-                          mainAxisSize: MainAxisSize.min,
+                          mainAxisSize: MainAxisSize.max,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             if (widget.icon != null) ...[
                               Icon(
@@ -191,24 +192,29 @@ class _EpicNeonButtonState extends State<EpicNeonButton>
                               ),
                               const SizedBox(width: 12),
                             ],
-                            Text(
-                              widget.text,
-                              style: TextStyle(
-                                fontFamily: NeonTextStyles.fontFamily,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 3,
-                                color: effectiveColor,
-                                shadows: [
-                                  Shadow(
-                                    color: effectiveColor.withOpacity(glowIntensity),
-                                    blurRadius: 8,
-                                  ),
-                                  Shadow(
-                                    color: effectiveColor.withOpacity(glowIntensity * 0.5),
-                                    blurRadius: 16,
-                                  ),
-                                ],
+                            Flexible(
+                              child: Text(
+                                widget.text,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontFamily: NeonTextStyles.fontFamily,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 3,
+                                  color: effectiveColor,
+                                  shadows: [
+                                    Shadow(
+                                      color: effectiveColor.withOpacity(glowIntensity),
+                                      blurRadius: 8,
+                                    ),
+                                    Shadow(
+                                      color: effectiveColor.withOpacity(glowIntensity * 0.5),
+                                      blurRadius: 16,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ],

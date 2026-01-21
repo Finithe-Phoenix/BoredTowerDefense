@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -45,6 +46,7 @@ class _GameResultOverlayState extends State<GameResultOverlay>
   late Animation<double> _fadeAnimation;
   late Animation<double> _statsAnimation;
 
+  Timer? _glitchTimer;
   int _displayedScore = 0;
   bool _showingDialogue = true;
   int _dialogueIndex = 0;
@@ -242,7 +244,8 @@ class _GameResultOverlayState extends State<GameResultOverlay>
 
   void _triggerGlitch() {
     _glitchController.forward(from: 0).then((_) {
-      Future.delayed(const Duration(milliseconds: 200), () {
+      _glitchTimer?.cancel();
+      _glitchTimer = Timer(const Duration(milliseconds: 200), () {
         if (mounted) _glitchController.forward(from: 0);
       });
     });
@@ -250,6 +253,7 @@ class _GameResultOverlayState extends State<GameResultOverlay>
 
   @override
   void dispose() {
+    _glitchTimer?.cancel();
     _fadeController.dispose();
     _pulseController.dispose();
     _glitchController.dispose();

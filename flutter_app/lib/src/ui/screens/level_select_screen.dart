@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
@@ -329,6 +330,7 @@ class _TronLevelCardState extends State<_TronLevelCard>
   late Animation<double> _materializeAnimation;
   late Animation<double> _pulseAnimation;
 
+  Timer? _materializeTimer;
   bool _isHovered = false;
   bool _isPressed = false;
 
@@ -360,7 +362,7 @@ class _TronLevelCardState extends State<_TronLevelCard>
       vsync: this,
     );
 
-    Future.delayed(widget.delay, () {
+    _materializeTimer = Timer(widget.delay, () {
       if (mounted) {
         _materializeController.forward();
         _pulseController.repeat(reverse: true);
@@ -370,6 +372,7 @@ class _TronLevelCardState extends State<_TronLevelCard>
 
   @override
   void dispose() {
+    _materializeTimer?.cancel();
     _materializeController.dispose();
     _pulseController.dispose();
     _hoverController.dispose();

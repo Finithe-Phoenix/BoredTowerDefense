@@ -470,48 +470,59 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
   Widget _buildStartScreen() {
     return Container(
       color: Colors.black.withOpacity(0.85),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildGlowingIcon(Icons.speed_rounded, const Color(0xFFFF6600), 80),
-            const SizedBox(height: 24),
-            Text(
-              'BENCHMARK MODE',
-              style: NeonTextStyles.title.copyWith(
-                color: const Color(0xFFFF6600),
-                fontSize: 36,
-                letterSpacing: 6,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final minHeight = math.max(0.0, constraints.maxHeight - 48);
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: minHeight),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildGlowingIcon(Icons.speed_rounded, const Color(0xFFFF6600), 80),
+                    const SizedBox(height: 24),
+                    Text(
+                      'BENCHMARK MODE',
+                      style: NeonTextStyles.title.copyWith(
+                        color: const Color(0xFFFF6600),
+                        fontSize: 36,
+                        letterSpacing: 6,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Sistema de prueba de rendimiento',
+                      style: NeonTextStyles.subtitle.copyWith(
+                        color: NeonColors.white.withOpacity(0.7),
+                      ),
+                    ),
+                    const SizedBox(height: 48),
+                    _buildInfoCard(),
+                    const SizedBox(height: 48),
+                    TronButton(
+                      text: _game != null ? 'INICIAR BENCHMARK' : 'CARGANDO...',
+                      icon: Icons.play_arrow_rounded,
+                      onPressed: _startBenchmark,
+                      enabled: _game != null,
+                      color: const Color(0xFFFF6600),
+                      width: 280,
+                    ),
+                    const SizedBox(height: 20),
+                    TronButton(
+                      text: 'VOLVER',
+                      icon: Icons.arrow_back_rounded,
+                      onPressed: () => Navigator.pop(context),
+                      color: NeonColors.cyan,
+                      width: 280,
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Sistema de prueba de rendimiento',
-              style: NeonTextStyles.subtitle.copyWith(
-                color: NeonColors.white.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 48),
-            _buildInfoCard(),
-            const SizedBox(height: 48),
-            TronButton(
-              text: _game != null ? 'INICIAR BENCHMARK' : 'CARGANDO...',
-              icon: Icons.play_arrow_rounded,
-              onPressed: _startBenchmark,
-              enabled: _game != null,
-              color: const Color(0xFFFF6600),
-              width: 280,
-            ),
-            const SizedBox(height: 20),
-            TronButton(
-              text: 'VOLVER',
-              icon: Icons.arrow_back_rounded,
-              onPressed: () => Navigator.pop(context),
-              color: NeonColors.cyan,
-              width: 280,
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -550,9 +561,13 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       children: [
         Icon(icon, color: const Color(0xFFFF6600), size: 20),
         const SizedBox(width: 12),
-        Text(
-          text,
-          style: NeonTextStyles.body.copyWith(color: NeonColors.white.withOpacity(0.9)),
+        Expanded(
+          child: Text(
+            text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: NeonTextStyles.body.copyWith(color: NeonColors.white.withOpacity(0.9)),
+          ),
         ),
       ],
     );
