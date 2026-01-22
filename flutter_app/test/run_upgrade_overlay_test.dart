@@ -70,7 +70,5 @@ void main() {
     await tester.tap(find.widgetWithText(EpicNeonButton, 'SKIP'));
     await tester.pump();
     expect(game.skipCount, 1);
-
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

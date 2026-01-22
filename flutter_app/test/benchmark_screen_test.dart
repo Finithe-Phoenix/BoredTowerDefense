@@ -17,8 +17,5 @@ void main() {
 
     expect(find.text('BENCHMARK MODE'), findsOneWidget);
     expect(find.widgetWithText(TronButton, 'INICIAR BENCHMARK'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 }

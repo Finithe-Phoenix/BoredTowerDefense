@@ -36,7 +36,5 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
 
     expect(find.byKey(const ValueKey('level_grid')), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

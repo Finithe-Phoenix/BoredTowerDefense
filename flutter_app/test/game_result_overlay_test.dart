@@ -49,6 +49,5 @@ void main() {
     expect(exited, 1);
 
     await tester.pump(const Duration(milliseconds: 400));
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

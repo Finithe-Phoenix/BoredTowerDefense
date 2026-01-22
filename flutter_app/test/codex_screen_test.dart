@@ -17,7 +17,5 @@ void main() {
     expect(header.text, 'ARCHIVOS DEL SISTEMA');
     expect(find.text('TODOS'), findsOneWidget);
     expect(find.widgetWithText(EpicNeonButton, 'VOLVER'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

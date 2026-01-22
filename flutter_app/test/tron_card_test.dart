@@ -16,6 +16,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       expect(find.text('CARD CONTENT'), findsOneWidget);
     });
 
@@ -49,6 +51,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.color, NeonColors.cyan);
     });
@@ -61,6 +65,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.delay, Duration.zero);
@@ -75,6 +81,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.materializationDuration, const Duration(milliseconds: 500));
     });
@@ -88,6 +96,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.borderRadius, 12.0);
     });
@@ -100,6 +110,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.enabled, isTrue);
@@ -115,6 +127,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.color, Colors.red);
     });
@@ -128,6 +142,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.secondaryColor, Colors.green);
@@ -143,6 +159,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 800));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.delay, const Duration(milliseconds: 200));
     });
@@ -156,6 +174,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 1100));
 
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.materializationDuration, const Duration(milliseconds: 1000));
@@ -172,6 +192,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.width, 200);
       expect(widget.height, 150);
@@ -187,6 +209,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.borderRadius, 24.0);
     });
@@ -200,6 +224,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.enabled, isFalse);
@@ -246,7 +272,7 @@ void main() {
       // Tap immediately before materialization completes
       await tester.pump(const Duration(milliseconds: 1));
       await tester.tap(find.byType(TronCard));
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 1100));
 
       expect(taps, 0);
     });
@@ -304,7 +330,7 @@ void main() {
 
       // Pump past the delay
       await tester.pump(const Duration(milliseconds: 600));
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 600));
 
       expect(find.byType(TronCard), findsOneWidget);
     });
@@ -400,6 +426,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       expect(find.text('No tap handler'), findsOneWidget);
     });
 
@@ -417,6 +445,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       expect(find.text('Line 1'), findsOneWidget);
       expect(find.text('Line 2'), findsOneWidget);
@@ -441,6 +471,8 @@ void main() {
         ),
       );
 
+      await tester.pump(const Duration(milliseconds: 600));
+
       expect(find.byType(TronCard), findsNWidgets(2));
       expect(find.text('Card 1'), findsOneWidget);
       expect(find.text('Card 2'), findsOneWidget);
@@ -455,6 +487,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       final widget = tester.widget<TronCard>(find.byType(TronCard));
       expect(widget.borderRadius, 0);
@@ -475,6 +509,8 @@ void main() {
           ),
         ),
       );
+
+      await tester.pump(const Duration(milliseconds: 600));
 
       expect(find.text('Scaffold Card'), findsOneWidget);
     });

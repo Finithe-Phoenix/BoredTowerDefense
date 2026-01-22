@@ -60,7 +60,5 @@ void main() {
     await tester.pump();
 
     expect(selectedWorld, worlds.first.id);
-
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

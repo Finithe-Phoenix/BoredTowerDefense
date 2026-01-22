@@ -15,9 +15,6 @@ void main() {
     expect(find.text('THE ARCHITECT LOGS'), findsOneWidget);
     expect(find.text('NEON FRONTIER'), findsOneWidget);
     expect(find.text('RETURN TO MENU'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('StoryScreen opens ChronicleReaderScreen', (tester) async {
@@ -33,8 +30,5 @@ void main() {
     await tester.pump();
 
     expect(find.byType(ChronicleReaderScreen), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 }

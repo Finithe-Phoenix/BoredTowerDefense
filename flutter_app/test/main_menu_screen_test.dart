@@ -18,8 +18,5 @@ void main() {
     expect(find.widgetWithText(TronButton, 'CAMPAIGN'), findsOneWidget);
     expect(find.widgetWithText(TronButton, 'STORY'), findsOneWidget);
     expect(find.widgetWithText(TronButton, 'CODEX'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 }

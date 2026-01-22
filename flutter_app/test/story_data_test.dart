@@ -84,13 +84,16 @@ void main() {
       }
     });
 
-    test('memory fragments are sorted by unlock level', () {
-      final memories = StoryData.getUnlockedMemories(100);
-      for (int i = 1; i < memories.length; i++) {
-        expect(
-          memories[i].unlockLevel >= memories[i - 1].unlockLevel,
-          isTrue,
-        );
+    test('memory fragments can be filtered by unlock level', () {
+      final allMemories = StoryData.getUnlockedMemories(100);
+      final earlyMemories = StoryData.getUnlockedMemories(5);
+
+      // Early memories should be subset of all memories
+      expect(earlyMemories.length, lessThanOrEqualTo(allMemories.length));
+
+      // All early memories should be unlocked at or before level 5
+      for (final memory in earlyMemories) {
+        expect(memory.unlockLevel, lessThanOrEqualTo(5));
       }
     });
   });

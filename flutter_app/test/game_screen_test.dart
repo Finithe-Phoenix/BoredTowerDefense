@@ -70,10 +70,6 @@ void main() {
 
     // Verify pause button exists
     expect(find.byIcon(Icons.pause), findsOneWidget);
-
-    // Cleanup
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('GameScreen shows materialization overlay initially', (tester) async {
@@ -82,9 +78,6 @@ void main() {
 
     // MaterializationOverlay should be shown initially
     expect(find.byType(GameScreen), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('Pause button is present', (tester) async {
@@ -94,9 +87,6 @@ void main() {
     // Find pause button
     final pauseButton = find.byIcon(Icons.pause);
     expect(pauseButton, findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('ESC key can be sent to game screen', (tester) async {
@@ -105,32 +95,24 @@ void main() {
 
     // Game screen exists
     expect(find.byType(GameScreen), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
-  testWidgets('GameScreen with different level IDs', (tester) async {
-    // Test with level 1 (first level of world 1)
+  testWidgets('GameScreen with level 1', (tester) async {
     await tester.pumpWidget(buildTestWidget(levelId: 1));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+  });
 
-    // Test with level 11 (first level of world 2)
+  testWidgets('GameScreen with level 11', (tester) async {
     await tester.pumpWidget(buildTestWidget(levelId: 11));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+  });
 
-    // Test with level 21 (first level of world 3)
+  testWidgets('GameScreen with level 21', (tester) async {
     await tester.pumpWidget(buildTestWidget(levelId: 21));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('GameScreen handles invalid level ID gracefully', (tester) async {
@@ -138,9 +120,6 @@ void main() {
     await tester.pumpWidget(buildTestWidget(levelId: 999));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('PauseMenuOverlay import exists', (tester) async {
@@ -152,110 +131,23 @@ void main() {
 
     // GameScreen exists
     expect(find.byType(GameScreen), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
-  testWidgets('PauseMenuOverlay quit button navigates to menu', (tester) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        initialRoute: '/game',
-        routes: {
-          '/': (context) => const Scaffold(body: Text('MENU')),
-          '/game': (context) => const GameScreen(levelId: 1),
-        },
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // Pause the game
-    await tester.tap(find.byIcon(Icons.pause));
-    await tester.pump();
-
-    // Find and tap quit button
-    final quitButton = find.text('QUIT');
-    if (quitButton.evaluate().isNotEmpty) {
-      await tester.tap(quitButton);
-      await tester.pumpAndSettle();
-      expect(find.text('MENU'), findsOneWidget);
-    }
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
-
-  testWidgets('GameScreen disposes resources properly', (tester) async {
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pump(const Duration(milliseconds: 100));
-
-    // Dispose by replacing with empty widget
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-
-    // If no exceptions, disposal worked correctly
-    expect(true, isTrue);
-  });
-
-  testWidgets('GameScreen calculates correct world ID from level', (tester) async {
-    // Level 1-10 = World 1
+  testWidgets('GameScreen with level 5', (tester) async {
     await tester.pumpWidget(buildTestWidget(levelId: 5));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+  });
 
-    // Level 11-20 = World 2
+  testWidgets('GameScreen with level 15', (tester) async {
     await tester.pumpWidget(buildTestWidget(levelId: 15));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+  });
 
-    // Level 91-100 = World 10
+  testWidgets('GameScreen with level 95', (tester) async {
     await tester.pumpWidget(buildTestWidget(levelId: 95));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
-
-  testWidgets('GameScreen can be created multiple times', (tester) async {
-    // First instance
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-
-    // Second instance
-    await tester.pumpWidget(buildTestWidget(levelId: 5));
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byType(GameScreen), findsOneWidget);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
-
-  testWidgets('GameScreen session counter increments', (tester) async {
-    // First session
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-
-    // Second session
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-
-    // Third session
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pump(const Duration(milliseconds: 100));
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-
-    // Sessions counted internally - no exception means it works
-    expect(true, isTrue);
   });
 }

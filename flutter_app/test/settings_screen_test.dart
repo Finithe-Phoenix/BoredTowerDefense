@@ -27,8 +27,5 @@ void main() {
     expect(find.text('GRAPHICS'), findsOneWidget);
     expect(find.text('GAMEPLAY'), findsOneWidget);
     expect(find.text('RESET TO DEFAULTS'), findsOneWidget);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 }

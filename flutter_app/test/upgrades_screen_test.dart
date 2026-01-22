@@ -27,9 +27,6 @@ void main() {
     expect(find.text('UPGRADE FORGE'), findsOneWidget);
     expect(find.text('DATA CORES'), findsOneWidget);
     expect(find.byType(EpicNeonButton), findsWidgets);
-
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
   });
 
   testWidgets('UpgradesScreen returns to previous route', (tester) async {

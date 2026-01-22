@@ -722,5 +722,184 @@ void main() {
       enemy.render(canvas);
       recorder.endRecording();
     });
+
+    test('renders with low health (plasma particles)', () {
+      final enemy = Enemy(
+        path: [Vector2(500, 500)],
+        maxHealth: 100,
+      );
+
+      enemy.takeDamage(70); // Reduce to 30% health
+
+      for (int i = 0; i < 30; i++) {
+        enemy.update(0.016);
+      }
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      enemy.render(canvas);
+      recorder.endRecording();
+    });
+
+    test('renders after multiple damage hits', () {
+      final enemy = Enemy(
+        path: [Vector2(500, 500)],
+        maxHealth: 100,
+      );
+
+      // Take multiple hits to trigger damage particles
+      for (int i = 0; i < 5; i++) {
+        enemy.takeDamage(10);
+        enemy.update(0.016);
+      }
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      enemy.render(canvas);
+      recorder.endRecording();
+    });
+  });
+
+  group('Enemy movement along path', () {
+    test('moves through multiple waypoints', () {
+      final path = [
+        Vector2(50, 0),
+        Vector2(50, 50),
+        Vector2(100, 50),
+      ];
+      final enemy = Enemy(
+        path: path,
+        speed: 500,
+        startPosition: Vector2(0, 0),
+      );
+
+      // Move through path
+      for (int i = 0; i < 30; i++) {
+        enemy.update(0.016);
+      }
+
+      expect(enemy.currentPathIndex, greaterThan(0));
+    });
+
+    test('handles diagonal path correctly', () {
+      final enemy = Enemy(
+        path: [Vector2(100, 100)],
+        speed: 100,
+        startPosition: Vector2(0, 0),
+      );
+
+      enemy.update(0.1);
+
+      expect(enemy.position.x, greaterThan(0));
+      expect(enemy.position.y, greaterThan(0));
+    });
+
+    test('pathProgress is tracked correctly', () {
+      final enemy = Enemy(
+        path: [Vector2(100, 0), Vector2(200, 0)],
+        speed: 100,
+        startPosition: Vector2(0, 0),
+      );
+
+      // pathProgress is 0 at start
+      expect(enemy.pathProgress, greaterThanOrEqualTo(0));
+
+      // Update moves enemy
+      enemy.update(0.5);
+
+      // Position should have changed
+      expect(enemy.position.x, greaterThan(0));
+    });
+  });
+
+  group('Enemy effects with different settings', () {
+    test('renders with allowBlur disabled', () {
+      final originalAllowBlur = Enemy.allowBlur;
+      Enemy.allowBlur = false;
+
+      final enemy = Enemy(path: [Vector2.zero()]);
+      enemy.update(0.1);
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      enemy.render(canvas);
+      recorder.endRecording();
+
+      Enemy.allowBlur = originalAllowBlur;
+    });
+
+    test('renders offscreen enemy with throttleOffscreen', () {
+      final originalThrottle = Enemy.throttleOffscreen;
+      Enemy.throttleOffscreen = true;
+      Enemy.screenSize = Vector2(100, 100);
+      Enemy.screenOffset = Vector2.zero();
+      Enemy.screenScale = 1.0;
+
+      final enemy = Enemy(
+        path: [Vector2(1000, 1000)],
+        startPosition: Vector2(500, 500),
+      );
+
+      enemy.update(0.016);
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      enemy.render(canvas);
+      recorder.endRecording();
+
+      Enemy.throttleOffscreen = originalThrottle;
+    });
+
+    test('updates many frames with all effects', () {
+      final enemy = Enemy(
+        path: [Vector2(1000, 1000)],
+        startPosition: Vector2.zero(),
+        speed: 50,
+        maxHealth: 100,
+        type: EnemyType.phantom,
+      );
+
+      enemy.applySlow(0.3, 2.0);
+      enemy.takeDamage(30);
+      enemy.reveal();
+
+      // Run many update frames
+      for (int i = 0; i < 120; i++) {
+        enemy.update(0.016);
+        if (i % 20 == 0) {
+          final recorder = ui.PictureRecorder();
+          final canvas = ui.Canvas(recorder);
+          enemy.render(canvas);
+          recorder.endRecording();
+        }
+      }
+
+      expect(enemy.isAlive, isTrue);
+    });
+  });
+
+  group('Enemy all types rendering', () {
+    test('renders all types with damage and slow', () {
+      for (final type in EnemyType.values) {
+        final enemy = Enemy(
+          path: [Vector2(100, 100)],
+          type: type,
+          maxHealth: 100,
+          speed: 50,
+        );
+
+        enemy.takeDamage(30);
+        enemy.applySlow(0.5, 1.0);
+
+        for (int i = 0; i < 5; i++) {
+          enemy.update(0.016);
+        }
+
+        final recorder = ui.PictureRecorder();
+        final canvas = ui.Canvas(recorder);
+        enemy.render(canvas);
+        recorder.endRecording();
+      }
+    });
   });
 }

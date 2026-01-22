@@ -702,5 +702,80 @@ void main() {
       tower.render(canvas);
       recorder.endRecording();
     });
+
+    test('renders with forceLowFx enabled', () {
+      Tower.lowFx = true;
+
+      final tower = Tower(
+        position: Vector2(0, 0),
+        size: 40,
+      );
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+
+      tower.update(0.1);
+      tower.render(canvas);
+      recorder.endRecording();
+
+      Tower.lowFx = false;
+    });
+  });
+
+  group('Tower firing', () {
+    test('isReady returns false when on cooldown', () {
+      final tower = Tower(position: Vector2.zero(), size: 40);
+      tower.resetCooldown();
+      expect(tower.isReady, isFalse);
+    });
+
+    test('isReady returns true after cooldown expires', () {
+      final tower = Tower(position: Vector2.zero(), size: 40);
+      tower.resetCooldown();
+
+      // Wait for cooldown to expire
+      for (int i = 0; i < 100; i++) {
+        tower.update(0.016);
+      }
+
+      expect(tower.isReady, isTrue);
+    });
+
+    test('resetCooldown sets tower to not ready', () {
+      final tower = Tower(position: Vector2.zero(), size: 40);
+
+      // Let cooldown expire
+      for (int i = 0; i < 100; i++) {
+        tower.update(0.016);
+      }
+      expect(tower.isReady, isTrue);
+
+      tower.resetCooldown();
+      expect(tower.isReady, isFalse);
+    });
+
+    test('lastFireTime tracks firing', () {
+      final tower = Tower(position: Vector2.zero(), size: 40);
+      final initial = tower.lastFireTime;
+
+      tower.update(0.1);
+      tower.resetCooldown();
+
+      expect(tower.lastFireTime, greaterThanOrEqualTo(initial));
+    });
+  });
+
+  group('Tower FPS boost mode', () {
+    test('enterFpsBoost and exitFpsBoost work correctly', () {
+      final tower = Tower(position: Vector2.zero(), size: 40);
+
+      tower.enterFpsBoost();
+      // Tower should be in boost mode
+      tower.update(0.1);
+
+      tower.exitFpsBoost();
+      // Tower should exit boost mode
+      tower.update(0.1);
+    });
   });
 }
