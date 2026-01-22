@@ -1,0 +1,26 @@
+# Build artifacts
+build/
+.dart_tool/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Coverage
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter/Dart
+*.log
+.packages
+.pub-cache/
+.pub/
+
+# Test artifacts
+*.test.dart.js
+*.test.dart.js.deps
+*.test.dart.js.map
