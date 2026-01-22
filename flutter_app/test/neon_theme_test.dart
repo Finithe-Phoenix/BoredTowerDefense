@@ -372,7 +372,10 @@ void main() {
 
     test('darkTheme uses monospace font family', () {
       final theme = NeonTheme.darkTheme;
-      expect(theme.fontFamily, NeonTextStyles.fontFamily);
+      expect(
+        theme.textTheme.bodyMedium?.fontFamily,
+        NeonTextStyles.fontFamily,
+      );
     });
 
     test('darkTheme scaffoldBackgroundColor is darkBg', () {

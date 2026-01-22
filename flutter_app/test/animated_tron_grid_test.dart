@@ -86,7 +86,5 @@ void main() {
     await tester.pump();
 
     expect(selectedId, levels.first.id);
-
-    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

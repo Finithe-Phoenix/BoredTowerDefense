@@ -6,49 +6,312 @@ import 'package:bored_games/src/bloc/settings/settings_state.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('setMusicVolume clamps and updates state', () {
-    final cubit = SettingsCubit();
+  group('SettingsCubit initial state', () {
+    test('initial state is default SettingsState', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state, const SettingsState());
+    });
 
-    cubit.setMusicVolume(2.0);
-    expect(cubit.state.musicVolume, 1.0);
+    test('initial musicVolume is 0.7', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.musicVolume, 0.7);
+    });
 
-    cubit.setMusicVolume(-1.0);
-    expect(cubit.state.musicVolume, 0.0);
+    test('initial sfxVolume is 0.8', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.sfxVolume, 0.8);
+    });
+
+    test('initial showFps is true', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.showFps, isTrue);
+    });
+
+    test('initial showGrid is true', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.showGrid, isTrue);
+    });
+
+    test('initial particleIntensity is 1.0', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.particleIntensity, 1.0);
+    });
+
+    test('initial screenShake is true', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.screenShake, isTrue);
+    });
   });
 
-  test('setSfxVolume clamps and updates state', () {
-    final cubit = SettingsCubit();
+  group('SettingsCubit setMusicVolume', () {
+    test('setMusicVolume clamps and updates state', () {
+      final cubit = SettingsCubit();
 
-    cubit.setSfxVolume(2.0);
-    expect(cubit.state.sfxVolume, 1.0);
+      cubit.setMusicVolume(2.0);
+      expect(cubit.state.musicVolume, 1.0);
 
-    cubit.setSfxVolume(-1.0);
-    expect(cubit.state.sfxVolume, 0.0);
+      cubit.setMusicVolume(-1.0);
+      expect(cubit.state.musicVolume, 0.0);
+    });
+
+    test('setMusicVolume updates to valid value', () {
+      final cubit = SettingsCubit();
+      cubit.setMusicVolume(0.5);
+      expect(cubit.state.musicVolume, 0.5);
+    });
+
+    test('setMusicVolume to 0', () {
+      final cubit = SettingsCubit();
+      cubit.setMusicVolume(0.0);
+      expect(cubit.state.musicVolume, 0.0);
+    });
+
+    test('setMusicVolume to 1', () {
+      final cubit = SettingsCubit();
+      cubit.setMusicVolume(1.0);
+      expect(cubit.state.musicVolume, 1.0);
+    });
+
+    test('setMusicVolume preserves other state', () {
+      final cubit = SettingsCubit();
+      final originalSfx = cubit.state.sfxVolume;
+      cubit.setMusicVolume(0.5);
+      expect(cubit.state.sfxVolume, originalSfx);
+    });
   });
 
-  test('toggle methods flip booleans', () {
-    final cubit = SettingsCubit();
-    final initial = cubit.state;
+  group('SettingsCubit setSfxVolume', () {
+    test('setSfxVolume clamps and updates state', () {
+      final cubit = SettingsCubit();
 
-    cubit.toggleFps();
-    cubit.toggleGrid();
-    cubit.toggleScreenShake();
+      cubit.setSfxVolume(2.0);
+      expect(cubit.state.sfxVolume, 1.0);
 
-    expect(cubit.state.showFps, isNot(equals(initial.showFps)));
-    expect(cubit.state.showGrid, isNot(equals(initial.showGrid)));
-    expect(cubit.state.screenShake, isNot(equals(initial.screenShake)));
+      cubit.setSfxVolume(-1.0);
+      expect(cubit.state.sfxVolume, 0.0);
+    });
+
+    test('setSfxVolume updates to valid value', () {
+      final cubit = SettingsCubit();
+      cubit.setSfxVolume(0.3);
+      expect(cubit.state.sfxVolume, 0.3);
+    });
+
+    test('setSfxVolume to 0', () {
+      final cubit = SettingsCubit();
+      cubit.setSfxVolume(0.0);
+      expect(cubit.state.sfxVolume, 0.0);
+    });
+
+    test('setSfxVolume to 1', () {
+      final cubit = SettingsCubit();
+      cubit.setSfxVolume(1.0);
+      expect(cubit.state.sfxVolume, 1.0);
+    });
+
+    test('setSfxVolume preserves other state', () {
+      final cubit = SettingsCubit();
+      final originalMusic = cubit.state.musicVolume;
+      cubit.setSfxVolume(0.5);
+      expect(cubit.state.musicVolume, originalMusic);
+    });
   });
 
-  test('particle intensity clamps and reset restores defaults', () {
-    final cubit = SettingsCubit();
+  group('SettingsCubit toggleFps', () {
+    test('toggle methods flip booleans', () {
+      final cubit = SettingsCubit();
+      final initial = cubit.state;
 
-    cubit.setParticleIntensity(2.0);
-    expect(cubit.state.particleIntensity, 1.0);
+      cubit.toggleFps();
+      cubit.toggleGrid();
+      cubit.toggleScreenShake();
 
-    cubit.setParticleIntensity(-1.0);
-    expect(cubit.state.particleIntensity, 0.0);
+      expect(cubit.state.showFps, isNot(equals(initial.showFps)));
+      expect(cubit.state.showGrid, isNot(equals(initial.showGrid)));
+      expect(cubit.state.screenShake, isNot(equals(initial.screenShake)));
+    });
 
-    cubit.resetToDefaults();
-    expect(cubit.state, const SettingsState());
+    test('toggleFps toggles from true to false', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.showFps, isTrue);
+      cubit.toggleFps();
+      expect(cubit.state.showFps, isFalse);
+    });
+
+    test('toggleFps toggles from false to true', () {
+      final cubit = SettingsCubit();
+      cubit.toggleFps(); // true -> false
+      cubit.toggleFps(); // false -> true
+      expect(cubit.state.showFps, isTrue);
+    });
+
+    test('toggleFps preserves other state', () {
+      final cubit = SettingsCubit();
+      final originalGrid = cubit.state.showGrid;
+      cubit.toggleFps();
+      expect(cubit.state.showGrid, originalGrid);
+    });
+  });
+
+  group('SettingsCubit toggleGrid', () {
+    test('toggleGrid toggles from true to false', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.showGrid, isTrue);
+      cubit.toggleGrid();
+      expect(cubit.state.showGrid, isFalse);
+    });
+
+    test('toggleGrid toggles from false to true', () {
+      final cubit = SettingsCubit();
+      cubit.toggleGrid(); // true -> false
+      cubit.toggleGrid(); // false -> true
+      expect(cubit.state.showGrid, isTrue);
+    });
+
+    test('toggleGrid preserves other state', () {
+      final cubit = SettingsCubit();
+      final originalFps = cubit.state.showFps;
+      cubit.toggleGrid();
+      expect(cubit.state.showFps, originalFps);
+    });
+  });
+
+  group('SettingsCubit toggleScreenShake', () {
+    test('toggleScreenShake toggles from true to false', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.screenShake, isTrue);
+      cubit.toggleScreenShake();
+      expect(cubit.state.screenShake, isFalse);
+    });
+
+    test('toggleScreenShake toggles from false to true', () {
+      final cubit = SettingsCubit();
+      cubit.toggleScreenShake(); // true -> false
+      cubit.toggleScreenShake(); // false -> true
+      expect(cubit.state.screenShake, isTrue);
+    });
+
+    test('toggleScreenShake preserves other state', () {
+      final cubit = SettingsCubit();
+      final originalParticle = cubit.state.particleIntensity;
+      cubit.toggleScreenShake();
+      expect(cubit.state.particleIntensity, originalParticle);
+    });
+  });
+
+  group('SettingsCubit setParticleIntensity', () {
+    test('particle intensity clamps and reset restores defaults', () {
+      final cubit = SettingsCubit();
+
+      cubit.setParticleIntensity(2.0);
+      expect(cubit.state.particleIntensity, 1.0);
+
+      cubit.setParticleIntensity(-1.0);
+      expect(cubit.state.particleIntensity, 0.0);
+
+      cubit.resetToDefaults();
+      expect(cubit.state, const SettingsState());
+    });
+
+    test('setParticleIntensity updates to valid value', () {
+      final cubit = SettingsCubit();
+      cubit.setParticleIntensity(0.5);
+      expect(cubit.state.particleIntensity, 0.5);
+    });
+
+    test('setParticleIntensity to 0', () {
+      final cubit = SettingsCubit();
+      cubit.setParticleIntensity(0.0);
+      expect(cubit.state.particleIntensity, 0.0);
+    });
+
+    test('setParticleIntensity to 1', () {
+      final cubit = SettingsCubit();
+      cubit.setParticleIntensity(1.0);
+      expect(cubit.state.particleIntensity, 1.0);
+    });
+
+    test('setParticleIntensity preserves other state', () {
+      final cubit = SettingsCubit();
+      final originalShake = cubit.state.screenShake;
+      cubit.setParticleIntensity(0.5);
+      expect(cubit.state.screenShake, originalShake);
+    });
+  });
+
+  group('SettingsCubit resetToDefaults', () {
+    test('resetToDefaults restores all values', () {
+      final cubit = SettingsCubit();
+
+      // Modify all settings
+      cubit.setMusicVolume(0.1);
+      cubit.setSfxVolume(0.2);
+      cubit.toggleFps();
+      cubit.toggleGrid();
+      cubit.setParticleIntensity(0.3);
+      cubit.toggleScreenShake();
+
+      // Verify modified
+      expect(cubit.state.musicVolume, 0.1);
+      expect(cubit.state.sfxVolume, 0.2);
+      expect(cubit.state.showFps, isFalse);
+      expect(cubit.state.showGrid, isFalse);
+      expect(cubit.state.particleIntensity, 0.3);
+      expect(cubit.state.screenShake, isFalse);
+
+      // Reset
+      cubit.resetToDefaults();
+
+      // Verify defaults
+      expect(cubit.state, const SettingsState());
+      expect(cubit.state.musicVolume, 0.7);
+      expect(cubit.state.sfxVolume, 0.8);
+      expect(cubit.state.showFps, isTrue);
+      expect(cubit.state.showGrid, isTrue);
+      expect(cubit.state.particleIntensity, 1.0);
+      expect(cubit.state.screenShake, isTrue);
+    });
+
+    test('resetToDefaults can be called multiple times', () {
+      final cubit = SettingsCubit();
+      cubit.setMusicVolume(0.1);
+      cubit.resetToDefaults();
+      cubit.resetToDefaults();
+      expect(cubit.state, const SettingsState());
+    });
+  });
+
+  group('SettingsCubit state transitions', () {
+    test('multiple state changes in sequence', () {
+      final cubit = SettingsCubit();
+
+      cubit.setMusicVolume(0.5);
+      expect(cubit.state.musicVolume, 0.5);
+
+      cubit.setSfxVolume(0.6);
+      expect(cubit.state.sfxVolume, 0.6);
+      expect(cubit.state.musicVolume, 0.5); // still preserved
+
+      cubit.toggleFps();
+      expect(cubit.state.showFps, isFalse);
+      expect(cubit.state.musicVolume, 0.5);
+      expect(cubit.state.sfxVolume, 0.6);
+    });
+
+    test('state changes emit new states', () {
+      final cubit = SettingsCubit();
+      final states = <SettingsState>[];
+
+      cubit.stream.listen(states.add);
+
+      cubit.setMusicVolume(0.5);
+      cubit.setSfxVolume(0.6);
+      cubit.toggleFps();
+
+      // Allow stream to propagate
+      Future.delayed(Duration.zero, () {
+        expect(states.length, greaterThanOrEqualTo(3));
+      });
+    });
   });
 }

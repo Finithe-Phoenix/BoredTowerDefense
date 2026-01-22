@@ -4,30 +4,68 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:bored_games/src/ui/widgets/tron_materialization_widget.dart';
 
 void main() {
-  testWidgets('TronMaterializationWidget renders for each pattern', (tester) async {
-    Future<void> pumpPattern(TronPattern pattern, {bool reducedMotion = false}) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: TronMaterializationWidget(
-            duration: const Duration(milliseconds: 50),
-            pattern: pattern,
-            reducedMotion: reducedMotion,
-            child: const Text('CHILD'),
-          ),
+  testWidgets('TronMaterializationWidget renders grid pattern', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TronMaterializationWidget(
+          duration: const Duration(milliseconds: 50),
+          pattern: TronPattern.grid,
+          child: const Text('CHILD'),
         ),
-      );
+      ),
+    );
 
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 80));
-      expect(find.text('CHILD'), findsOneWidget);
-    }
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.text('CHILD'), findsOneWidget);
+  });
 
-    await pumpPattern(TronPattern.grid);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await pumpPattern(TronPattern.hexagonal, reducedMotion: true);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await pumpPattern(TronPattern.radial);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await pumpPattern(TronPattern.lightCycle);
+  testWidgets('TronMaterializationWidget renders hexagonal pattern', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TronMaterializationWidget(
+          duration: const Duration(milliseconds: 50),
+          pattern: TronPattern.hexagonal,
+          reducedMotion: true,
+          child: const Text('CHILD'),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.text('CHILD'), findsOneWidget);
+  });
+
+  testWidgets('TronMaterializationWidget renders radial pattern', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TronMaterializationWidget(
+          duration: const Duration(milliseconds: 50),
+          pattern: TronPattern.radial,
+          child: const Text('CHILD'),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.text('CHILD'), findsOneWidget);
+  });
+
+  testWidgets('TronMaterializationWidget renders lightCycle pattern', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: TronMaterializationWidget(
+          duration: const Duration(milliseconds: 50),
+          pattern: TronPattern.lightCycle,
+          child: const Text('CHILD'),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.text('CHILD'), findsOneWidget);
   });
 }
