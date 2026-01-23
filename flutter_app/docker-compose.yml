@@ -31,3 +31,14 @@ services:
     container_name: bored-games-apk
     profiles:
       - apk
+
+  # Run tests
+  flutter-test:
+    image: ghcr.io/cirruslabs/flutter:stable
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: flutter test --coverage
+    container_name: bored-games-test
+    profiles:
+      - test
