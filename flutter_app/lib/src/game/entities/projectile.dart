@@ -304,9 +304,6 @@ class Projectile extends PositionComponent {
           target!.applySlow(slowAmount, slowDuration);
         }
 
-        // Play hit sound with tower type context
-        AudioService.instance.playHit(type: towerType);
-
         onHit?.call(target!, target!.position.clone(), killed);
 
         // Spawn impact effect
