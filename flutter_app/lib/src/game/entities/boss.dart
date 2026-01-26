@@ -22,8 +22,15 @@ enum BossType {
   omegaNexus,        // World 10: Ultimate boss with all mechanics
 }
 
-/// Boss-specific mechanics data
+/// Boss-specific mechanics data - with pre-allocated lists to avoid per-frame allocations
 class BossMechanicState {
+  // Pre-allocated list capacities
+  static const int _maxPortals = 4;
+  static const int _maxClones = 4;
+  static const int _maxTurrets = 8;
+  static const int _maxHackedTowers = 10;
+  static const int _maxLightningTargets = 6;
+
   // Citadel Core
   double shieldAngle = 0;
   int shieldCount = 4;
@@ -31,20 +38,20 @@ class BossMechanicState {
 
   // Abyss Gate
   double teleportCooldown = 0;
-  final List<Vector2> portalPositions = [];
+  final List<Vector2> portalPositions;
   double portalSpawnTimer = 0;
 
   // Voidline Apex
   bool isSplit = false;
   int splitCount = 0;
-  final List<Vector2> clonePositions = [];
+  final List<Vector2> clonePositions;
 
   // Shard Vault
   bool reflectionActive = false;
   double prismRotation = 0;
 
   // Arc Fortress
-  final List<double> turretAngles = [];
+  final List<double> turretAngles;
   double turretFireTimer = 0;
 
   // Core Hunter
@@ -53,12 +60,12 @@ class BossMechanicState {
 
   // Omega Grid
   double hackPulseTimer = 0;
-  final List<int> hackedTowerIds = [];
+  final List<int> hackedTowerIds;
 
   // Storm Tower
   double stormIntensity = 0;
   double lightningTimer = 0;
-  final List<Vector2> lightningTargets = [];
+  final List<Vector2> lightningTargets;
 
   // Final Gate
   int currentPhase = 1;
@@ -70,6 +77,49 @@ class BossMechanicState {
 
   // MiniBoss
   double minionSpawnTimer = 0;
+
+  /// Constructor with pre-allocated lists
+  BossMechanicState()
+      : portalPositions = List<Vector2>.generate(_maxPortals, (_) => Vector2.zero(), growable: true),
+        clonePositions = List<Vector2>.generate(_maxClones, (_) => Vector2.zero(), growable: true),
+        turretAngles = List<double>.filled(_maxTurrets, 0, growable: true),
+        hackedTowerIds = List<int>.empty(growable: true),
+        lightningTargets = List<Vector2>.generate(_maxLightningTargets, (_) => Vector2.zero(), growable: true) {
+    // Clear pre-allocated elements (they're just placeholders)
+    portalPositions.clear();
+    clonePositions.clear();
+    turretAngles.clear();
+    lightningTargets.clear();
+  }
+
+  /// Reset state for reuse
+  void reset() {
+    shieldAngle = 0;
+    shieldCount = 4;
+    empChargeTimer = 0;
+    teleportCooldown = 0;
+    portalPositions.clear();
+    portalSpawnTimer = 0;
+    isSplit = false;
+    splitCount = 0;
+    clonePositions.clear();
+    reflectionActive = false;
+    prismRotation = 0;
+    turretAngles.clear();
+    turretFireTimer = 0;
+    timeScale = 1.0;
+    isPhaseShift = false;
+    hackPulseTimer = 0;
+    hackedTowerIds.clear();
+    stormIntensity = 0;
+    lightningTimer = 0;
+    lightningTargets.clear();
+    currentPhase = 1;
+    phaseTransitionTimer = 0;
+    mechanicCycle = 0;
+    ultimateTimer = 0;
+    minionSpawnTimer = 0;
+  }
 }
 
 /// Callback for boss events
@@ -77,6 +127,73 @@ typedef BossPhaseChangeCallback = void Function(Boss boss, int phase);
 typedef BossAbilityCallback = void Function(Boss boss, String abilityName);
 
 class Boss extends Enemy {
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _shieldPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 8;
+  static final Paint _portalPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4;
+  static final Paint _clonePaint = Paint();
+  static final Paint _prismPaint = Paint();
+  static final Paint _turretPaint = Paint();
+  static final Paint _turretBarrelPaint = Paint()
+    ..strokeWidth = 4
+    ..strokeCap = StrokeCap.round;
+  static final Paint _stormPaint = Paint();
+  static final Paint _stormArcPaint = Paint()
+    ..strokeWidth = 3
+    ..strokeCap = StrokeCap.round;
+  static final Paint _hexFillPaint = Paint();
+  static final Paint _hexStrokePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _triPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _segmentPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _petalPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _centerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _nodeGlowPaint = Paint();
+  static final Paint _nodeCorePaint = Paint();
+  static final Paint _pulsePaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _crackPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _crackGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4;
+  static final Paint _crownPaint = Paint();
+  static final Paint _crownOutlinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _auraPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+  // Cached Path objects
+  static final Path _hexPath = Path();
+  static final Path _crackPath = Path();
+  static final Path _crownPath = Path();
+
+  // Cached TextPainter for announcement
+  TextPainter? _announcementPainter;
+  double _lastAnnouncementAlpha = -1;
+
+  // Cached Random instance to avoid per-frame allocations
+  static final math.Random _random = math.Random();
+
+  // Pre-allocated Vector2 for temporary calculations in render methods
+  static final Vector2 _tempOffset = Vector2.zero();
+
   Boss({
     required super.path,
     required this.bossType,
@@ -213,17 +330,30 @@ class Boss extends Enemy {
       if (_pulseScale < 1.0) _pulseScale = 1.0;
     }
 
-    // Update aura particles
-    _auraParticles.removeWhere((p) => !p.isAlive);
-    for (final particle in _auraParticles) {
+    // Update aura particles with single-pass removal
+    int writeIdx = 0;
+    for (int i = 0; i < _auraParticles.length; i++) {
+      final particle = _auraParticles[i];
       particle.update(dt);
+      if (particle.isAlive) {
+        if (writeIdx != i) _auraParticles[writeIdx] = particle;
+        writeIdx++;
+      }
     }
-    // Spawn new particles
+    if (writeIdx < _auraParticles.length) {
+      _auraParticles.removeRange(writeIdx, _auraParticles.length);
+    }
+    // Spawn new particles using cached Random instance
     if (_auraParticles.length < 50) {
-      final random = math.Random();
-      final angle = random.nextDouble() * math.pi * 2;
-      final offset = Vector2(math.cos(angle), math.sin(angle)) * (random.nextDouble() * size.x * 0.5);
-      _auraParticles.add(_AuraParticle(startOffset: offset, color: type.color));
+      final angle = _random.nextDouble() * math.pi * 2;
+      final dist = _random.nextDouble() * size.x * 0.5;
+      // Reuse _tempOffset to avoid Vector2 allocation
+      _tempOffset.setValues(math.cos(angle) * dist, math.sin(angle) * dist);
+      _auraParticles.add(_AuraParticle(
+        startOffset: _tempOffset.clone(),
+        color: type.color,
+        random: _random,
+      ));
     }
 
     // Check for phase changes
@@ -412,7 +542,7 @@ class Boss extends Enemy {
     // Find random position on path ahead
     if (path.isNotEmpty && _currentTargetIndex < path.length - 3) {
       final targetIndex = math.min(_currentTargetIndex + 5, path.length - 1);
-      position = path[targetIndex].clone();
+      position.setFrom(path[targetIndex]);
       _currentTargetIndex = targetIndex;
       onAbilityUsed?.call(this, 'teleport');
     }
@@ -496,23 +626,26 @@ class Boss extends Enemy {
     final progress = (_announcementTimer / _announcementDuration).clamp(0.0, 1.0);
     final alpha = progress < 0.5 ? progress * 2 : (1 - progress) * 2;
 
-    // Warning text
-    final textPaint = TextPainter(
-      text: TextSpan(
-        text: 'BOSS INCOMING',
-        style: TextStyle(
-          color: Color(0xFFFF0066).withOpacity(alpha),
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
+    // Only relayout if alpha changed significantly (reduces TextPainter work)
+    if (_announcementPainter == null || (alpha - _lastAnnouncementAlpha).abs() > 0.01) {
+      _lastAnnouncementAlpha = alpha;
+      _announcementPainter = TextPainter(
+        text: TextSpan(
+          text: 'BOSS INCOMING',
+          style: TextStyle(
+            color: const Color(0xFFFF0066).withOpacity(alpha),
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      );
+      _announcementPainter!.layout();
+    }
 
-    textPaint.layout();
-    textPaint.paint(
+    _announcementPainter!.paint(
       canvas,
-      Offset(-textPaint.width / 2, -size.y - 60),
+      Offset(-_announcementPainter!.width / 2, -size.y - 60),
     );
   }
 
@@ -521,6 +654,9 @@ class Boss extends Enemy {
 
     // Render epic aura
     _renderAura(canvas);
+
+    // Render geometric pattern shield (all bosses)
+    _renderGeometricShield(canvas, allowBlur);
 
     switch (bossType) {
       case BossType.citadelCore:
@@ -556,42 +692,37 @@ class Boss extends Enemy {
     final radius = size.x / 2;
     final shieldRadius = radius * 1.8;
 
+    _shieldPaint.color = const Color(0xFF00FFFF).withOpacity(0.6);
+    _shieldPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+
     for (int i = 0; i < _mechanicState.shieldCount; i++) {
       final angle = _mechanicState.shieldAngle + (i * math.pi * 2 / _mechanicState.shieldCount);
       final arcStart = angle - math.pi / 8;
       final arcSweep = math.pi / 4;
-
-      final shieldPaint = Paint()
-        ..color = Color(0xFF00FFFF).withOpacity(0.6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..maskFilter = allowBlur ? MaskFilter.blur(BlurStyle.normal, 4) : null;
 
       canvas.drawArc(
         Rect.fromCircle(center: Offset.zero, radius: shieldRadius),
         arcStart,
         arcSweep,
         false,
-        shieldPaint,
+        _shieldPaint,
       );
     }
   }
 
   void _renderPortals(Canvas canvas, bool allowBlur) {
-    for (final portalPos in _mechanicState.portalPositions) {
-      final offset = portalPos - position;
+    _portalPaint.color = const Color(0xFFAA00FF).withOpacity(0.7);
+    _portalPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 6) : null;
 
-      // Portal ring
-      final portalPaint = Paint()
-        ..color = Color(0xFFAA00FF).withOpacity(0.7)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..maskFilter = allowBlur ? MaskFilter.blur(BlurStyle.normal, 6) : null;
+    for (final portalPos in _mechanicState.portalPositions) {
+      // Use cached offset to avoid Vector2 allocation from subtraction
+      _tempOffset.setFrom(portalPos);
+      _tempOffset.sub(position);
 
       canvas.drawCircle(
-        Offset(offset.x, offset.y),
+        Offset(_tempOffset.x, _tempOffset.y),
         30,
-        portalPaint,
+        _portalPaint,
       );
     }
   }
@@ -599,18 +730,19 @@ class Boss extends Enemy {
   void _renderClones(Canvas canvas, bool allowBlur) {
     if (!_mechanicState.isSplit) return;
 
-    for (final clonePos in _mechanicState.clonePositions) {
-      final offset = clonePos - position;
+    _clonePaint.color = type.color.withOpacity(0.4);
+    _clonePaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 8) : null;
 
-      // Ghost clone
-      final clonePaint = Paint()
-        ..color = type.color.withOpacity(0.4)
-        ..maskFilter = allowBlur ? MaskFilter.blur(BlurStyle.normal, 8) : null;
+    final cloneRadius = size.x / 2;
+    for (final clonePos in _mechanicState.clonePositions) {
+      // Use cached offset to avoid Vector2 allocation from subtraction
+      _tempOffset.setFrom(clonePos);
+      _tempOffset.sub(position);
 
       canvas.drawCircle(
-        Offset(offset.x, offset.y),
-        size.x / 2,
-        clonePaint,
+        Offset(_tempOffset.x, _tempOffset.y),
+        cloneRadius,
+        _clonePaint,
       );
     }
   }
@@ -618,6 +750,8 @@ class Boss extends Enemy {
   void _renderPrisms(Canvas canvas, bool allowBlur) {
     final radius = size.x / 2;
     final prismCount = 6;
+
+    _prismPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
 
     for (int i = 0; i < prismCount; i++) {
       final angle = _mechanicState.prismRotation + (i * math.pi * 2 / prismCount);
@@ -627,16 +761,17 @@ class Boss extends Enemy {
 
       // Rainbow prism effect
       final hue = (i / prismCount) * 360;
-      final prismPaint = Paint()
-        ..color = HSVColor.fromAHSV(0.6, hue, 1.0, 1.0).toColor()
-        ..maskFilter = allowBlur ? MaskFilter.blur(BlurStyle.normal, 4) : null;
+      _prismPaint.color = HSVColor.fromAHSV(0.6, hue, 1.0, 1.0).toColor();
 
-      canvas.drawCircle(Offset(x, y), 8, prismPaint);
+      canvas.drawCircle(Offset(x, y), 8, _prismPaint);
     }
   }
 
   void _renderTurrets(Canvas canvas, bool allowBlur) {
     final radius = size.x / 2;
+
+    _turretPaint.color = const Color(0xFFFF6600).withOpacity(0.8);
+    _turretBarrelPaint.color = const Color(0xFFFF3300);
 
     for (int i = 0; i < _mechanicState.turretAngles.length; i++) {
       final angle = _mechanicState.turretAngles[i];
@@ -644,20 +779,12 @@ class Boss extends Enemy {
       final x = math.cos(angle) * dist;
       final y = math.sin(angle) * dist;
 
-      // Turret
-      final turretPaint = Paint()
-        ..color = Color(0xFFFF6600).withOpacity(0.8);
+      canvas.drawCircle(Offset(x, y), 12, _turretPaint);
 
-      canvas.drawCircle(Offset(x, y), 12, turretPaint);
-
-      // Turret barrel
       canvas.drawLine(
         Offset(x, y),
         Offset(x + math.cos(angle) * 20, y + math.sin(angle) * 20),
-        Paint()
-          ..color = Color(0xFFFF3300)
-          ..strokeWidth = 4
-          ..strokeCap = StrokeCap.round,
+        _turretBarrelPaint,
       );
     }
   }
@@ -667,19 +794,16 @@ class Boss extends Enemy {
     final stormRadius = radius * (2.0 + _mechanicState.stormIntensity * 2.0);
 
     // Storm aura
-    final stormPaint = Paint()
-      ..color = Color(0xFFFFFF00).withOpacity(0.3 * _mechanicState.stormIntensity)
-      ..maskFilter = allowBlur ? MaskFilter.blur(BlurStyle.normal, 20) : null;
+    _stormPaint.color = const Color(0xFFFFFF00).withOpacity(0.3 * _mechanicState.stormIntensity);
+    _stormPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 20) : null;
 
-    canvas.drawCircle(Offset.zero, stormRadius, stormPaint);
+    canvas.drawCircle(Offset.zero, stormRadius, _stormPaint);
 
     // Lightning arcs
+    _stormArcPaint.color = const Color(0xFFFFFFFF).withOpacity(0.6);
+
     for (int i = 0; i < 6; i++) {
       final angle = (_animationPhase * 2 + i * math.pi / 3);
-      final arcPaint = Paint()
-        ..color = Color(0xFFFFFFFF).withOpacity(0.6)
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round;
 
       canvas.drawLine(
         Offset.zero,
@@ -687,8 +811,255 @@ class Boss extends Enemy {
           math.cos(angle) * stormRadius,
           math.sin(angle) * stormRadius,
         ),
-        arcPaint,
+        _stormArcPaint,
       );
+    }
+  }
+
+  /// Renders a geometric pattern shield around the boss
+  void _renderGeometricShield(Canvas canvas, bool allowBlur) {
+    final radius = size.x / 2;
+    final shieldRadius = radius * 1.6;
+    final animPhase = _animationPhase;
+
+    // Shield intensity based on health (stronger shield when damaged)
+    final healthPct = health / maxHealth;
+    final shieldIntensity = 0.4 + (1 - healthPct) * 0.5;
+
+    // Boss-specific shield color
+    Color shieldColor;
+    switch (bossType) {
+      case BossType.citadelCore:
+        shieldColor = const Color(0xFF00FFFF);
+        break;
+      case BossType.abyssGate:
+        shieldColor = const Color(0xFFAA00FF);
+        break;
+      case BossType.voidlineApex:
+        shieldColor = const Color(0xFF6600FF);
+        break;
+      case BossType.shardVault:
+        shieldColor = const Color(0xFFFF00FF);
+        break;
+      case BossType.arcFortress:
+        shieldColor = const Color(0xFFFFFF00);
+        break;
+      case BossType.coreHunter:
+        shieldColor = const Color(0xFF00FF00);
+        break;
+      case BossType.omegaGrid:
+        shieldColor = const Color(0xFF00FF66);
+        break;
+      case BossType.stormTower:
+        shieldColor = const Color(0xFF0099FF);
+        break;
+      case BossType.finalGate:
+        shieldColor = const Color(0xFFFF3300);
+        break;
+      case BossType.omegaNexus:
+        shieldColor = const Color(0xFFFF0066);
+        break;
+      case BossType.miniBoss:
+        shieldColor = const Color(0xFFFF6600);
+        break;
+    }
+
+    final secondaryColor = HSLColor.fromColor(shieldColor)
+        .withHue((HSLColor.fromColor(shieldColor).hue + 60) % 360)
+        .toColor();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: OUTER HEXAGONAL GRID PATTERN
+    // ═══════════════════════════════════════════════════════════════════════
+    final hexCount = 12;
+    final hexRadius = shieldRadius * 0.25;
+
+    _hexFillPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+
+    for (int i = 0; i < hexCount; i++) {
+      final hexAngle = (i * math.pi * 2 / hexCount) + animPhase * 0.3;
+      final hexDist = shieldRadius * (0.9 + math.sin(animPhase * 2 + i) * 0.1);
+      final hexX = math.cos(hexAngle) * hexDist;
+      final hexY = math.sin(hexAngle) * hexDist;
+
+      final hexAlpha = shieldIntensity * (0.3 + math.sin(animPhase * 3 + i * 0.5) * 0.15);
+
+      // Draw hexagon using cached path
+      _hexPath.reset();
+      for (int j = 0; j < 6; j++) {
+        final vertAngle = j * math.pi / 3 + animPhase * 0.5;
+        final vx = hexX + math.cos(vertAngle) * hexRadius;
+        final vy = hexY + math.sin(vertAngle) * hexRadius;
+        if (j == 0) {
+          _hexPath.moveTo(vx, vy);
+        } else {
+          _hexPath.lineTo(vx, vy);
+        }
+      }
+      _hexPath.close();
+
+      // Fill
+      _hexFillPaint.color = shieldColor.withOpacity(hexAlpha * 0.2);
+      canvas.drawPath(_hexPath, _hexFillPaint);
+
+      // Stroke
+      _hexStrokePaint.color = shieldColor.withOpacity(hexAlpha);
+      canvas.drawPath(_hexPath, _hexStrokePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: TRIANGULAR LATTICE CONNECTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    final triangleCount = 8;
+    final triR1 = shieldRadius * 0.5;
+    final triR2 = shieldRadius * 1.1;
+
+    for (int i = 0; i < triangleCount; i++) {
+      final triAngle = (i * math.pi * 2 / triangleCount) + animPhase * 0.2;
+      final nextAngle = ((i + 1) * math.pi * 2 / triangleCount) + animPhase * 0.2;
+
+      final x1 = math.cos(triAngle) * triR1;
+      final y1 = math.sin(triAngle) * triR1;
+      final x2 = math.cos(triAngle) * triR2;
+      final y2 = math.sin(triAngle) * triR2;
+      final x3 = math.cos(nextAngle) * triR2;
+      final y3 = math.sin(nextAngle) * triR2;
+
+      final triAlpha = shieldIntensity * (0.2 + math.sin(animPhase * 4 + i * 0.8) * 0.1);
+
+      _triPaint.color = secondaryColor.withOpacity(triAlpha);
+
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _triPaint);
+      canvas.drawLine(Offset(x2, y2), Offset(x3, y3), _triPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: ROTATING GEOMETRIC RINGS
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int ring = 0; ring < 3; ring++) {
+      final ringRadius = shieldRadius * (0.6 + ring * 0.25);
+      final ringAlpha = shieldIntensity * (0.25 - ring * 0.05);
+      final ringRotation = animPhase * (0.5 + ring * 0.2) * (ring % 2 == 0 ? 1 : -1);
+
+      // Draw segmented ring (not complete circle)
+      final segmentCount = 6 + ring * 2;
+      final gapAngle = math.pi / (segmentCount * 2);
+
+      _segmentPaint.color = shieldColor.withOpacity(ringAlpha);
+      _segmentPaint.strokeWidth = 2 - ring * 0.3;
+
+      for (int s = 0; s < segmentCount; s++) {
+        final segStart = ringRotation + (s * math.pi * 2 / segmentCount) + gapAngle;
+        final segSweep = (math.pi * 2 / segmentCount) - gapAngle * 2;
+
+        canvas.drawArc(
+          Rect.fromCircle(center: Offset.zero, radius: ringRadius),
+          segStart,
+          segSweep,
+          false,
+          _segmentPaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: SACRED GEOMETRY PATTERN (Center)
+    // ═══════════════════════════════════════════════════════════════════════
+    final sacredRadius = shieldRadius * 0.4;
+    final sacredAlpha = shieldIntensity * 0.4;
+
+    // Flower of life pattern (overlapping circles)
+    final petalCount = 6;
+    final petalRadius = sacredRadius * 0.5;
+
+    _petalPaint.color = shieldColor.withOpacity(sacredAlpha * 0.5);
+    _petalPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+
+    for (int i = 0; i < petalCount; i++) {
+      final petalAngle = (i * math.pi * 2 / petalCount) + animPhase * 0.4;
+      final petalX = math.cos(petalAngle) * petalRadius;
+      final petalY = math.sin(petalAngle) * petalRadius;
+
+      canvas.drawCircle(Offset(petalX, petalY), petalRadius, _petalPaint);
+    }
+
+    // Center circle
+    _centerPaint.color = shieldColor.withOpacity(sacredAlpha);
+    canvas.drawCircle(Offset.zero, petalRadius, _centerPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: ENERGY NODES AT INTERSECTIONS
+    // ═══════════════════════════════════════════════════════════════════════
+    final nodeCount = 6;
+    final nodeDist = shieldRadius * 0.7;
+    _nodeGlowPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 8) : null;
+
+    for (int i = 0; i < nodeCount; i++) {
+      final nodeAngle = (i * math.pi * 2 / nodeCount) + animPhase * 0.6;
+      final nodeX = math.cos(nodeAngle) * nodeDist;
+      final nodeY = math.sin(nodeAngle) * nodeDist;
+
+      final nodePulse = 0.6 + math.sin(animPhase * 4 + i * 1.2) * 0.4;
+      final nodeAlpha = shieldIntensity * nodePulse;
+
+      // Node glow
+      _nodeGlowPaint.color = shieldColor.withOpacity(nodeAlpha * 0.4);
+      canvas.drawCircle(Offset(nodeX, nodeY), 6, _nodeGlowPaint);
+
+      // Node core
+      _nodeCorePaint.color = Colors.white.withOpacity(nodeAlpha * 0.8);
+      canvas.drawCircle(Offset(nodeX, nodeY), 2, _nodeCorePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: SHIELD PULSE RIPPLES
+    // ═══════════════════════════════════════════════════════════════════════
+    _pulsePaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+
+    for (int i = 0; i < 2; i++) {
+      final pulsePhase = (animPhase * 1.5 + i * 0.5) % 1.0;
+      final pulseRadius = shieldRadius * (0.3 + pulsePhase * 0.9);
+      final pulseAlpha = (1 - pulsePhase) * shieldIntensity * 0.3;
+
+      if (pulseAlpha < 0.03) continue;
+
+      _pulsePaint.color = shieldColor.withOpacity(pulseAlpha);
+      _pulsePaint.strokeWidth = 2 * (1 - pulsePhase);
+
+      canvas.drawCircle(Offset.zero, pulseRadius, _pulsePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: DAMAGE CRACKS (When health is low)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (healthPct < 0.5) {
+      final crackIntensity = (0.5 - healthPct) * 2; // 0 to 1
+      final crackCount = (4 * crackIntensity).ceil();
+
+      _crackPaint.color = Colors.white.withOpacity(0.3 * crackIntensity);
+      _crackGlowPaint.color = const Color(0xFFFF3300).withOpacity(0.2 * crackIntensity);
+      _crackGlowPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+
+      for (int i = 0; i < crackCount; i++) {
+        final crackAngle = _animationPhase * 0.1 + i * math.pi * 2 / crackCount + i * 0.5;
+        final crackLength = shieldRadius * (0.3 + crackIntensity * 0.5);
+
+        // Jagged crack line using cached path
+        _crackPath.reset();
+        _crackPath.moveTo(0, 0);
+
+        double cx = 0, cy = 0;
+        for (int j = 0; j < 5; j++) {
+          final t = (j + 1) / 5;
+          final jitter = (math.Random(i * 10 + j).nextDouble() - 0.5) * 15;
+          cx = math.cos(crackAngle) * crackLength * t + jitter * math.sin(crackAngle);
+          cy = math.sin(crackAngle) * crackLength * t + jitter * math.cos(crackAngle);
+          _crackPath.lineTo(cx, cy);
+        }
+
+        canvas.drawPath(_crackPath, _crackPaint);
+        canvas.drawPath(_crackPath, _crackGlowPaint);
+      }
     }
   }
 
@@ -697,8 +1068,8 @@ class Boss extends Enemy {
     final radius = size.x / 2;
     final crownRadius = radius * 2.2;
 
-    // Epic crown for boss
-    final crownPath = Path();
+    // Epic crown for boss using cached path
+    _crownPath.reset();
     const spikes = 12;
     for (int i = 0; i < spikes * 2; i++) {
       final angle = (i / (spikes * 2)) * math.pi * 2;
@@ -707,28 +1078,23 @@ class Boss extends Enemy {
       final y = math.sin(angle) * r;
 
       if (i == 0) {
-        crownPath.moveTo(x, y);
+        _crownPath.moveTo(x, y);
       } else {
-        crownPath.lineTo(x, y);
+        _crownPath.lineTo(x, y);
       }
     }
-    crownPath.close();
+    _crownPath.close();
 
     // Gradient crown
-    final crownPaint = Paint()
-      ..color = Color(0xFFFF0066).withOpacity(0.4)
-      ..maskFilter = allowBlur ? MaskFilter.blur(BlurStyle.normal, 6) : null;
+    _crownPaint.color = const Color(0xFFFF0066).withOpacity(0.4);
+    _crownPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 6) : null;
 
-    canvas.drawPath(crownPath, crownPaint);
+    canvas.drawPath(_crownPath, _crownPaint);
 
     // Crown outline
-    final outlinePaint = Paint()
-      ..color = Color(0xFFFF0066).withOpacity(0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
+    _crownOutlinePaint.color = const Color(0xFFFF0066).withOpacity(0.8);
 
-// ... (end of _renderBossCrown method)
-    canvas.drawPath(crownPath, outlinePaint);
+    canvas.drawPath(_crownPath, _crownOutlinePaint);
   }
 }
 
@@ -737,20 +1103,27 @@ class _AuraParticle {
   _AuraParticle({
     required this.startOffset,
     required this.color,
+    required math.Random random,
   }) {
     _timer = 0;
-    _lifetime = 0.8 + math.Random().nextDouble() * 1.2;
-    _velocity = Vector2(
-      (math.Random().nextDouble() - 0.5) * 40,
-      (math.Random().nextDouble() - 0.5) * 40,
-    );
+    _lifetime = 0.8 + random.nextDouble() * 1.2;
+    _velocityX = (random.nextDouble() - 0.5) * 40;
+    _velocityY = (random.nextDouble() - 0.5) * 40;
   }
 
+  // Static cached paint for all aura particles
+  static final Paint _paint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
   late final double _lifetime;
-  late final Vector2 _velocity;
+  // Store velocity as separate doubles to avoid Vector2 allocations in update
+  late final double _velocityX;
+  late final double _velocityY;
   late final Color color;
 
-  Vector2 position = Vector2.zero();
+  // Current position stored as doubles to avoid Vector2 operations
+  double _posX = 0;
+  double _posY = 0;
   final Vector2 startOffset;
   double _timer = 0;
 
@@ -759,17 +1132,18 @@ class _AuraParticle {
 
   void update(double dt) {
     _timer += dt;
-    position = startOffset + _velocity * progress;
+    final p = progress;
+    // Avoid Vector2 allocation by computing position directly
+    _posX = startOffset.x + _velocityX * p;
+    _posY = startOffset.y + _velocityY * p;
   }
 
   void render(Canvas canvas) {
     final opacity = (1.0 - progress) * 0.5;
     final size = (1.0 - progress) * 12;
 
-    final paint = Paint()
-      ..color = color.withOpacity(opacity)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4);
+    _paint.color = color.withOpacity(opacity);
 
-    canvas.drawCircle(position.toOffset(), size, paint);
+    canvas.drawCircle(Offset(_posX, _posY), size, _paint);
   }
 }

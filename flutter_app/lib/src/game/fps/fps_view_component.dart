@@ -7,6 +7,7 @@ import '../entities/enemy.dart';
 import '../bored_games_game.dart';
 import 'fps_camera_3d.dart';
 import 'fps_tower_3d.dart';
+import 'fps_enemy_3d.dart';
 
 /// First-person view mode that provides unique interface for each tower type
 /// Activates BOOST mode when a boss is present
@@ -29,8 +30,10 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   // 3D Camera System
   late final Camera3D _camera;
   final List<Tower3D> _towers3d = [];
+  final List<Enemy3D> _enemies3d = [];
   Tower3D? _hoveredTower;
   Tower3D? _selectedTower;
+  Enemy3D? _targetedEnemy3d;
 
   // Performance optimizations
   double _tower3dUpdateTimer = 0;
@@ -82,6 +85,116 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   static const double _tiltLerp = 4.0;
   static const double _maxTilt = 40.0;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _gridPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _vignettePaint = Paint();
+  static final Paint _particlePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _bowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _stringPaint = Paint()
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _arrowPaint = Paint()
+    ..strokeWidth = 3
+    ..strokeCap = StrokeCap.round;
+  static final Paint _arrowGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _wingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _barrelPaint = Paint()
+    ..style = PaintingStyle.fill;
+  static final Paint _segmentPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _chargePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _muzzleFlashPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _coilPaint = Paint()
+    ..strokeWidth = 3;
+  static final Paint _staffPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..strokeCap = StrokeCap.round;
+  static final Paint _crystalGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _crystalPaint = Paint()
+    ..style = PaintingStyle.fill;
+  static final Paint _orbParticlePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _riftPaint = Paint()
+    ..strokeWidth = 2;
+  static final Paint _emitterGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _emitterCorePaint = Paint();
+  static final Paint _shimmerPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _beamPaint = Paint()
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _burstPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _reloadBgPaint = Paint();
+  static final Paint _reloadFillPaint = Paint();
+  static final Paint _reloadBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _bracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _crosshairPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _crosshairGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _lockPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _scanlinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _glitchPaint = Paint();
+  static final Paint _flashPaint = Paint();
+  static final Paint _metalPaint = Paint();
+  static final Paint _edgePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2);
+  static final Paint _neonPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _corePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _deckPaint = Paint();
+  static final Paint _deckRimPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _graphPaint = Paint()
+    ..strokeWidth = 2;
+  static final Paint _dataParticlePaint = Paint();
+  static final Paint _simpleFillPaint = Paint();
+  static final Paint _simpleStrokePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _targetReticlePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _centerDotPaint = Paint();
+  static final Paint _timerBgPaint = Paint();
+  static final Paint _timerFillPaint = Paint();
+  static final Paint _targetLockBracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+
   void _initializeForTowerType() {
     switch (tower.type) {
       case TowerType.pulseArcher:
@@ -131,6 +244,12 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         _secondaryColor = const Color(0xFF88FF00);
         _towerName = 'NEURAL DISRUPTOR';
         _weaponType = 'SYNAPTIC BEAM';
+        break;
+      case TowerType.plasmaBubble:
+        _primaryColor = const Color(0xFFE040FB);
+        _secondaryColor = const Color(0xFFFF80FF);
+        _towerName = 'PLASMA BUBBLE';
+        _weaponType = 'BUBBLE LAUNCHER';
         break;
     }
   }
@@ -214,8 +333,19 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
             _dataParticles.add(_DataParticle());
           }
        }
-       for(final p in _dataParticles) p.update(dt);
-       _dataParticles.removeWhere((p) => p.z >= 1.0 || p.life <= 0);
+       // Update data particles with single-pass removal
+       int dataWriteIdx = 0;
+       for (int i = 0; i < _dataParticles.length; i++) {
+         final p = _dataParticles[i];
+         p.update(dt);
+         if (p.z < 1.0 && p.life > 0) {
+           if (dataWriteIdx != i) _dataParticles[dataWriteIdx] = p;
+           dataWriteIdx++;
+         }
+       }
+       if (dataWriteIdx < _dataParticles.length) {
+         _dataParticles.removeRange(dataWriteIdx, _dataParticles.length);
+       }
     }
 
     // Boost flash decay
@@ -239,13 +369,19 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       );
     }
 
-    // Update 3D towers (throttled for performance)
+    // Update 3D towers and enemies (throttled for performance)
     _tower3dUpdateTimer += dt;
     if (_tower3dUpdateTimer >= _tower3dUpdateInterval) {
       _tower3dUpdateTimer = 0;
       _updateTowers3D();
+      _updateEnemies3D(dt);
     }
-    
+
+    // Update enemy animations every frame
+    for (final enemy3d in _enemies3d) {
+      enemy3d.update(dt);
+    }
+
     _updateHoveredTower();
   }
 
@@ -273,9 +409,18 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   }
 
   void _updateBoostParticles(double dt) {
-    _boostParticles.removeWhere((p) => !p.isAlive);
-    for (final particle in _boostParticles) {
+    // Update boost particles with single-pass removal
+    int boostWriteIdx = 0;
+    for (int i = 0; i < _boostParticles.length; i++) {
+      final particle = _boostParticles[i];
       particle.update(dt);
+      if (particle.isAlive) {
+        if (boostWriteIdx != i) _boostParticles[boostWriteIdx] = particle;
+        boostWriteIdx++;
+      }
+    }
+    if (boostWriteIdx < _boostParticles.length) {
+      _boostParticles.removeRange(boostWriteIdx, _boostParticles.length);
     }
   }
 
@@ -313,6 +458,45 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     
     // Sort by distance (farthest first for proper rendering)
     _towers3d.sort((a, b) => b.distanceToCamera.compareTo(a.distanceToCamera));
+  }
+
+  /// Update 3D enemy positions and distances
+  void _updateEnemies3D(double dt) {
+    _enemies3d.clear();
+    final allEnemies = gameRef.enemyManager.activeEnemies;
+
+    // Limit number of enemies in low performance mode
+    final maxEnemies = gameRef.reduceFx ? 15 : 60;
+    int count = 0;
+
+    for (final enemy in allEnemies) {
+      if (!enemy.isAlive) continue;
+      if (count >= maxEnemies) break;
+
+      // Convert 2D world position to 3D camera space
+      final worldPos = enemy.position;
+      final pos3d = _worldToCamera3D(worldPos);
+
+      // Frustum culling: skip enemies outside camera view
+      final screenPos = _camera.project(pos3d, size);
+      if (screenPos == null) continue;
+
+      final enemy3d = Enemy3D(
+        enemy: enemy,
+        position3d: pos3d,
+        distanceToCamera: _camera.distanceTo(pos3d),
+        isTargeted: enemy == _currentTarget,
+      );
+
+      _enemies3d.add(enemy3d);
+      count++;
+    }
+
+    // Sort by distance (farthest first for proper rendering - painter's algorithm)
+    _enemies3d.sort((a, b) => b.distanceToCamera.compareTo(a.distanceToCamera));
+
+    // Update targeted enemy reference
+    _targetedEnemy3d = _enemies3d.where((e) => e.isTargeted).firstOrNull;
   }
 
   /// Update which tower is being hovered via raycasting (optimized)
@@ -398,6 +582,9 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Render 3D towers
     _renderTowers3D(canvas);
 
+    // Render 3D enemies
+    _renderEnemies3D(canvas);
+
     // Draw 3D Cockpit Frame (Materializing)
     _renderCockpit3D(canvas);
 
@@ -434,10 +621,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
   void _renderBoostBackground(Canvas canvas) {
     // Animated background grid
-    final gridPaint = Paint()
-      ..color = _primaryColor.withOpacity(0.1 * _boostIntensity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    _gridPaint.color = _primaryColor.withOpacity(0.1 * _boostIntensity);
 
     final gridSize = 50.0;
     final offset = (_animationTime * 50) % gridSize;
@@ -447,7 +631,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawLine(
         Offset(x, -_maxTilt),
         Offset(x, size.y + _maxTilt),
-        gridPaint,
+        _gridPaint,
       );
     }
 
@@ -456,36 +640,32 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawLine(
         Offset(-_maxTilt, y),
         Offset(size.x + _maxTilt, y),
-        gridPaint,
+        _gridPaint,
       );
     }
 
     // Vignette effect
-    final vignettePaint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          Colors.transparent,
-          _primaryColor.withOpacity(0.3 * _boostIntensity),
-        ],
-        stops: const [0.5, 1.0],
-      ).createShader(Rect.fromLTWH(-_maxTilt, -_maxTilt, size.x + _maxTilt*2, size.y + _maxTilt*2));
+    _vignettePaint.shader = RadialGradient(
+      colors: [
+        Colors.transparent,
+        _primaryColor.withOpacity(0.3 * _boostIntensity),
+      ],
+      stops: const [0.5, 1.0],
+    ).createShader(Rect.fromLTWH(-_maxTilt, -_maxTilt, size.x + _maxTilt*2, size.y + _maxTilt*2));
 
     canvas.drawRect(
       Rect.fromLTWH(-_maxTilt, -_maxTilt, size.x + _maxTilt*2, size.y + _maxTilt*2),
-      vignettePaint,
+      _vignettePaint,
     );
   }
 
   void _renderBoostParticles(Canvas canvas) {
     for (final particle in _boostParticles) {
-      final paint = Paint()
-        ..color = particle.color.withOpacity(particle.alpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-
+      _particlePaint.color = particle.color.withOpacity(particle.alpha);
       canvas.drawCircle(
         Offset(particle.position.x, particle.position.y),
         particle.size,
-        paint,
+        _particlePaint,
       );
     }
   }
@@ -512,6 +692,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       case TowerType.teslaTerminal:
       case TowerType.resonanceSiphon:
       case TowerType.neuralDisruptor:
+      case TowerType.plasmaBubble:
         _renderPulseArcherWeapon(canvas); // Fallback
         break;
     }
@@ -1054,14 +1235,8 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         ? Colors.red
         : _primaryColor;
 
-    final crosshairPaint = Paint()
-      ..color = crosshairColor.withOpacity(0.8)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    final glowPaint = Paint()
-      ..color = crosshairColor.withOpacity(_crosshairPulse * 0.5)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+    _crosshairPaint.color = crosshairColor.withOpacity(0.8);
+    _crosshairGlowPaint.color = crosshairColor.withOpacity(_crosshairPulse * 0.5);
 
     // Rotating outer ring
     canvas.save();
@@ -1082,7 +1257,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         -math.pi / 8,
         math.pi / 4,
         false,
-        crosshairPaint,
+        _crosshairPaint,
       );
 
       // Glow
@@ -1091,7 +1266,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         -math.pi / 8,
         math.pi / 4,
         false,
-        glowPaint,
+        _crosshairGlowPaint,
       );
 
       canvas.restore();
@@ -1100,23 +1275,21 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.restore();
 
     // Center dot
+    _centerDotPaint.color = crosshairColor;
     canvas.drawCircle(
       Offset(centerX, centerY),
       3,
-      Paint()..color = crosshairColor,
+      _centerDotPaint,
     );
 
     // Target lock indicator
     if (_targetLockProgress > 0) {
-      final lockPaint = Paint()
-        ..color = Colors.red.withOpacity(_targetLockProgress)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3;
+      _lockPaint.color = Colors.red.withOpacity(_targetLockProgress);
 
       canvas.drawCircle(
         Offset(centerX, centerY),
         40 - _targetLockProgress * 10,
-        lockPaint,
+        _lockPaint,
       );
     }
   }
@@ -1128,29 +1301,26 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     final centerX = size.x / 2;
     final y = 120.0;
 
-    final lockPaint = Paint()
-      ..color = Colors.red.withOpacity(_targetLockProgress)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    _targetLockBracketPaint.color = Colors.red.withOpacity(_targetLockProgress);
 
     // Target brackets
     const bracketSize = 20.0;
 
     // Top-left
-    canvas.drawLine(Offset(centerX - 40, y - 20), Offset(centerX - 40 + bracketSize, y - 20), lockPaint);
-    canvas.drawLine(Offset(centerX - 40, y - 20), Offset(centerX - 40, y - 20 + bracketSize), lockPaint);
+    canvas.drawLine(Offset(centerX - 40, y - 20), Offset(centerX - 40 + bracketSize, y - 20), _targetLockBracketPaint);
+    canvas.drawLine(Offset(centerX - 40, y - 20), Offset(centerX - 40, y - 20 + bracketSize), _targetLockBracketPaint);
 
     // Top-right
-    canvas.drawLine(Offset(centerX + 40 - bracketSize, y - 20), Offset(centerX + 40, y - 20), lockPaint);
-    canvas.drawLine(Offset(centerX + 40, y - 20), Offset(centerX + 40, y - 20 + bracketSize), lockPaint);
+    canvas.drawLine(Offset(centerX + 40 - bracketSize, y - 20), Offset(centerX + 40, y - 20), _targetLockBracketPaint);
+    canvas.drawLine(Offset(centerX + 40, y - 20), Offset(centerX + 40, y - 20 + bracketSize), _targetLockBracketPaint);
 
     // Bottom-left
-    canvas.drawLine(Offset(centerX - 40, y + 20 - bracketSize), Offset(centerX - 40, y + 20), lockPaint);
-    canvas.drawLine(Offset(centerX - 40, y + 20), Offset(centerX - 40 + bracketSize, y + 20), lockPaint);
+    canvas.drawLine(Offset(centerX - 40, y + 20 - bracketSize), Offset(centerX - 40, y + 20), _targetLockBracketPaint);
+    canvas.drawLine(Offset(centerX - 40, y + 20), Offset(centerX - 40 + bracketSize, y + 20), _targetLockBracketPaint);
 
     // Bottom-right
-    canvas.drawLine(Offset(centerX + 40, y + 20 - bracketSize), Offset(centerX + 40, y + 20), lockPaint);
-    canvas.drawLine(Offset(centerX + 40 - bracketSize, y + 20), Offset(centerX + 40, y + 20), lockPaint);
+    canvas.drawLine(Offset(centerX + 40, y + 20 - bracketSize), Offset(centerX + 40, y + 20), _targetLockBracketPaint);
+    canvas.drawLine(Offset(centerX + 40 - bracketSize, y + 20), Offset(centerX + 40, y + 20), _targetLockBracketPaint);
 
     // Target info
     final targetPainter = TextPainter(
@@ -1181,24 +1351,26 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     const barHeight = 8.0;
 
     // Timer background
+    _timerBgPaint.color = Colors.black.withOpacity(0.5);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(center: Offset(centerX, y), width: barWidth, height: barHeight),
         const Radius.circular(4),
       ),
-      Paint()..color = Colors.black.withOpacity(0.5),
+      _timerBgPaint,
     );
 
     // Progress
     final progress = _remainingOverdriveTime / overdriveDuration;
     final color = Color.lerp(Colors.red, _primaryColor, progress)!;
 
+    _timerFillPaint.color = color;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromCenter(center: Offset(centerX - (barWidth/2 * (1 - progress)), y), width: barWidth * progress, height: barHeight),
         const Radius.circular(4),
       ),
-      Paint()..color = color,
+      _timerFillPaint,
     );
 
     // Indicator Text
@@ -1219,30 +1391,25 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   }
 
   void _renderScanlines(Canvas canvas) {
-    final linePaint = Paint()
-      ..color = Colors.black.withOpacity(0.05)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    _scanlinePaint.color = Colors.black.withOpacity(0.05);
 
     for (double y = 0; y < size.y; y += 4) {
-      canvas.drawLine(Offset(0, y), Offset(size.x, y), linePaint);
+      canvas.drawLine(Offset(0, y), Offset(size.x, y), _scanlinePaint);
     }
 
     if (_isGlitching) {
-      final glitchPaint = Paint()
-        ..color = _primaryColor.withOpacity(0.1);
+      _glitchPaint.color = _primaryColor.withOpacity(0.1);
       final glitchY = math.Random().nextDouble() * size.y;
-      canvas.drawRect(Rect.fromLTWH(0, glitchY, size.x, 20), glitchPaint);
+      canvas.drawRect(Rect.fromLTWH(0, glitchY, size.x, 20), _glitchPaint);
     }
   }
 
   void _renderBoostFlash(Canvas canvas) {
-    final flashPaint = Paint()
-      ..color = Colors.white.withOpacity(_boostFlash * 0.3);
+    _flashPaint.color = Colors.white.withOpacity(_boostFlash * 0.3);
 
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.x, size.y),
-      flashPaint,
+      _flashPaint,
     );
   }
 
@@ -1435,6 +1602,77 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Render targeting reticle for hovered tower
     if (_hoveredTower != null) {
       _renderTargetingReticle(canvas, _hoveredTower!);
+    }
+  }
+
+  /// Render all enemies in 3D perspective
+  void _renderEnemies3D(Canvas canvas) {
+    if (_introTime < _phaseWireframe) return;
+
+    // In low quality, render fewer enemies
+    final maxRender = gameRef.reduceFx ? 10 : _enemies3d.length;
+
+    // Render enemies from farthest to nearest (painter's algorithm)
+    for (int i = 0; i < math.min(maxRender, _enemies3d.length); i++) {
+      final enemy3d = _enemies3d[i];
+
+      // Simplify rendering for distant enemies in low quality
+      if (gameRef.reduceFx && enemy3d.distanceToCamera > 300) {
+        _renderSimpleEnemy(canvas, enemy3d);
+      } else {
+        enemy3d.render(canvas, _camera, size);
+      }
+    }
+  }
+
+  /// Simplified enemy rendering for distant enemies (performance)
+  void _renderSimpleEnemy(Canvas canvas, Enemy3D enemy3d) {
+    final screenPos = _camera.project(enemy3d.position3d, size);
+    if (screenPos == null) return;
+
+    final scale = math.max(0.1, 1.0 / (enemy3d.distanceToCamera * 0.012));
+    final renderSize = 15.0 * enemy3d.enemy.type.sizeMult * scale;
+
+    final center = Offset(screenPos.x, screenPos.y);
+    final color = enemy3d.enemy.type.color;
+
+    // Simple shape based on enemy type
+    if (enemy3d.enemy.type.isPhantom) {
+      // Ghost-like transparent circle
+      canvas.drawCircle(
+        center,
+        renderSize * 0.5,
+        Paint()..color = color.withOpacity(0.3),
+      );
+    } else {
+      // Solid circle
+      canvas.drawCircle(
+        center,
+        renderSize * 0.5,
+        Paint()..color = color.withOpacity(0.7),
+      );
+    }
+
+    // Outline
+    canvas.drawCircle(
+      center,
+      renderSize * 0.5,
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // Target indicator if targeted
+    if (enemy3d.isTargeted) {
+      canvas.drawCircle(
+        center,
+        renderSize * 0.7,
+        Paint()
+          ..color = Colors.red
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
     }
   }
 

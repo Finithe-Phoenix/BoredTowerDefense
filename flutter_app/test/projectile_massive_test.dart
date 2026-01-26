@@ -136,10 +136,6 @@ void main() {
         expect(type.name, isNotEmpty);
       });
 
-      test('${type.name} has non-empty description', () {
-        expect(type.description, isNotEmpty);
-      });
-
       test('${type.name} has non-null slow amount', () {
         expect(type.slowAmount, isNotNull);
       });

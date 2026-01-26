@@ -20,6 +20,9 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
   ui.FragmentProgram? _program;
   double _time = 0;
 
+  // Static cached paint to avoid per-frame allocations
+  static final ui.Paint _shaderPaint = ui.Paint();
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
@@ -61,12 +64,12 @@ class ScreenPostProcessComponent extends PositionComponent with HasGameRef<Bored
     for (var i = 0; i < uniforms.length; i++) {
       shader.setFloat(i, uniforms[i]);
     }
-    final paint = ui.Paint()..shader = shader;
+    _shaderPaint.shader = shader;
     canvas.save();
     if (scale != 1.0) {
       canvas.scale(1 / scale);
     }
-    canvas.drawRect(rect, paint);
+    canvas.drawRect(rect, _shaderPaint);
     canvas.restore();
     shader.dispose();
   }

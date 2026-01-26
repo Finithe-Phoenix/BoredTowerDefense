@@ -38,7 +38,8 @@ services:
     working_dir: /app
     volumes:
       - .:/app
-    command: sh -c "flutter pub get && flutter test --coverage"
+      - ./scripts:/scripts
+    command: ["/bin/sh", "/scripts/run_tests.sh"]
     container_name: bored-games-test
     profiles:
       - test

@@ -10,7 +10,7 @@ class BossEntranceEffect extends PositionComponent {
   }) : _bossPosition = bossPosition,
        _bossColor = bossColor,
        _duration = 2.5 {
-    position = bossPosition.clone();
+    position.setFrom(bossPosition);
     priority = 50;
   }
 

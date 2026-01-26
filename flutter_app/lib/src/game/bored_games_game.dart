@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'components/neon_grid_component.dart';
+import 'components/reflective_floor_component.dart';
 import 'components/neon_mine.dart';
 import 'components/neon_pulse.dart';
 import 'effects/floating_text.dart';
@@ -15,6 +16,7 @@ import 'effects/focus_mode_overlay.dart';
 import 'effects/particle_system.dart';
 import 'effects/impact_effect.dart';
 import 'effects/explosion_effect.dart';
+import 'effects/pixel_disintegration_effect.dart';
 import 'effects/screen_effects.dart';
 import 'effects/shaders/shader_uniform_controller.dart';
 import 'effects/shaders/world_uber_shader_component.dart';
@@ -33,6 +35,7 @@ import 'hud/minimap_component.dart';
 import 'hud/game_event_feed.dart';
 import 'hud/ability_panel.dart';
 import 'hud/battle_dialogue_component.dart';
+import 'hud/countdown_timer_component.dart';
 import 'managers/bullet_manager.dart';
 import 'managers/enemy_manager.dart';
 import 'managers/tower_manager.dart';
@@ -87,6 +90,7 @@ class BoredGamesGame extends FlameGame
   late final GameEventFeed gameEventFeed;
   late final AbilityPanel abilityPanel;
   late final BattleDialogueComponent battleDialogue;
+  late final CountdownTimerComponent countdownTimer;
   late final ParticleEmitter particleEmitter;
   late final ScreenEffects screenEffects;
   late final VisualDirector visualDirector;
@@ -684,9 +688,11 @@ class BoredGamesGame extends FlameGame
     final minePos = gridToWorld(targetCell, tileSize) +
         Vector2(tileSize / 2, tileSize / 2);
 
-    // Don't place too close to existing mines
+    // Don't place too close to existing mines (using squared distance to avoid sqrt)
+    final minDistThreshold = tileSize * 0.8;
+    final minDistSq = minDistThreshold * minDistThreshold;
     for (final mine in _activeMines) {
-      if ((mine.position - minePos).length < tileSize * 0.8) {
+      if ((mine.position - minePos).length2 < minDistSq) {
         return; // Too close to another mine
       }
     }
@@ -764,6 +770,14 @@ class BoredGamesGame extends FlameGame
     AudioService.instance.playEnemyLeak();
     _applyVisual(() => visualDirector.handleEnemyLeak(enemy));
 
+    // Trigger energy shield flash effect on base damage
+    final intensity = lives <= 3 ? 1.0 : 0.7;
+    screenEffects.triggerShieldFlash(
+      intensity: intensity,
+      duration: 0.6,
+      impactPoint: enemy.position.clone(),
+    );
+
     // Low health warning
     if (lives > 0 && lives <= 3) {
       gameEventFeed.lowHealth();
@@ -832,6 +846,7 @@ class BoredGamesGame extends FlameGame
       TowerType.teslaTerminal => 0.4,
       TowerType.resonanceSiphon => 0.5,
       TowerType.neuralDisruptor => 0.4,
+      TowerType.plasmaBubble => 0.5,
     };
     _focusFxPulse = 1.0;
     _threatShakeIntensity = math.max(_threatShakeIntensity, 0.8 + base * 1.4);
@@ -897,6 +912,48 @@ class BoredGamesGame extends FlameGame
       _maybeOfferRunUpgrade(waveNumber);
     }
   }
+
+  void _onCountdownComplete() {
+    if (_gameEnded) return;
+    // Timer reached zero - trigger game over or penalty
+    gameEventFeed.timerExpired();
+    battleDialogue.onTimerExpired();
+    // Optionally: lose all remaining lives or trigger game over
+    // lives = 0;
+    // _gameEnded = true;
+    // onGameOver?.call();
+  }
+
+  /// Start the countdown timer
+  void startCountdown({double duration = 60.0}) {
+    countdownTimer.start(duration: duration);
+  }
+
+  /// Stop the countdown timer
+  void stopCountdown() {
+    countdownTimer.stop();
+  }
+
+  /// Pause the countdown timer
+  void pauseCountdown() {
+    countdownTimer.pause();
+  }
+
+  /// Resume the countdown timer
+  void resumeCountdown() {
+    countdownTimer.resume();
+  }
+
+  /// Add time to the countdown
+  void addCountdownTime(double seconds) {
+    countdownTimer.addTime(seconds);
+  }
+
+  /// Get countdown timer remaining time
+  double get countdownRemaining => countdownTimer.remainingTime;
+
+  /// Check if countdown is active
+  bool get countdownActive => countdownTimer.isActive;
 
   void startWave({int count = 6}) {
     enemyManager.startWave(count: count);
@@ -1438,7 +1495,7 @@ class BoredGamesGame extends FlameGame
         ..position = Vector2(offsetX, offsetY)
         ..scale = Vector2.all(_worldScale);
     }
-    _worldBasePosition = worldRoot.position.clone();
+    _worldBasePosition.setFrom(worldRoot.position);
     _syncEnemyViewport();
   }
 
@@ -1553,6 +1610,9 @@ class BoredGamesGame extends FlameGame
     );
     ImpactEffect.fxScale = particleScale;
     ExplosionEffect.fxScale = particleScale;
+    PixelDisintegrationEffect.fxScale = particleScale;
+    PixelDisintegrationEffect.reduceFx = _quality == QualityLevel.medium;
+    PixelDisintegrationEffect.lowFx = _quality == QualityLevel.low;
     Projectile.lowFx = _quality == QualityLevel.low;
     Projectile.allowTrails = _quality == QualityLevel.high;
     Projectile.allowGlow = _quality != QualityLevel.low;
@@ -1582,6 +1642,9 @@ class BoredGamesGame extends FlameGame
 
     ImpactEffect.fxScale = fxScale;
     ExplosionEffect.fxScale = fxScale;
+    PixelDisintegrationEffect.fxScale = fxScale;
+    PixelDisintegrationEffect.reduceFx = _quality == QualityLevel.medium || heavyLoad;
+    PixelDisintegrationEffect.lowFx = _quality == QualityLevel.low || heavyLoad;
     Projectile.lowFx = _quality == QualityLevel.low || heavyLoad;
     Projectile.allowTrails = _quality == QualityLevel.high && !heavyLoad;
     Projectile.allowGlow = _quality != QualityLevel.low && !heavyLoad;
@@ -1633,9 +1696,9 @@ class BoredGamesGame extends FlameGame
 
   void _syncEnemyViewport() {
     if (!_worldLayoutReady || size.isZero()) return;
-    Enemy.screenOffset = worldRoot.position.clone();
+    Enemy.screenOffset.setFrom(worldRoot.position);
     Enemy.screenScale = _worldScale;
-    Enemy.screenSize = size.clone();
+    Enemy.screenSize.setFrom(size);
   }
 
   @override
@@ -1697,6 +1760,13 @@ class BoredGamesGame extends FlameGame
       reducedFx: true,
     ));
 
+    // Reflective floor effect layer - renders after grid
+    add(ReflectiveFloorComponent(
+      glowColor: const Color(0xAA00FFFF),
+      reducedFx: true,
+      horizonRatio: 0.55,
+    ));
+
     final mapFile = levelConfig?.mapFile ?? 'maps/level1.tmx';
     worldLayer = GameWorld(
       tileSize: tileSize,
@@ -1708,6 +1778,7 @@ class BoredGamesGame extends FlameGame
     ImpactEffect.clearPool();
     FloatingText.clearPool();
     ExplosionEffect.clearPool();
+    PixelDisintegrationEffect.clearPool();
     Enemy.clearBlurCache();
     EnemyManager.clearBucketPool();
 
@@ -1738,6 +1809,10 @@ class BoredGamesGame extends FlameGame
     gameEventFeed = GameEventFeed();
     abilityPanel = AbilityPanel();
     battleDialogue = BattleDialogueComponent();
+    countdownTimer = CountdownTimerComponent(
+      totalDuration: 60.0,
+      onComplete: _onCountdownComplete,
+    );
 
     // Particle system
     particleEmitter = ParticleEmitter(position: Vector2.zero(), maxParticles: 200);
@@ -1759,6 +1834,8 @@ class BoredGamesGame extends FlameGame
     await add(gameEventFeed);
     await add(abilityPanel);
     await add(battleDialogue);
+    // Timer removed - not adding to game
+    // await add(countdownTimer);
 
     screenEffects = ScreenEffects(
       gameSize: size,

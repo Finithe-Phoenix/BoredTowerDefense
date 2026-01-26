@@ -62,6 +62,10 @@ class GameEventFeed extends PositionComponent with HasGameRef<BoredGamesGame> {
     addEvent(GameEventType.warning, 'LOW HEALTH WARNING', color: const Color(0xFFFF4444));
   }
 
+  void timerExpired() {
+    addEvent(GameEventType.warning, 'TIME EXPIRED', color: const Color(0xFFFF0066));
+  }
+
   Color _getDefaultColor(GameEventType type) {
     switch (type) {
       case GameEventType.waveStart:
@@ -89,10 +93,19 @@ class GameEventFeed extends PositionComponent with HasGameRef<BoredGamesGame> {
   void update(double dt) {
     super.update(dt);
 
-    for (final event in _events) {
+    // Update events with single-pass removal
+    int eventWriteIdx = 0;
+    for (int i = 0; i < _events.length; i++) {
+      final event = _events[i];
       event.update(dt);
+      if (!event.isExpired) {
+        if (eventWriteIdx != i) _events[eventWriteIdx] = event;
+        eventWriteIdx++;
+      }
     }
-    _events.removeWhere((e) => e.isExpired);
+    if (eventWriteIdx < _events.length) {
+      _events.removeRange(eventWriteIdx, _events.length);
+    }
   }
 
   @override
@@ -144,6 +157,18 @@ class _GameEvent {
 
   static const double duration = 4.0;
   static const double fadeStart = 3.0;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _iconBgPaint = Paint();
+  static final Paint _iconPaint = Paint()
+    ..strokeWidth = 1.5
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _pulseRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
   double get height => 22.0;
 
   bool get isExpired => _lifetime >= duration;

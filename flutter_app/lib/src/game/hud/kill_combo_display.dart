@@ -79,10 +79,19 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
       _displayTimer -= dt;
     }
 
-    for (final notif in _notifications) {
+    // Update notifications with single-pass removal
+    int notifWriteIdx = 0;
+    for (int i = 0; i < _notifications.length; i++) {
+      final notif = _notifications[i];
       notif.update(dt);
+      if (!notif.isExpired) {
+        if (notifWriteIdx != i) _notifications[notifWriteIdx] = notif;
+        notifWriteIdx++;
+      }
     }
-    _notifications.removeWhere((n) => n.isExpired);
+    if (notifWriteIdx < _notifications.length) {
+      _notifications.removeRange(notifWriteIdx, _notifications.length);
+    }
   }
 
   @override

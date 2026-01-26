@@ -24,6 +24,20 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
   static const double fadeInDuration = 0.3;
   static const double fadeOutDuration = 0.5;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _bgPaint = Paint();
+  static final Paint _borderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _glowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _avatarBgPaint = Paint();
+  static final Paint _avatarBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+
   /// Queue a battle dialogue to show
   void showDialogue({
     required Character speaker,
@@ -213,10 +227,20 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
     } else if (abilityName == 'NEON MINE') {
       showDialogue(
         speaker: StoryData.aria,
-        text: 'Mina desplegada. Área de negación establecida.',
+        text: 'Mina desplegada. Area de negacion establecida.',
         mood: BriefingMood.analytical,
       );
     }
+  }
+
+  /// Timer expired warning
+  void onTimerExpired() {
+    showDialogue(
+      speaker: StoryData.aria,
+      text: 'TIEMPO AGOTADO. Mision comprometida.',
+      mood: BriefingMood.urgent,
+      priority: true,
+    );
   }
 
   @override

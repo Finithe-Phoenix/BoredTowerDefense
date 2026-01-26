@@ -95,6 +95,207 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.5;
 
+  // Wave Indicator optimized paints
+  static final Paint _waveIndicatorBgPaint = Paint();
+  static final Paint _waveIndicatorBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _waveIndicatorGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _waveIndicatorInnerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _waveIndicatorScanlinePaint = Paint();
+  static final Paint _waveIndicatorCornerPaint = Paint()..strokeWidth = 2;
+  static final Paint _waveIndicatorAccentPaint = Paint()
+    ..strokeCap = StrokeCap.round;
+  static final Paint _waveIndicatorProgressBgPaint = Paint();
+  static final Paint _waveIndicatorProgressFillPaint = Paint();
+  static final Paint _waveIndicatorProgressGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _waveIndicatorEnemyDotPaint = Paint();
+  static final Paint _waveIndicatorEnemyGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DATA STREAM EFFECT PAINTS (Towers to HUD connection visualization)
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _dataStreamBeamPaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _dataStreamCorePaint = Paint()
+    ..strokeWidth = 1
+    ..strokeCap = StrokeCap.round;
+  static final Paint _dataStreamParticlePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _dataStreamGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _dataStreamNodePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _dataStreamArcPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round;
+  static final Paint _dataStreamHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.8;
+  static final Paint _dataStreamPulsePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Path _dataStreamPath = Path();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GLITCH DISTORTION EFFECT PAINTS (Wave transitions)
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _glitchRedPaint = Paint()
+    ..blendMode = BlendMode.plus
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _glitchCyanPaint = Paint()
+    ..blendMode = BlendMode.plus
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _glitchNoisePaint = Paint();
+  static final Paint _glitchBlockPaint = Paint();
+  static final Paint _glitchLinePaint = Paint()
+    ..strokeWidth = 2;
+  static final Paint _glitchScanlinePaint = Paint()
+    ..strokeWidth = 1;
+  static final Paint _glitchStaticPaint = Paint()
+    ..strokeWidth = 1;
+  static final Paint _glitchEdgePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _glitchFlashPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _glitchDataPaint = Paint()
+    ..strokeWidth = 1
+    ..strokeCap = StrokeCap.round;
+  static final math.Random _glitchRandom = math.Random();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CRT/SCANLINE EFFECT PAINTS (Retro monitor aesthetic)
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _crtScanlinePaint = Paint()
+    ..color = const Color(0xFF000000);
+  static final Paint _crtVignettePaint = Paint();
+  static final Paint _crtScreenGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _crtRgbLinePaint = Paint()
+    ..strokeWidth = 1;
+  static final Paint _crtFlickerPaint = Paint();
+  static final Paint _crtPhosphorPaint = Paint()
+    ..blendMode = BlendMode.plus;
+  static final Paint _crtCurveHighlightPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _crtInterlacePaint = Paint()
+    ..strokeWidth = 0.5;
+  static final Paint _crtNoisePaint = Paint();
+  static final math.Random _crtRandom = math.Random();
+  static double _crtFlickerPhase = 0.0;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC TOWER UPGRADE PREVIEW PAINTS
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _holoPreviewBgPaint = Paint();
+  static final Paint _holoPreviewBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _holoPreviewGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+  static final Paint _holoPreviewCornerPaint = Paint()
+    ..strokeWidth = 2.5
+    ..strokeCap = StrokeCap.round;
+  static final Paint _holoPreviewScanPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _holoPreviewHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _holoPreviewBarBgPaint = Paint();
+  static final Paint _holoPreviewBarFillPaint = Paint();
+  static final Paint _holoPreviewBarGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _holoPreviewIconPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _holoPreviewDataPaint = Paint()
+    ..strokeWidth = 1
+    ..strokeCap = StrokeCap.round;
+  static final Paint _holoPreviewBonusPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _holoPreviewProjectionPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _holoPreviewFramePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _holoPreviewPulsePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _holoPreviewDigitPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round;
+  static final Path _holoPreviewPath = Path();
+  static final math.Random _holoPreviewRandom = math.Random();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC MINIMAP PAINTS
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _minimapBgPaint = Paint();
+  static final Paint _minimapBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _minimapGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _minimapGridPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _minimapTowerPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _minimapEnemyPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _minimapPathPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _minimapBasePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _minimapScanPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _minimapCornerPaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _minimapHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.3;
+  static final Paint _minimapDataPaint = Paint()
+    ..strokeCap = StrokeCap.round;
+  static final Paint _minimapPulsePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Path _minimapPath = Path();
+  static final math.Random _minimapRandom = math.Random();
+  static double _minimapScanAngle = 0.0;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ADDITIONAL OPTIMIZED PAINTS (Avoid inline allocations in hot paths)
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _colorFlashPaint = Paint();
+  static final Paint _vignettePaint = Paint();
+  static final Paint _focusTimerBgPaint = Paint()..color = Colors.black45;
+  static final Paint _focusTimerFillPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _alertGradientPaint = Paint();
+  static final Paint _panelGradientPaint = Paint();
+  static final Paint _genericBgPaint = Paint();
+  static final Paint _genericBorderPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _progressFillPaint = Paint();
+  static final Paint _highlightGradientPaint = Paint();
+
   double _layoutButtonWidth = 100.0;
   double _layoutAbilityWidth = 110.0;
   double _layoutMineWidth = 90.0;
@@ -406,98 +607,871 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (gameRef.hideHud) return; // Hide HUD in benchmark/screenshot mode
     if (gameRef.focusModeActive) return; // Hide standard HUD in FPS mode
 
+    // Draw data stream effects (background layer - behind HUD panels)
+    _drawDataStreamEffects(canvas, screenWidth, screenHeight);
+
     _drawTopPanel(canvas, screenWidth);
     _drawBottomPanel(canvas, screenWidth, screenHeight);
+
+    // Draw holographic minimap (top-right corner)
+    if (!gameRef.reduceFx) {
+      _drawHolographicMinimap(canvas, screenWidth, screenHeight);
+    }
 
     // No instruction prompt needed - modern HUD is self-explanatory
 
     _drawAbilityTargetHint(canvas, screenHeight);
     _drawFocusTimerOverlay(canvas, screenWidth, screenHeight);
 
-    // ═══ WAVE TRANSITION FLASH - EPIC SCREEN EFFECT ═══
+    // ═══ WAVE TRANSITION FLASH WITH GLITCH DISTORTION ═══
     if (_waveTransitionActive && !reduceFlicker) {
-      final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+      _drawGlitchDistortionEffect(canvas, screenWidth, screenHeight);
+    }
 
-      // Flash intensity - peaks early then fades
-      double flashAlpha = 0.0;
-      if (t < 0.1) {
-        // Explosive white flash
-        flashAlpha = (t / 0.1) * 0.6;
-      } else if (t < 0.25) {
-        // Rapid fade
-        flashAlpha = 0.6 - ((t - 0.1) / 0.15) * 0.5;
-      } else if (t < 0.5) {
-        // Lingering glow
-        flashAlpha = 0.1 - ((t - 0.25) / 0.25) * 0.1;
+    // ═══ CRT/SCANLINE OVERLAY EFFECT (Always on for cyberpunk aesthetic) ═══
+    if (!gameRef.reduceFx) {
+      _drawCrtScanlineEffect(canvas, screenWidth, screenHeight);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CRT/SCANLINE EFFECT (Retro monitor aesthetic over HUD)
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawCrtScanlineEffect(Canvas canvas, double screenWidth, double screenHeight) {
+    final animPhase = _time;
+    _crtFlickerPhase += 0.016; // ~60fps time step
+
+    // Only apply CRT effect over HUD areas (top and bottom panels)
+    final topPanelHeight = HudComponent.topBarHeight + 10;
+    final bottomPanelY = screenHeight - HudComponent.bottomBarHeight - 60;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: SUBTLE HORIZONTAL SCANLINES (Top panel)
+    // ═══════════════════════════════════════════════════════════════════════
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight));
+
+    _crtScanlinePaint.color = const Color(0xFF000000).withOpacity(0.08);
+    final scanlineSpacing = 3.0;
+    final scanlineOffset = (animPhase * 30) % scanlineSpacing;
+
+    for (double y = scanlineOffset; y < topPanelHeight; y += scanlineSpacing) {
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(screenWidth, y),
+        _crtScanlinePaint,
+      );
+    }
+    canvas.restore();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: RGB PHOSPHOR LINES (subtle color fringing)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!gameRef.reduceFx) {
+      canvas.save();
+      canvas.clipRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight));
+
+      final rgbSpacing = 6.0;
+      for (double x = 0; x < screenWidth; x += rgbSpacing) {
+        // Red line
+        _crtRgbLinePaint.color = const Color(0xFFFF0000).withOpacity(0.02);
+        canvas.drawLine(Offset(x, 0), Offset(x, topPanelHeight), _crtRgbLinePaint);
+
+        // Green line
+        _crtRgbLinePaint.color = const Color(0xFF00FF00).withOpacity(0.02);
+        canvas.drawLine(Offset(x + 2, 0), Offset(x + 2, topPanelHeight), _crtRgbLinePaint);
+
+        // Blue line
+        _crtRgbLinePaint.color = const Color(0xFF0000FF).withOpacity(0.02);
+        canvas.drawLine(Offset(x + 4, 0), Offset(x + 4, topPanelHeight), _crtRgbLinePaint);
+      }
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: VIGNETTE EFFECT (Darker edges like CRT monitors)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Top panel vignette
+    final topVignetteGradient = RadialGradient(
+      center: Alignment.center,
+      radius: 1.2,
+      colors: [
+        Colors.transparent,
+        const Color(0xFF000000).withOpacity(0.15),
+        const Color(0xFF000000).withOpacity(0.35),
+      ],
+      stops: const [0.3, 0.7, 1.0],
+    );
+
+    _crtVignettePaint.shader = topVignetteGradient.createShader(
+      Rect.fromLTWH(0, 0, screenWidth, topPanelHeight),
+    );
+    canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight), _crtVignettePaint);
+    _crtVignettePaint.shader = null;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: SUBTLE SCREEN FLICKER (random brightness variation)
+    // ═══════════════════════════════════════════════════════════════════════
+    final flickerValue = math.sin(_crtFlickerPhase * 50) * 0.02;
+    if (flickerValue.abs() > 0.01) {
+      _crtFlickerPaint.color = Colors.white.withOpacity(flickerValue.abs() * 0.5);
+      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight), _crtFlickerPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: INTERLACE EFFECT (alternating line brightness)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!gameRef.reduceFx) {
+      canvas.save();
+      canvas.clipRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight));
+
+      // Alternate frame - shift which lines are brighter
+      final frameEven = (animPhase * 30).toInt() % 2 == 0;
+      _crtInterlacePaint.color = const Color(0xFF000000).withOpacity(0.04);
+
+      for (double y = frameEven ? 0 : 1; y < topPanelHeight; y += 2) {
+        canvas.drawLine(Offset(0, y), Offset(screenWidth, y), _crtInterlacePaint);
+      }
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: PHOSPHOR GLOW (subtle colored glow on edges)
+    // ═══════════════════════════════════════════════════════════════════════
+    final phosphorPulse = 0.5 + math.sin(animPhase * 2) * 0.3;
+    _crtPhosphorPaint.color = const Color(0xFF00FFFF).withOpacity(0.02 * phosphorPulse);
+    canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, 2), _crtPhosphorPaint);
+    canvas.drawRect(Rect.fromLTWH(0, topPanelHeight - 2, screenWidth, 2), _crtPhosphorPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: SCREEN CURVE HIGHLIGHT (simulates curved CRT glass)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!gameRef.reduceFx) {
+      final curveHighlightGradient = LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Colors.white.withOpacity(0.03),
+          Colors.transparent,
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.3, 1.0],
+      );
+
+      _crtCurveHighlightPaint.shader = curveHighlightGradient.createShader(
+        Rect.fromLTWH(0, 0, screenWidth * 0.4, topPanelHeight),
+      );
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, screenWidth * 0.4, topPanelHeight),
+        _crtCurveHighlightPaint,
+      );
+      _crtCurveHighlightPaint.shader = null;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 8: STATIC NOISE (occasional digital artifacts)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!gameRef.reduceFx && _crtRandom.nextDouble() < 0.05) {
+      final noiseCount = 3 + _crtRandom.nextInt(5);
+      for (int i = 0; i < noiseCount; i++) {
+        final noiseX = _crtRandom.nextDouble() * screenWidth;
+        final noiseY = _crtRandom.nextDouble() * topPanelHeight;
+        final noiseW = 1 + _crtRandom.nextDouble() * 3;
+        final noiseH = 1 + _crtRandom.nextDouble() * 2;
+
+        _crtNoisePaint.color = _crtRandom.nextBool()
+            ? Colors.white.withOpacity(0.15)
+            : Colors.black.withOpacity(0.2);
+
+        canvas.drawRect(
+          Rect.fromLTWH(noiseX, noiseY, noiseW, noiseH),
+          _crtNoisePaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 9: BOTTOM PANEL SCANLINES
+    // ═══════════════════════════════════════════════════════════════════════
+    if (bottomPanelY < screenHeight) {
+      canvas.save();
+      canvas.clipRect(Rect.fromLTWH(0, bottomPanelY, screenWidth, screenHeight - bottomPanelY));
+
+      _crtScanlinePaint.color = const Color(0xFF000000).withOpacity(0.06);
+      for (double y = bottomPanelY + scanlineOffset; y < screenHeight; y += scanlineSpacing) {
+        canvas.drawLine(
+          Offset(0, y),
+          Offset(screenWidth, y),
+          _crtScanlinePaint,
+        );
+      }
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 10: CORNER EDGE GLOW (CRT monitor corner illumination)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!gameRef.reduceFx) {
+      final edgeGlowAlpha = 0.05 + math.sin(animPhase * 1.5) * 0.02;
+
+      // Top-left corner glow
+      _crtScreenGlowPaint.color = const Color(0xFF00FFFF).withOpacity(edgeGlowAlpha);
+      canvas.drawCircle(const Offset(0, 0), 60, _crtScreenGlowPaint);
+
+      // Top-right corner glow
+      _crtScreenGlowPaint.color = const Color(0xFFFF00FF).withOpacity(edgeGlowAlpha);
+      canvas.drawCircle(Offset(screenWidth, 0), 60, _crtScreenGlowPaint);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC MINIMAP WITH REAL-TIME ENTITY TRACKING
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawHolographicMinimap(Canvas canvas, double screenWidth, double screenHeight) {
+    // Minimap positioned at bottom-left corner
+    const minimapSize = 120.0;
+    const minimapMargin = 15.0;
+    const minimapPadding = 8.0;
+
+    // Check if we have enough vertical space (avoid overlapping with bottom panel)
+    final bottomPanelTop = screenHeight - HudComponent.bottomBarHeight - 60;
+    final minimapBottom = screenHeight - minimapMargin;
+    if (minimapBottom - minimapSize < bottomPanelTop + 20) return; // Not enough space
+
+    final minimapRect = Rect.fromLTWH(
+      minimapMargin,
+      bottomPanelTop - minimapSize - minimapMargin,
+      minimapSize,
+      minimapSize,
+    );
+
+    final animPhase = _time;
+    _minimapScanAngle += 0.02; // Rotate radar scan
+
+    // Get game entities for rendering
+    final worldSize = Vector2(
+      gameRef.worldLayer.mapWidth * gameRef.worldLayer.tileSize,
+      gameRef.worldLayer.mapHeight * gameRef.worldLayer.tileSize,
+    );
+    final towers = gameRef.towerManager.towers;
+    final enemies = gameRef.enemyManager.activeEnemies;
+    final pathPoints = gameRef.worldLayer.waypoints;
+    final basePos = pathPoints.isNotEmpty ? pathPoints.last : Vector2(worldSize.x, worldSize.y / 2);
+
+    // Calculate scale factors
+    final scaleX = (minimapSize - minimapPadding * 2) / worldSize.x;
+    final scaleY = (minimapSize - minimapPadding * 2) / worldSize.y;
+    final scale = math.min(scaleX, scaleY);
+    final offsetX = minimapRect.left + minimapPadding + (minimapSize - minimapPadding * 2 - worldSize.x * scale) / 2;
+    final offsetY = minimapRect.top + minimapPadding + (minimapSize - minimapPadding * 2 - worldSize.y * scale) / 2;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: BACKGROUND WITH HOLOGRAPHIC TINT
+    // ═══════════════════════════════════════════════════════════════════════
+    _minimapBgPaint.color = const Color(0xFF050510).withOpacity(0.85);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(minimapRect, const Radius.circular(6)),
+      _minimapBgPaint,
+    );
+
+    // Outer glow
+    final glowPulse = 0.4 + math.sin(animPhase * 2) * 0.15;
+    _minimapGlowPaint.color = NeonTheme.cyberCyan.withOpacity(glowPulse * 0.3);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(minimapRect.inflate(3), const Radius.circular(8)),
+      _minimapGlowPaint,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: HEXAGONAL GRID OVERLAY
+    // ═══════════════════════════════════════════════════════════════════════
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(minimapRect, const Radius.circular(6)));
+
+    _minimapHexPaint.color = NeonTheme.cyberCyan.withOpacity(0.1);
+    final hexGridSize = 12.0;
+    for (double y = minimapRect.top; y < minimapRect.bottom; y += hexGridSize * 0.866) {
+      final rowOffset = ((y - minimapRect.top) / (hexGridSize * 0.866)).floor() % 2 == 0 ? 0.0 : hexGridSize / 2;
+      for (double x = minimapRect.left + rowOffset; x < minimapRect.right; x += hexGridSize) {
+        _drawMiniHex(canvas, x, y, hexGridSize / 2, _minimapHexPaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: PATH VISUALIZATION
+    // ═══════════════════════════════════════════════════════════════════════
+    if (pathPoints.length >= 2) {
+      _minimapPath.reset();
+      final firstPoint = pathPoints[0];
+      _minimapPath.moveTo(
+        offsetX + firstPoint.x * scale,
+        offsetY + firstPoint.y * scale,
+      );
+
+      for (int i = 1; i < pathPoints.length; i++) {
+        final point = pathPoints[i];
+        _minimapPath.lineTo(
+          offsetX + point.x * scale,
+          offsetY + point.y * scale,
+        );
       }
 
-      if (flashAlpha > 0.01) {
-        // Main flash - white core
-        canvas.drawRect(
-          Rect.fromLTWH(0, 0, screenWidth, screenHeight),
-          Paint()..color = Colors.white.withOpacity(flashAlpha * 0.5),
-        );
+      // Path glow
+      _minimapPathPaint.color = NeonTheme.cyberPurple.withOpacity(0.4);
+      canvas.drawPath(_minimapPath, _minimapPathPaint);
 
-        // Cyberpunk color overlay - cyan/magenta
-        final colorFlash = t < 0.15
-            ? const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.3)
-            : const Color(0xFFFF00FF).withOpacity(flashAlpha * 0.2);
-        canvas.drawRect(
-          Rect.fromLTWH(0, 0, screenWidth, screenHeight),
-          Paint()..color = colorFlash,
-        );
+      // Path flow animation (dots moving along path)
+      final flowOffset = (animPhase * 0.5) % 1.0;
+      _minimapDataPaint.strokeWidth = 2;
+      for (int i = 0; i < 5; i++) {
+        final t = (flowOffset + i * 0.2) % 1.0;
+        final pathIndex = ((pathPoints.length - 1) * t).floor();
+        final pathT = ((pathPoints.length - 1) * t) - pathIndex;
 
-        // Horizontal scan lines during flash
-        if (t < 0.3) {
-          final scanCount = 8;
-          for (int i = 0; i < scanCount; i++) {
-            final scanY = (screenHeight / scanCount) * i + (_time * 500 % (screenHeight / scanCount));
-            canvas.drawLine(
-              Offset(0, scanY),
-              Offset(screenWidth, scanY),
-              Paint()
-                ..color = const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.4)
-                ..strokeWidth = 2,
-            );
-          }
+        if (pathIndex < pathPoints.length - 1) {
+          final p1 = pathPoints[pathIndex];
+          final p2 = pathPoints[pathIndex + 1];
+          final dotX = offsetX + (p1.x + (p2.x - p1.x) * pathT) * scale;
+          final dotY = offsetY + (p1.y + (p2.y - p1.y) * pathT) * scale;
+
+          final dotAlpha = (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
+          _minimapDataPaint.color = NeonTheme.cyberMagenta.withOpacity(dotAlpha * 0.8);
+          canvas.drawCircle(Offset(dotX, dotY), 2, _minimapDataPaint);
         }
       }
+    }
 
-      // Edge glow effect - borders light up
-      if (t < 0.4) {
-        final edgeAlpha = t < 0.1 ? (t / 0.1) : (1 - (t - 0.1) / 0.3);
-        const edgeWidth = 4.0;
-        final edgeColor = const Color(0xFFFF00FF).withOpacity(edgeAlpha * 0.6);
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: TOWER MARKERS
+    // ═══════════════════════════════════════════════════════════════════════
+    for (final tower in towers) {
+      final towerX = offsetX + tower.position.x * scale;
+      final towerY = offsetY + tower.position.y * scale;
 
-        // Top edge
-        canvas.drawRect(
-          Rect.fromLTWH(0, 0, screenWidth, edgeWidth),
-          Paint()
-            ..color = edgeColor
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-        );
-        // Bottom edge
-        canvas.drawRect(
-          Rect.fromLTWH(0, screenHeight - edgeWidth, screenWidth, edgeWidth),
-          Paint()
-            ..color = edgeColor
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-        );
-        // Left edge
-        canvas.drawRect(
-          Rect.fromLTWH(0, 0, edgeWidth, screenHeight),
-          Paint()
-            ..color = edgeColor
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-        );
-        // Right edge
-        canvas.drawRect(
-          Rect.fromLTWH(screenWidth - edgeWidth, 0, edgeWidth, screenHeight),
-          Paint()
-            ..color = edgeColor
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      // Tower range indicator (subtle)
+      final rangeRadius = tower.range * scale * 0.5;
+      _minimapPulsePaint.color = tower.color.withOpacity(0.1);
+      canvas.drawCircle(Offset(towerX, towerY), rangeRadius, _minimapPulsePaint);
+
+      // Tower glow
+      _minimapTowerPaint.color = tower.color.withOpacity(0.7);
+      canvas.drawCircle(Offset(towerX, towerY), 3.5, _minimapTowerPaint);
+
+      // Tower core
+      _minimapDataPaint.color = Colors.white.withOpacity(0.9);
+      canvas.drawCircle(Offset(towerX, towerY), 1.5, _minimapDataPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: ENEMY MARKERS (Real-time tracking)
+    // ═══════════════════════════════════════════════════════════════════════
+    for (final enemy in enemies) {
+      final enemyX = offsetX + enemy.position.x * scale;
+      final enemyY = offsetY + enemy.position.y * scale;
+
+      // Enemy glow based on health
+      final healthFactor = enemy.healthPercent;
+      final enemyAlpha = 0.5 + (1 - healthFactor) * 0.4;
+
+      _minimapEnemyPaint.color = enemy.type.color.withOpacity(enemyAlpha);
+      canvas.drawCircle(Offset(enemyX, enemyY), 2.5, _minimapEnemyPaint);
+
+      // Direction indicator (small line showing movement direction)
+      if (enemy.speed > 0) {
+        final dir = enemy.movementDirection;
+        _minimapDataPaint.color = enemy.type.color.withOpacity(0.6);
+        _minimapDataPaint.strokeWidth = 1;
+        canvas.drawLine(
+          Offset(enemyX, enemyY),
+          Offset(enemyX + dir.x * 4, enemyY + dir.y * 4),
+          _minimapDataPaint,
         );
       }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: BASE MARKER (Pulsing target)
+    // ═══════════════════════════════════════════════════════════════════════
+    final baseX = offsetX + basePos.x * scale;
+    final baseY = offsetY + basePos.y * scale;
+    final basePulse = 0.7 + math.sin(animPhase * 4) * 0.3;
+
+    // Base glow rings
+    for (int i = 0; i < 3; i++) {
+      final ringPhase = (animPhase * 2 + i * 0.4) % 1.0;
+      final ringRadius = 4 + ringPhase * 6;
+      final ringAlpha = (1 - ringPhase) * 0.4;
+      _minimapPulsePaint.color = NeonTheme.cyberGreen.withOpacity(ringAlpha);
+      canvas.drawCircle(Offset(baseX, baseY), ringRadius, _minimapPulsePaint);
+    }
+
+    // Base core
+    _minimapBasePaint.color = NeonTheme.cyberGreen.withOpacity(basePulse);
+    canvas.drawCircle(Offset(baseX, baseY), 4, _minimapBasePaint);
+    _minimapDataPaint.color = Colors.white;
+    canvas.drawCircle(Offset(baseX, baseY), 2, _minimapDataPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: RADAR SCAN SWEEP
+    // ═══════════════════════════════════════════════════════════════════════
+    final scanCenterX = minimapRect.center.dx;
+    final scanCenterY = minimapRect.center.dy;
+    final scanRadius = minimapSize / 2 - minimapPadding;
+
+    // Draw scan line
+    final scanEndX = scanCenterX + math.cos(_minimapScanAngle) * scanRadius;
+    final scanEndY = scanCenterY + math.sin(_minimapScanAngle) * scanRadius;
+
+    _minimapScanPaint.color = NeonTheme.cyberCyan.withOpacity(0.4);
+    canvas.drawLine(
+      Offset(scanCenterX, scanCenterY),
+      Offset(scanEndX, scanEndY),
+      _minimapScanPaint,
+    );
+
+    // Scan trail (fading arc behind the scan line)
+    _minimapPath.reset();
+    _minimapPath.moveTo(scanCenterX, scanCenterY);
+    for (int i = 0; i <= 20; i++) {
+      final trailAngle = _minimapScanAngle - (i / 20) * (math.pi / 3);
+      final trailAlpha = (1 - i / 20) * 0.15;
+      final trailX = scanCenterX + math.cos(trailAngle) * scanRadius;
+      final trailY = scanCenterY + math.sin(trailAngle) * scanRadius;
+
+      if (i == 0) {
+        _minimapPath.lineTo(trailX, trailY);
+      } else {
+        _minimapPath.lineTo(trailX, trailY);
+      }
+    }
+    _minimapPath.close();
+
+    _minimapScanPaint.color = NeonTheme.cyberCyan.withOpacity(0.08);
+    canvas.drawPath(_minimapPath, _minimapScanPaint);
+
+    canvas.restore(); // Restore clip
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 8: BORDER AND CORNER ACCENTS
+    // ═══════════════════════════════════════════════════════════════════════
+    _minimapBorderPaint.color = NeonTheme.cyberCyan.withOpacity(0.6);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(minimapRect, const Radius.circular(6)),
+      _minimapBorderPaint,
+    );
+
+    // Tech corners
+    final cornerLen = 12.0;
+    _minimapCornerPaint.color = NeonTheme.cyberCyan.withOpacity(0.9);
+
+    // Top-left corner
+    canvas.drawLine(
+      Offset(minimapRect.left, minimapRect.top + cornerLen),
+      Offset(minimapRect.left, minimapRect.top),
+      _minimapCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(minimapRect.left, minimapRect.top),
+      Offset(minimapRect.left + cornerLen, minimapRect.top),
+      _minimapCornerPaint,
+    );
+
+    // Top-right corner
+    canvas.drawLine(
+      Offset(minimapRect.right - cornerLen, minimapRect.top),
+      Offset(minimapRect.right, minimapRect.top),
+      _minimapCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(minimapRect.right, minimapRect.top),
+      Offset(minimapRect.right, minimapRect.top + cornerLen),
+      _minimapCornerPaint,
+    );
+
+    // Bottom-left corner
+    canvas.drawLine(
+      Offset(minimapRect.left, minimapRect.bottom - cornerLen),
+      Offset(minimapRect.left, minimapRect.bottom),
+      _minimapCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(minimapRect.left, minimapRect.bottom),
+      Offset(minimapRect.left + cornerLen, minimapRect.bottom),
+      _minimapCornerPaint,
+    );
+
+    // Bottom-right corner
+    canvas.drawLine(
+      Offset(minimapRect.right - cornerLen, minimapRect.bottom),
+      Offset(minimapRect.right, minimapRect.bottom),
+      _minimapCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(minimapRect.right, minimapRect.bottom),
+      Offset(minimapRect.right, minimapRect.bottom - cornerLen),
+      _minimapCornerPaint,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 9: MINIMAP LABEL
+    // ═══════════════════════════════════════════════════════════════════════
+    final labelY = minimapRect.top - 14;
+    _minimapDataPaint.color = NeonTheme.cyberCyan.withOpacity(0.7);
+    _minimapDataPaint.strokeWidth = 1;
+
+    // Small "TACTICAL" text indicator (draw as lines to avoid TextPainter overhead)
+    final labelX = minimapRect.left + 4;
+    // T
+    canvas.drawLine(Offset(labelX, labelY), Offset(labelX + 4, labelY), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 2, labelY), Offset(labelX + 2, labelY + 5), _minimapDataPaint);
+    // A
+    canvas.drawLine(Offset(labelX + 6, labelY + 5), Offset(labelX + 8, labelY), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 8, labelY), Offset(labelX + 10, labelY + 5), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 7, labelY + 3), Offset(labelX + 9, labelY + 3), _minimapDataPaint);
+    // C
+    canvas.drawLine(Offset(labelX + 14, labelY), Offset(labelX + 12, labelY), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 12, labelY), Offset(labelX + 12, labelY + 5), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 12, labelY + 5), Offset(labelX + 14, labelY + 5), _minimapDataPaint);
+
+    // Entity count indicator
+    final entityCount = enemies.length;
+    if (entityCount > 0) {
+      final countX = minimapRect.right - 25;
+      final countPulse = math.sin(animPhase * 3) * 0.2 + 0.8;
+      _minimapDataPaint.color = NeonTheme.cyberMagenta.withOpacity(countPulse);
+
+      // Draw count as small dots (up to 10)
+      final dotCount = math.min(entityCount, 10);
+      for (int i = 0; i < dotCount; i++) {
+        canvas.drawCircle(
+          Offset(countX + (i % 5) * 4, labelY + (i ~/ 5) * 4 + 1),
+          1,
+          _minimapDataPaint,
+        );
+      }
+      if (entityCount > 10) {
+        // Plus indicator for > 10 enemies
+        canvas.drawLine(
+          Offset(countX + 22, labelY + 2),
+          Offset(countX + 26, labelY + 2),
+          _minimapDataPaint,
+        );
+        canvas.drawLine(
+          Offset(countX + 24, labelY),
+          Offset(countX + 24, labelY + 4),
+          _minimapDataPaint,
+        );
+      }
+    }
+  }
+
+  /// Draw a small hexagon for the minimap grid
+  void _drawMiniHex(Canvas canvas, double cx, double cy, double radius, Paint paint) {
+    _minimapPath.reset();
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3 - math.pi / 6;
+      final x = cx + radius * math.cos(angle);
+      final y = cy + radius * math.sin(angle);
+      if (i == 0) {
+        _minimapPath.moveTo(x, y);
+      } else {
+        _minimapPath.lineTo(x, y);
+      }
+    }
+    _minimapPath.close();
+    canvas.drawPath(_minimapPath, paint);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // GLITCH DISTORTION EFFECT (Wave transitions)
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawGlitchDistortionEffect(Canvas canvas, double screenWidth, double screenHeight) {
+    final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+
+    // Flash intensity - peaks early then fades
+    double flashAlpha = 0.0;
+    if (t < 0.1) {
+      flashAlpha = (t / 0.1) * 0.6;
+    } else if (t < 0.25) {
+      flashAlpha = 0.6 - ((t - 0.1) / 0.15) * 0.5;
+    } else if (t < 0.5) {
+      flashAlpha = 0.1 - ((t - 0.25) / 0.25) * 0.1;
+    }
+
+    // Glitch intensity - highest in the middle of transition
+    final glitchIntensity = t < 0.5 ? t * 2 : (1 - t) * 2;
+    final isGlitching = _glitchRandom.nextDouble() < glitchIntensity * 0.8;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: CHROMATIC ABERRATION (RGB SPLIT)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.2 && isGlitching) {
+      final chromaOffset = glitchIntensity * 8;
+
+      // Red channel shift - left
+      _glitchRedPaint.color = const Color(0xFFFF0044).withOpacity(glitchIntensity * 0.15);
+      canvas.save();
+      canvas.translate(-chromaOffset, 0);
+      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchRedPaint);
+      canvas.restore();
+
+      // Cyan channel shift - right
+      _glitchCyanPaint.color = const Color(0xFF00FFFF).withOpacity(glitchIntensity * 0.15);
+      canvas.save();
+      canvas.translate(chromaOffset, 0);
+      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchCyanPaint);
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: HORIZONTAL DISPLACEMENT GLITCH BLOCKS
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.3) {
+      final blockCount = (glitchIntensity * 6).round();
+      for (int i = 0; i < blockCount; i++) {
+        if (_glitchRandom.nextDouble() > 0.5) continue; // Random skip
+
+        final blockY = _glitchRandom.nextDouble() * screenHeight;
+        final blockHeight = 2 + _glitchRandom.nextDouble() * 15;
+        final displacement = (_glitchRandom.nextDouble() - 0.5) * 30 * glitchIntensity;
+
+        // Draw displaced block with color tint
+        final blockColor = _glitchRandom.nextBool()
+            ? const Color(0xFFFF0066)
+            : const Color(0xFF00FFFF);
+
+        _glitchBlockPaint.color = blockColor.withOpacity(glitchIntensity * 0.3);
+        canvas.drawRect(
+          Rect.fromLTWH(displacement, blockY, screenWidth, blockHeight),
+          _glitchBlockPaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: DIGITAL NOISE BLOCKS
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.4 && isGlitching) {
+      final noiseCount = (glitchIntensity * 20).round();
+      for (int i = 0; i < noiseCount; i++) {
+        final noiseX = _glitchRandom.nextDouble() * screenWidth;
+        final noiseY = _glitchRandom.nextDouble() * screenHeight;
+        final noiseW = 5 + _glitchRandom.nextDouble() * 25;
+        final noiseH = 2 + _glitchRandom.nextDouble() * 8;
+
+        final noiseColor = _glitchRandom.nextDouble() < 0.3
+            ? Colors.white
+            : (_glitchRandom.nextBool()
+                ? const Color(0xFFFF0066)
+                : const Color(0xFF00FFFF));
+
+        _glitchNoisePaint.color = noiseColor.withOpacity(glitchIntensity * 0.5);
+        canvas.drawRect(Rect.fromLTWH(noiseX, noiseY, noiseW, noiseH), _glitchNoisePaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: SCANLINE DISTORTION
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.15) {
+      final scanlineSpacing = 3.0;
+      final scanlineCount = (screenHeight / scanlineSpacing).round();
+
+      for (int i = 0; i < scanlineCount; i++) {
+        final y = i * scanlineSpacing;
+        final jitter = isGlitching && _glitchRandom.nextDouble() < 0.1
+            ? (_glitchRandom.nextDouble() - 0.5) * 10 * glitchIntensity
+            : 0.0;
+
+        final scanAlpha = (0.03 + math.sin(_time * 30 + i * 0.1) * 0.02) * glitchIntensity;
+        _glitchScanlinePaint.color = Colors.black.withOpacity(scanAlpha);
+        canvas.drawLine(
+          Offset(jitter, y),
+          Offset(screenWidth + jitter, y),
+          _glitchScanlinePaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: STATIC NOISE LINES
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.5 && isGlitching) {
+      final staticLineCount = (glitchIntensity * 15).round();
+      for (int i = 0; i < staticLineCount; i++) {
+        final y = _glitchRandom.nextDouble() * screenHeight;
+        final startX = _glitchRandom.nextDouble() * screenWidth * 0.3;
+        final endX = startX + _glitchRandom.nextDouble() * screenWidth * 0.7;
+
+        _glitchStaticPaint.color = Colors.white.withOpacity(glitchIntensity * 0.4);
+        canvas.drawLine(Offset(startX, y), Offset(endX, y), _glitchStaticPaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: MAIN FLASH EFFECT (from original)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (flashAlpha > 0.01) {
+      // White core flash
+      _glitchFlashPaint.color = Colors.white.withOpacity(flashAlpha * 0.5);
+      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchFlashPaint);
+
+      // Cyberpunk color overlay
+      final colorFlash = t < 0.15
+          ? const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.3)
+          : const Color(0xFFFF00FF).withOpacity(flashAlpha * 0.2);
+      _colorFlashPaint.color = colorFlash;
+      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _colorFlashPaint);
+
+      // Animated scan lines
+      if (t < 0.3) {
+        for (int i = 0; i < 8; i++) {
+          final scanY = (screenHeight / 8) * i + (_time * 500 % (screenHeight / 8));
+          _glitchLinePaint.color = const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.4);
+          canvas.drawLine(Offset(0, scanY), Offset(screenWidth, scanY), _glitchLinePaint);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: GLITCH EDGE DISTORTION
+    // ═══════════════════════════════════════════════════════════════════════
+    if (t < 0.4) {
+      final edgeAlpha = t < 0.1 ? (t / 0.1) : (1 - (t - 0.1) / 0.3);
+      final edgeJitter = isGlitching ? (_glitchRandom.nextDouble() - 0.5) * 5 : 0.0;
+
+      // Glitched border edges
+      _glitchEdgePaint.color = const Color(0xFFFF00FF).withOpacity(edgeAlpha * 0.6);
+
+      // Top edge with jitter
+      canvas.drawLine(
+        Offset(edgeJitter, 2),
+        Offset(screenWidth + edgeJitter, 2),
+        _glitchEdgePaint,
+      );
+
+      // Bottom edge
+      canvas.drawLine(
+        Offset(-edgeJitter, screenHeight - 2),
+        Offset(screenWidth - edgeJitter, screenHeight - 2),
+        _glitchEdgePaint,
+      );
+
+      // Cyan secondary edges
+      _glitchEdgePaint.color = const Color(0xFF00FFFF).withOpacity(edgeAlpha * 0.4);
+      canvas.drawLine(Offset(2, 0), Offset(2, screenHeight), _glitchEdgePaint);
+      canvas.drawLine(Offset(screenWidth - 2, 0), Offset(screenWidth - 2, screenHeight), _glitchEdgePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 8: DATA CORRUPTION VISUAL (random "data" characters)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.6 && isGlitching) {
+      final dataCount = (glitchIntensity * 8).round();
+      for (int i = 0; i < dataCount; i++) {
+        final dataX = _glitchRandom.nextDouble() * screenWidth;
+        final dataY = _glitchRandom.nextDouble() * screenHeight;
+        final dataLength = 3 + _glitchRandom.nextInt(8);
+
+        _glitchDataPaint.color = const Color(0xFF00FF00).withOpacity(glitchIntensity * 0.4);
+
+        // Draw small data blips
+        for (int j = 0; j < dataLength; j++) {
+          final blipX = dataX + j * 4;
+          final blipHeight = 2 + _glitchRandom.nextDouble() * 6;
+          canvas.drawLine(
+            Offset(blipX, dataY),
+            Offset(blipX, dataY + blipHeight),
+            _glitchDataPaint,
+          );
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 9: WAVE NUMBER GLITCH EFFECT
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.3) {
+      final waveNum = gameRef.enemyManager.currentWave.toString();
+      final centerX = screenWidth / 2;
+      final centerY = screenHeight / 2;
+
+      // Glitched wave number - RGB split
+      final textGlitchOffset = glitchIntensity * 4;
+
+      // Red shadow
+      final redPainter = _getPainter(
+        'glitch-wave-red-$waveNum',
+        'WAVE $waveNum',
+        TextStyle(
+          color: const Color(0xFFFF0044).withOpacity(glitchIntensity * 0.5),
+          fontSize: 40 + glitchIntensity * 10,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+        ),
+      );
+      redPainter.paint(
+        canvas,
+        Offset(centerX - redPainter.width / 2 - textGlitchOffset, centerY - redPainter.height / 2),
+      );
+
+      // Cyan shadow
+      final cyanPainter = _getPainter(
+        'glitch-wave-cyan-$waveNum',
+        'WAVE $waveNum',
+        TextStyle(
+          color: const Color(0xFF00FFFF).withOpacity(glitchIntensity * 0.5),
+          fontSize: 40 + glitchIntensity * 10,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+        ),
+      );
+      cyanPainter.paint(
+        canvas,
+        Offset(centerX - cyanPainter.width / 2 + textGlitchOffset, centerY - cyanPainter.height / 2),
+      );
+
+      // Main text
+      final mainPainter = _getPainter(
+        'glitch-wave-main-$waveNum',
+        'WAVE $waveNum',
+        TextStyle(
+          color: Colors.white.withOpacity(glitchIntensity * 0.8),
+          fontSize: 40 + glitchIntensity * 10,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+          shadows: [
+            Shadow(color: const Color(0xFFFF00FF), blurRadius: 15),
+            Shadow(color: const Color(0xFF00FFFF), blurRadius: 25),
+          ],
+        ),
+      );
+      mainPainter.paint(
+        canvas,
+        Offset(centerX - mainPainter.width / 2, centerY - mainPainter.height / 2),
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 10: VIGNETTE PULSE
+    // ═══════════════════════════════════════════════════════════════════════
+    if (glitchIntensity > 0.2) {
+      final vignetteAlpha = glitchIntensity * 0.3;
+      final vignetteGradient = RadialGradient(
+        colors: [
+          Colors.transparent,
+          Colors.transparent,
+          const Color(0xFFFF00FF).withOpacity(vignetteAlpha),
+          Colors.black.withOpacity(vignetteAlpha * 2),
+        ],
+        stops: const [0.0, 0.5, 0.8, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, screenWidth, screenHeight));
+
+      _vignettePaint.shader = vignetteGradient;
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, screenWidth, screenHeight),
+        _vignettePaint,
+      );
     }
   }
 
@@ -516,15 +1490,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Draw timer bar
     canvas.drawRect(
       Rect.fromLTWH(x, y, barWidth, barHeight),
-      Paint()..color = Colors.black45,
+      _focusTimerBgPaint,
     );
-    
+
     final color = gameRef.focusTower?.color ?? const Color(0xFF00FFFF);
+    _focusTimerFillPaint.color = color;
     canvas.drawRect(
       Rect.fromLTWH(x, y, barWidth * progress, barHeight),
-      Paint()
-        ..color = color
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      _focusTimerFillPaint,
     );
     
     final labelPainter = _getPainter(
@@ -890,224 +1863,362 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final enemiesAlive = gameRef.enemyManager.aliveCount;
 
     // ═══════════════════════════════════════════════════════════════════════
-    // CLEAN WAVE INDICATOR - Below top bar
-    // ═══════════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════════════════
+    // CYBERPUNK WAVE INDICATOR - Enhanced Design
+    // ════════════════════════════════════════════════════════════════════════════
 
-    // Animation for wave transition
+    // Animation calculations
     double transitionScale = 1.0;
     double shakeX = 0.0;
     double shakeY = 0.0;
     if (_waveTransitionActive) {
       final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
       if (t < 0.2) {
-        transitionScale = 1.0 + (t / 0.2) * 0.3;
-        shakeX = math.sin(t * 60) * 4 * (1 - t / 0.2);
-        shakeY = math.cos(t * 40) * 2 * (1 - t / 0.2);
+        transitionScale = 1.0 + (t / 0.2) * 0.35;
+        shakeX = math.sin(t * 60) * 5 * (1 - t / 0.2);
+        shakeY = math.cos(t * 40) * 3 * (1 - t / 0.2);
       } else {
-        transitionScale = 1.3 - ((t - 0.2) / 0.8) * 0.3;
+        transitionScale = 1.35 - ((t - 0.2) / 0.8) * 0.35;
       }
     }
 
-    // Colors
+    // Dynamic colors based on state
     const cyanColor = Color(0xFF00FFFF);
     const magentaColor = Color(0xFFFF00FF);
+    const goldColor = Color(0xFFFFD700);
     final primaryColor = isSpawning ? magentaColor : cyanColor;
+    final secondaryColor = Color.lerp(primaryColor, Colors.white, 0.3)!;
+    final pulseIntensity = 0.3 + math.sin(_time * 2.5) * 0.15;
 
-    // Container dimensions - compact, positioned below top bar
-    const containerWidth = 160.0;
-    const containerHeight = 56.0;
+    // Container dimensions
+    const containerWidth = 180.0;
+    const containerHeight = 68.0;
     final containerX = centerX - containerWidth / 2;
-    const containerY = 45.0; // Below the top bar
+    const containerY = 48.0;
 
-    // ═══ CLEAN BACKGROUND ═══
-    final bgPath = Path();
-    const cut = 10.0;
-    bgPath.moveTo(containerX + cut, containerY);
-    bgPath.lineTo(containerX + containerWidth - cut, containerY);
-    bgPath.lineTo(containerX + containerWidth, containerY + cut);
-    bgPath.lineTo(containerX + containerWidth, containerY + containerHeight - cut);
-    bgPath.lineTo(containerX + containerWidth - cut, containerY + containerHeight);
-    bgPath.lineTo(containerX + cut, containerY + containerHeight);
-    bgPath.lineTo(containerX, containerY + containerHeight - cut);
-    bgPath.lineTo(containerX, containerY + cut);
-    bgPath.close();
+    // ═══ HEXAGONAL CYBERPUNK FRAME ═══
+    final framePath = Path();
+    const cut = 14.0;
+    const innerCut = 6.0;
+    framePath.moveTo(containerX + cut, containerY);
+    framePath.lineTo(containerX + containerWidth - cut, containerY);
+    framePath.lineTo(containerX + containerWidth, containerY + cut);
+    framePath.lineTo(containerX + containerWidth, containerY + containerHeight - cut);
+    framePath.lineTo(containerX + containerWidth - cut, containerY + containerHeight);
+    framePath.lineTo(containerX + cut, containerY + containerHeight);
+    framePath.lineTo(containerX, containerY + containerHeight - cut);
+    framePath.lineTo(containerX, containerY + cut);
+    framePath.close();
 
-    // Dark background
+    // Multi-layer background with depth
     final bgGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
-        const Color(0xFF0a0a18).withOpacity(0.92),
-        const Color(0xFF12061a).withOpacity(0.88),
+        const Color(0xFF08081a).withOpacity(0.96),
+        const Color(0xFF0c0418).withOpacity(0.94),
+        const Color(0xFF100820).withOpacity(0.92),
       ],
     ).createShader(Rect.fromLTWH(containerX, containerY, containerWidth, containerHeight));
-    canvas.drawPath(bgPath, Paint()..shader = bgGradient);
+    _waveIndicatorBgPaint.shader = bgGradient;
+    canvas.drawPath(framePath, _waveIndicatorBgPaint);
 
-    // Border
-    canvas.drawPath(
-      bgPath,
-      Paint()
-        ..color = primaryColor.withOpacity(0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+    // Outer glow (pulsing)
+    _waveIndicatorGlowPaint.color = primaryColor.withOpacity(pulseIntensity);
+    canvas.drawPath(framePath, _waveIndicatorGlowPaint);
+
+    // Inner glow layer
+    _waveIndicatorInnerGlowPaint.color = primaryColor.withOpacity(0.12);
+    canvas.drawPath(framePath, _waveIndicatorInnerGlowPaint);
+
+    // Animated scanline effect
+    final scanY = containerY + ((_time * 30) % containerHeight);
+    _waveIndicatorScanlinePaint.color = primaryColor.withOpacity(0.06);
+    canvas.drawRect(
+      Rect.fromLTWH(containerX + 2, scanY, containerWidth - 4, 2),
+      _waveIndicatorScanlinePaint,
     );
 
-    // Subtle glow
-    canvas.drawPath(
-      bgPath,
-      Paint()
-        ..color = primaryColor.withOpacity(0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    // Main border
+    _waveIndicatorBorderPaint.color = primaryColor.withOpacity(0.7);
+    canvas.drawPath(framePath, _waveIndicatorBorderPaint);
+
+    // ═══ CORNER ACCENTS (Cyberpunk style) ═══
+    _waveIndicatorCornerPaint.color = secondaryColor.withOpacity(0.9);
+
+    // Top-left corner
+    canvas.drawLine(
+      Offset(containerX + cut, containerY),
+      Offset(containerX + cut + 16, containerY),
+      _waveIndicatorCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(containerX, containerY + cut),
+      Offset(containerX, containerY + cut + 12),
+      _waveIndicatorCornerPaint,
     );
 
-    // ═══ WAVE NUMBER ═══
+    // Top-right corner
+    canvas.drawLine(
+      Offset(containerX + containerWidth - cut - 16, containerY),
+      Offset(containerX + containerWidth - cut, containerY),
+      _waveIndicatorCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(containerX + containerWidth, containerY + cut),
+      Offset(containerX + containerWidth, containerY + cut + 12),
+      _waveIndicatorCornerPaint,
+    );
+
+    // Bottom corners
+    canvas.drawLine(
+      Offset(containerX + cut, containerY + containerHeight),
+      Offset(containerX + cut + 16, containerY + containerHeight),
+      _waveIndicatorCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(containerX + containerWidth - cut - 16, containerY + containerHeight),
+      Offset(containerX + containerWidth - cut, containerY + containerHeight),
+      _waveIndicatorCornerPaint,
+    );
+
+    // ═══ LEFT ACCENT BAR (Animated) ═══
+    final barPulse = 0.7 + math.sin(_time * 3) * 0.3;
+    _waveIndicatorAccentPaint
+      ..color = primaryColor.withOpacity(barPulse)
+      ..strokeWidth = 4;
+    canvas.drawLine(
+      Offset(containerX + 12, containerY + 16),
+      Offset(containerX + 12, containerY + containerHeight - 16),
+      _waveIndicatorAccentPaint,
+    );
+
+    // ═══ RIGHT ACCENT BAR ═══
+    _waveIndicatorAccentPaint.color = primaryColor.withOpacity(0.5);
+    canvas.drawLine(
+      Offset(containerX + containerWidth - 12, containerY + 16),
+      Offset(containerX + containerWidth - 12, containerY + containerHeight - 16),
+      _waveIndicatorAccentPaint,
+    );
+
+    // ═══ WAVE NUMBER (Big, Bold, Glowing) ═══
     final waveText = '$currentWave';
-    final numberY = containerY + 4;
+    final numberY = containerY + 6;
 
     canvas.save();
-    canvas.translate(centerX + shakeX, numberY + 16 + shakeY);
+    canvas.translate(centerX + shakeX, numberY + 18 + shakeY);
     canvas.scale(transitionScale, transitionScale);
-    canvas.translate(-(centerX + shakeX), -(numberY + 16 + shakeY));
+    canvas.translate(-(centerX + shakeX), -(numberY + 18 + shakeY));
 
-    // Main number with glow
     final wavePainter = _getPainter(
-      'wave-num-clean-$waveText-$isSpawning',
+      'wave-num-cyber-$waveText-$isSpawning',
       waveText,
       TextStyle(
         color: Colors.white,
-        fontSize: 36,
+        fontSize: 40,
         fontWeight: FontWeight.w900,
         fontFamily: 'monospace',
         shadows: [
-          Shadow(color: primaryColor, blurRadius: 16),
-          Shadow(color: primaryColor.withOpacity(0.6), blurRadius: 32),
+          Shadow(color: primaryColor, blurRadius: 20),
+          Shadow(color: primaryColor.withOpacity(0.7), blurRadius: 40),
+          Shadow(color: primaryColor.withOpacity(0.3), blurRadius: 60),
         ],
       ),
     );
     wavePainter.paint(canvas, Offset(centerX - wavePainter.width / 2, numberY));
     canvas.restore();
 
-    // ═══ SUBTITLE ═══
-    final subtitleY = containerY + 40;
-    final subtitleText = 'WAVE $currentWave / $totalWaves';
+    // ═══ WAVE LABEL ═══
+    final labelPainter = _getPainter(
+      'wave-label-cyber',
+      '◆ WAVE ◆',
+      TextStyle(
+        color: secondaryColor.withOpacity(0.7),
+        fontSize: 9,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 2.5,
+        fontFamily: 'monospace',
+      ),
+    );
+    labelPainter.paint(canvas, Offset(centerX - labelPainter.width / 2, containerY + 4));
+
+    // ═══ SUBTITLE WITH PROGRESS ═══
+    final subtitleY = containerY + 48;
+    final subtitleText = '$currentWave / $totalWaves';
     final subtitlePainter = _getPainter(
-      'wave-subtitle-clean-$currentWave-$totalWaves',
+      'wave-subtitle-cyber-$currentWave-$totalWaves',
       subtitleText,
       TextStyle(
-        color: primaryColor.withOpacity(0.85),
-        fontSize: 10,
+        color: primaryColor.withOpacity(0.9),
+        fontSize: 11,
         fontWeight: FontWeight.bold,
-        letterSpacing: 1.5,
+        letterSpacing: 2.0,
         fontFamily: 'monospace',
       ),
     );
     subtitlePainter.paint(canvas, Offset(centerX - subtitlePainter.width / 2, subtitleY));
 
-    // ═══ PROGRESS BAR ═══
-    const barWidth = 140.0;
-    const barHeight = 3.0;
+    // ═══ PROGRESS BAR (Enhanced) ═══
+    const barWidth = 150.0;
+    const progressBarHeight = 4.0;
     final barX = centerX - barWidth / 2;
-    final barY = containerY + containerHeight - 8;
+    final barY = containerY + containerHeight - 10;
 
-    // Background
+    // Background with inner shadow effect
+    _waveIndicatorProgressBgPaint.color = Colors.white.withOpacity(0.08);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromLTWH(barX, barY, barWidth, barHeight),
+        Rect.fromLTWH(barX, barY, barWidth, progressBarHeight),
         const Radius.circular(2),
       ),
-      Paint()..color = Colors.white.withOpacity(0.1),
+      _waveIndicatorProgressBgPaint,
     );
 
-    // Progress fill
+    // Progress fill with gradient
     if (waveProgress > 0) {
       final fillWidth = barWidth * waveProgress;
       final fillGradient = LinearGradient(
-        colors: [cyanColor, magentaColor],
-      ).createShader(Rect.fromLTWH(barX, barY, fillWidth, barHeight));
+        colors: [cyanColor, magentaColor, goldColor],
+        stops: const [0.0, 0.6, 1.0],
+      ).createShader(Rect.fromLTWH(barX, barY, fillWidth, progressBarHeight));
 
+      _waveIndicatorProgressFillPaint.shader = fillGradient;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(barX, barY, fillWidth, barHeight),
+          Rect.fromLTWH(barX, barY, fillWidth, progressBarHeight),
           const Radius.circular(2),
         ),
-        Paint()..shader = fillGradient,
+        _waveIndicatorProgressFillPaint,
       );
 
-      // Glow on progress
+      // Glow effect on progress
+      _waveIndicatorProgressGlowPaint.shader = fillGradient;
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(barX, barY - 1, fillWidth, barHeight + 2),
+          Rect.fromLTWH(barX, barY - 1, fillWidth, progressBarHeight + 2),
           const Radius.circular(2),
         ),
-        Paint()
-          ..shader = fillGradient
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        _waveIndicatorProgressGlowPaint,
       );
+
+      // Progress tip glow
+      if (fillWidth > 4) {
+        canvas.drawCircle(
+          Offset(barX + fillWidth, barY + progressBarHeight / 2),
+          4,
+          Paint()
+            ..color = Colors.white.withOpacity(0.8 * pulseIntensity)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        );
+      }
     }
 
-    // ═══ ENEMY COUNT (compact) ═══
+    // ═══ ENEMY COUNT (Enhanced) ═══
     if (isSpawning && enemiesAlive > 0) {
       final enemyText = '$enemiesAlive';
       final urgentColor = enemiesAlive > 20
           ? const Color(0xFFFF0044)
           : (enemiesAlive > 10 ? const Color(0xFFFFFF00) : magentaColor);
+
+      // Enemy count panel (right side)
+      final enemyPanelX = containerX + containerWidth + 10;
+      final enemyPanelY = containerY + containerHeight / 2 - 14;
+      const enemyPanelWidth = 36.0;
+      const enemyPanelHeight = 28.0;
+
+      // Mini panel background
+      final enemyPanelPath = Path();
+      const miniCut = 5.0;
+      enemyPanelPath.moveTo(enemyPanelX + miniCut, enemyPanelY);
+      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth - miniCut, enemyPanelY);
+      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth, enemyPanelY + miniCut);
+      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth, enemyPanelY + enemyPanelHeight - miniCut);
+      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth - miniCut, enemyPanelY + enemyPanelHeight);
+      enemyPanelPath.lineTo(enemyPanelX + miniCut, enemyPanelY + enemyPanelHeight);
+      enemyPanelPath.lineTo(enemyPanelX, enemyPanelY + enemyPanelHeight - miniCut);
+      enemyPanelPath.lineTo(enemyPanelX, enemyPanelY + miniCut);
+      enemyPanelPath.close();
+
+      canvas.drawPath(
+        enemyPanelPath,
+        Paint()..color = const Color(0xFF0a0a18).withOpacity(0.9),
+      );
+      canvas.drawPath(
+        enemyPanelPath,
+        Paint()
+          ..color = urgentColor.withOpacity(0.6)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+
+      // Enemy indicator dot
+      _waveIndicatorEnemyGlowPaint.color = urgentColor.withOpacity(0.5);
+      canvas.drawCircle(
+        Offset(enemyPanelX + 8, enemyPanelY + enemyPanelHeight / 2),
+        4,
+        _waveIndicatorEnemyGlowPaint,
+      );
+      _waveIndicatorEnemyDotPaint.color = urgentColor;
+      canvas.drawCircle(
+        Offset(enemyPanelX + 8, enemyPanelY + enemyPanelHeight / 2),
+        2.5,
+        _waveIndicatorEnemyDotPaint,
+      );
+
+      // Enemy count text
       final enemyPainter = _getPainter(
-        'wave-enemies-clean-$enemiesAlive',
+        'wave-enemies-cyber-$enemiesAlive',
         enemyText,
         TextStyle(
           color: urgentColor,
-          fontSize: 11,
+          fontSize: 13,
           fontWeight: FontWeight.bold,
           fontFamily: 'monospace',
-          shadows: [Shadow(color: urgentColor, blurRadius: 4)],
+          shadows: [Shadow(color: urgentColor, blurRadius: 6)],
         ),
-      );
-      // Draw enemy icon and count to the right of the container
-      final iconX = containerX + containerWidth + 8;
-      final iconY = containerY + containerHeight / 2 - 6;
-
-      // Small enemy indicator
-      canvas.drawCircle(
-        Offset(iconX + 4, iconY + 6),
-        4,
-        Paint()..color = urgentColor.withOpacity(0.3),
-      );
-      canvas.drawCircle(
-        Offset(iconX + 4, iconY + 6),
-        2,
-        Paint()..color = urgentColor,
       );
       enemyPainter.paint(
         canvas,
-        Offset(centerX - enemyPainter.width / 2, containerY + containerHeight + 4),
+        Offset(enemyPanelX + 16, enemyPanelY + (enemyPanelHeight - enemyPainter.height) / 2),
       );
     }
 
-    // ═══ WAVE TRANSITION - SUBTLE EFFECT ═══
+    // ═══ WAVE TRANSITION EFFECT ═══
     if (_waveTransitionActive) {
       final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
       final transitionAlpha = t < 0.4 ? t * 2.5 : (1 - t) * 1.67;
       if (transitionAlpha > 0.05) {
+        // "INCOMING" text with dramatic effect
         final incomingPainter = _getPainter(
-          'wave-incoming',
-          'WAVE $currentWave INCOMING',
+          'wave-incoming-cyber',
+          '▶ WAVE INCOMING ◀',
           TextStyle(
-            color: magentaColor.withOpacity(transitionAlpha * 0.8),
-            fontSize: 12,
+            color: magentaColor.withOpacity(transitionAlpha * 0.9),
+            fontSize: 13,
             fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
+            letterSpacing: 2.0,
             fontFamily: 'monospace',
             shadows: [
-              Shadow(color: magentaColor.withOpacity(transitionAlpha * 0.5), blurRadius: 8),
+              Shadow(color: magentaColor.withOpacity(transitionAlpha * 0.7), blurRadius: 10),
+              Shadow(color: magentaColor.withOpacity(transitionAlpha * 0.4), blurRadius: 20),
             ],
           ),
         );
         incomingPainter.paint(
           canvas,
-          Offset(centerX - incomingPainter.width / 2, containerY + containerHeight + 10),
+          Offset(centerX - incomingPainter.width / 2, containerY + containerHeight + 14),
         );
+
+        // Extra glow burst during transition
+        if (t < 0.3) {
+          final burstAlpha = (0.3 - t) / 0.3;
+          canvas.drawPath(
+            framePath,
+            Paint()
+              ..color = magentaColor.withOpacity(burstAlpha * 0.4)
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+          );
+        }
       }
     }
   }
@@ -1874,54 +2985,361 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _drawTowerInfoPanel(Canvas canvas, double screenHeight) {
     final selected = gameRef.towerManager.selectedTowerType;
-    final panelY = screenHeight - bottomBarHeight + 8;
+    final lowFx = gameRef.reduceFx;
 
-    // Panel background
-    final panelRect = Rect.fromLTWH(15, panelY, 180, 25);
-    _towerInfoPanelPaint.shader = _getTowerInfoShader(panelRect, selected);
+    // Larger holographic panel
+    const panelWidth = 220.0;
+    const panelHeight = 110.0;
+    final panelX = 12.0;
+    final panelY = screenHeight - panelHeight - 8;
+    final panelRect = Rect.fromLTWH(panelX, panelY, panelWidth, panelHeight);
+
+    final hslColor = HSLColor.fromColor(selected.color);
+    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
+    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: HOLOGRAPHIC PROJECTION GLOW
+    // ═══════════════════════════════════════════════════════════════════════
+    _holoPreviewGlowPaint.color = selected.color.withOpacity(0.15 + math.sin(_time * 2) * 0.05);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(panelRect, const Radius.circular(3)),
-      _towerInfoPanelPaint,
+      RRect.fromRectAndRadius(panelRect.inflate(8), const Radius.circular(8)),
+      _holoPreviewGlowPaint,
     );
 
-    // Border
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: BACKGROUND WITH GRADIENT
+    // ═══════════════════════════════════════════════════════════════════════
+    _holoPreviewBgPaint.shader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        const Color(0xFF0a0a18).withOpacity(0.95),
+        const Color(0xFF0f0f24).withOpacity(0.9),
+        selected.color.withOpacity(0.08),
+      ],
+    ).createShader(panelRect);
     canvas.drawRRect(
-      RRect.fromRectAndRadius(panelRect, const Radius.circular(3)),
-      _towerInfoBorderPaint..color = selected.color.withOpacity(0.4),
+      RRect.fromRectAndRadius(panelRect, const Radius.circular(6)),
+      _holoPreviewBgPaint,
     );
 
-    // Tower name
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: HEXAGONAL PATTERN OVERLAY
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!lowFx) {
+      canvas.save();
+      canvas.clipRRect(RRect.fromRectAndRadius(panelRect, const Radius.circular(6)));
+      _holoPreviewHexPaint.color = selected.color.withOpacity(0.08);
+      const hexSize = 12.0;
+      for (double y = panelY - hexSize; y < panelY + panelHeight + hexSize; y += hexSize * 1.5) {
+        for (double x = panelX - hexSize; x < panelX + panelWidth + hexSize; x += hexSize * 1.73) {
+          final offsetX = ((y ~/ (hexSize * 1.5)) % 2 == 0) ? 0.0 : hexSize * 0.866;
+          _holoPreviewPath.reset();
+          for (int i = 0; i < 6; i++) {
+            final angle = (i * 60 - 30) * math.pi / 180;
+            final px = x + offsetX + math.cos(angle) * hexSize * 0.4;
+            final py = y + math.sin(angle) * hexSize * 0.4;
+            if (i == 0) {
+              _holoPreviewPath.moveTo(px, py);
+            } else {
+              _holoPreviewPath.lineTo(px, py);
+            }
+          }
+          _holoPreviewPath.close();
+          canvas.drawPath(_holoPreviewPath, _holoPreviewHexPaint);
+        }
+      }
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: ANIMATED SCAN LINE
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!lowFx) {
+      final scanY = panelY + ((_time * 40) % panelHeight);
+      _holoPreviewScanPaint.shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          selected.color.withOpacity(0.3),
+          selected.color.withOpacity(0.5),
+          selected.color.withOpacity(0.3),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(panelX, scanY - 8, panelWidth, 16));
+      canvas.drawRect(Rect.fromLTWH(panelX, scanY - 8, panelWidth, 16), _holoPreviewScanPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: HOLOGRAPHIC FRAME WITH ANIMATED CORNERS
+    // ═══════════════════════════════════════════════════════════════════════
+    _holoPreviewBorderPaint.color = selected.color.withOpacity(0.6);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(panelRect, const Radius.circular(6)),
+      _holoPreviewBorderPaint,
+    );
+
+    // Animated corner brackets
+    _holoPreviewCornerPaint.color = selected.color;
+    final cornerLen = 15.0 + math.sin(_time * 3) * 2;
+    // Top-left
+    canvas.drawLine(Offset(panelX, panelY + cornerLen), Offset(panelX, panelY), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX, panelY), Offset(panelX + cornerLen, panelY), _holoPreviewCornerPaint);
+    // Top-right
+    canvas.drawLine(Offset(panelX + panelWidth - cornerLen, panelY), Offset(panelX + panelWidth, panelY), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX + panelWidth, panelY), Offset(panelX + panelWidth, panelY + cornerLen), _holoPreviewCornerPaint);
+    // Bottom-left
+    canvas.drawLine(Offset(panelX, panelY + panelHeight - cornerLen), Offset(panelX, panelY + panelHeight), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX, panelY + panelHeight), Offset(panelX + cornerLen, panelY + panelHeight), _holoPreviewCornerPaint);
+    // Bottom-right
+    canvas.drawLine(Offset(panelX + panelWidth - cornerLen, panelY + panelHeight), Offset(panelX + panelWidth, panelY + panelHeight), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX + panelWidth, panelY + panelHeight - cornerLen), Offset(panelX + panelWidth, panelY + panelHeight), _holoPreviewCornerPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: TOWER NAME HEADER WITH GLITCH
+    // ═══════════════════════════════════════════════════════════════════════
+    final nameY = panelY + 8;
+
+    // Glitch offset (occasional)
+    double glitchX = 0;
+    if (!lowFx && _holoPreviewRandom.nextDouble() < 0.02) {
+      glitchX = (_holoPreviewRandom.nextDouble() - 0.5) * 4;
+    }
+
     final namePainter = _towerInfoNamePainter ??
         _buildPainter(
-          '>> ${selected.name.toUpperCase()}',
+          '◈ ${selected.name.toUpperCase()}',
           TextStyle(
             color: selected.color,
-            fontSize: 11,
+            fontSize: 12,
             fontFamily: 'monospace',
             fontWeight: FontWeight.bold,
-            letterSpacing: 1,
-            shadows: [Shadow(color: selected.color.withOpacity(0.6), blurRadius: 6)],
+            letterSpacing: 1.5,
+            shadows: [
+              Shadow(color: selected.color.withOpacity(0.8), blurRadius: 8),
+              Shadow(color: selected.color.withOpacity(0.4), blurRadius: 16),
+            ],
           ),
         );
-    namePainter.paint(canvas, Offset(22, panelY + 6));
+    namePainter.paint(canvas, Offset(panelX + 10 + glitchX, nameY));
 
-    // Stats
-    final damage = gameRef.towerDamage(selected).round();
-    final range = gameRef.towerRange(selected).round();
+    // Type indicator line
+    _holoPreviewFramePaint.color = selected.color.withOpacity(0.5);
+    canvas.drawLine(
+      Offset(panelX + 8, nameY + 18),
+      Offset(panelX + panelWidth - 8, nameY + 18),
+      _holoPreviewFramePaint,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: STAT BARS WITH HOLOGRAPHIC ENERGY FILLS
+    // ═══════════════════════════════════════════════════════════════════════
+    final damage = gameRef.towerDamage(selected);
+    final range = gameRef.towerRange(selected);
     final fireRate = gameRef.towerFireRate(selected);
-    final statsText =
-        'DMG:$damage RNG:$range SPD:${fireRate.toStringAsFixed(1)}';
-    final statsPainter = _towerInfoStatsPainter ??
-        _buildPainter(
-          statsText,
-          TextStyle(
-            color: Colors.white.withOpacity(0.6),
-            fontSize: 8,
-            fontFamily: 'monospace',
-            letterSpacing: 0.5,
-          ),
+    final baseDamage = selected.damage;
+    final baseRange = selected.range;
+    final baseFireRate = selected.fireRate;
+
+    final barY = nameY + 26;
+    const barHeight = 14.0;
+    const barWidth = 85.0;
+    const labelWidth = 35.0;
+    const barSpacing = 18.0;
+
+    // Helper to draw stat bar
+    void drawStatBar(double y, String label, double value, double maxValue, double baseValue, Color barColor) {
+      // Label
+      final labelPainter = _getPainter(
+        'stat-$label',
+        label,
+        TextStyle(
+          color: barColor.withOpacity(0.9),
+          fontSize: 9,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+        ),
+      );
+      labelPainter.paint(canvas, Offset(panelX + 10, y + 1));
+
+      // Bar background
+      final barX = panelX + labelWidth + 8;
+      _holoPreviewBarBgPaint.color = const Color(0xFF0a0a18);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(barX, y, barWidth, barHeight), const Radius.circular(2)),
+        _holoPreviewBarBgPaint,
+      );
+
+      // Fill percentage
+      final fillPercent = (value / maxValue).clamp(0.0, 1.0);
+      final fillWidth = barWidth * fillPercent;
+
+      // Glow behind fill
+      if (!lowFx) {
+        _holoPreviewBarGlowPaint.color = barColor.withOpacity(0.4);
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(Rect.fromLTWH(barX, y, fillWidth, barHeight), const Radius.circular(2)),
+          _holoPreviewBarGlowPaint,
         );
-    statsPainter.paint(canvas, Offset(100, panelY + 8));
+      }
+
+      // Animated energy fill gradient
+      _holoPreviewBarFillPaint.shader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          barColor.withOpacity(0.9),
+          barColor,
+          barColor.withOpacity(0.7 + math.sin(_time * 4 + y) * 0.2),
+        ],
+      ).createShader(Rect.fromLTWH(barX, y, fillWidth, barHeight));
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromLTWH(barX + 1, y + 1, fillWidth - 2, barHeight - 2), const Radius.circular(1)),
+        _holoPreviewBarFillPaint,
+      );
+
+      // Energy flow animation inside bar
+      if (!lowFx && fillWidth > 10) {
+        _holoPreviewDataPaint.color = Colors.white.withOpacity(0.3);
+        final flowX = barX + ((_time * 60) % fillWidth);
+        if (flowX < barX + fillWidth - 3) {
+          canvas.drawLine(
+            Offset(flowX, y + 3),
+            Offset(flowX + 3, y + barHeight - 3),
+            _holoPreviewDataPaint,
+          );
+        }
+      }
+
+      // Value display with upgrade indicator
+      final hasBonus = value > baseValue;
+      final valueText = label == 'SPD' ? value.toStringAsFixed(1) : value.round().toString();
+      final bonusIndicator = hasBonus ? ' ▲' : '';
+      final valuePainter = _getPainter(
+        'val-$label-$valueText',
+        '$valueText$bonusIndicator',
+        TextStyle(
+          color: hasBonus ? const Color(0xFF00FF88) : Colors.white.withOpacity(0.8),
+          fontSize: 9,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+          shadows: hasBonus ? [Shadow(color: const Color(0xFF00FF88), blurRadius: 4)] : null,
+        ),
+      );
+      valuePainter.paint(canvas, Offset(barX + barWidth + 6, y + 1));
+    }
+
+    // Draw the three stat bars
+    drawStatBar(barY, 'DMG', damage, 200, baseDamage, selected.color);
+    drawStatBar(barY + barSpacing, 'RNG', range, 350, baseRange, secondaryColor);
+    drawStatBar(barY + barSpacing * 2, 'SPD', fireRate, 5.0, baseFireRate, tertiaryColor);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 8: COST DISPLAY WITH HOLOGRAPHIC CREDITS
+    // ═══════════════════════════════════════════════════════════════════════
+    final cost = gameRef.towerCost(selected);
+    final costY = panelY + panelHeight - 20;
+    final canAfford = gameRef.gold >= cost;
+
+    // Cost pill background
+    final costPillRect = Rect.fromLTWH(panelX + panelWidth - 70, costY, 60, 16);
+    _holoPreviewBgPaint.shader = LinearGradient(
+      colors: [
+        (canAfford ? NeonColors.green : NeonColors.magenta).withOpacity(0.15),
+        (canAfford ? NeonColors.green : NeonColors.magenta).withOpacity(0.05),
+      ],
+    ).createShader(costPillRect);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(costPillRect, const Radius.circular(8)),
+      _holoPreviewBgPaint,
+    );
+
+    // Cost text
+    final costPainter = _getPainter(
+      'cost-$cost',
+      '◆ $cost',
+      TextStyle(
+        color: canAfford ? NeonColors.green : NeonColors.magenta,
+        fontSize: 10,
+        fontFamily: 'monospace',
+        fontWeight: FontWeight.bold,
+        shadows: [
+          Shadow(color: (canAfford ? NeonColors.green : NeonColors.magenta).withOpacity(0.6), blurRadius: 4),
+        ],
+      ),
+    );
+    costPainter.paint(canvas, Offset(costPillRect.left + (costPillRect.width - costPainter.width) / 2, costY + 2));
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 9: UPGRADE BONUSES INDICATOR
+    // ═══════════════════════════════════════════════════════════════════════
+    final stats = gameRef.upgradeStats;
+    final hasBonuses = stats.towerDamageMult > 1.0 || stats.towerRangeMult > 1.0 || stats.towerFireRateMult > 1.0;
+
+    if (hasBonuses) {
+      final bonusX = panelX + 10;
+      final bonusY = costY + 2;
+
+      // Pulsing bonus indicator
+      _holoPreviewBonusPaint.color = const Color(0xFF00FF88).withOpacity(0.6 + math.sin(_time * 4) * 0.3);
+      canvas.drawCircle(Offset(bonusX + 4, bonusY + 6), 4, _holoPreviewBonusPaint);
+
+      // UPGRADED text
+      final upgradedPainter = _getPainter(
+        'upgraded',
+        'UPGRADED',
+        TextStyle(
+          color: const Color(0xFF00FF88),
+          fontSize: 8,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1,
+        ),
+      );
+      upgradedPainter.paint(canvas, Offset(bonusX + 12, bonusY));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 10: HOLOGRAPHIC PROJECTION LINES
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!lowFx) {
+      _holoPreviewProjectionPaint.color = selected.color.withOpacity(0.2 + math.sin(_time * 2) * 0.1);
+
+      // Top projection rays
+      for (int i = 0; i < 3; i++) {
+        final rayX = panelX + 40 + i * 50;
+        canvas.drawLine(
+          Offset(rayX, panelY),
+          Offset(rayX + (_holoPreviewRandom.nextDouble() - 0.5) * 10, panelY - 15 - _holoPreviewRandom.nextDouble() * 10),
+          _holoPreviewProjectionPaint,
+        );
+      }
+
+      // Side data streams
+      final streamPhase = (_time * 3) % 1.0;
+      _holoPreviewDataPaint.color = selected.color.withOpacity(0.4);
+      for (int i = 0; i < 4; i++) {
+        final dotY = panelY + 10 + i * 25 + streamPhase * 25;
+        if (dotY < panelY + panelHeight - 10) {
+          canvas.drawCircle(Offset(panelX + panelWidth - 4, dotY), 1.5, _holoPreviewDataPaint);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 11: OUTER PULSE RING (when selected and can afford)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!lowFx && canAfford) {
+      final pulsePhase = (_time * 1.5) % 1.0;
+      final pulseRadius = 6 + pulsePhase * 20;
+      _holoPreviewPulsePaint.color = selected.color.withOpacity((1 - pulsePhase) * 0.3);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(panelRect.inflate(pulseRadius), Radius.circular(6 + pulseRadius * 0.3)),
+        _holoPreviewPulsePaint,
+      );
+    }
   }
 
   void _drawAbilityCooldowns(Canvas canvas, double screenWidth, double screenHeight) {
@@ -2434,6 +3852,199 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       textDirection: TextDirection.ltr,
     )..layout();
     return painter;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DATA STREAM EFFECTS (Towers to HUD connection visualization)
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawDataStreamEffects(Canvas canvas, double screenWidth, double screenHeight) {
+    // Only draw when there are active towers
+    final towers = gameRef.towerManager.towers;
+    if (towers.isEmpty || reduceFlicker) return;
+
+    final targetY = topBarHeight; // HUD area at top
+    final streamCount = math.min(towers.length, 6); // Limit streams for performance
+
+    // Get colors for data streams based on active tower types
+    final activeColors = <Color>[];
+    for (int i = 0; i < streamCount; i++) {
+      activeColors.add(towers[i].color);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: AMBIENT DATA STREAMS FROM SCREEN EDGES
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 0; i < streamCount; i++) {
+      final color = activeColors[i];
+      final streamPhase = (_time * 2 + i * 0.4) % 1.0;
+
+      // Calculate stream position - distribute across screen width
+      final startX = (screenWidth / (streamCount + 1)) * (i + 1);
+      final startY = screenHeight - 50;
+
+      // Stream flows upward with animated particles
+      for (int p = 0; p < 8; p++) {
+        final particlePhase = (streamPhase + p * 0.12) % 1.0;
+        final particleY = startY - particlePhase * (startY - targetY - 20);
+        final particleX = startX + math.sin(_time * 3 + i + p * 0.5) * 3;
+
+        final alpha = (1 - particlePhase) * 0.4;
+
+        // Particle glow
+        _dataStreamGlowPaint.color = color.withOpacity(alpha * 0.3);
+        canvas.drawCircle(Offset(particleX, particleY), 4, _dataStreamGlowPaint);
+
+        // Particle core
+        _dataStreamParticlePaint.color = color.withOpacity(alpha);
+        canvas.drawCircle(Offset(particleX, particleY), 2, _dataStreamParticlePaint);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 2: BEAM LINES CONNECTING PARTICLES
+      // ═══════════════════════════════════════════════════════════════════════
+      final beamAlpha = 0.1 + math.sin(_time * 4 + i) * 0.05;
+      _dataStreamBeamPaint.color = color.withOpacity(beamAlpha);
+
+      final beamStartY = startY - streamPhase * 100;
+      final beamEndY = math.max(targetY + 30, beamStartY - 150);
+      final beamStartX = startX + math.sin(_time * 2 + i) * 2;
+      final beamEndX = startX + math.sin(_time * 2.5 + i) * 2;
+
+      canvas.drawLine(
+        Offset(beamStartX, beamStartY),
+        Offset(beamEndX, beamEndY),
+        _dataStreamBeamPaint,
+      );
+
+      // Core beam
+      _dataStreamCorePaint.color = color.withOpacity(beamAlpha * 2);
+      canvas.drawLine(
+        Offset(beamStartX, beamStartY),
+        Offset(beamEndX, beamEndY),
+        _dataStreamCorePaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: HUD ENTRY NODES (where data "enters" the HUD)
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 0; i < streamCount; i++) {
+      final color = activeColors[i];
+      final nodeX = (screenWidth / (streamCount + 1)) * (i + 1);
+      final nodeY = targetY + 5;
+
+      final nodePulse = 0.5 + math.sin(_time * 6 + i * 0.8) * 0.5;
+
+      // Node glow
+      _dataStreamNodePaint.color = color.withOpacity(nodePulse * 0.3);
+      canvas.drawCircle(Offset(nodeX, nodeY), 6, _dataStreamNodePaint);
+
+      // Node ring
+      _dataStreamArcPaint.color = color.withOpacity(nodePulse * 0.5);
+      canvas.drawCircle(Offset(nodeX, nodeY), 4, _dataStreamArcPaint);
+
+      // Node core
+      _dataStreamParticlePaint.color = color.withOpacity(nodePulse * 0.8);
+      canvas.drawCircle(Offset(nodeX, nodeY), 2, _dataStreamParticlePaint);
+
+      // Expanding pulse rings from nodes
+      final pulsePhase = (_time * 3 + i * 0.3) % 1.0;
+      final pulseRadius = 3 + pulsePhase * 12;
+      final pulseAlpha = (1 - pulsePhase) * 0.3;
+
+      _dataStreamPulsePaint.color = color.withOpacity(pulseAlpha);
+      canvas.drawCircle(Offset(nodeX, nodeY), pulseRadius, _dataStreamPulsePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: HEXAGONAL DATA PATTERN (decorative)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (towers.length >= 3) {
+      final hexAlpha = 0.08 + math.sin(_time * 2) * 0.04;
+      _dataStreamHexPaint.color = const Color(0xFF00FFFF).withOpacity(hexAlpha);
+
+      // Draw small hexagons along the top panel edge
+      for (int h = 0; h < 5; h++) {
+        final hexX = screenWidth * (0.2 + h * 0.15);
+        final hexY = targetY - 2;
+        final hexSize = 3 + math.sin(_time * 4 + h) * 1;
+
+        _dataStreamPath.reset();
+        for (int v = 0; v < 6; v++) {
+          final angle = v * math.pi / 3;
+          final px = hexX + math.cos(angle) * hexSize;
+          final py = hexY + math.sin(angle) * hexSize;
+          if (v == 0) {
+            _dataStreamPath.moveTo(px, py);
+          } else {
+            _dataStreamPath.lineTo(px, py);
+          }
+        }
+        _dataStreamPath.close();
+        canvas.drawPath(_dataStreamPath, _dataStreamHexPaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: SIDE EDGE DATA STREAMS
+    // ═══════════════════════════════════════════════════════════════════════
+    // Left side stream
+    final leftStreamPhase = (_time * 1.5) % 1.0;
+    for (int p = 0; p < 5; p++) {
+      final particlePhase = (leftStreamPhase + p * 0.2) % 1.0;
+      final py = screenHeight - particlePhase * (screenHeight - targetY - 30);
+      final px = 8 + math.sin(_time * 2 + p) * 2;
+
+      final alpha = (1 - particlePhase) * 0.25;
+      _dataStreamParticlePaint.color = const Color(0xFF00FFFF).withOpacity(alpha);
+      canvas.drawCircle(Offset(px, py), 1.5, _dataStreamParticlePaint);
+    }
+
+    // Right side stream
+    final rightStreamPhase = (_time * 1.8 + 0.5) % 1.0;
+    for (int p = 0; p < 5; p++) {
+      final particlePhase = (rightStreamPhase + p * 0.2) % 1.0;
+      final py = screenHeight - particlePhase * (screenHeight - targetY - 30);
+      final px = screenWidth - 8 + math.sin(_time * 2.2 + p) * 2;
+
+      final alpha = (1 - particlePhase) * 0.25;
+      _dataStreamParticlePaint.color = const Color(0xFFFF00FF).withOpacity(alpha);
+      canvas.drawCircle(Offset(px, py), 1.5, _dataStreamParticlePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: CONNECTING ARCS BETWEEN NODES
+    // ═══════════════════════════════════════════════════════════════════════
+    if (streamCount >= 2) {
+      for (int i = 0; i < streamCount - 1; i++) {
+        final x1 = (screenWidth / (streamCount + 1)) * (i + 1);
+        final x2 = (screenWidth / (streamCount + 1)) * (i + 2);
+        final y = targetY + 5;
+
+        final arcPulse = 0.3 + math.sin(_time * 5 + i) * 0.2;
+        final arcAlpha = arcPulse * 0.15;
+
+        // Draw curved connection
+        _dataStreamArcPaint.color = const Color(0xFF00FFFF).withOpacity(arcAlpha);
+        _dataStreamPath.reset();
+        _dataStreamPath.moveTo(x1 + 6, y);
+        _dataStreamPath.quadraticBezierTo(
+          (x1 + x2) / 2,
+          y - 8,
+          x2 - 6,
+          y,
+        );
+        canvas.drawPath(_dataStreamPath, _dataStreamArcPaint);
+
+        // Animated dot traveling along the arc
+        final dotProgress = (_time * 2 + i * 0.3) % 1.0;
+        final dotX = x1 + 6 + (x2 - x1 - 12) * dotProgress;
+        final dotY = y - math.sin(dotProgress * math.pi) * 8;
+
+        _dataStreamParticlePaint.color = const Color(0xFFFFFFFF).withOpacity(arcPulse);
+        canvas.drawCircle(Offset(dotX, dotY), 1.5, _dataStreamParticlePaint);
+      }
+    }
   }
 }
 

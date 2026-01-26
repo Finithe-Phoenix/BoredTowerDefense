@@ -50,6 +50,57 @@ class NeonMine extends PositionComponent {
   static const Color _armedColor = Color(0xFF00FF88); // Green when armed
   static const Color _hazardYellow = Color(0xFFFFDD00); // Hazard yellow
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _ringPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _ringGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _corePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _innerDotPaint = Paint();
+  static final Paint _hazardPaint = Paint();
+  static final Paint _dangerFillPaint = Paint()
+    ..style = PaintingStyle.fill;
+  static final Paint _dangerBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _detectionPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _orbitPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _glowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _hexGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _triFillPaint = Paint()
+    ..style = PaintingStyle.fill;
+  static final Paint _triGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _pulsingRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _scanLinePaint = Paint()
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _flashPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _triggerCorePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _warningRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _dangerZoneFlashPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
   MineState get state => _state;
   bool get isArmed => _state == MineState.armed;
 
@@ -104,12 +155,14 @@ class NeonMine extends PositionComponent {
 
   void _checkEnemyProximity() {
     final triggerRadius = math.max(28.0, explosionRadius * 0.4);
+    final triggerRadiusSq = triggerRadius * triggerRadius; // Pre-compute squared
 
     for (final enemy in enemies()) {
       if (!enemy.isAlive) continue;
 
-      final distance = (enemy.position - position).length;
-      if (distance <= triggerRadius) {
+      // Use squared distance to avoid sqrt
+      final distanceSq = (enemy.position - position).length2;
+      if (distanceSq <= triggerRadiusSq) {
         _trigger();
         break;
       }
@@ -138,7 +191,7 @@ class NeonMine extends PositionComponent {
 
     // Spawn explosion effect
     final effect = ExplosionEffect.spawn(
-      position: position.clone(),
+      position: position,
       color: _primaryColor,
       explosionSize: explosionRadius,
       duration: 0.7,

@@ -292,7 +292,7 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
        t.resetResonanceBoost();
     }
     
-    final siphons = _towers.where((t) => t.type == TowerType.resonanceSiphon).toList();
+    final siphons = _towers.where((t) => t.type == TowerType.resonanceSiphon);
     if (siphons.isEmpty) return;
     for (final siphon in siphons) {
        for (final tower in _towers) {

@@ -16,6 +16,10 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
   double _time = 0;
   bool enabled = true;
 
+  // Static cached paints to avoid per-frame allocations
+  static final ui.Paint _fallbackPaint = ui.Paint()..color = const ui.Color(0xFF02030F);
+  static final ui.Paint _shaderPaint = ui.Paint();
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
@@ -55,7 +59,7 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
       if (scale != 1.0) {
         canvas.scale(1 / scale);
       }
-      canvas.drawRect(rect, ui.Paint()..color = const ui.Color(0xFF02030F));
+      canvas.drawRect(rect, _fallbackPaint);
       canvas.restore();
       return;
     }
@@ -67,7 +71,7 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
       if (scale != 1.0) {
         canvas.scale(1 / scale);
       }
-      canvas.drawRect(rect, ui.Paint()..color = const ui.Color(0xFF02030F));
+      canvas.drawRect(rect, _fallbackPaint);
       canvas.restore();
       return;
     }
@@ -84,12 +88,12 @@ class WorldUberShaderComponent extends PositionComponent with HasGameRef<BoredGa
     }
     shader.setImageSampler(0, texture);
 
-    final paint = ui.Paint()..shader = shader;
+    _shaderPaint.shader = shader;
     canvas.save();
     if (scale != 1.0) {
       canvas.scale(1 / scale);
     }
-    canvas.drawRect(rect, paint);
+    canvas.drawRect(rect, _shaderPaint);
     canvas.restore();
     shader.dispose();
   }

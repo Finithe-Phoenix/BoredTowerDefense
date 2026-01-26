@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import '../../services/audio_service.dart';
+import '../bored_games_game.dart';
+import '../effects/damage_number_effect.dart';
 
 /// Callback types for enemy events
 typedef EnemyDeathCallback = void Function(Enemy enemy);
@@ -106,9 +108,15 @@ enum EnemyType {
   final bool isPhantom;
   final int world;
 
-  /// Get all enemy types for a specific world
+  // HYPER-OPTIMIZED: Cached world enemies (avoids list allocation per call)
+  static final Map<int, List<EnemyType>> _worldEnemiesCache = {};
+
+  /// Get all enemy types for a specific world (cached)
   static List<EnemyType> getWorldEnemies(int worldIndex) {
-    return EnemyType.values.where((e) => e.world == worldIndex).toList();
+    return _worldEnemiesCache.putIfAbsent(
+      worldIndex,
+      () => EnemyType.values.where((e) => e.world == worldIndex).toList(),
+    );
   }
 
   /// Get basic enemy types (for fallback/mixed waves)
@@ -132,7 +140,7 @@ class Enemy extends PositionComponent {
   static const double offscreenUpdateInterval = 0.12;
 
   // ═══════════════════════════════════════════════════════════════════════
-  // CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // CACHED PAINT OBJECTS - Avoid per-frame allocations (MEGA OPTIMIZED)
   // ═══════════════════════════════════════════════════════════════════════
   static final Paint _outerGlowPaint = Paint();
   static final Paint _bodyGlowPaint = Paint();
@@ -142,6 +150,261 @@ class Enemy extends PositionComponent {
   static final Paint _circuitPaint = Paint()..style = PaintingStyle.stroke;
   static final Paint _auraPaint = Paint();
   static final Paint _corePaint = Paint();
+  static final Paint _shadowPaint = Paint();
+  static final Paint _3dLightPaint = Paint();
+  // Additional cached paints for walk/eye effects (prevents 55+ allocations per frame)
+  static final Paint _legPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _tendrilPaint = Paint();
+  static final Paint _wispPaint = Paint();
+  static final Paint _glitchPaint = Paint();
+  static final Paint _sparkPaint = Paint();
+  static final Paint _crystalPaint = Paint();
+  static final Paint _metalPaint = Paint();
+  static final Paint _dataPaint = Paint();
+  static final Paint _windPaint = Paint();
+  static final Paint _voidPaint = Paint();
+  static final Paint _omegaPaint = Paint();
+  static final Paint _eyePaint = Paint();
+  static final Paint _pupilPaint = Paint();
+  static final Paint _veinPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _flamePaint = Paint();
+  static final Paint _facetPaint = Paint();
+  static final Paint _swirlPaint = Paint();
+  static final Paint _healthBarPaint = Paint();
+  static final Paint _healthBarBgPaint = Paint();
+  static final Paint _extrusionPaint = Paint();
+  // Additional per-frame Paint optimizations (44 more allocations eliminated)
+  static final Paint _socketPaint = Paint();
+  static final Paint _irisPaint = Paint();
+  static final Paint _scanPaint = Paint();
+  static final Paint _reticlePaint = Paint();
+  static final Paint _barPaint = Paint();
+  static final Paint _chromaPaint = Paint();
+  static final Paint _slicePaint = Paint();
+  static final Paint _shardPaint = Paint();
+  static final Paint _fillPaint = Paint();
+  static final Paint _strokePaint = Paint();
+  static final Paint _arcPaint = Paint();
+  static final Paint _slowPaint = Paint();
+  static final Paint _gearPaint = Paint();
+  static final Paint _warnPaint = Paint();
+  static final Paint _codePaint = Paint();
+  static final Paint _bracePaint = Paint();
+  static final Paint _spikePaint = Paint();
+  static final Paint _bladePaint = Paint();
+  static final Paint _stripePaint = Paint();
+  static final Paint _tearPaint = Paint();
+  static final Paint _corruptPaint = Paint();
+  static final Paint _errorPaint = Paint();
+  static final Paint _riftPaint = Paint();
+  static final Paint _platePaint = Paint();
+  static final Paint _shellPaint = Paint();
+  static final Paint _hullPaint = Paint();
+  static final Paint _outlinePaint = Paint();
+  static final Paint _slashPaint = Paint();
+  static final Paint _specularPaint = Paint();
+  static final Paint _pulsePaint = Paint();
+  static final Paint _bitPaint = Paint();
+  static final Paint _layerPaint = Paint();
+  static final Paint _bottomGlowPaint = Paint();
+  static final Paint _impactPaint = Paint();
+  static final Paint _footPaint = Paint();
+  static final Paint _rayPaint = Paint();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // SPAWN/MATERIALIZE EFFECT PAINTS (Enemy teleporting into existence)
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _spawnNoisePaint = Paint();
+  static final Paint _spawnParticlePaint = Paint();
+  static final Paint _spawnHoloPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _spawnScanlinePaint = Paint();
+  static final Paint _spawnBurstPaint = Paint();
+  static final Paint _spawnPortalPaint = Paint();
+  static final Paint _spawnPortalGlowPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _spawnGlitchPaint = Paint();
+  static final Path _spawnPath = Path();
+  static final math.Random _spawnRandom = math.Random();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // ENERGY VEIN EFFECT PAINTS (Pulsing veins of light in enemy bodies)
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _energyVeinGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _energyVeinCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _energyVeinNodePaint = Paint();
+  static final Paint _energyVeinDotPaint = Paint();
+  static final Paint _energyVeinMicroPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _energyVeinHeartbeatPaint = Paint();
+  static final Path _energyVeinPath = Path();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // WARP/TELEPORT EFFECT PAINTS (Fast enemies phasing through dimensions)
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _warpAfterimgPaint = Paint();
+  static final Paint _warpStreakPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _warpDistortPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _warpParticlePaint = Paint();
+  static final Paint _warpLightningPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _warpChromaPaint = Paint();
+  static final Paint _warpFlickerPaint = Paint();
+  static final Path _warpPath = Path();
+  static final math.Random _warpRandom = math.Random();
+  static double _warpFlickerPhase = 0;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC SHIELD EFFECT PAINTS
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _shieldHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _shieldGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _shieldRipplePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _shieldDataPaint = Paint();
+  static final Paint _shieldInterferencePaint = Paint();
+  static final Paint _shieldFragmentPaint = Paint();
+  static final Paint _shieldCorePaint = Paint();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC HEALTH BAR EFFECT PAINTS
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _holoBarFramePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0;
+  static final Paint _holoBarGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _holoBarScanlinePaint = Paint();
+  static final Paint _holoBarDataPaint = Paint();
+  static final Paint _holoBarHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _holoBarEnergyPaint = Paint()
+    ..strokeCap = StrokeCap.round;
+  static final Paint _holoBarGlitchPaint = Paint();
+  static final Paint _holoBarCornerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Path _holoBarPath = Path();
+  static final math.Random _holoBarRandom = math.Random();
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // LIGHTNING CHAIN EFFECT PAINTS (Between nearby enemies)
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _lightningCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _lightningGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _lightningInnerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..strokeCap = StrokeCap.round;
+  static final Paint _lightningSparkPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _lightningNodePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Path _lightningPath = Path();
+  static final math.Random _lightningRandom = math.Random();
+  static const double _lightningChainMinDistance = 30.0;
+  static const double _lightningChainMaxDistance = 120.0;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC STATUS ICON PAINTS (Above entity indicators)
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _statusIconBasePaint = Paint()
+    ..style = PaintingStyle.fill;
+  static final Paint _statusIconGlowPaint = Paint()
+    ..style = PaintingStyle.fill
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _statusIconStrokePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+  static final Paint _statusIconTimerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _statusIconScanlinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Path _statusIconPath = Path();
+
+  // Status icon colors
+  static const Color _slowIconColor = Color(0xFF00CCFF);    // Blue
+  static const Color _burnIconColor = Color(0xFFFF6600);    // Orange-red
+  static const Color _shieldIconColor = Color(0xFF00FFCC);  // Cyan
+  static const Color _boostIconColor = Color(0xFF00FF66);   // Green
+  static const Color _stunIconColor = Color(0xFFFFFF00);    // Yellow
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // NEON TRAIL EFFECT PAINTS (Smooth movement path visualization)
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _neonTrailOuterGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+  static final Paint _neonTrailCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeJoin = StrokeJoin.round;
+  static final Paint _neonTrailGradientPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _neonTrailParticlePaint = Paint();
+  static final Paint _neonTrailNodePaint = Paint();
+  static final Paint _neonTrailScanlinePaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Path _neonTrailPath = Path();
+  static final math.Random _neonTrailRandom = math.Random(42);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // REUSABLE OFFSETS - Avoid per-loop Offset allocations (50+ per frame)
+  // ═══════════════════════════════════════════════════════════════════════
+  static Offset _tempOffset1 = Offset.zero;
+  static Offset _tempOffset2 = Offset.zero;
+  static Offset _tempOffset3 = Offset.zero;
+  static Offset _tempOffset4 = Offset.zero;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // CACHED LISTS - Avoid per-frame list allocations
+  // ═══════════════════════════════════════════════════════════════════════
+  // Hive eye positions as fractions of radius (multiply by radius when using)
+  static final List<Offset> _hiveEyePositions = [
+    const Offset(0.25, -0.15),
+    const Offset(0.1, -0.25),
+    const Offset(-0.05, -0.2),
+    const Offset(0.3, 0),
+    const Offset(0.15, 0.1),
+    const Offset(-0.1, 0.05),
+  ];
+
+  static final List<Color> _flameColors = [
+    const Color(0xFFFF3300),
+    const Color(0xFFFF6600),
+    const Color(0xFFFFAA00),
+    const Color(0xFFFFFF00),
+    Colors.white,
+  ];
 
   // Reusable paths to avoid per-frame allocations
   static final Path _reusableBodyPath = Path();
@@ -149,6 +412,9 @@ class Enemy extends PositionComponent {
   static final Path _reusableLayerPath = Path();
   static final Path _reusableOverlayPath = Path();
   static final Path _reusableHexPath = Path();
+  static final Path _reusableShieldPath = Path();
+  // Reusable Vector2 for temporary spawn position calculations
+  static final Vector2 _tempSpawnPos = Vector2.zero();
 
   // Particle list limits
   static const int _maxDataBits = 20;
@@ -185,11 +451,22 @@ class Enemy extends PositionComponent {
 
     size = Vector2.all(24 * type.sizeMult * _tierSizeMult);
     anchor = Anchor.center;
-    position = startPosition ?? (path.isNotEmpty ? path.first.clone() : Vector2.zero());
-    _lastPosition = position.clone();
+    if (startPosition != null) {
+      position.setFrom(startPosition);
+    } else if (path.isNotEmpty) {
+      position.setFrom(path.first);
+    } else {
+      position.setZero();
+    }
+    _lastPosition.setFrom(position);
 
-    // Initialize trail
+    // Initialize trail (circular buffer)
     _trailPositions = List.generate(_maxTrailLength, (_) => position.clone());
+    _trailHead = 0;
+
+    // Cache body shape and walk style (never changes, avoids per-frame calls)
+    _cachedBodyShape = _getBodyShape();
+    _cachedWalkStyle = _getWalkingStyle();
   }
 
   final List<Vector2> path;
@@ -213,11 +490,35 @@ class Enemy extends PositionComponent {
   double _slowFactor = 1.0;
   double _slowDuration = 0;
 
-  // Visual trail
-  static const int _maxTrailLength = 8;
+  // Burn effect (damage over time)
+  double _burnDamage = 0;
+  double _burnDuration = 0;
+  double _burnTickTimer = 0;
+  static const double _burnTickInterval = 0.5;
+
+  // Shield effect (damage reduction)
+  double _shieldAmount = 0;
+  double _shieldDuration = 0;
+  double _shieldMaxAmount = 0;
+
+  // Boost effect (speed increase)
+  double _boostFactor = 1.0;
+  double _boostDuration = 0;
+
+  // Stun effect (complete stop)
+  double _stunDuration = 0;
+
+  // Visual trail - circular buffer for O(1) updates instead of O(n) list shifts
+  static const int _maxTrailLength = 15;
   late List<Vector2> _trailPositions;
   double _trailUpdateTimer = 0;
   static const double _trailUpdateInterval = 0.03;
+  int _trailHead = 0; // Current write position in circular buffer
+
+  /// Get physical index from logical index (0 = newest, _maxTrailLength-1 = oldest)
+  int _getTrailPhysicalIndex(int logicalIndex) {
+    return (_trailHead - logicalIndex + _maxTrailLength) % _maxTrailLength;
+  }
 
   // Hit flash effect
   double _hitFlashTimer = 0;
@@ -244,9 +545,21 @@ class Enemy extends PositionComponent {
   double _orbitalRotation = 0;
   double _lastHealth = 0;
 
+  // Cached body shape - never changes per enemy (avoids _getBodyShape() call every frame)
+  late final _BodyShape _cachedBodyShape;
+  // Cached walk style - never changes per enemy (avoids _getWalkingStyle() call every frame)
+  late final _WalkStyle _cachedWalkStyle;
+
   // Damage particles
   final List<_DamageParticle> _damageParticles = [];
   static const int _maxDamageParticles = 12;
+
+  // Spawn/materialize effect state
+  bool _isSpawning = true;
+  double _spawnProgress = 0.0;
+  static const double _spawnDuration = 1.0;
+  final List<_SpawnParticle> _spawnParticles = [];
+  static const int _maxSpawnParticles = 24;
 
   /// Callbacks for events
   EnemyDeathCallback? onDeath;
@@ -258,8 +571,8 @@ class Enemy extends PositionComponent {
   /// Max health
   double get maxHealth => _maxHealth;
 
-  /// Current speed (after modifiers)
-  double get speed => _speed * _slowFactor;
+  /// Current speed (after modifiers: slow, boost, stun)
+  double get speed => _stunDuration > 0 ? 0 : _speed * _slowFactor * _boostFactor;
 
   /// Health percentage (0.0 to 1.0)
   double get healthPercent => _health / _maxHealth;
@@ -273,6 +586,28 @@ class Enemy extends PositionComponent {
   /// Whether enemy is currently slowed
   bool get isSlowed => _slowFactor < 1.0;
 
+  /// Whether enemy is currently burning
+  bool get isBurning => _burnDuration > 0;
+
+  /// Whether enemy has a shield
+  bool get hasShield => _shieldAmount > 0;
+
+  /// Whether enemy is currently boosted
+  bool get isBoosted => _boostFactor > 1.0;
+
+  /// Whether enemy is currently stunned
+  bool get isStunned => _stunDuration > 0;
+
+  /// Whether enemy is currently spawning/materializing
+  bool get isSpawning => _isSpawning;
+
+  /// Spawn progress (0.0 to 1.0)
+  double get spawnProgress => _spawnProgress;
+
+  /// Whether enemy has any active status effects
+  bool get hasActiveStatusEffects =>
+      isSlowed || isBurning || hasShield || isBoosted || isStunned;
+
   /// The index of the current waypoint the enemy is moving towards.
   int get currentPathIndex => _currentTargetIndex;
 
@@ -284,6 +619,21 @@ class Enemy extends PositionComponent {
 
   /// Whether this enemy is a phantom type
   bool get isPhantom => type.isPhantom;
+
+  /// Whether this enemy is a fast/warp type (speedMult >= 1.3)
+  /// These enemies get special dimensional phasing visual effects
+  bool get isFastWarpType =>
+      type == EnemyType.overloaded ||      // 1.4 - World 1
+      type == EnemyType.voidling ||        // 1.3 - World 2
+      type == EnemyType.dataWorm ||        // 1.5 - World 3
+      type == EnemyType.sparkDrone ||      // 1.3 - World 4
+      type == EnemyType.ionSurge ||        // 1.6 - World 4
+      type == EnemyType.droneSwarm ||      // 1.5 - World 6
+      type == EnemyType.cloakedAssassin || // 1.4 - World 6
+      type == EnemyType.stormRunner ||     // 1.4 - World 8
+      type == EnemyType.lightningWraith || // 1.7 - World 8
+      type == EnemyType.shadowSwarm ||     // 1.6 - World 9
+      type == EnemyType.nexusHunter;       // 1.3 - World 10
 
   /// Whether this enemy is a boss (overridden in Boss class)
   bool get isBoss => false;
@@ -335,7 +685,9 @@ class Enemy extends PositionComponent {
   }
 
   /// Apply damage to the enemy
-  void takeDamage(double amount) {
+  /// [amount] - The damage amount to apply
+  /// [isCritical] - Whether this was a critical hit (for visual effect)
+  void takeDamage(double amount, {bool isCritical = false}) {
     if (!isAlive) return;
 
     // Reveal phantom when damaged
@@ -350,10 +702,60 @@ class Enemy extends PositionComponent {
     // Spawn damage particles
     _spawnDamageParticles();
 
+    // Spawn holographic damage number
+    _spawnDamageNumber(amount, isCritical: isCritical);
+
     if (_health <= 0) {
       _health = 0;
       onDeath?.call(this);
       removeFromParent();
+    }
+  }
+
+  /// Spawn a holographic damage number at the enemy position
+  void _spawnDamageNumber(double amount, {bool isCritical = false}) {
+    // Skip if effects are disabled or parent is null
+    if (Enemy.lowFx || Enemy.forceLowFx || parent == null) return;
+
+    // Determine damage type
+    final type = isCritical ? DamageNumberType.critical : DamageNumberType.damage;
+
+    // Spawn slightly above the enemy center - use reusable vector
+    _tempSpawnPos.setFrom(position);
+    _tempSpawnPos.y -= size.y * 0.3;
+
+    final effect = DamageNumberEffect.spawn(
+      position: _tempSpawnPos,
+      damageAmount: amount.round(),
+      type: type,
+    );
+
+    if (effect != null) {
+      parent!.add(effect);
+    }
+  }
+
+  /// Apply healing to the enemy (spawns green healing number)
+  void applyHeal(double amount) {
+    if (!isAlive) return;
+
+    final healAmount = amount.clamp(0, _maxHealth - _health);
+    if (healAmount <= 0) return;
+
+    _health += healAmount;
+
+    // Spawn healing number effect - use reusable vector
+    if (!Enemy.lowFx && !Enemy.forceLowFx && parent != null) {
+      _tempSpawnPos.setFrom(position);
+      _tempSpawnPos.y -= size.y * 0.3;
+      final effect = DamageNumberEffect.spawn(
+        position: _tempSpawnPos,
+        damageAmount: healAmount.round(),
+        type: DamageNumberType.heal,
+      );
+      if (effect != null) {
+        parent!.add(effect);
+      }
     }
   }
 
@@ -404,6 +806,9 @@ class Enemy extends PositionComponent {
     _animationTimer += dt;
     _animationPhase += dt * 2;
     _walkPhase += dt * speed / 15.0;
+
+    // Update spawn effect
+    _updateSpawnEffect(dt);
 
     // Update particles
     _updateParticles(dt);
@@ -541,9 +946,9 @@ class Enemy extends PositionComponent {
     _trailUpdateTimer += dt;
     if (_trailUpdateTimer >= _trailUpdateInterval && _trailPositions.isNotEmpty) {
       _trailUpdateTimer = 0;
-      final recycled = _trailPositions.removeLast();
-      recycled.setFrom(position);
-      _trailPositions.insert(0, recycled);
+      // CIRCULAR BUFFER: O(1) update instead of O(n) removeLast + insert
+      _trailHead = (_trailHead + 1) % _maxTrailLength;
+      _trailPositions[_trailHead].setFrom(position);
     }
   }
 
@@ -562,10 +967,49 @@ class Enemy extends PositionComponent {
   void _renderLowFx(Canvas canvas, double opacity) {
     final radius = size.x / 2;
 
+    // Spawn effect (simple ring) for low-fx mode
+    if (_isSpawning) {
+      final spawnRingRadius = radius * (1.5 + (1.0 - _spawnProgress) * 1.0);
+      _spawnPortalPaint
+        ..color = type.color.withOpacity(0.4 * (1.0 - _spawnProgress) * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..maskFilter = null;
+      canvas.drawCircle(Offset.zero, spawnRingRadius, _spawnPortalPaint);
+    }
+
+    // 3D Shadow (simple ellipse below enemy)
+    final shadowOffsetY = radius * 0.6;
+    _shadowPaint
+      ..color = Colors.black.withOpacity(0.4 * opacity)
+      ..maskFilter = null;
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(radius * 0.1, shadowOffsetY),
+        width: radius * 1.3,
+        height: radius * 0.4,
+      ),
+      _shadowPaint,
+    );
+
+    // 3D Extrusion (dark layer below)
+    final darkColor = Color.lerp(type.color, Colors.black, 0.6)!;
     _bodyGlowPaint
-      ..color = type.color.withOpacity(0.45 * opacity)
+      ..color = darkColor.withOpacity(0.5 * opacity)
+      ..maskFilter = null;
+    canvas.drawCircle(Offset(radius * 0.05, radius * 0.15), radius * 0.95, _bodyGlowPaint);
+
+    // Main body
+    _bodyGlowPaint
+      ..color = type.color.withOpacity(0.55 * opacity)
       ..maskFilter = null;
     canvas.drawCircle(Offset.zero, radius, _bodyGlowPaint);
+
+    // 3D Highlight (top-left bright spot)
+    _corePaint
+      ..color = Colors.white.withOpacity(0.35 * opacity)
+      ..maskFilter = null;
+    canvas.drawCircle(Offset(-radius * 0.3, -radius * 0.3), radius * 0.25, _corePaint);
 
     if (threatTier > 0) {
       _circuitPaint
@@ -575,10 +1019,11 @@ class Enemy extends PositionComponent {
       canvas.drawCircle(Offset.zero, radius * (1.05 + threatTier * 0.06), _circuitPaint);
     }
 
+    // Core highlight
     _corePaint
-      ..color = Colors.white.withOpacity(0.6 * opacity)
+      ..color = Colors.white.withOpacity(0.5 * opacity)
       ..maskFilter = null;
-    canvas.drawCircle(Offset.zero, radius * 0.35, _corePaint);
+    canvas.drawCircle(Offset.zero, radius * 0.3, _corePaint);
 
     if (opacity > 0.2) {
       _renderHealthBar(canvas, visibility: opacity);
@@ -608,6 +1053,15 @@ class Enemy extends PositionComponent {
       phantomOpacity = 0.6 + math.sin(_animationPhase * 3) * 0.08;
     }
 
+    // Apply spawn transparency (enemy fades in during spawn)
+    double spawnOpacity = 1.0;
+    if (_isSpawning) {
+      // Enemy is partially transparent until fully spawned
+      // Starts at 0.15 and increases to 1.0 as spawn progresses
+      spawnOpacity = 0.15 + _spawnProgress * 0.85;
+    }
+    phantomOpacity *= spawnOpacity;
+
     if (reduceFx) {
       _renderLowFx(canvas, phantomOpacity);
       return;
@@ -628,6 +1082,9 @@ class Enemy extends PositionComponent {
     // Render damage particles
     _renderDamageParticles(canvas, allowBlur);
 
+    // Render 3D ground shadow (creates depth illusion)
+    _render3DShadow(canvas, phantomOpacity);
+
     // Apply world-specific distortions/effects
     _applyWorldVisuals(canvas);
 
@@ -642,6 +1099,16 @@ class Enemy extends PositionComponent {
     // Speed-based motion blur when moving fast
     if (!reduceFx && _speedIndicator > 0.3) {
       _renderMotionBlur(canvas, radius, phantomOpacity, allowBlur);
+    }
+
+    // Warp/teleport effect for fast enemies (dimensional phasing)
+    if (!reduceFx && isFastWarpType) {
+      _renderWarpEffect(canvas, radius, phantomOpacity, allowBlur);
+    }
+
+    // Spawn/materialize effect (enemy teleporting into existence)
+    if (!reduceFx && _isSpawning) {
+      _renderSpawnEffect(canvas, radius, phantomOpacity, allowBlur);
     }
 
     // Outer glow (pulsing intensity based on walk phase)
@@ -671,6 +1138,11 @@ class Enemy extends PositionComponent {
 
     // MEGA GEOMETRY: Core, Shell and Plates
     _drawMegaGeometry(canvas, radius, phantomOpacity, allowBlur);
+
+    // Energy veins (pulsing light network on enemy body)
+    if (!reduceFx) {
+      _renderEnergyVeins(canvas, radius, phantomOpacity, allowBlur);
+    }
 
     // Inner highlight (bobs with movement)
     final highlightOffset = Offset(
@@ -730,9 +1202,114 @@ class Enemy extends PositionComponent {
       _renderSlowEffect(canvas, radius, allowBlur);
     }
 
+    // Lightning chain connections to nearby enemies
+    if (!reduceFx) {
+      _renderLightningChains(canvas, phantomOpacity);
+    }
+
     // Health bar (always show while visible enough)
     if (phantomOpacity > 0.2) {
       _renderHealthBar(canvas, visibility: phantomOpacity);
+    }
+
+    // Status icons (above health bar, showing active effects)
+    if (phantomOpacity > 0.2 && hasActiveStatusEffects) {
+      _renderStatusIcons(canvas, phantomOpacity, reduceFx);
+    }
+  }
+
+  // Cached MaskFilters for shadow rendering (avoid per-frame allocations)
+  static const MaskFilter _shadowBlur8 = MaskFilter.blur(BlurStyle.normal, 8);
+  static const MaskFilter _shadowBlur5 = MaskFilter.blur(BlurStyle.normal, 5);
+  static const MaskFilter _shadowBlur2 = MaskFilter.blur(BlurStyle.normal, 2);
+
+  /// Renders a 3D ground shadow beneath the enemy for depth perception
+  void _render3DShadow(Canvas canvas, double opacity) {
+    // HYPER-OPTIMIZED: Precalculated values, cached MaskFilters
+    final radius = size.x / 2;
+    final isLowFx = Enemy.lowFx;
+
+    // Precalculate radius multipliers
+    final r008 = radius * 0.08;
+    final r04 = radius * 0.4;
+    final r02 = radius * 0.2;
+    final r012 = radius * 0.12;
+    final r055 = radius * 0.55;
+    final r14 = radius * 1.4;
+    final r045 = radius * 0.45;
+
+    // Floating animation
+    final floatOffset = isLowFx ? 0.0 : math.sin(_animationTimer * 2.5) * r008;
+    final shadowHeight = r04 + floatOffset;
+
+    // Shadow scaling
+    final heightFactor = 1.0 - (floatOffset / r02).clamp(0.0, 0.3);
+    final shadowScale = isLowFx ? 0.75 : (0.75 + math.sin(_animationPhase * 2) * 0.05) * heightFactor;
+
+    // Shadow position and size
+    final shadowOffsetX = r012;
+    final shadowOffsetY = r055 + shadowHeight;
+    final sizeMultClamped = type.sizeMult.clamp(0.8, 1.5);
+    final shadowWidth = r14 * shadowScale * sizeMultClamped;
+    final shadowHeightSize = r045 * shadowScale;
+    final shadowCenter = Offset(shadowOffsetX, shadowOffsetY);
+
+    // LowFx: single simple shadow
+    if (isLowFx) {
+      _shadowPaint
+        ..color = Colors.black.withOpacity(0.45 * opacity)
+        ..maskFilter = null;
+      canvas.drawOval(
+        Rect.fromCenter(center: shadowCenter, width: shadowWidth, height: shadowHeightSize),
+        _shadowPaint,
+      );
+      return;
+    }
+
+    // Full quality: Multi-layer shadow with cached MaskFilters
+    final opacityHeightFactor = opacity * heightFactor;
+
+    // Outer diffuse shadow
+    _shadowPaint
+      ..color = Colors.black.withOpacity(0.25 * opacityHeightFactor)
+      ..maskFilter = _shadowBlur8;
+    canvas.drawOval(
+      Rect.fromCenter(center: shadowCenter, width: shadowWidth * 1.2, height: shadowHeightSize * 1.1),
+      _shadowPaint,
+    );
+
+    // Main shadow
+    _shadowPaint
+      ..color = Colors.black.withOpacity(0.4 * opacityHeightFactor)
+      ..maskFilter = _shadowBlur5;
+    canvas.drawOval(
+      Rect.fromCenter(center: shadowCenter, width: shadowWidth, height: shadowHeightSize),
+      _shadowPaint,
+    );
+
+    // Inner shadow core
+    _shadowPaint
+      ..color = Colors.black.withOpacity(0.3 * opacityHeightFactor)
+      ..maskFilter = _shadowBlur2;
+    canvas.drawOval(
+      Rect.fromCenter(center: shadowCenter, width: shadowWidth * 0.5, height: shadowHeightSize * 0.4),
+      _shadowPaint,
+    );
+
+    // Contact shadow (tiny dark spot directly under enemy)
+    if (heightFactor > 0.8) {
+      _shadowPaint
+        ..color = Colors.black.withOpacity(0.15 * opacity)
+        ..maskFilter = null;
+
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset(shadowOffsetX * 0.5, shadowOffsetY - shadowHeight * 0.3),
+          width: shadowWidth * 0.25,
+          height: shadowHeightSize * 0.2,
+        ),
+        _shadowPaint,
+      );
     }
   }
 
@@ -760,9 +1337,545 @@ class Enemy extends PositionComponent {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // WARP/TELEPORT EFFECT - Dimensional phasing for fast enemies
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _renderWarpEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    final t = _animationTimer;
+    final direction = movementDirection;
+    final warpIntensity = (type.speedMult - 1.0).clamp(0.2, 0.8);
+
+    // Update flicker phase for teleport effect
+    _warpFlickerPhase += 0.1;
+
+    // Get HSL color for secondary/tertiary color manipulation
+    final hslColor = HSLColor.fromColor(type.color);
+    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final tertiaryColor = hslColor.withHue((hslColor.hue + 90) % 360)
+        .withSaturation((hslColor.saturation * 1.2).clamp(0.0, 1.0))
+        .withLightness((hslColor.lightness * 1.1).clamp(0.0, 1.0))
+        .toColor();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: Trailing afterimages (3-4 dimensional ghosts behind)
+    // ═══════════════════════════════════════════════════════════════════════
+    final ghostCount = 4;
+    for (int i = 1; i <= ghostCount; i++) {
+      final ghostOffset = -direction * (i * radius * 0.6);
+      final ghostAlpha = (1 - i / (ghostCount + 1)) * 0.3 * opacity * warpIntensity;
+      final ghostScale = 1.0 - i * 0.08;
+      final phaseShift = math.sin(t * 8 + i * 0.5) * radius * 0.1;
+
+      final ghostPath = _createBodyPath(radius * ghostScale);
+      _warpAfterimgPaint
+        ..color = type.color.withOpacity(ghostAlpha)
+        ..style = PaintingStyle.fill
+        ..maskFilter = _blur(allowBlur, 4.0 + i * 2);
+
+      canvas.save();
+      canvas.translate(ghostOffset.x + phaseShift, ghostOffset.y);
+      canvas.drawPath(ghostPath, _warpAfterimgPaint);
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: Motion blur streaks in movement direction
+    // ═══════════════════════════════════════════════════════════════════════
+    final streakCount = 6;
+    for (int i = 0; i < streakCount; i++) {
+      final streakOffset = (i - streakCount / 2) * radius * 0.25;
+      final perpX = -direction.y;
+      final perpY = direction.x;
+      final startX = perpX * streakOffset;
+      final startY = perpY * streakOffset;
+      final streakLength = radius * (1.5 + warpIntensity * 2);
+      final endX = startX - direction.x * streakLength;
+      final endY = startY - direction.y * streakLength;
+
+      final streakAlpha = (1 - (i / streakCount - 0.5).abs() * 2) * 0.4 * opacity * warpIntensity;
+      _warpStreakPaint
+        ..color = secondaryColor.withOpacity(streakAlpha)
+        ..strokeWidth = radius * 0.08 * (1 - i / streakCount * 0.5)
+        ..maskFilter = _blur(allowBlur, 3);
+
+      canvas.drawLine(
+        Offset(startX, startY),
+        Offset(endX, endY),
+        _warpStreakPaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: Dimensional distortion ring around enemy
+    // ═══════════════════════════════════════════════════════════════════════
+    final ringPulse = 0.8 + math.sin(t * 6) * 0.2;
+    final distortRadius = radius * 1.4 * ringPulse;
+
+    // Outer distortion ring
+    _warpDistortPaint
+      ..color = tertiaryColor.withOpacity(0.35 * opacity * warpIntensity)
+      ..strokeWidth = radius * 0.1
+      ..maskFilter = _blur(allowBlur, 6);
+    canvas.drawCircle(Offset.zero, distortRadius, _warpDistortPaint);
+
+    // Inner wobbling ring
+    _warpPath.reset();
+    final segments = 16;
+    for (int i = 0; i <= segments; i++) {
+      final angle = (i / segments) * math.pi * 2;
+      final wobble = math.sin(angle * 4 + t * 10) * radius * 0.08 * warpIntensity;
+      final r = distortRadius * 0.75 + wobble;
+      final x = math.cos(angle) * r;
+      final y = math.sin(angle) * r;
+      if (i == 0) {
+        _warpPath.moveTo(x, y);
+      } else {
+        _warpPath.lineTo(x, y);
+      }
+    }
+    _warpPath.close();
+
+    _warpDistortPaint
+      ..color = type.color.withOpacity(0.25 * opacity * warpIntensity)
+      ..strokeWidth = radius * 0.06
+      ..maskFilter = _blur(allowBlur, 4);
+    canvas.drawPath(_warpPath, _warpDistortPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: Energy particles trailing behind
+    // ═══════════════════════════════════════════════════════════════════════
+    final particleCount = 8;
+    for (int i = 0; i < particleCount; i++) {
+      final seed = (i * 7919 + spawnIndex * 31) % 1000;
+      final particlePhase = t * 3 + seed * 0.001 * math.pi * 2;
+      final particleT = (particlePhase % 1.0);
+
+      // Spiral trajectory behind enemy
+      final spiralAngle = particleT * math.pi * 4 + i * (math.pi * 2 / particleCount);
+      final spiralRadius = radius * 0.3 * (1 - particleT * 0.5);
+      final trailDist = particleT * radius * 2;
+
+      final px = -direction.x * trailDist + math.cos(spiralAngle) * spiralRadius;
+      final py = -direction.y * trailDist + math.sin(spiralAngle) * spiralRadius;
+      final particleSize = radius * 0.08 * (1 - particleT);
+      final particleAlpha = (1 - particleT) * 0.6 * opacity * warpIntensity;
+
+      _warpParticlePaint
+        ..color = (i % 2 == 0 ? type.color : secondaryColor).withOpacity(particleAlpha)
+        ..maskFilter = _blur(allowBlur, 3);
+      canvas.drawCircle(Offset(px, py), particleSize, _warpParticlePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: Warp lightning/electric arcs
+    // ═══════════════════════════════════════════════════════════════════════
+    final arcCount = 3;
+    for (int i = 0; i < arcCount; i++) {
+      final arcSeed = (i * 1234 + (t * 20).toInt()) % 1000;
+      final arcRand = math.Random(arcSeed);
+
+      // Random start point around enemy
+      final startAngle = arcRand.nextDouble() * math.pi * 2;
+      final startR = radius * (0.6 + arcRand.nextDouble() * 0.3);
+      final startX = math.cos(startAngle) * startR;
+      final startY = math.sin(startAngle) * startR;
+
+      // End point further out
+      final endAngle = startAngle + (arcRand.nextDouble() - 0.5) * math.pi * 0.5;
+      final endR = radius * (1.2 + arcRand.nextDouble() * 0.5);
+      final endX = math.cos(endAngle) * endR;
+      final endY = math.sin(endAngle) * endR;
+
+      // Draw jagged lightning path
+      _warpPath.reset();
+      _warpPath.moveTo(startX, startY);
+
+      final segmentCount = 4;
+      for (int j = 1; j <= segmentCount; j++) {
+        final segT = j / segmentCount;
+        final baseX = startX + (endX - startX) * segT;
+        final baseY = startY + (endY - startY) * segT;
+        final jitter = (1 - segT) * radius * 0.15 * warpIntensity;
+        final jx = baseX + (arcRand.nextDouble() - 0.5) * jitter * 2;
+        final jy = baseY + (arcRand.nextDouble() - 0.5) * jitter * 2;
+        _warpPath.lineTo(jx, jy);
+      }
+
+      // Glow layer
+      _warpLightningPaint
+        ..color = tertiaryColor.withOpacity(0.4 * opacity * warpIntensity)
+        ..strokeWidth = radius * 0.08
+        ..maskFilter = _blur(allowBlur, 5);
+      canvas.drawPath(_warpPath, _warpLightningPaint);
+
+      // Core layer
+      _warpLightningPaint
+        ..color = Colors.white.withOpacity(0.6 * opacity * warpIntensity)
+        ..strokeWidth = radius * 0.03
+        ..maskFilter = null;
+      canvas.drawPath(_warpPath, _warpLightningPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: Chromatic aberration split on the enemy
+    // ═══════════════════════════════════════════════════════════════════════
+    final chromaOffset = radius * 0.08 * warpIntensity * (1 + math.sin(t * 12) * 0.3);
+    final bodyPath = _createBodyPath(radius * 0.95);
+
+    // Red channel offset
+    _warpChromaPaint
+      ..color = const Color(0xFFFF0044).withOpacity(0.25 * opacity * warpIntensity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.04
+      ..maskFilter = _blur(allowBlur, 2);
+    canvas.save();
+    canvas.translate(-chromaOffset, -chromaOffset * 0.5);
+    canvas.drawPath(bodyPath, _warpChromaPaint);
+    canvas.restore();
+
+    // Cyan channel offset
+    _warpChromaPaint
+      ..color = const Color(0xFF00FFFF).withOpacity(0.25 * opacity * warpIntensity);
+    canvas.save();
+    canvas.translate(chromaOffset, chromaOffset * 0.5);
+    canvas.drawPath(bodyPath, _warpChromaPaint);
+    canvas.restore();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: Teleport flicker effect (randomly blink visibility)
+    // ═══════════════════════════════════════════════════════════════════════
+    final flickerValue = math.sin(_warpFlickerPhase * 17 + spawnIndex) *
+                         math.sin(_warpFlickerPhase * 23 + spawnIndex * 0.7);
+    final shouldFlicker = flickerValue > 0.7 && warpIntensity > 0.3;
+
+    if (shouldFlicker) {
+      // Bright flash effect during flicker
+      _warpFlickerPaint
+        ..color = Colors.white.withOpacity(0.4 * opacity)
+        ..maskFilter = _blur(allowBlur, 8);
+      canvas.drawCircle(Offset.zero, radius * 1.2, _warpFlickerPaint);
+
+      // Dimensional rift lines during flicker
+      final riftCount = 5;
+      for (int i = 0; i < riftCount; i++) {
+        final riftAngle = (i / riftCount) * math.pi * 2 + t * 4;
+        final riftLen = radius * (0.8 + _warpRandom.nextDouble() * 0.6);
+        final rx = math.cos(riftAngle) * riftLen;
+        final ry = math.sin(riftAngle) * riftLen;
+
+        _warpLightningPaint
+          ..color = type.color.withOpacity(0.5 * opacity)
+          ..strokeWidth = radius * 0.04
+          ..maskFilter = _blur(allowBlur, 3);
+        canvas.drawLine(Offset.zero, Offset(rx, ry), _warpLightningPaint);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SPAWN/MATERIALIZE EFFECT - Enemy teleporting into existence
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _renderSpawnEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    final t = _animationTimer;
+    final progress = _spawnProgress;
+    final inverseProgress = 1.0 - progress;
+
+    // Get secondary color for effects
+    final hslColor = HSLColor.fromColor(type.color);
+    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: Ground portal/circle where enemy spawns (render first, behind)
+    // ═══════════════════════════════════════════════════════════════════════
+    final portalRadius = radius * (1.8 + math.sin(t * 8) * 0.1) * (0.5 + progress * 0.5);
+    final portalY = radius * 0.5; // Slightly below center
+
+    // Outer portal glow
+    _spawnPortalGlowPaint
+      ..color = type.color.withOpacity(0.4 * inverseProgress * opacity)
+      ..strokeWidth = radius * 0.15
+      ..maskFilter = _blur(allowBlur, 10);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(0, portalY),
+        width: portalRadius * 2,
+        height: portalRadius * 0.4,
+      ),
+      _spawnPortalGlowPaint,
+    );
+
+    // Inner portal ring
+    _spawnPortalGlowPaint
+      ..color = secondaryColor.withOpacity(0.5 * inverseProgress * opacity)
+      ..strokeWidth = radius * 0.08
+      ..maskFilter = _blur(allowBlur, 5);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(0, portalY),
+        width: portalRadius * 1.6,
+        height: portalRadius * 0.32,
+      ),
+      _spawnPortalGlowPaint,
+    );
+
+    // Portal core fill
+    _spawnPortalPaint
+      ..color = type.color.withOpacity(0.2 * inverseProgress * opacity)
+      ..maskFilter = _blur(allowBlur, 3);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset(0, portalY),
+        width: portalRadius * 1.4,
+        height: portalRadius * 0.28,
+      ),
+      _spawnPortalPaint,
+    );
+
+    // Portal hex pattern
+    final hexCount = 6;
+    for (int i = 0; i < hexCount; i++) {
+      final hexAngle = (i / hexCount) * math.pi * 2 + t * 3;
+      final hexDist = portalRadius * 0.7;
+      final hx = math.cos(hexAngle) * hexDist;
+      final hy = portalY + math.sin(hexAngle) * hexDist * 0.2;
+      final hexSize = radius * 0.12 * inverseProgress;
+
+      _spawnPortalPaint
+        ..color = Colors.white.withOpacity(0.3 * inverseProgress * opacity);
+      canvas.drawCircle(Offset(hx, hy), hexSize, _spawnPortalPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: Digital noise static (enemy form assembling)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (inverseProgress > 0.2) {
+      final noiseIntensity = inverseProgress * 0.8;
+      final noiseCount = (12 * noiseIntensity).toInt();
+
+      for (int i = 0; i < noiseCount; i++) {
+        // Use deterministic pseudo-random based on time and index
+        final noiseSeed = ((t * 20).toInt() + i * 73 + spawnIndex * 17) % 1000;
+        final noiseRand = math.Random(noiseSeed);
+
+        final noiseAngle = noiseRand.nextDouble() * math.pi * 2;
+        final noiseDist = noiseRand.nextDouble() * radius * 1.2;
+        final nx = math.cos(noiseAngle) * noiseDist;
+        final ny = math.sin(noiseAngle) * noiseDist;
+
+        // Noise block size varies
+        final blockW = radius * (0.08 + noiseRand.nextDouble() * 0.12);
+        final blockH = radius * (0.04 + noiseRand.nextDouble() * 0.08);
+
+        // Random color between enemy color and white
+        final noiseColor = Color.lerp(type.color, Colors.white, noiseRand.nextDouble() * 0.5)!;
+
+        _spawnNoisePaint
+          ..color = noiseColor.withOpacity(0.5 * noiseIntensity * opacity);
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset(nx, ny), width: blockW, height: blockH),
+          _spawnNoisePaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: Particle coalescence (particles converging to form)
+    // ═══════════════════════════════════════════════════════════════════════
+    final particleCount = 16;
+    for (int i = 0; i < particleCount; i++) {
+      // Particles start far out and converge as spawn progresses
+      final baseAngle = (i / particleCount) * math.pi * 2 + t * 2;
+      final convergeFactor = 1.0 - progress; // 1.0 at start, 0.0 at end
+      final startDist = radius * 3.5;
+      final endDist = radius * 0.3;
+      final currentDist = endDist + (startDist - endDist) * convergeFactor;
+
+      // Add spiral motion
+      final spiralOffset = math.sin(t * 6 + i * 0.5) * radius * 0.2 * convergeFactor;
+      final px = math.cos(baseAngle) * (currentDist + spiralOffset);
+      final py = math.sin(baseAngle) * (currentDist + spiralOffset);
+
+      // Particle size grows as it converges
+      final particleSize = radius * 0.06 * (1.0 + progress * 0.5);
+      final particleAlpha = (0.6 + progress * 0.4) * opacity;
+
+      // Glow
+      _spawnParticlePaint
+        ..color = type.color.withOpacity(particleAlpha * 0.5)
+        ..maskFilter = _blur(allowBlur, 4);
+      canvas.drawCircle(Offset(px, py), particleSize * 1.5, _spawnParticlePaint);
+
+      // Core
+      _spawnParticlePaint
+        ..color = Colors.white.withOpacity(particleAlpha * 0.8)
+        ..maskFilter = null;
+      canvas.drawCircle(Offset(px, py), particleSize, _spawnParticlePaint);
+
+      // Trail line toward center
+      if (convergeFactor > 0.1) {
+        final trailEndDist = currentDist * 0.6;
+        final trailEndX = math.cos(baseAngle) * trailEndDist;
+        final trailEndY = math.sin(baseAngle) * trailEndDist;
+
+        _spawnHoloPaint
+          ..color = type.color.withOpacity(0.3 * convergeFactor * opacity)
+          ..strokeWidth = radius * 0.02
+          ..maskFilter = _blur(allowBlur, 2);
+        canvas.drawLine(Offset(px, py), Offset(trailEndX, trailEndY), _spawnHoloPaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: Holographic outline (flickering enemy silhouette)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (progress > 0.15) {
+      final holoOpacity = ((progress - 0.15) / 0.85).clamp(0.0, 1.0);
+      final flickerValue = math.sin(t * 25) * math.sin(t * 17 + 0.5);
+      final flicker = flickerValue > 0.6 ? 0.3 : 1.0;
+
+      // Holographic body outline
+      final bodyPath = _createBodyPath(radius * (0.7 + progress * 0.3));
+
+      // Outer glow
+      _spawnHoloPaint
+        ..color = type.color.withOpacity(0.3 * holoOpacity * flicker * opacity)
+        ..strokeWidth = radius * 0.12
+        ..maskFilter = _blur(allowBlur, 6);
+      canvas.drawPath(bodyPath, _spawnHoloPaint);
+
+      // Core outline
+      _spawnHoloPaint
+        ..color = secondaryColor.withOpacity(0.5 * holoOpacity * flicker * opacity)
+        ..strokeWidth = radius * 0.04
+        ..maskFilter = _blur(allowBlur, 2);
+      canvas.drawPath(bodyPath, _spawnHoloPaint);
+
+      // Inner bright edge
+      _spawnHoloPaint
+        ..color = Colors.white.withOpacity(0.4 * holoOpacity * flicker * opacity)
+        ..strokeWidth = radius * 0.02
+        ..maskFilter = null;
+      canvas.drawPath(bodyPath, _spawnHoloPaint);
+
+      // Glitch slices (horizontal displacement)
+      if (inverseProgress > 0.1 && flickerValue > 0.3) {
+        final sliceCount = 3;
+        for (int i = 0; i < sliceCount; i++) {
+          final sliceSeed = ((t * 15).toInt() + i * 47) % 100;
+          final sliceRand = math.Random(sliceSeed);
+          final sliceY = (sliceRand.nextDouble() - 0.5) * radius * 1.6;
+          final sliceHeight = radius * 0.1;
+          final sliceOffset = (sliceRand.nextDouble() - 0.5) * radius * 0.3;
+
+          _spawnGlitchPaint
+            ..color = type.color.withOpacity(0.4 * inverseProgress * opacity);
+
+          canvas.save();
+          canvas.clipRect(Rect.fromCenter(
+            center: Offset(0, sliceY),
+            width: radius * 3,
+            height: sliceHeight,
+          ));
+          canvas.translate(sliceOffset, 0);
+          canvas.drawPath(bodyPath, _spawnGlitchPaint);
+          canvas.restore();
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: Scanline sweep (materialization scan)
+    // ═══════════════════════════════════════════════════════════════════════
+    final scanY = -radius * 1.5 + progress * radius * 3.0;
+    final scanHeight = radius * 0.15;
+
+    // Main scanline
+    _spawnScanlinePaint
+      ..color = Colors.white.withOpacity(0.6 * opacity)
+      ..maskFilter = _blur(allowBlur, 3);
+    canvas.drawRect(
+      Rect.fromCenter(center: Offset(0, scanY), width: radius * 2.5, height: scanHeight),
+      _spawnScanlinePaint,
+    );
+
+    // Glow around scanline
+    _spawnScanlinePaint
+      ..color = type.color.withOpacity(0.4 * opacity)
+      ..maskFilter = _blur(allowBlur, 8);
+    canvas.drawRect(
+      Rect.fromCenter(center: Offset(0, scanY), width: radius * 2.8, height: scanHeight * 2),
+      _spawnScanlinePaint,
+    );
+
+    // Secondary scanlines (fading echoes)
+    for (int i = 1; i <= 3; i++) {
+      final echoY = scanY - i * radius * 0.25;
+      final echoAlpha = 0.3 / i;
+      _spawnScanlinePaint
+        ..color = type.color.withOpacity(echoAlpha * opacity)
+        ..maskFilter = _blur(allowBlur, 2);
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset(0, echoY), width: radius * 2.2, height: scanHeight * 0.5),
+        _spawnScanlinePaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: Energy burst when fully materialized (progress > 0.85)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (progress > 0.85) {
+      final burstProgress = (progress - 0.85) / 0.15; // 0 to 1 in last 15%
+      final burstRadius = radius * (1.0 + burstProgress * 1.5);
+      final burstAlpha = (1.0 - burstProgress) * 0.6;
+
+      // Expanding ring
+      _spawnBurstPaint
+        ..color = Colors.white.withOpacity(burstAlpha * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = radius * 0.15 * (1.0 - burstProgress)
+        ..maskFilter = _blur(allowBlur, 6);
+      canvas.drawCircle(Offset.zero, burstRadius, _spawnBurstPaint);
+
+      // Inner energy flash
+      _spawnBurstPaint
+        ..color = type.color.withOpacity(burstAlpha * 0.5 * opacity)
+        ..style = PaintingStyle.fill
+        ..maskFilter = _blur(allowBlur, 10);
+      canvas.drawCircle(Offset.zero, burstRadius * 0.6, _spawnBurstPaint);
+
+      // Radial rays
+      final rayCount = 8;
+      for (int i = 0; i < rayCount; i++) {
+        final rayAngle = (i / rayCount) * math.pi * 2 + t * 2;
+        final rayLength = burstRadius * (0.8 + burstProgress * 0.5);
+        final rx = math.cos(rayAngle) * rayLength;
+        final ry = math.sin(rayAngle) * rayLength;
+
+        _spawnHoloPaint
+          ..color = Colors.white.withOpacity(burstAlpha * 0.8 * opacity)
+          ..strokeWidth = radius * 0.06 * (1.0 - burstProgress)
+          ..maskFilter = _blur(allowBlur, 4);
+        canvas.drawLine(Offset.zero, Offset(rx, ry), _spawnHoloPaint);
+      }
+    }
+  }
+
+  /// Update spawn particles and progress
+  void _updateSpawnEffect(double dt) {
+    if (!_isSpawning) return;
+
+    _spawnProgress += dt / _spawnDuration;
+
+    if (_spawnProgress >= 1.0) {
+      _spawnProgress = 1.0;
+      _isSpawning = false;
+      _spawnParticles.clear();
+    }
+  }
+
   void _renderWalkingEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Get visual style based on enemy archetype
-    final style = _getWalkingStyle();
+    // Use cached walk style (computed once in constructor)
+    final style = _cachedWalkStyle;
 
     switch (style) {
       case _WalkStyle.legs:
@@ -873,181 +1986,270 @@ class Enemy extends PositionComponent {
   }
 
   void _renderLegsEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    // OPTIMIZED: Reuse paint, precalculate constants, cache sin/cos
+    final r08 = radius * 0.8;
+    final r02 = radius * 0.2;
+    final walkPhase2 = _walkPhase * 2;
+    final opacity06 = 0.6 * opacity;
+
+    _legPaint
+      ..color = type.color.withOpacity(opacity06)
+      ..strokeWidth = 2
+      ..strokeCap = StrokeCap.square
+      ..maskFilter = _blur(allowBlur, 2);
+
     for (int i = 0; i < 4; i++) {
-      final legPhase = _walkPhase * 2 + i * math.pi / 2;
-      final legAngle = math.pi / 2 + i * math.pi / 2 + math.sin(legPhase) * 0.3;
-      final legLength = radius * 0.8 + math.sin(legPhase) * radius * 0.2;
-      final legX = math.cos(legAngle) * legLength;
-      final legY = math.sin(legAngle) * legLength;
-      canvas.drawLine(
-        Offset.zero,
-        Offset(legX, legY),
-        Paint()
-          ..color = type.color.withOpacity(0.6 * opacity)
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.square
-          ..maskFilter = _blur(allowBlur, 2),
-      );
+      final legPhase = walkPhase2 + i * math.pi / 2;
+      final sinLegPhase = math.sin(legPhase);
+      final legAngle = math.pi / 2 + i * math.pi / 2 + sinLegPhase * 0.3;
+      final legLength = r08 + sinLegPhase * r02;
+      final cosAngle = math.cos(legAngle);
+      final sinAngle = math.sin(legAngle);
+      _tempOffset1 = Offset(cosAngle * legLength, sinAngle * legLength);
+      canvas.drawLine(Offset.zero, _tempOffset1, _legPaint);
     }
   }
 
   void _renderTendrilsEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    // OPTIMIZED: Reuse paint, precalculate, cache trig
+    final r08 = radius * 0.8;
+    final r03 = radius * 0.3;
+    final animPhase15 = _animationPhase * 1.5;
+    final opacity04 = 0.4 * opacity;
+
+    _tendrilPaint
+      ..color = Colors.white.withOpacity(opacity04)
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.square
+      ..maskFilter = _blur(allowBlur, 3);
+
     for (int i = 0; i < 6; i++) {
-      final tendrilAngle = _animationPhase * 1.5 + i * math.pi / 3;
-      final tendrilLength = radius * (0.8 + math.sin(_walkPhase + i) * 0.3);
-      final endX = math.cos(tendrilAngle) * tendrilLength;
-      final endY = math.sin(tendrilAngle) * tendrilLength;
-      canvas.drawLine(
-        Offset.zero,
-        Offset(endX, endY),
-        Paint()
-          ..color = Colors.white.withOpacity(0.4 * opacity)
-          ..strokeWidth = 1.5
-          ..strokeCap = StrokeCap.square
-          ..maskFilter = _blur(allowBlur, 3),
-      );
+      final tendrilAngle = animPhase15 + i * math.pi / 3;
+      final sinWalkPlusI = math.sin(_walkPhase + i);
+      final tendrilLength = r08 + sinWalkPlusI * r03;
+      final cosAngle = math.cos(tendrilAngle);
+      final sinAngle = math.sin(tendrilAngle);
+      _tempOffset1 = Offset(cosAngle * tendrilLength, sinAngle * tendrilLength);
+      canvas.drawLine(Offset.zero, _tempOffset1, _tendrilPaint);
     }
   }
 
   void _renderStompEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    // OPTIMIZED: Precalculate, reuse paints, cache sin/cos
+    final r03 = radius * 0.3;
+    final r07 = radius * 0.7;
+    final r06 = radius * 0.6;
+    final r05 = radius * 0.5;
+    final r018 = radius * 0.18;
+    final r022 = radius * 0.22;
+    final impactRadius = Radius.circular(radius * 0.04);
+    final footRadius = Radius.circular(radius * 0.05);
+    final opacity03 = 0.3 * opacity;
+    final opacity07 = 0.7 * opacity;
+
+    // Setup paints once
+    _impactPaint
+      ..color = type.color.withOpacity(opacity03)
+      ..maskFilter = _blur(allowBlur, 6);
+    _footPaint.color = type.color.withOpacity(opacity07);
+
     for (int i = 0; i < 2; i++) {
       final footPhase = _walkPhase + i * math.pi;
+      final sinFootPhase = math.sin(footPhase);
       final footAngle = math.pi / 2 + i * math.pi;
-      final footOffset = math.sin(footPhase) * radius * 0.3;
-      final footX = math.cos(footAngle) * (radius * 0.7 + footOffset);
-      final footY = math.sin(footAngle) * (radius * 0.7 + footOffset) + math.sin(footPhase).abs() * 3;
+      final footOffset = sinFootPhase * r03;
+      final baseLen = r07 + footOffset;
+      final cosAngle = math.cos(footAngle);
+      final sinAngle = math.sin(footAngle);
+      final footX = cosAngle * baseLen;
+      final footY = sinAngle * baseLen + sinFootPhase.abs() * 3;
 
-      if (math.sin(footPhase) < -0.8) {
+      if (sinFootPhase < -0.8) {
         final impactRect = RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(footX, footY + 2), width: radius * 0.6, height: radius * 0.18),
-          Radius.circular(radius * 0.04),
+          Rect.fromCenter(center: Offset(footX, footY + 2), width: r06, height: r018),
+          impactRadius,
         );
-        canvas.drawRRect(impactRect, Paint()..color = type.color.withOpacity(0.3 * opacity)..maskFilter = _blur(allowBlur, 6));
+        canvas.drawRRect(impactRect, _impactPaint);
       }
 
       final footRect = RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(footX, footY), width: radius * 0.5, height: radius * 0.22),
-        Radius.circular(radius * 0.05),
+        Rect.fromCenter(center: Offset(footX, footY), width: r05, height: r022),
+        footRadius,
       );
-      canvas.drawRRect(footRect, Paint()..color = type.color.withOpacity(0.7 * opacity));
+      canvas.drawRRect(footRect, _footPaint);
     }
   }
 
   void _renderWispsEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    // OPTIMIZED: Precalculate, cache trig, reuse paint
+    final r09 = radius * 0.9;
+    final r03 = radius * 0.3;
+    final animPhase2 = _animationPhase * 2;
+    final animPhase04 = _animationPhase * 0.4;
+    final opacity04 = 0.4 * opacity;
+    final blurFilter = _blur(allowBlur, 2);
+
+    _wispPaint
+      ..style = PaintingStyle.fill
+      ..maskFilter = blurFilter;
+
     for (int i = 0; i < 4; i++) {
-      final wispPhase = _animationPhase * 2 + i * math.pi / 2;
-      final wispDist = radius * (0.9 + math.sin(wispPhase * 0.5) * 0.3);
+      final wispPhase = animPhase2 + i * math.pi / 2;
+      final sinPhaseHalf = math.sin(wispPhase * 0.5);
+      final wispDist = r09 + sinPhaseHalf * r03;
       final wispAngle = wispPhase * 0.3 + i * math.pi / 2;
-      final wispX = math.cos(wispAngle) * wispDist;
-      final wispY = math.sin(wispAngle) * wispDist;
+      final cosAngle = math.cos(wispAngle);
+      final sinAngle = math.sin(wispAngle);
+      final wispX = cosAngle * wispDist;
+      final wispY = sinAngle * wispDist;
+      final rotAngle = wispAngle + animPhase04;
 
       for (int j = 0; j < 3; j++) {
-        final trailAlpha = (1 - j / 3) * 0.4 * opacity;
+        final trailAlpha = (1 - j / 3) * opacity04;
         final trailOffset = j * 3.0;
-        final shardX = wispX - math.cos(wispAngle) * trailOffset;
-        final shardY = wispY - math.sin(wispAngle) * trailOffset;
+        final shardX = wispX - cosAngle * trailOffset;
+        final shardY = wispY - sinAngle * trailOffset;
         canvas.save();
         canvas.translate(shardX, shardY);
-        canvas.rotate(wispAngle + _animationPhase * 0.4);
-        _particlePaint..color = type.color.withOpacity(trailAlpha)..style = PaintingStyle.fill..maskFilter = _blur(allowBlur, 2);
-        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 4.0 - j, height: 1.5), _particlePaint);
+        canvas.rotate(rotAngle);
+        _wispPaint.color = type.color.withOpacity(trailAlpha);
+        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 4.0 - j, height: 1.5), _wispPaint);
         canvas.restore();
       }
     }
   }
 
   void _renderGlitchWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Dimensional rifts and glitchy teleport trails
-    final glitchPaint = Paint()
+    // OPTIMIZED: Reuse paints, precalculate, cache trig
+    final r07 = radius * 0.7;
+    final r04 = radius * 0.4;
+    final animTimer8 = _animationTimer * 8;
+    final animTimer2 = _animationTimer * 2;
+    final blurFilter3 = _blur(allowBlur, 3);
+
+    _glitchPaint
       ..color = type.color.withOpacity(0.5 * opacity)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.square;
+      ..strokeCap = StrokeCap.square
+      ..maskFilter = blurFilter3;
 
     for (int i = 0; i < 5; i++) {
-      final glitchPhase = _animationTimer * 8 + i * 1.2;
-      final flicker = math.sin(glitchPhase) > 0.3 ? 1.0 : 0.0;
-      if (flicker == 0) continue;
+      final glitchPhase = animTimer8 + i * 1.2;
+      final sinGlitch = math.sin(glitchPhase);
+      if (sinGlitch <= 0.3) continue;
 
-      final angle = (i / 5) * math.pi * 2 + _animationTimer * 2;
-      final dist = radius * (0.7 + math.sin(glitchPhase * 0.5) * 0.4);
-      final x = math.cos(angle) * dist;
-      final y = math.sin(angle) * dist;
-
-      // Glitch line with offset
+      final angle = (i / 5) * math.pi * 2 + animTimer2;
+      final sinGlitchHalf = math.sin(glitchPhase * 0.5);
+      final dist = r07 + sinGlitchHalf * r04;
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+      final x = cosAngle * dist;
+      final y = sinAngle * dist;
       final offsetX = math.sin(glitchPhase * 3) * 4;
-      canvas.drawLine(
-        Offset(x + offsetX, y - 4),
-        Offset(x - offsetX, y + 4),
-        glitchPaint..maskFilter = _blur(allowBlur, 3),
-      );
+
+      _tempOffset1 = Offset(x + offsetX, y - 4);
+      _tempOffset2 = Offset(x - offsetX, y + 4);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _glitchPaint);
     }
 
     // Rift portal effect
     if (type == EnemyType.riftwalker || type == EnemyType.dimensionBreaker) {
-      final riftPaint = Paint()
+      _riftPaint
         ..color = const Color(0xFFFF00FF).withOpacity(0.3 * opacity)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
+        ..strokeWidth = 1.5
+        ..maskFilter = _blur(allowBlur, 4);
       canvas.drawOval(
         Rect.fromCenter(center: Offset.zero, width: radius * 1.8, height: radius * 0.6),
-        riftPaint..maskFilter = _blur(allowBlur, 4),
+        _riftPaint,
       );
     }
   }
 
   void _renderElectricWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Electric arcs and sparks
-    final sparkPaint = Paint()
+    // OPTIMIZED: Reuse paints, precalculate, cache trig
+    final r06 = radius * 0.6;
+    final r03 = radius * 0.3;
+    final animTimer12 = _animationTimer * 12;
+
+    _sparkPaint
       ..color = type.color.withOpacity(0.7 * opacity)
       ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
     for (int i = 0; i < 6; i++) {
-      final sparkPhase = _animationTimer * 12 + i * 0.8;
-      final active = math.sin(sparkPhase) > 0.2;
-      if (!active) continue;
+      final sparkPhase = animTimer12 + i * 0.8;
+      final sinSparkPhase = math.sin(sparkPhase);
+      if (sinSparkPhase <= 0.2) continue;
 
       final angle = (i / 6) * math.pi * 2;
-      final startDist = radius * 0.6;
-      final endDist = radius * (1.0 + math.sin(sparkPhase * 2) * 0.3);
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+      final startDist = r06;
+      final endDist = radius + sinSparkPhase * 2 * r03;
 
-      // Jagged lightning bolt
-      final startX = math.cos(angle) * startDist;
-      final startY = math.sin(angle) * startDist;
-      final endX = math.cos(angle) * endDist;
-      final endY = math.sin(angle) * endDist;
+      final startX = cosAngle * startDist;
+      final startY = sinAngle * startDist;
+      final endX = cosAngle * endDist;
+      final endY = sinAngle * endDist;
 
-      final midX = (startX + endX) / 2 + math.sin(sparkPhase * 5) * 3;
-      final midY = (startY + endY) / 2 + math.cos(sparkPhase * 5) * 3;
+      final sparkPhase5 = sparkPhase * 5;
+      final midX = (startX + endX) / 2 + math.sin(sparkPhase5) * 3;
+      final midY = (startY + endY) / 2 + math.cos(sparkPhase5) * 3;
 
-      canvas.drawLine(Offset(startX, startY), Offset(midX, midY), sparkPaint);
-      canvas.drawLine(Offset(midX, midY), Offset(endX, endY), sparkPaint);
+      _tempOffset1 = Offset(startX, startY);
+      _tempOffset2 = Offset(midX, midY);
+      _tempOffset3 = Offset(endX, endY);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _sparkPaint);
+      canvas.drawLine(_tempOffset2, _tempOffset3, _sparkPaint);
     }
 
     // Electric aura for larger enemies
     if (type == EnemyType.thunderHulk || type == EnemyType.plasmaCore) {
-      final auraPaint = Paint()
+      _auraPaint
         ..color = type.color.withOpacity(0.2 * opacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
         ..maskFilter = _blur(allowBlur, 8);
-      canvas.drawCircle(Offset.zero, radius * 1.3, auraPaint);
+      canvas.drawCircle(Offset.zero, radius * 1.3, _auraPaint);
     }
   }
 
+  // Static ray colors for crystal effect
+  static const List<Color> _rayColors = [Color(0xFFFF0000), Color(0xFF00FF00), Color(0xFF0000FF)];
+
   void _renderCrystalWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Floating crystal shards
-    final crystalPaint = Paint()
-      ..color = type.color.withOpacity(0.6 * opacity)
+    // OPTIMIZED: Reuse paints, precalculate, cache trig
+    final r09 = radius * 0.9;
+    final r02 = radius * 0.2;
+    final r015 = radius * 0.15;
+    final r005 = radius * 0.05;
+    final animTimer15 = _animationTimer * 1.5;
+    final animTimer05 = _animationTimer * 0.5;
+    final opacity06 = 0.6 * opacity;
+    final opacity03 = 0.3 * opacity;
+
+    _crystalPaint
+      ..color = type.color.withOpacity(opacity06)
       ..style = PaintingStyle.fill;
 
+    _strokePaint
+      ..color = Colors.white.withOpacity(opacity03)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+
     for (int i = 0; i < 5; i++) {
-      final phase = _animationTimer * 1.5 + i * math.pi * 0.4;
-      final dist = radius * (0.9 + math.sin(phase) * 0.2);
-      final angle = (i / 5) * math.pi * 2 + _animationTimer * 0.5;
-      final x = math.cos(angle) * dist;
-      final y = math.sin(angle) * dist;
-      final shardSize = radius * (0.15 + 0.05 * math.sin(phase * 2));
+      final phase = animTimer15 + i * math.pi * 0.4;
+      final sinPhase = math.sin(phase);
+      final dist = r09 + sinPhase * r02;
+      final angle = (i / 5) * math.pi * 2 + animTimer05;
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+      final x = cosAngle * dist;
+      final y = sinAngle * dist;
+      final shardSize = r015 + r005 * math.sin(phase * 2);
+      final shardHalf = shardSize * 0.5;
 
       canvas.save();
       canvas.translate(x, y);
@@ -1056,260 +2258,302 @@ class Enemy extends PositionComponent {
       // Diamond shard shape
       _reusableOverlayPath.reset();
       _reusableOverlayPath.moveTo(0, -shardSize);
-      _reusableOverlayPath.lineTo(shardSize * 0.5, 0);
+      _reusableOverlayPath.lineTo(shardHalf, 0);
       _reusableOverlayPath.lineTo(0, shardSize);
-      _reusableOverlayPath.lineTo(-shardSize * 0.5, 0);
+      _reusableOverlayPath.lineTo(-shardHalf, 0);
       _reusableOverlayPath.close();
 
-      canvas.drawPath(_reusableOverlayPath, crystalPaint);
-      canvas.drawPath(_reusableOverlayPath, Paint()
-        ..color = Colors.white.withOpacity(0.3 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1);
+      canvas.drawPath(_reusableOverlayPath, _crystalPaint);
+      canvas.drawPath(_reusableOverlayPath, _strokePaint);
       canvas.restore();
     }
 
     // Prismatic light rays for special types
     if (type == EnemyType.prismWalker || type == EnemyType.diamondGolem) {
+      final animTimer2 = _animationTimer * 2;
+      final rayLen = radius * 1.5;
+      final rayOpacity = 0.15 * opacity;
+      final blurFilter = _blur(allowBlur, 4);
+
+      _rayPaint
+        ..strokeWidth = 2
+        ..maskFilter = blurFilter;
+
       for (int i = 0; i < 3; i++) {
-        final rayAngle = _animationTimer * 2 + i * math.pi * 2 / 3;
-        final rayColor = [const Color(0xFFFF0000), const Color(0xFF00FF00), const Color(0xFF0000FF)][i];
-        canvas.drawLine(
-          Offset.zero,
-          Offset(math.cos(rayAngle) * radius * 1.5, math.sin(rayAngle) * radius * 1.5),
-          Paint()..color = rayColor.withOpacity(0.15 * opacity)..strokeWidth = 2..maskFilter = _blur(allowBlur, 4),
-        );
+        final rayAngle = animTimer2 + i * math.pi * 2 / 3;
+        final cosRay = math.cos(rayAngle);
+        final sinRay = math.sin(rayAngle);
+        _rayPaint.color = _rayColors[i].withOpacity(rayOpacity);
+        _tempOffset1 = Offset(cosRay * rayLen, sinRay * rayLen);
+        canvas.drawLine(Offset.zero, _tempOffset1, _rayPaint);
       }
     }
   }
 
   void _renderMechanicalWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Mechanical legs/treads
-    final metalPaint = Paint()
-      ..color = type.color.withOpacity(0.7 * opacity)
+    // HYPER-OPTIMIZED: All calculations precached, all paints static
+    final r08 = radius * 0.8;
+    final r07 = radius * 0.7;
+    final r03 = radius * 0.3;
+    final opacity07 = 0.7 * opacity;
+    final opacity05 = 0.5 * opacity;
+
+    _metalPaint
+      ..color = type.color.withOpacity(opacity07)
       ..strokeWidth = 2.5
-      ..strokeCap = StrokeCap.square;
+      ..strokeCap = StrokeCap.square
+      ..maskFilter = _blur(allowBlur, 2);
 
     if (type == EnemyType.droneSwarm) {
-      // Propeller effect
+      final animTimer20 = _animationTimer * 20;
       for (int i = 0; i < 4; i++) {
-        final bladeAngle = _animationTimer * 20 + i * math.pi / 2;
-        final bladeLen = radius * 0.8;
-        canvas.drawLine(
-          Offset.zero,
-          Offset(math.cos(bladeAngle) * bladeLen, math.sin(bladeAngle) * bladeLen),
-          metalPaint..maskFilter = _blur(allowBlur, 2),
-        );
+        final bladeAngle = animTimer20 + i * math.pi / 2;
+        _tempOffset1 = Offset(math.cos(bladeAngle) * r08, math.sin(bladeAngle) * r08);
+        canvas.drawLine(Offset.zero, _tempOffset1, _metalPaint);
       }
     } else {
-      // Piston legs
+      final walkPhase15 = _walkPhase * 1.5;
+      _corePaint.color = Colors.white.withOpacity(opacity05);
+
       for (int i = 0; i < 4; i++) {
-        final legPhase = _walkPhase * 1.5 + i * math.pi / 2;
-        final extension = math.sin(legPhase) * radius * 0.3;
+        final legPhase = walkPhase15 + i * math.pi / 2;
+        final sinLegPhase = math.sin(legPhase);
+        final extension = sinLegPhase * r03;
         final angle = math.pi / 2 + i * math.pi / 2;
-        final baseLen = radius * 0.7;
+        final cosAngle = math.cos(angle);
+        final sinAngle = math.sin(angle);
 
-        final x1 = math.cos(angle) * baseLen;
-        final y1 = math.sin(angle) * baseLen;
-        final x2 = math.cos(angle) * (baseLen + extension);
-        final y2 = math.sin(angle) * (baseLen + extension);
+        final x1 = cosAngle * r07;
+        final y1 = sinAngle * r07;
+        final extLen = r07 + extension;
+        final x2 = cosAngle * extLen;
+        final y2 = sinAngle * extLen;
 
-        // Piston joint
-        canvas.drawCircle(Offset(x1, y1), 2, Paint()..color = Colors.white.withOpacity(0.5 * opacity));
-        canvas.drawLine(Offset(x1, y1), Offset(x2, y2), metalPaint);
+        _tempOffset1 = Offset(x1, y1);
+        _tempOffset2 = Offset(x2, y2);
+        canvas.drawCircle(_tempOffset1, 2, _corePaint);
+        canvas.drawLine(_tempOffset1, _tempOffset2, _metalPaint);
       }
     }
 
-    // Exhaust ports for heavy mechs
     if (type == EnemyType.siegeWalker) {
       final exhaustPhase = _animationTimer * 4;
       if (math.sin(exhaustPhase) > 0.5) {
-        canvas.drawCircle(
-          Offset(-radius * 0.8, 0),
-          radius * 0.15,
-          Paint()..color = const Color(0xFFFF6600).withOpacity(0.4 * opacity)..maskFilter = _blur(allowBlur, 6),
-        );
+        _flamePaint
+          ..color = const Color(0xFFFF6600).withOpacity(0.4 * opacity)
+          ..maskFilter = _blur(allowBlur, 6);
+        canvas.drawCircle(Offset(-radius * 0.8, 0), radius * 0.15, _flamePaint);
       }
     }
   }
 
   void _renderDigitalWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Binary/data stream effect
-    final dataPaint = Paint()
-      ..color = type.color.withOpacity(0.5 * opacity)
-      ..style = PaintingStyle.fill;
+    // HYPER-OPTIMIZED: Precalc all, reuse paint
+    final r05 = radius * 0.5;
+    final r08 = radius * 0.8;
+    final animTimer3 = _animationTimer * 3;
+    final opacity06 = 0.6 * opacity;
+
+    _dataPaint.style = PaintingStyle.fill;
 
     for (int i = 0; i < 8; i++) {
-      final phase = _animationTimer * 3 + i * 0.4;
-      final progress = (phase % 1.0);
+      final phase = animTimer3 + i * 0.4;
+      final progress = phase % 1.0;
+      final invProgress = 1 - progress;
       final angle = (i / 8) * math.pi * 2;
-      final dist = radius * (0.5 + progress * 0.8);
-      final x = math.cos(angle) * dist;
-      final y = math.sin(angle) * dist;
-      final bitSize = 2 + (1 - progress) * 2;
+      final dist = r05 + progress * r08;
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+      final x = cosAngle * dist;
+      final y = sinAngle * dist;
+      final bitSize = 2 + invProgress * 2;
 
-      canvas.drawRect(
-        Rect.fromCenter(center: Offset(x, y), width: bitSize, height: bitSize),
-        dataPaint..color = type.color.withOpacity((1 - progress) * 0.6 * opacity),
-      );
+      _dataPaint.color = type.color.withOpacity(invProgress * opacity06);
+      canvas.drawRect(Rect.fromCenter(center: Offset(x, y), width: bitSize, height: bitSize), _dataPaint);
     }
 
-    // Matrix rain for matrix agents
     if (type == EnemyType.matrixAgent || type == EnemyType.firewallBreaker) {
+      final r06 = radius * 0.6;
+      final r04 = radius * 0.4;
+      final r2 = radius * 2;
+      final animTimer2 = _animationTimer * 2;
+      _dataPaint.color = const Color(0xFF00FF00).withOpacity(0.4 * opacity);
+
       for (int i = 0; i < 4; i++) {
-        final rainX = -radius * 0.6 + i * radius * 0.4;
-        final rainY = (((_animationTimer * 2 + i * 0.3) % 1.0) - 0.5) * radius * 2;
-        canvas.drawRect(
-          Rect.fromCenter(center: Offset(rainX, rainY), width: 2, height: 6),
-          Paint()..color = const Color(0xFF00FF00).withOpacity(0.4 * opacity),
-        );
+        final rainX = -r06 + i * r04;
+        final rainY = (((animTimer2 + i * 0.3) % 1.0) - 0.5) * r2;
+        canvas.drawRect(Rect.fromCenter(center: Offset(rainX, rainY), width: 2, height: 6), _dataPaint);
       }
     }
   }
 
   void _renderStormWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Wind/cyclone effect
-    final windPaint = Paint()
+    // HYPER-OPTIMIZED: All precalc, static paints
+    final animTimer4 = _animationTimer * 4;
+    final blurFilter3 = _blur(allowBlur, 3);
+
+    _windPaint
       ..color = type.color.withOpacity(0.4 * opacity)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 1.5
+      ..maskFilter = blurFilter3;
 
-    // Spiral wind lines
     for (int i = 0; i < 3; i++) {
-      final spiralPhase = _animationTimer * 4 + i * math.pi * 2 / 3;
+      final spiralPhase = animTimer4 + i * math.pi * 2 / 3;
       final spiralRadius = radius * (0.6 + i * 0.2);
-
       canvas.drawArc(
         Rect.fromCircle(center: Offset.zero, radius: spiralRadius),
-        spiralPhase,
-        math.pi * 0.7,
-        false,
-        windPaint..maskFilter = _blur(allowBlur, 3),
+        spiralPhase, math.pi * 0.7, false, _windPaint,
       );
     }
 
-    // Lightning for thunder types
     if (type == EnemyType.thunderTitan || type == EnemyType.lightningWraith) {
       final boltPhase = _animationTimer * 15;
-      if (math.sin(boltPhase) > 0.7) {
+      final sinBolt = math.sin(boltPhase);
+      if (sinBolt > 0.7) {
         final boltAngle = math.sin(boltPhase * 0.3) * math.pi;
-        canvas.drawLine(
-          Offset.zero,
-          Offset(math.cos(boltAngle) * radius * 1.5, math.sin(boltAngle) * radius * 1.5),
-          Paint()..color = Colors.white.withOpacity(0.8 * opacity)..strokeWidth = 2..maskFilter = _blur(allowBlur, 4),
-        );
+        final r15 = radius * 1.5;
+        _sparkPaint
+          ..color = Colors.white.withOpacity(0.8 * opacity)
+          ..strokeWidth = 2
+          ..maskFilter = _blur(allowBlur, 4);
+        _tempOffset1 = Offset(math.cos(boltAngle) * r15, math.sin(boltAngle) * r15);
+        canvas.drawLine(Offset.zero, _tempOffset1, _sparkPaint);
       }
     }
 
-    // Rain drops
+    final r06 = radius * 0.6;
+    final r2 = radius * 2;
+    final animTimer3 = _animationTimer * 3;
+    _swirlPaint
+      ..color = const Color(0xFF99CCFF).withOpacity(0.3 * opacity)
+      ..strokeWidth = 1;
+
     for (int i = 0; i < 4; i++) {
-      final dropX = -radius + i * radius * 0.6;
-      final dropY = (((_animationTimer * 3 + i * 0.25) % 1.0) - 0.5) * radius * 2;
-      canvas.drawLine(
-        Offset(dropX, dropY),
-        Offset(dropX - 2, dropY + 4),
-        Paint()..color = const Color(0xFF99CCFF).withOpacity(0.3 * opacity)..strokeWidth = 1,
-      );
+      final dropX = -radius + i * r06;
+      final dropY = (((animTimer3 + i * 0.25) % 1.0) - 0.5) * r2;
+      _tempOffset1 = Offset(dropX, dropY);
+      _tempOffset2 = Offset(dropX - 2, dropY + 4);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _swirlPaint);
     }
   }
 
   void _renderVoidWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Dark void tendrils
-    final voidPaint = Paint()
+    // HYPER-OPTIMIZED: All precalc, static paints
+    final r08 = radius * 0.8;
+    final r03 = radius * 0.3;
+    final animTimer15 = _animationTimer * 1.5;
+    final blurFilter2 = _blur(allowBlur, 2);
+
+    _voidPaint
       ..color = type.color.withOpacity(0.6 * opacity)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = blurFilter2;
 
     for (int i = 0; i < 5; i++) {
-      final tendrilPhase = _animationTimer * 1.5 + i * math.pi * 0.4;
-      final angle = (i / 5) * math.pi * 2 + math.sin(tendrilPhase) * 0.3;
-      final length = radius * (0.8 + math.sin(tendrilPhase * 2) * 0.3);
+      final tendrilPhase = animTimer15 + i * math.pi * 0.4;
+      final sinPhase = math.sin(tendrilPhase);
+      final sinPhase2 = math.sin(tendrilPhase * 2);
+      final sinPhase3 = math.sin(tendrilPhase * 3);
+      final angle = (i / 5) * math.pi * 2 + sinPhase * 0.3;
+      final length = r08 + sinPhase2 * r03;
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
 
-      // Wavy tendril
-      final midAngle = angle + math.sin(tendrilPhase * 3) * 0.2;
+      final midAngle = angle + sinPhase3 * 0.2;
       final midDist = length * 0.5;
-      final midX = math.cos(midAngle) * midDist;
-      final midY = math.sin(midAngle) * midDist;
-      final endX = math.cos(angle) * length;
-      final endY = math.sin(angle) * length;
+      final cosMid = math.cos(midAngle);
+      final sinMid = math.sin(midAngle);
+      final midX = cosMid * midDist;
+      final midY = sinMid * midDist;
+      final endX = cosAngle * length;
+      final endY = sinAngle * length;
 
-      canvas.drawLine(Offset.zero, Offset(midX, midY), voidPaint..maskFilter = _blur(allowBlur, 2));
-      canvas.drawLine(Offset(midX, midY), Offset(endX, endY), voidPaint);
+      _tempOffset1 = Offset(midX, midY);
+      _tempOffset2 = Offset(endX, endY);
+      canvas.drawLine(Offset.zero, _tempOffset1, _voidPaint);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _voidPaint);
     }
 
-    // Darkness aura
-    canvas.drawCircle(
-      Offset.zero,
-      radius * 1.2,
-      Paint()
-        ..color = Colors.black.withOpacity(0.2 * opacity)
-        ..maskFilter = _blur(allowBlur, 10),
-    );
+    _shadowPaint
+      ..color = Colors.black.withOpacity(0.2 * opacity)
+      ..maskFilter = _blur(allowBlur, 10);
+    canvas.drawCircle(Offset.zero, radius * 1.2, _shadowPaint);
 
-    // Shadow particles for swarm type
     if (type == EnemyType.shadowSwarm) {
+      final animTimer2 = _animationTimer * 2;
+      _particlePaint.color = type.color.withOpacity(0.4 * opacity);
       for (int i = 0; i < 6; i++) {
-        final px = math.cos(_animationTimer * 2 + i) * radius * 0.8;
-        final py = math.sin(_animationTimer * 2 + i) * radius * 0.8;
-        canvas.drawCircle(
-          Offset(px, py),
-          2,
-          Paint()..color = type.color.withOpacity(0.4 * opacity),
-        );
+        final phase = animTimer2 + i;
+        final px = math.cos(phase) * r08;
+        final py = math.sin(phase) * r08;
+        canvas.drawCircle(Offset(px, py), 2, _particlePaint);
       }
     }
   }
 
   void _renderOmegaWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    // Ultimate combined effects - energy + void + electric
-    final omegaPaint = Paint()
+    // HYPER-OPTIMIZED: All precalc, static paints
+    final blurFilter3 = _blur(allowBlur, 3);
+    final blurFilter2 = _blur(allowBlur, 2);
+    final r05 = radius * 0.5;
+    final r09 = radius * 0.9;
+    final r03 = radius * 0.3;
+
+    _omegaPaint
       ..color = type.color.withOpacity(0.5 * opacity)
-      ..strokeWidth = 2;
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke
+      ..maskFilter = blurFilter3;
 
     // Rotating energy rings
     for (int i = 0; i < 3; i++) {
       final ringPhase = _animationTimer * (2 + i * 0.5);
       final ringRadius = radius * (0.7 + i * 0.2);
-
       canvas.save();
       canvas.rotate(ringPhase);
       canvas.drawArc(
         Rect.fromCircle(center: Offset.zero, radius: ringRadius),
-        0,
-        math.pi * 1.5,
-        false,
-        omegaPaint..style = PaintingStyle.stroke..maskFilter = _blur(allowBlur, 3),
+        0, math.pi * 1.5, false, _omegaPaint,
       );
       canvas.restore();
     }
 
     // Energy spikes
+    final animTimer3 = _animationTimer * 3;
+    _sparkPaint
+      ..color = Colors.white.withOpacity(0.6 * opacity)
+      ..strokeWidth = 1.5
+      ..maskFilter = blurFilter2;
+
     for (int i = 0; i < 6; i++) {
-      final spikePhase = _animationTimer * 3 + i * math.pi / 3;
-      final active = math.sin(spikePhase * 2) > 0;
-      if (!active) continue;
+      final spikePhase = animTimer3 + i * math.pi / 3;
+      final sinSpike2 = math.sin(spikePhase * 2);
+      if (sinSpike2 <= 0) continue;
 
       final angle = (i / 6) * math.pi * 2;
-      final length = radius * (0.9 + math.sin(spikePhase) * 0.3);
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+      final sinSpike = math.sin(spikePhase);
+      final length = r09 + sinSpike * r03;
 
-      canvas.drawLine(
-        Offset(math.cos(angle) * radius * 0.5, math.sin(angle) * radius * 0.5),
-        Offset(math.cos(angle) * length, math.sin(angle) * length),
-        Paint()
-          ..color = Colors.white.withOpacity(0.6 * opacity)
-          ..strokeWidth = 1.5
-          ..maskFilter = _blur(allowBlur, 2),
-      );
+      _tempOffset1 = Offset(cosAngle * r05, sinAngle * r05);
+      _tempOffset2 = Offset(cosAngle * length, sinAngle * length);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _sparkPaint);
     }
 
-    // Reality distortion for shifter
     if (type == EnemyType.realityShifter) {
       final distortPhase = _animationTimer * 5;
-      if (math.sin(distortPhase) > 0.5) {
+      final sinDistort = math.sin(distortPhase);
+      if (sinDistort > 0.5) {
+        final distortPhase3 = distortPhase * 3;
+        _auraPaint
+          ..color = type.color.withOpacity(0.2 * opacity)
+          ..maskFilter = _blur(allowBlur, 8);
         canvas.drawCircle(
-          Offset(math.sin(distortPhase * 3) * 5, math.cos(distortPhase * 3) * 5),
-          radius * 0.8,
-          Paint()..color = type.color.withOpacity(0.2 * opacity)..maskFilter = _blur(allowBlur, 8),
+          Offset(math.sin(distortPhase3) * 5, math.cos(distortPhase3) * 5),
+          radius * 0.8, _auraPaint,
         );
       }
     }
@@ -1331,45 +2575,229 @@ class Enemy extends PositionComponent {
   void _renderHitFlash(Canvas canvas, double radius, double opacity, bool allowBlur) {
     final flashProgress = _hitFlashTimer / _hitFlashDuration;
 
-    // Flash overlay
+    // ═══════════════════════════════════════════════════════════════════════
+    // EPIC HOLOGRAPHIC SHIELD BUBBLE EFFECT
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // LAYER 1: Deep outer glow pulse
+    _shieldGlowPaint
+      ..color = type.color.withOpacity(flashProgress * 0.25 * opacity)
+      ..maskFilter = _blur(allowBlur, 12);
+    canvas.drawCircle(Offset.zero, radius * (1.4 + (1 - flashProgress) * 0.6), _shieldGlowPaint);
+
+    // Secondary magenta glow
+    _shieldGlowPaint
+      ..color = const Color(0xFFFF0066).withOpacity(flashProgress * 0.15 * opacity)
+      ..maskFilter = _blur(allowBlur, 8);
+    canvas.drawCircle(Offset.zero, radius * (1.2 + (1 - flashProgress) * 0.4), _shieldGlowPaint);
+
+    // LAYER 2: Multiple hexagonal shield rings expanding outward
+    for (int ring = 0; ring < 3; ring++) {
+      final ringDelay = ring * 0.15;
+      final ringProgress = ((flashProgress - ringDelay) / (1 - ringDelay)).clamp(0.0, 1.0);
+      if (ringProgress <= 0) continue;
+
+      final hexRadius = radius * (1.1 + (1 - ringProgress) * (0.4 + ring * 0.2));
+      final hexRotation = _animationPhase + ring * math.pi / 6;
+
+      // Create hexagon path
+      _reusableShieldPath.reset();
+      for (int i = 0; i < 6; i++) {
+        final angle = hexRotation + i * math.pi / 3;
+        final x = math.cos(angle) * hexRadius;
+        final y = math.sin(angle) * hexRadius;
+        if (i == 0) {
+          _reusableShieldPath.moveTo(x, y);
+        } else {
+          _reusableShieldPath.lineTo(x, y);
+        }
+      }
+      _reusableShieldPath.close();
+
+      // Hexagon glow
+      _shieldHexPaint
+        ..color = type.color.withOpacity(ringProgress * 0.4 * opacity * (1 - ring * 0.25))
+        ..strokeWidth = 2.5 - ring * 0.5
+        ..maskFilter = _blur(allowBlur, 4);
+      canvas.drawPath(_reusableShieldPath, _shieldHexPaint);
+
+      // Hexagon core line
+      _shieldHexPaint
+        ..color = Colors.white.withOpacity(ringProgress * 0.5 * opacity * (1 - ring * 0.2))
+        ..strokeWidth = 1.5 - ring * 0.3
+        ..maskFilter = null;
+      canvas.drawPath(_reusableShieldPath, _shieldHexPaint);
+
+      // Energy nodes at hexagon vertices
+      for (int i = 0; i < 6; i++) {
+        final angle = hexRotation + i * math.pi / 3;
+        final nodeX = math.cos(angle) * hexRadius;
+        final nodeY = math.sin(angle) * hexRadius;
+        final nodePhase = math.sin(_animationPhase * 4 + i);
+
+        if (nodePhase > 0.3) {
+          _shieldCorePaint.color = Colors.white.withOpacity(ringProgress * 0.7 * opacity);
+          canvas.drawCircle(Offset(nodeX, nodeY), 2.5 - ring * 0.5, _shieldCorePaint);
+
+          _shieldGlowPaint
+            ..color = type.color.withOpacity(ringProgress * 0.4 * opacity)
+            ..maskFilter = _blur(allowBlur, 4);
+          canvas.drawCircle(Offset(nodeX, nodeY), 4 - ring * 0.5, _shieldGlowPaint);
+        }
+      }
+    }
+
+    // LAYER 3: Energy ripple waves
+    for (int i = 0; i < 4; i++) {
+      final rippleDelay = i * 0.1;
+      final rippleProgress = ((flashProgress - rippleDelay) / (1 - rippleDelay)).clamp(0.0, 1.0);
+      if (rippleProgress <= 0) continue;
+
+      final rippleRadius = radius * (0.9 + rippleProgress * 0.8);
+      final rippleAlpha = (1 - rippleProgress) * flashProgress * 0.35;
+
+      _shieldRipplePaint
+        ..color = (i % 2 == 0 ? type.color : const Color(0xFFFF0066)).withOpacity(rippleAlpha * opacity)
+        ..strokeWidth = 1.5 * (1 - rippleProgress * 0.5)
+        ..maskFilter = _blur(allowBlur, 2);
+      canvas.drawCircle(Offset.zero, rippleRadius, _shieldRipplePaint);
+    }
+
+    // LAYER 4: Holographic interference bands
+    final bandCount = 8;
+    for (int i = 0; i < bandCount; i++) {
+      final bandAngle = _animationPhase * 2 + i * math.pi * 2 / bandCount;
+      final bandRadius = radius * (0.8 + (1 - flashProgress) * 0.5);
+      final bandLength = radius * 0.4;
+
+      final startX = math.cos(bandAngle) * (bandRadius - bandLength * 0.5);
+      final startY = math.sin(bandAngle) * (bandRadius - bandLength * 0.5);
+      final endX = math.cos(bandAngle) * (bandRadius + bandLength * 0.5);
+      final endY = math.sin(bandAngle) * (bandRadius + bandLength * 0.5);
+
+      _shieldInterferencePaint
+        ..color = (i % 3 == 0 ? const Color(0xFF00FFFF) : i % 3 == 1 ? const Color(0xFFFF00FF) : type.color)
+            .withOpacity(flashProgress * 0.2 * opacity * math.sin(_animationPhase * 3 + i).abs())
+        ..strokeWidth = 1
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = _blur(allowBlur, 1);
+      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _shieldInterferencePaint);
+    }
+
+    // LAYER 5: Data fragment scatter
+    for (int i = 0; i < 12; i++) {
+      final fragmentAngle = _animationPhase + i * math.pi / 6;
+      final fragmentSpeed = 0.5 + (i % 3) * 0.3;
+      final fragmentDist = radius * (0.8 + (1 - flashProgress) * fragmentSpeed);
+      final fragmentX = math.cos(fragmentAngle) * fragmentDist;
+      final fragmentY = math.sin(fragmentAngle) * fragmentDist;
+
+      final fragmentAlpha = flashProgress * 0.6 * (1 - (1 - flashProgress) * 0.7);
+      _shieldFragmentPaint.color = (i % 2 == 0 ? type.color : Colors.white).withOpacity(fragmentAlpha * opacity);
+
+      // Small rectangles as data fragments
+      canvas.save();
+      canvas.translate(fragmentX, fragmentY);
+      canvas.rotate(fragmentAngle + _animationPhase * 2);
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset.zero, width: 3, height: 1.5),
+        _shieldFragmentPaint,
+      );
+      canvas.restore();
+    }
+
+    // LAYER 6: Electric arc discharge
+    for (int i = 0; i < 6; i++) {
+      final arcAngle = i * math.pi / 3 + _animationPhase;
+      final arcStartRadius = radius * 0.9;
+      final arcEndRadius = radius * (1.2 + (1 - flashProgress) * 0.4);
+
+      final arcStartX = math.cos(arcAngle) * arcStartRadius;
+      final arcStartY = math.sin(arcAngle) * arcStartRadius;
+
+      final arcPath = Path()..moveTo(arcStartX, arcStartY);
+      final segments = 4;
+      for (int s = 1; s <= segments; s++) {
+        final t = s / segments;
+        final currentRadius = arcStartRadius + (arcEndRadius - arcStartRadius) * t;
+        final jitter = (s < segments) ? (_random.nextDouble() - 0.5) * 6 : 0.0;
+        final perpAngle = arcAngle + math.pi / 2;
+        final x = math.cos(arcAngle) * currentRadius + math.cos(perpAngle) * jitter;
+        final y = math.sin(arcAngle) * currentRadius + math.sin(perpAngle) * jitter;
+        arcPath.lineTo(x, y);
+      }
+
+      // Arc glow
+      _shieldHexPaint
+        ..color = type.color.withOpacity(flashProgress * 0.4 * opacity)
+        ..strokeWidth = 3
+        ..strokeCap = StrokeCap.round
+        ..maskFilter = _blur(allowBlur, 3);
+      canvas.drawPath(arcPath, _shieldHexPaint);
+
+      // Arc core
+      _shieldHexPaint
+        ..color = Colors.white.withOpacity(flashProgress * 0.7 * opacity)
+        ..strokeWidth = 1
+        ..maskFilter = null;
+      canvas.drawPath(arcPath, _shieldHexPaint);
+    }
+
+    // LAYER 7: Central flash overlay
     final flashPath = _createBodyPath(radius * 1.1);
     _highlightPaint
-      ..color = Colors.white.withOpacity(flashProgress * 0.35 * opacity)
+      ..color = Colors.white.withOpacity(flashProgress * 0.4 * opacity)
       ..style = PaintingStyle.fill
       ..maskFilter = _blur(allowBlur, 3);
     canvas.drawPath(flashPath, _highlightPaint);
 
-    // Expanding ring
-    final ringRadius = radius * (1.1 + (1 - flashProgress) * 0.35);
-    final ringPath = _createBodyPath(ringRadius);
-    _circuitPaint
-      ..color = const Color(0xFFFF0066).withOpacity(flashProgress * 0.35 * opacity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.square
-      ..maskFilter = _blur(allowBlur, 2);
-    canvas.drawPath(ringPath, _circuitPaint);
+    // LAYER 8: Chromatic aberration effect on body
+    if (flashProgress > 0.5) {
+      final chromaOffset = (flashProgress - 0.5) * 4;
+      final chromaAlpha = (flashProgress - 0.5) * 0.3 * opacity;
 
-    // Directional damage sparks
+      // Red channel offset
+      canvas.save();
+      canvas.translate(-chromaOffset, 0);
+      _highlightPaint.color = Colors.red.withOpacity(chromaAlpha);
+      canvas.drawPath(_createBodyPath(radius), _highlightPaint);
+      canvas.restore();
+
+      // Blue channel offset
+      canvas.save();
+      canvas.translate(chromaOffset, 0);
+      _highlightPaint.color = Colors.blue.withOpacity(chromaAlpha);
+      canvas.drawPath(_createBodyPath(radius), _highlightPaint);
+      canvas.restore();
+    }
+
+    // LAYER 9: Energy pulse core
+    final pulseRadius = radius * 0.3 * flashProgress;
+    _shieldCorePaint.color = Colors.white.withOpacity(flashProgress * 0.8 * opacity);
+    canvas.drawCircle(Offset.zero, pulseRadius, _shieldCorePaint);
+
+    _shieldGlowPaint
+      ..color = type.color.withOpacity(flashProgress * 0.5 * opacity)
+      ..maskFilter = _blur(allowBlur, 6);
+    canvas.drawCircle(Offset.zero, pulseRadius * 1.5, _shieldGlowPaint);
+
+    // LAYER 10: Rotating energy arcs around body
     for (int i = 0; i < 4; i++) {
-      final sparkAngle = i * math.pi / 2 + _animationPhase;
-      final sparkDist = radius * (1 + (1 - flashProgress) * 0.8);
-      final sparkX = math.cos(sparkAngle) * sparkDist;
-      final sparkY = math.sin(sparkAngle) * sparkDist;
+      final arcAngle = _animationPhase * 3 + i * math.pi / 2;
+      final arcRadius = radius * 1.15;
 
-      _particlePaint
-        ..color = Colors.white.withOpacity(flashProgress * 0.5 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.6
-        ..strokeCap = StrokeCap.square
+      _shieldRipplePaint
+        ..color = (i % 2 == 0 ? type.color : const Color(0xFFFF0066)).withOpacity(flashProgress * 0.4 * opacity)
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
         ..maskFilter = _blur(allowBlur, 2);
-      canvas.drawLine(
-        Offset(sparkX, sparkY),
-        Offset(
-          sparkX + math.cos(sparkAngle) * radius * 0.2,
-          sparkY + math.sin(sparkAngle) * radius * 0.2,
-        ),
-        _particlePaint,
+
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset.zero, radius: arcRadius),
+        arcAngle,
+        math.pi * 0.25,
+        false,
+        _shieldRipplePaint,
       );
     }
   }
@@ -1443,30 +2871,266 @@ class Enemy extends PositionComponent {
   }
 
   void _renderTrail(Canvas canvas, double opacity, bool allowBlur) {
-    for (int i = 0; i < _trailPositions.length; i++) {
-      final t = i / _trailPositions.length;
-      final alpha = (1 - t) * 0.35 * opacity;
+    _renderNeonTrail(canvas, opacity, allowBlur);
+  }
 
-      // Calculate offset from current position
-      final offset = _trailPositions[i] - position;
+  /// Renders an elaborate neon trail effect with multiple layers for cyberpunk aesthetic.
+  /// Uses quadratic bezier curves for smooth path connections with gradient fade.
+  void _renderNeonTrail(Canvas canvas, double opacity, bool allowBlur) {
+    if (_trailPositions.length < 2) return;
+
+    // Skip trail rendering if positions are too close (enemy stationary)
+    // Use circular buffer index for newest position
+    final firstPhysIdx = _getTrailPhysicalIndex(0);
+    final firstOffset = _trailPositions[firstPhysIdx] - position;
+    if (firstOffset.length < 1.0) return;
+
+    final reduceFx = Enemy.lowFx || Enemy.forceLowFx;
+    final t = _animationTimer;
+
+    // Get HSL color for secondary/tertiary colors
+    final hslColor = HSLColor.fromColor(type.color);
+    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final tertiaryColor = hslColor.withHue((hslColor.hue + 60) % 360)
+        .withSaturation((hslColor.saturation * 0.8).clamp(0.0, 1.0))
+        .withLightness((hslColor.lightness * 1.2).clamp(0.0, 1.0))
+        .toColor();
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: Outer glow trail (wide, blurred, faded)
+    // ═══════════════════════════════════════════════════════════════════════
+    _neonTrailPath.reset();
+    bool pathStarted = false;
+
+    for (int i = 0; i < _trailPositions.length; i++) {
+      final physIdx = _getTrailPhysicalIndex(i);
+      final offset = _trailPositions[physIdx] - position;
       if (offset.length < 0.5) continue;
 
-      final angle = math.atan2(offset.y, offset.x);
-      final streakLength = size.x * (0.55 - t * 0.3);
-      final streakWidth = size.x * (0.08 - t * 0.04);
+      if (!pathStarted) {
+        _neonTrailPath.moveTo(offset.x, offset.y);
+        pathStarted = true;
+      } else if (i < _trailPositions.length - 1) {
+        // Use quadratic bezier for smooth curves
+        final nextPhysIdx = _getTrailPhysicalIndex(i + 1);
+        final nextOffset = _trailPositions[nextPhysIdx] - position;
+        final midX = (offset.x + nextOffset.x) / 2;
+        final midY = (offset.y + nextOffset.y) / 2;
+        _neonTrailPath.quadraticBezierTo(offset.x, offset.y, midX, midY);
+      } else {
+        _neonTrailPath.lineTo(offset.x, offset.y);
+      }
+    }
 
-      _trailPaint
-        ..color = type.color.withOpacity(alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = streakWidth
-        ..strokeCap = StrokeCap.square
+    if (pathStarted) {
+      // Outer glow with pulsing intensity
+      final glowPulse = 0.25 + math.sin(t * 4) * 0.1;
+      _neonTrailOuterGlowPaint
+        ..color = type.color.withOpacity(glowPulse * opacity * 0.4)
+        ..strokeWidth = size.x * 0.35
+        ..maskFilter = _blur(allowBlur, 12);
+      canvas.drawPath(_neonTrailPath, _neonTrailOuterGlowPaint);
+
+      // Secondary color outer glow (offset slightly for chromatic effect)
+      if (!reduceFx) {
+        _neonTrailOuterGlowPaint
+          ..color = secondaryColor.withOpacity(glowPulse * opacity * 0.2)
+          ..strokeWidth = size.x * 0.28
+          ..maskFilter = _blur(allowBlur, 8);
+        canvas.save();
+        canvas.translate(1.5, 0.5);
+        canvas.drawPath(_neonTrailPath, _neonTrailOuterGlowPaint);
+        canvas.restore();
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: Core trail line (bright, thin)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (pathStarted) {
+      _neonTrailCorePaint
+        ..color = Colors.white.withOpacity(opacity * 0.8)
+        ..strokeWidth = size.x * 0.06
         ..maskFilter = _blur(allowBlur, 2);
+      canvas.drawPath(_neonTrailPath, _neonTrailCorePaint);
 
-      canvas.save();
-      canvas.translate(offset.x, offset.y);
-      canvas.rotate(angle);
-      canvas.drawLine(Offset.zero, Offset(streakLength, 0), _trailPaint);
-      canvas.restore();
+      // Inner bright core
+      _neonTrailCorePaint
+        ..color = type.color.withOpacity(opacity * 0.9)
+        ..strokeWidth = size.x * 0.04
+        ..maskFilter = null;
+      canvas.drawPath(_neonTrailPath, _neonTrailCorePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: Trail segments with gradient fade based on age
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 0; i < _trailPositions.length - 1; i++) {
+      final segmentT = i / _trailPositions.length;
+      final fadeAlpha = (1 - segmentT) * opacity;
+
+      final physIdx = _getTrailPhysicalIndex(i);
+      final nextPhysIdx = _getTrailPhysicalIndex(i + 1);
+      final offset = _trailPositions[physIdx] - position;
+      final nextOffset = _trailPositions[nextPhysIdx] - position;
+      if (offset.length < 0.5 || nextOffset.length < 0.5) continue;
+
+      // Gradient color based on age (bright at head, faded at tail)
+      final gradientColor = Color.lerp(type.color, tertiaryColor, segmentT)!;
+      final segmentWidth = size.x * (0.12 - segmentT * 0.08);
+
+      _neonTrailGradientPaint
+        ..color = gradientColor.withOpacity(fadeAlpha * 0.6)
+        ..strokeWidth = segmentWidth
+        ..maskFilter = _blur(allowBlur, 3);
+
+      canvas.drawLine(
+        Offset(offset.x, offset.y),
+        Offset(nextOffset.x, nextOffset.y),
+        _neonTrailGradientPaint,
+      );
+    }
+
+    if (reduceFx) return; // Skip detailed effects in low-fx mode
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: Energy particles along the trail (small dots)
+    // ═══════════════════════════════════════════════════════════════════════
+    final particleCount = 8;
+    for (int i = 0; i < particleCount; i++) {
+      // Distribute particles along trail with animation offset
+      final particleProgress = (i / particleCount + t * 0.5) % 1.0;
+      final trailIndex = (particleProgress * (_trailPositions.length - 1)).floor();
+      if (trailIndex >= _trailPositions.length - 1) continue;
+
+      final physIdxA = _getTrailPhysicalIndex(trailIndex);
+      final physIdxB = _getTrailPhysicalIndex(trailIndex + 1);
+      final posA = _trailPositions[physIdxA] - position;
+      final posB = _trailPositions[physIdxB] - position;
+      final lerpT = (particleProgress * (_trailPositions.length - 1)) - trailIndex;
+
+      final particleX = posA.x + (posB.x - posA.x) * lerpT;
+      final particleY = posA.y + (posB.y - posA.y) * lerpT;
+
+      // Add slight wobble to particles
+      final wobbleX = math.sin(t * 8 + i * 2) * 2;
+      final wobbleY = math.cos(t * 8 + i * 2) * 2;
+
+      final particleAlpha = (1 - particleProgress) * opacity * 0.8;
+      final particleSize = size.x * (0.08 - particleProgress * 0.04);
+
+      // Particle glow
+      _neonTrailParticlePaint
+        ..color = type.color.withOpacity(particleAlpha * 0.5)
+        ..maskFilter = _blur(allowBlur, 4);
+      canvas.drawCircle(
+        Offset(particleX + wobbleX, particleY + wobbleY),
+        particleSize * 2,
+        _neonTrailParticlePaint,
+      );
+
+      // Particle core
+      _neonTrailParticlePaint
+        ..color = Colors.white.withOpacity(particleAlpha)
+        ..maskFilter = null;
+      canvas.drawCircle(
+        Offset(particleX + wobbleX, particleY + wobbleY),
+        particleSize,
+        _neonTrailParticlePaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: Pulsing nodes at regular intervals
+    // ═══════════════════════════════════════════════════════════════════════
+    final nodeInterval = 4; // Every 4th position
+    for (int i = 0; i < _trailPositions.length; i += nodeInterval) {
+      final physIdx = _getTrailPhysicalIndex(i);
+      final offset = _trailPositions[physIdx] - position;
+      if (offset.length < 1.0) continue;
+
+      final nodeT = i / _trailPositions.length;
+      final nodeAlpha = (1 - nodeT) * opacity;
+      final nodePulse = 1.0 + math.sin(t * 6 + i) * 0.3;
+      final nodeRadius = size.x * 0.1 * nodePulse * (1 - nodeT * 0.5);
+
+      // Node outer glow
+      _neonTrailNodePaint
+        ..color = secondaryColor.withOpacity(nodeAlpha * 0.4)
+        ..maskFilter = _blur(allowBlur, 6);
+      canvas.drawCircle(
+        Offset(offset.x, offset.y),
+        nodeRadius * 2.5,
+        _neonTrailNodePaint,
+      );
+
+      // Node middle glow
+      _neonTrailNodePaint
+        ..color = type.color.withOpacity(nodeAlpha * 0.7)
+        ..maskFilter = _blur(allowBlur, 3);
+      canvas.drawCircle(
+        Offset(offset.x, offset.y),
+        nodeRadius * 1.5,
+        _neonTrailNodePaint,
+      );
+
+      // Node core
+      _neonTrailNodePaint
+        ..color = Colors.white.withOpacity(nodeAlpha * 0.9)
+        ..maskFilter = null;
+      canvas.drawCircle(
+        Offset(offset.x, offset.y),
+        nodeRadius * 0.5,
+        _neonTrailNodePaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: Scanline effect along trail
+    // ═══════════════════════════════════════════════════════════════════════
+    final scanlineOffset = (t * 2) % 1.0;
+    final scanlineIndex = (scanlineOffset * (_trailPositions.length - 1)).floor();
+    if (scanlineIndex < _trailPositions.length - 1) {
+      final scanPhysIdxA = _getTrailPhysicalIndex(scanlineIndex);
+      final scanPhysIdxB = _getTrailPhysicalIndex(scanlineIndex + 1);
+      final scanPosA = _trailPositions[scanPhysIdxA] - position;
+      final scanPosB = _trailPositions[scanPhysIdxB] - position;
+      final scanLerp = (scanlineOffset * (_trailPositions.length - 1)) - scanlineIndex;
+
+      final scanX = scanPosA.x + (scanPosB.x - scanPosA.x) * scanLerp;
+      final scanY = scanPosA.y + (scanPosB.y - scanPosA.y) * scanLerp;
+
+      // Calculate perpendicular direction for scanline
+      final dx = scanPosB.x - scanPosA.x;
+      final dy = scanPosB.y - scanPosA.y;
+      final len = math.sqrt(dx * dx + dy * dy);
+      if (len > 0.1) {
+        final perpX = -dy / len;
+        final perpY = dx / len;
+        final scanWidth = size.x * 0.4;
+
+        // Scanline glow
+        _neonTrailScanlinePaint
+          ..color = tertiaryColor.withOpacity(opacity * 0.6)
+          ..strokeWidth = 3
+          ..maskFilter = _blur(allowBlur, 4);
+        canvas.drawLine(
+          Offset(scanX - perpX * scanWidth, scanY - perpY * scanWidth),
+          Offset(scanX + perpX * scanWidth, scanY + perpY * scanWidth),
+          _neonTrailScanlinePaint,
+        );
+
+        // Scanline core
+        _neonTrailScanlinePaint
+          ..color = Colors.white.withOpacity(opacity * 0.9)
+          ..strokeWidth = 1.5
+          ..maskFilter = null;
+        canvas.drawLine(
+          Offset(scanX - perpX * scanWidth, scanY - perpY * scanWidth),
+          Offset(scanX + perpX * scanWidth, scanY + perpY * scanWidth),
+          _neonTrailScanlinePaint,
+        );
+      }
     }
   }
 
@@ -1546,85 +3210,88 @@ class Enemy extends PositionComponent {
   }
 
   void _renderPredatorEye(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
-    // Main eye socket - dark recess
-    final socketPaint = Paint()
-      ..color = Colors.black.withOpacity(0.8 * opacity);
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset(radius * 0.15, -radius * 0.1), width: radius * 0.5, height: radius * 0.35),
-      socketPaint,
-    );
+    // HYPER-OPTIMIZED: Static paints, precalculated values
+    final r015 = radius * 0.15;
+    final r01 = radius * 0.1;
+    final r05 = radius * 0.5;
+    final r035 = radius * 0.35;
+    final r025 = radius * 0.25;
+    final r02 = radius * 0.2;
+    final eyeCenterX = r015;
+    final eyeCenterY = -r01;
+    final eyeCenter = Offset(eyeCenterX, eyeCenterY);
 
-    // Glowing iris - pulsing menacingly
+    // Main eye socket
+    _socketPaint.color = Colors.black.withOpacity(0.8 * opacity);
+    canvas.drawOval(Rect.fromCenter(center: eyeCenter, width: r05, height: r035), _socketPaint);
+
+    // Glowing iris
     final pulse = 0.7 + 0.3 * math.sin(t * 4);
-    final irisPaint = Paint()
+    _irisPaint
       ..color = type.color.withOpacity(0.9 * opacity * pulse)
       ..maskFilter = _blur(allowBlur, 4);
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset(radius * 0.15, -radius * 0.1), width: radius * 0.35, height: radius * 0.25),
-      irisPaint,
-    );
+    canvas.drawOval(Rect.fromCenter(center: eyeCenter, width: r035, height: r025), _irisPaint);
 
-    // Slit pupil - vertical and menacing
-    final pupilPaint = Paint()..color = Colors.black.withOpacity(0.95 * opacity);
-    final pupilWidth = radius * 0.06 * (0.8 + 0.4 * math.sin(t * 2)); // Dilating
-    canvas.drawOval(
-      Rect.fromCenter(center: Offset(radius * 0.15, -radius * 0.1), width: pupilWidth, height: radius * 0.2),
-      pupilPaint,
-    );
+    // Slit pupil
+    final t2 = t * 2;
+    final pupilWidth = radius * 0.06 * (0.8 + 0.4 * math.sin(t2));
+    _pupilPaint.color = Colors.black.withOpacity(0.95 * opacity);
+    canvas.drawOval(Rect.fromCenter(center: eyeCenter, width: pupilWidth, height: r02), _pupilPaint);
 
     // Evil glint
-    canvas.drawCircle(
-      Offset(radius * 0.08, -radius * 0.18),
-      radius * 0.04,
-      Paint()..color = Colors.white.withOpacity(0.8 * opacity),
-    );
+    _corePaint.color = Colors.white.withOpacity(0.8 * opacity);
+    canvas.drawCircle(Offset(radius * 0.08, -radius * 0.18), radius * 0.04, _corePaint);
 
-    // Blood vessel streaks around eye
-    final veinPaint = Paint()
+    // Blood vessel streaks
+    _veinPaint
       ..color = const Color(0xFFFF0033).withOpacity(0.4 * opacity)
-      ..strokeWidth = 0.8
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 0.8;
     for (int i = 0; i < 4; i++) {
-      final angle = -math.pi / 4 + i * 0.3 + math.sin(t * 2 + i) * 0.1;
-      final startX = radius * 0.15 + math.cos(angle) * radius * 0.2;
-      final startY = -radius * 0.1 + math.sin(angle) * radius * 0.15;
-      final endX = startX + math.cos(angle) * radius * 0.15;
-      final endY = startY + math.sin(angle) * radius * 0.1;
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), veinPaint);
+      final angle = -math.pi / 4 + i * 0.3 + math.sin(t2 + i) * 0.1;
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+      final startX = eyeCenterX + cosAngle * r02;
+      final startY = eyeCenterY + sinAngle * r015;
+      final endX = startX + cosAngle * r015;
+      final endY = startY + sinAngle * r01;
+      _tempOffset1 = Offset(startX, startY);
+      _tempOffset2 = Offset(endX, endY);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _veinPaint);
     }
   }
 
   void _renderHiveEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
-    // Multiple compound eyes like an insect nightmare
-    final eyePositions = [
-      Offset(radius * 0.25, -radius * 0.15),
-      Offset(radius * 0.1, -radius * 0.25),
-      Offset(-radius * 0.05, -radius * 0.2),
-      Offset(radius * 0.3, 0),
-      Offset(radius * 0.15, radius * 0.1),
-      Offset(-radius * 0.1, radius * 0.05),
-    ];
+    // OPTIMIZED: Uses static _hiveEyePositions list, cached sin, reusable paints
+    final t3 = t * 3;
+    final baseSize = radius * 0.08;
+    final sizeVar = radius * 0.02;
+    final opacity07 = 0.7 * opacity;
+    final opacity08 = 0.8 * opacity;
+    final opacity09 = 0.9 * opacity;
 
-    for (int i = 0; i < eyePositions.length; i++) {
-      final pos = eyePositions[i];
-      final phase = t * 3 + i * 0.5;
-      final active = math.sin(phase) > -0.3;
-      final size = radius * (0.08 + 0.02 * math.sin(phase * 2));
+    for (int i = 0; i < _hiveEyePositions.length; i++) {
+      final relPos = _hiveEyePositions[i];
+      _tempOffset1 = Offset(relPos.dx * radius, relPos.dy * radius);
 
-      // Eye socket
-      canvas.drawCircle(pos, size * 1.2, Paint()..color = Colors.black.withOpacity(0.7 * opacity));
+      final phase = t3 + i * 0.5;
+      final sinPhase = math.sin(phase);
+      final active = sinPhase > -0.3;
+      final size = baseSize + sizeVar * math.sin(phase * 2);
+
+      // Eye socket - reuse _socketPaint
+      _socketPaint.color = Colors.black.withOpacity(opacity07);
+      canvas.drawCircle(_tempOffset1, size * 1.2, _socketPaint);
 
       if (active) {
-        // Glowing eye
-        canvas.drawCircle(
-          pos,
-          size,
-          Paint()
-            ..color = type.color.withOpacity(0.8 * opacity)
-            ..maskFilter = _blur(allowBlur, 3),
-        );
-        // Tiny pupil
-        canvas.drawCircle(pos, size * 0.3, Paint()..color = Colors.black.withOpacity(0.9 * opacity));
+        // Glowing eye - reuse _eyePaint
+        _eyePaint
+          ..color = type.color.withOpacity(opacity08)
+          ..maskFilter = _blur(allowBlur, 3);
+        canvas.drawCircle(_tempOffset1, size, _eyePaint);
+
+        // Tiny pupil - reuse _pupilPaint
+        _pupilPaint.color = Colors.black.withOpacity(opacity09);
+        canvas.drawCircle(_tempOffset1, size * 0.3, _pupilPaint);
       }
     }
   }
@@ -1678,50 +3345,64 @@ class Enemy extends PositionComponent {
   }
 
   void _renderBurningEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
-    // Eyes of pure fire/plasma
-    final eyePos = Offset(radius * 0.15, -radius * 0.1);
-    final flameColors = [
-      const Color(0xFFFFFF00),
-      type.color,
-      const Color(0xFFFF3300),
-      const Color(0xFF660000),
-    ];
+    // OPTIMIZED: Cached calculations, reusable paints, reduced allocations
+    final eyePosX = radius * 0.15;
+    final eyePosY = -radius * 0.1;
+    final r002 = radius * 0.02;
+    final r008 = radius * 0.08;
+    final r01 = radius * 0.1;
 
-    // Flame aura around eye
+    // Precalculate trig values used multiple times
+    final t10 = t * 10;
+    final t12 = t * 12;
+    final t8 = t * 8;
+    final t6 = t * 6;
+
+    // Flame colors: index 1 uses type.color, others are static
+    // [yellow, type.color, orange-red, dark-red]
+
+    // Flame aura around eye - unrolled loop for fewer branches
     for (int i = 3; i >= 0; i--) {
       final flameSize = radius * (0.2 + i * 0.05);
-      final jitter = Offset(
-        math.sin(t * 10 + i) * radius * 0.02,
-        math.cos(t * 12 + i) * radius * 0.02 - i * radius * 0.02,
-      );
+      final sinVal = math.sin(t10 + i);
+      final cosVal = math.cos(t12 + i);
+      final jitterX = sinVal * r002;
+      final jitterY = cosVal * r002 - i * r002;
+
+      final flameColor = i == 1 ? type.color : _flameColors[i];
+      final flameOpacity = (0.3 + i * 0.15) * opacity;
+
+      _flamePaint
+        ..color = flameColor.withOpacity(flameOpacity)
+        ..maskFilter = _blur(allowBlur, 4 + i * 2);
+
       canvas.drawOval(
-        Rect.fromCenter(center: eyePos + jitter, width: flameSize * 1.5, height: flameSize),
-        Paint()
-          ..color = flameColors[i].withOpacity((0.3 + i * 0.15) * opacity)
-          ..maskFilter = _blur(allowBlur, 4 + i * 2),
+        Rect.fromCenter(
+          center: Offset(eyePosX + jitterX, eyePosY + jitterY),
+          width: flameSize * 1.5,
+          height: flameSize,
+        ),
+        _flamePaint,
       );
     }
 
     // Core of the eye - white hot
-    canvas.drawCircle(
-      eyePos,
-      radius * 0.08,
-      Paint()..color = Colors.white.withOpacity(0.9 * opacity),
-    );
+    _corePaint.color = Colors.white.withOpacity(0.9 * opacity);
+    canvas.drawCircle(Offset(eyePosX, eyePosY), r008, _corePaint);
 
-    // Flame licks rising from eye
-    final flamePaint = Paint()
+    // Flame licks rising from eye - reuse static paint
+    _sparkPaint
       ..color = const Color(0xFFFF6600).withOpacity(0.6 * opacity)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final baseY = eyePosY - r01;
     for (int i = 0; i < 3; i++) {
-      final x = eyePos.dx + (i - 1) * radius * 0.08;
-      final height = radius * (0.15 + 0.1 * math.sin(t * 8 + i * 2));
-      canvas.drawLine(
-        Offset(x, eyePos.dy - radius * 0.1),
-        Offset(x + math.sin(t * 6 + i) * radius * 0.05, eyePos.dy - radius * 0.1 - height),
-        flamePaint,
-      );
+      final x = eyePosX + (i - 1) * r008;
+      final height = radius * (0.15 + 0.1 * math.sin(t8 + i * 2));
+      final tipX = x + math.sin(t6 + i) * radius * 0.05;
+      canvas.drawLine(Offset(x, baseY), Offset(tipX, baseY - height), _sparkPaint);
     }
   }
 
@@ -2364,6 +4045,212 @@ class Enemy extends PositionComponent {
     }
   }
 
+  /// Renders pulsing energy veins across the enemy body
+  /// Creates a cyberpunk aesthetic with glowing vein network
+  void _renderEnergyVeins(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    // HYPER-OPTIMIZED: Precalculated values, reuse static paints
+    final t = _animationTimer;
+    final walkT = _walkPhase;
+    final veinColor = type.color;
+
+    // Heartbeat timing - faster when damaged
+    final heartbeatSpeed = 2.0 + (1.0 - healthPercent) * 3.0;
+    final heartbeat = math.sin(t * heartbeatSpeed * math.pi);
+    final heartbeatIntensity = (heartbeat * 0.5 + 0.5).clamp(0.0, 1.0);
+
+    // Movement-based pulse (veins pulse with walking)
+    final movementPulse = math.sin(walkT * 2) * 0.3 + 0.7;
+
+    // Combined intensity
+    final baseIntensity = (heartbeatIntensity * 0.6 + movementPulse * 0.4) * opacity;
+
+    // Precalculate common radius multipliers
+    final r02 = radius * 0.2;
+    final r03 = radius * 0.3;
+    final r04 = radius * 0.4;
+    final r05 = radius * 0.5;
+    final r06 = radius * 0.6;
+    final r07 = radius * 0.7;
+    final r08 = radius * 0.8;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: Vein glow effect (blurred behind main lines) - Render first
+    // ═══════════════════════════════════════════════════════════════════════
+    _energyVeinGlowPaint
+      ..color = veinColor.withOpacity(0.25 * baseIntensity)
+      ..strokeWidth = 4.0
+      ..maskFilter = _blur(allowBlur, 6);
+
+    // Main vein branches with glow
+    for (int i = 0; i < 6; i++) {
+      final angle = (i / 6) * math.pi * 2 + t * 0.3;
+      final pulseOffset = math.sin(t * 3 + i * 0.8) * 0.1;
+      final branchLength = r06 + pulseOffset * radius;
+
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+
+      // Glow layer
+      _tempOffset1 = Offset(cosAngle * r02, sinAngle * r02);
+      _tempOffset2 = Offset(cosAngle * branchLength, sinAngle * branchLength);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinGlowPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: Main vein network (branching lines from center outward)
+    // ═══════════════════════════════════════════════════════════════════════
+    _energyVeinCorePaint
+      ..color = veinColor.withOpacity(0.7 * baseIntensity)
+      ..strokeWidth = 1.5;
+
+    // Primary veins (6 main branches)
+    for (int i = 0; i < 6; i++) {
+      final angle = (i / 6) * math.pi * 2 + t * 0.3;
+      final pulseOffset = math.sin(t * 3 + i * 0.8) * 0.1;
+      final branchLength = r06 + pulseOffset * radius;
+
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+
+      // Main vein line
+      _tempOffset1 = Offset(cosAngle * r02, sinAngle * r02);
+      _tempOffset2 = Offset(cosAngle * branchLength, sinAngle * branchLength);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinCorePaint);
+
+      // Secondary branches off main veins
+      final branchAngle1 = angle + 0.4;
+      final branchAngle2 = angle - 0.4;
+      final midPoint = r04;
+
+      _tempOffset1 = Offset(cosAngle * midPoint, sinAngle * midPoint);
+      _tempOffset2 = Offset(
+        math.cos(branchAngle1) * r05,
+        math.sin(branchAngle1) * r05,
+      );
+      canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinCorePaint);
+
+      _tempOffset2 = Offset(
+        math.cos(branchAngle2) * r05,
+        math.sin(branchAngle2) * r05,
+      );
+      canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinCorePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: Vein intersection nodes (brighter spots at junctions)
+    // ═══════════════════════════════════════════════════════════════════════
+    _energyVeinNodePaint
+      ..color = veinColor.withOpacity(0.9 * baseIntensity)
+      ..maskFilter = _blur(allowBlur, 3);
+
+    // Center node (heart)
+    final centerPulse = 1.0 + heartbeatIntensity * 0.3;
+    canvas.drawCircle(Offset.zero, r02 * 0.4 * centerPulse, _energyVeinNodePaint);
+
+    // Junction nodes at branch points
+    for (int i = 0; i < 6; i++) {
+      final angle = (i / 6) * math.pi * 2 + t * 0.3;
+      final nodePulse = math.sin(t * 4 + i * 1.2) * 0.2 + 0.8;
+
+      // Main junction
+      _tempOffset1 = Offset(math.cos(angle) * r04, math.sin(angle) * r04);
+      canvas.drawCircle(_tempOffset1, 2.0 * nodePulse, _energyVeinNodePaint);
+
+      // End node
+      final endDist = r06 + math.sin(t * 3 + i * 0.8) * 0.1 * radius;
+      _tempOffset2 = Offset(math.cos(angle) * endDist, math.sin(angle) * endDist);
+      canvas.drawCircle(_tempOffset2, 1.5 * nodePulse, _energyVeinNodePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: Pulsing energy flow along veins (traveling dots)
+    // ═══════════════════════════════════════════════════════════════════════
+    _energyVeinDotPaint
+      ..color = Colors.white.withOpacity(0.85 * baseIntensity)
+      ..maskFilter = _blur(allowBlur, 2);
+
+    // Energy dots traveling along each main vein
+    for (int i = 0; i < 6; i++) {
+      final angle = (i / 6) * math.pi * 2 + t * 0.3;
+      final cosAngle = math.cos(angle);
+      final sinAngle = math.sin(angle);
+
+      // Multiple dots per vein at different phases
+      for (int j = 0; j < 2; j++) {
+        // Dot travels from center outward cyclically
+        final travelPhase = ((t * 2.5 + i * 0.4 + j * 0.5) % 1.0);
+        final dotDist = r02 + travelPhase * r04;
+
+        // Fade in/out at ends
+        final dotOpacity = math.sin(travelPhase * math.pi);
+        if (dotOpacity > 0.1) {
+          _energyVeinDotPaint.color = Colors.white.withOpacity(0.85 * baseIntensity * dotOpacity);
+          _tempOffset1 = Offset(cosAngle * dotDist, sinAngle * dotDist);
+          canvas.drawCircle(_tempOffset1, 1.5, _energyVeinDotPaint);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: Secondary micro-veins between main veins
+    // ═══════════════════════════════════════════════════════════════════════
+    _energyVeinMicroPaint
+      ..color = veinColor.withOpacity(0.35 * baseIntensity)
+      ..strokeWidth = 0.8;
+
+    // Thin connecting veins between main branches
+    for (int i = 0; i < 6; i++) {
+      final angle1 = (i / 6) * math.pi * 2 + t * 0.3;
+      final angle2 = ((i + 1) / 6) * math.pi * 2 + t * 0.3;
+
+      // Arc at mid-radius connecting adjacent veins
+      final midAngle = (angle1 + angle2) / 2;
+      final arcPulse = math.sin(t * 5 + i * 0.7) * 0.1 + 0.9;
+      final arcRadius = r04 * arcPulse;
+
+      _tempOffset1 = Offset(math.cos(angle1) * r03, math.sin(angle1) * r03);
+      _tempOffset2 = Offset(math.cos(midAngle) * arcRadius, math.sin(midAngle) * arcRadius);
+      _tempOffset3 = Offset(math.cos(angle2) * r03, math.sin(angle2) * r03);
+
+      // Draw as two line segments forming an arc approximation
+      canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinMicroPaint);
+      canvas.drawLine(_tempOffset2, _tempOffset3, _energyVeinMicroPaint);
+
+      // Inner ring micro-veins
+      final innerAngle = midAngle + math.pi / 12;
+      _tempOffset1 = Offset(math.cos(innerAngle) * r02, math.sin(innerAngle) * r02);
+      _tempOffset2 = Offset(math.cos(innerAngle) * r03, math.sin(innerAngle) * r03);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinMicroPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: Heartbeat pulse effect (periodic bright flash from center)
+    // ═══════════════════════════════════════════════════════════════════════
+    // Only render on strong heartbeat pulses
+    if (heartbeatIntensity > 0.7) {
+      final pulseExpand = (heartbeatIntensity - 0.7) / 0.3; // 0 to 1 during pulse
+      final pulseRadius = r02 + pulseExpand * r06;
+      final pulseOpacity = (1.0 - pulseExpand) * 0.4 * opacity;
+
+      _energyVeinHeartbeatPaint
+        ..color = veinColor.withOpacity(pulseOpacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0 * (1.0 - pulseExpand * 0.5)
+        ..maskFilter = _blur(allowBlur, 4);
+
+      canvas.drawCircle(Offset.zero, pulseRadius, _energyVeinHeartbeatPaint);
+
+      // Inner bright flash
+      if (pulseExpand < 0.3) {
+        _energyVeinHeartbeatPaint
+          ..color = Colors.white.withOpacity(0.6 * opacity * (1.0 - pulseExpand / 0.3))
+          ..style = PaintingStyle.fill
+          ..maskFilter = _blur(allowBlur, 6);
+        canvas.drawCircle(Offset.zero, r02 * 0.5 * (1.0 - pulseExpand), _energyVeinHeartbeatPaint);
+      }
+    }
+  }
+
   void _renderCorruptionAura(Canvas canvas, double radius, double opacity, bool allowBlur) {
     final corruption =
         ((1 - healthPercent) * 0.7 + threatTier * 0.08 + (isPhantom ? 0.2 : 0.0))
@@ -2574,8 +4461,8 @@ class Enemy extends PositionComponent {
     // Reuse static path to avoid allocations
     _reusableBodyPath.reset();
 
-    // Get shape category based on enemy type
-    final shape = _getBodyShape();
+    // Use cached shape (already computed in constructor)
+    final shape = _cachedBodyShape;
 
     switch (shape) {
       case _BodyShape.dart:
@@ -2890,6 +4777,237 @@ class Enemy extends PositionComponent {
     canvas.drawPath(_reusableOverlayPath, auraPaint);
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // LIGHTNING CHAIN CONNECTIONS BETWEEN NEARBY ENEMIES
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _renderLightningChains(Canvas canvas, double opacity) {
+    // Safely check if game reference is available
+    if (!isMounted) return;
+
+    List<Enemy> enemies;
+    try {
+      final game = findGame() as BoredGamesGame?;
+      if (game == null) return;
+      enemies = game.enemyManager.activeEnemies;
+    } catch (_) {
+      return; // Game not fully mounted yet
+    }
+
+    // Get this enemy's index to only draw chains to enemies with higher index
+    // This prevents drawing the same chain twice
+    final myIndex = enemies.indexOf(this);
+    if (myIndex < 0) return;
+
+    final myCenter = position;
+    final animPhase = _animationPhase;
+
+    // Determine chain intensity based on health and type
+    final healthFactor = 1.0 - healthPercent; // More chains when damaged
+    final isElectricType = type == EnemyType.sparkDrone ||
+        type == EnemyType.ionSurge ||
+        type == EnemyType.plasmaCore ||
+        type == EnemyType.thunderHulk ||
+        type == EnemyType.lightningWraith ||
+        type == EnemyType.stormRunner ||
+        type == EnemyType.cycloneSpirit ||
+        type == EnemyType.thunderTitan;
+    final typeBonus = isElectricType ? 0.6 : 0.0;
+    final chainIntensity = (healthFactor * 0.5 + typeBonus).clamp(0.0, 1.0);
+
+    // Skip if no chain intensity
+    if (chainIntensity < 0.1) return;
+
+    // Electric chain colors
+    final chainColor = isElectricType
+        ? type.color
+        : Color.lerp(type.color, const Color(0xFF00FFFF), 0.5)!;
+    final hslColor = HSLColor.fromColor(chainColor);
+    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
+
+    for (int i = myIndex + 1; i < enemies.length; i++) {
+      final otherEnemy = enemies[i];
+      final otherCenter = otherEnemy.position;
+      final distance = myCenter.distanceTo(otherCenter);
+
+      // Check if within chain range
+      if (distance < _lightningChainMinDistance || distance > _lightningChainMaxDistance) continue;
+
+      // Calculate combined chain probability
+      final otherHealthFactor = 1.0 - otherEnemy.healthPercent;
+      final otherIsElectric = otherEnemy.type == EnemyType.sparkDrone ||
+          otherEnemy.type == EnemyType.ionSurge ||
+          otherEnemy.type == EnemyType.plasmaCore ||
+          otherEnemy.type == EnemyType.thunderHulk ||
+          otherEnemy.type == EnemyType.lightningWraith ||
+          otherEnemy.type == EnemyType.stormRunner ||
+          otherEnemy.type == EnemyType.cycloneSpirit ||
+          otherEnemy.type == EnemyType.thunderTitan;
+      final otherTypeBonus = otherIsElectric ? 0.6 : 0.0;
+      final otherIntensity = (otherHealthFactor * 0.5 + otherTypeBonus).clamp(0.0, 1.0);
+
+      final combinedIntensity = ((chainIntensity + otherIntensity) / 2).clamp(0.0, 1.0);
+
+      // Distance falloff
+      final distanceFactor = 1.0 - ((distance - _lightningChainMinDistance) /
+          (_lightningChainMaxDistance - _lightningChainMinDistance));
+      final chainOpacity = combinedIntensity * distanceFactor * opacity * 0.7;
+
+      if (chainOpacity < 0.1) continue;
+
+      // Random flicker (chains appear and disappear)
+      final flickerSeed = (animPhase * 5 + myIndex * 7 + i * 13).floor();
+      if (_lightningRandom.nextDouble() > chainOpacity + 0.3) continue;
+
+      // Calculate start and end points (in local coordinates)
+      final direction = otherCenter - myCenter;
+      final startX = direction.x * 0.0; // Start from this enemy's center
+      final startY = direction.y * 0.0;
+      final endX = direction.x;
+      final endY = direction.y;
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 1: Outer glow (wide blur)
+      // ═══════════════════════════════════════════════════════════════════════
+      _lightningPath.reset();
+      _generateLightningBolt(
+        _lightningPath,
+        startX, startY,
+        endX, endY,
+        8, // segments
+        distance * 0.12, // displacement amplitude
+        animPhase * 10,
+      );
+
+      _lightningGlowPaint.color = chainColor.withOpacity(chainOpacity * 0.3);
+      canvas.drawPath(_lightningPath, _lightningGlowPaint);
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 2: Core lightning bolt
+      // ═══════════════════════════════════════════════════════════════════════
+      _lightningCorePaint.color = chainColor.withOpacity(chainOpacity * 0.8);
+      canvas.drawPath(_lightningPath, _lightningCorePaint);
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 3: Inner white highlight
+      // ═══════════════════════════════════════════════════════════════════════
+      _lightningInnerPaint.color = Colors.white.withOpacity(chainOpacity * 0.6);
+      canvas.drawPath(_lightningPath, _lightningInnerPaint);
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 4: Branch lightning (smaller bolts off the main one)
+      // ═══════════════════════════════════════════════════════════════════════
+      if (chainOpacity > 0.3 && !Enemy.lowFx) {
+        final branchCount = 2 + _lightningRandom.nextInt(2);
+        for (int b = 0; b < branchCount; b++) {
+          final t = 0.25 + _lightningRandom.nextDouble() * 0.5;
+          final branchX = startX + (endX - startX) * t;
+          final branchY = startY + (endY - startY) * t;
+
+          // Branch direction (perpendicular with random angle)
+          final mainAngle = math.atan2(endY - startY, endX - startX);
+          final branchAngle = mainAngle + (math.pi / 2) * (_lightningRandom.nextBool() ? 1 : -1) +
+              (_lightningRandom.nextDouble() - 0.5) * 0.8;
+          final branchLength = distance * 0.15 * (0.5 + _lightningRandom.nextDouble() * 0.5);
+          final branchEndX = branchX + math.cos(branchAngle) * branchLength;
+          final branchEndY = branchY + math.sin(branchAngle) * branchLength;
+
+          _lightningPath.reset();
+          _generateLightningBolt(
+            _lightningPath,
+            branchX, branchY,
+            branchEndX, branchEndY,
+            3, // fewer segments for branches
+            branchLength * 0.15,
+            animPhase * 12 + b,
+          );
+
+          _lightningCorePaint.color = secondaryColor.withOpacity(chainOpacity * 0.5);
+          canvas.drawPath(_lightningPath, _lightningCorePaint);
+        }
+      }
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 5: Spark nodes at connection points
+      // ═══════════════════════════════════════════════════════════════════════
+      final sparkPulse = math.sin(animPhase * 8) * 0.3 + 0.7;
+
+      // Spark at start
+      _lightningNodePaint.color = Colors.white.withOpacity(chainOpacity * 0.8 * sparkPulse);
+      canvas.drawCircle(Offset(startX, startY), 4 * sparkPulse, _lightningNodePaint);
+
+      // Spark at end
+      _lightningNodePaint.color = chainColor.withOpacity(chainOpacity * 0.6 * sparkPulse);
+      canvas.drawCircle(Offset(endX, endY), 5 * sparkPulse, _lightningNodePaint);
+
+      // ═══════════════════════════════════════════════════════════════════════
+      // LAYER 6: Electric sparks along the chain
+      // ═══════════════════════════════════════════════════════════════════════
+      if (!Enemy.lowFx) {
+        final sparkCount = (4 * chainOpacity).ceil();
+        for (int s = 0; s < sparkCount; s++) {
+          final t = _lightningRandom.nextDouble();
+          final sparkX = startX + (endX - startX) * t;
+          final sparkY = startY + (endY - startY) * t;
+          final sparkOffset = (_lightningRandom.nextDouble() - 0.5) * distance * 0.1;
+          final perpAngle = math.atan2(endY - startY, endX - startX) + math.pi / 2;
+          final finalSparkX = sparkX + math.cos(perpAngle) * sparkOffset;
+          final finalSparkY = sparkY + math.sin(perpAngle) * sparkOffset;
+
+          final sparkAlpha = math.sin(animPhase * 15 + s * 2) * 0.5 + 0.5;
+          if (sparkAlpha < 0.3) continue;
+
+          _lightningSparkPaint.color = Colors.white.withOpacity(chainOpacity * sparkAlpha * 0.9);
+          canvas.drawCircle(
+            Offset(finalSparkX, finalSparkY),
+            1.5 + sparkAlpha * 1.5,
+            _lightningSparkPaint,
+          );
+        }
+      }
+    }
+  }
+
+  /// Generates a jagged lightning bolt path between two points
+  void _generateLightningBolt(
+    Path path,
+    double startX, double startY,
+    double endX, double endY,
+    int segments,
+    double displacement,
+    double seed,
+  ) {
+    path.moveTo(startX, startY);
+
+    final dx = endX - startX;
+    final dy = endY - startY;
+    final perpX = -dy;
+    final perpY = dx;
+    final perpLen = math.sqrt(perpX * perpX + perpY * perpY);
+    final normPerpX = perpLen > 0 ? perpX / perpLen : 0;
+    final normPerpY = perpLen > 0 ? perpY / perpLen : 0;
+
+    double prevX = startX;
+    double prevY = startY;
+
+    for (int i = 1; i < segments; i++) {
+      final t = i / segments;
+      final baseX = startX + dx * t;
+      final baseY = startY + dy * t;
+
+      // Add random displacement perpendicular to the line
+      final dispSeed = seed + i * 3.7;
+      final dispAmount = math.sin(dispSeed) * displacement * (1 - math.pow(t * 2 - 1, 2));
+      final pointX = baseX + normPerpX * dispAmount;
+      final pointY = baseY + normPerpY * dispAmount;
+
+      path.lineTo(pointX, pointY);
+      prevX = pointX;
+      prevY = pointY;
+    }
+
+    path.lineTo(endX, endY);
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
   // CACHED MASKFILTERS - Avoid per-frame allocations (CRITICAL for perf)
   // ═══════════════════════════════════════════════════════════════════════
@@ -2912,163 +5030,1027 @@ class Enemy extends PositionComponent {
 
   void _renderHealthBar(Canvas canvas, {double visibility = 1.0}) {
     final allowBlur = Enemy.allowBlur;
-    final barWidth = 34.0 * type.sizeMult;
-    const barHeight = 6.0;
-    final barY = -24.0 * type.sizeMult;
+    final reduceFx = Enemy.lowFx;
+    final barWidth = 42.0 * type.sizeMult;
+    const barHeight = 8.0;
+    final barY = -28.0 * type.sizeMult;
     final visibilityClamp = visibility.clamp(0.4, 1.0);
-    final baseOpacity =
-        (healthPercent >= 1.0 ? 0.45 : 0.9) * visibilityClamp;
+    final baseOpacity = (healthPercent >= 1.0 ? 0.5 : 0.95) * visibilityClamp;
+    final healthColor = _getHealthColor();
+    final animPhase = _animationTimer;
 
-    // Background with glow
-    final bgRect = Rect.fromCenter(
-      center: Offset(0, barY),
-      width: barWidth + 2,
-      height: barHeight + 2,
+    // Extended holographic frame dimensions
+    const frameExtendLeft = 6.0;
+    const frameExtendRight = 18.0; // Extra space for data readout
+    const frameExtendTop = 4.0;
+    const frameExtendBottom = 3.0;
+
+    final frameRect = Rect.fromLTRB(
+      -barWidth / 2 - frameExtendLeft,
+      barY - barHeight / 2 - frameExtendTop,
+      barWidth / 2 + frameExtendRight,
+      barY + barHeight / 2 + frameExtendBottom,
     );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 1: Holographic background field
+    // ═══════════════════════════════════════════════════════════════════════
     if (allowBlur) {
+      _holoBarGlowPaint
+        ..color = const Color(0xFF00FFFF).withOpacity(0.15 * baseOpacity);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(bgRect.inflate(1.5), const Radius.circular(3)),
-        Paint()
-          ..color = Colors.black.withOpacity(0.35 * baseOpacity)
-          ..maskFilter = _blur(allowBlur, 6),
+        RRect.fromRectAndRadius(frameRect.inflate(3), const Radius.circular(2)),
+        _holoBarGlowPaint,
       );
     }
+
+    // Dark holographic panel background
+    _holoBarDataPaint
+      ..color = const Color(0xFF001122).withOpacity(0.85 * baseOpacity)
+      ..style = PaintingStyle.fill;
     canvas.drawRRect(
-      RRect.fromRectAndRadius(bgRect, const Radius.circular(2)),
-      Paint()..color = const Color(0xFF000000).withOpacity(0.65 * baseOpacity),
+      RRect.fromRectAndRadius(frameRect, const Radius.circular(1)),
+      _holoBarDataPaint,
     );
 
-    // Border
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(bgRect, const Radius.circular(2)),
-      Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(0.6 * baseOpacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
-    );
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 2: Animated hexagonal grid pattern overlay
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!reduceFx) {
+      canvas.save();
+      canvas.clipRRect(RRect.fromRectAndRadius(frameRect, const Radius.circular(1)));
 
-    // Health fill with gradient
+      const hexSize = 4.0;
+      final hexPhase = animPhase * 0.5;
+      _holoBarHexPaint
+        ..color = const Color(0xFF00FFFF).withOpacity(0.12 * baseOpacity);
+
+      for (double hx = frameRect.left; hx < frameRect.right; hx += hexSize * 1.5) {
+        for (double hy = frameRect.top; hy < frameRect.bottom; hy += hexSize * 1.73) {
+          final offsetX = ((hy - frameRect.top) ~/ (hexSize * 1.73)) % 2 == 0 ? 0.0 : hexSize * 0.75;
+          final pulse = math.sin(hexPhase + hx * 0.2 + hy * 0.15) * 0.5 + 0.5;
+          if (pulse > 0.6) {
+            _holoBarPath.reset();
+            final cx = hx + offsetX;
+            final cy = hy;
+            for (int i = 0; i < 6; i++) {
+              final angle = i * math.pi / 3;
+              final px = cx + math.cos(angle) * hexSize * 0.4;
+              final py = cy + math.sin(angle) * hexSize * 0.4;
+              if (i == 0) {
+                _holoBarPath.moveTo(px, py);
+              } else {
+                _holoBarPath.lineTo(px, py);
+              }
+            }
+            _holoBarPath.close();
+            canvas.drawPath(_holoBarPath, _holoBarHexPaint);
+          }
+        }
+      }
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 3: Scanline effect
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!reduceFx) {
+      canvas.save();
+      canvas.clipRRect(RRect.fromRectAndRadius(frameRect, const Radius.circular(1)));
+
+      _holoBarScanlinePaint
+        ..color = const Color(0xFF000000).withOpacity(0.15 * baseOpacity)
+        ..strokeWidth = 0.5
+        ..style = PaintingStyle.stroke;
+
+      final scanOffset = (animPhase * 15) % 3;
+      for (double sy = frameRect.top + scanOffset; sy < frameRect.bottom; sy += 3) {
+        canvas.drawLine(
+          Offset(frameRect.left, sy),
+          Offset(frameRect.right, sy),
+          _holoBarScanlinePaint,
+        );
+      }
+      canvas.restore();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 4: Health fill with animated energy gradient
+    // ═══════════════════════════════════════════════════════════════════════
     final fillWidth = barWidth * healthPercent;
-    final healthColor = _getHealthColor();
-
-    final fillRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(-barWidth / 2, barY - barHeight / 2, fillWidth, barHeight),
-      const Radius.circular(1),
+    final fillRect = Rect.fromLTWH(
+      -barWidth / 2,
+      barY - barHeight / 2 + 1,
+      fillWidth,
+      barHeight - 2,
     );
 
-    // Gradient fill
-    final gradient = LinearGradient(
+    // Animated gradient fill
+    final gradientPhase = animPhase * 2;
+    final energyShift = math.sin(gradientPhase) * 0.1;
+    final healthGradient = LinearGradient(
       colors: [
-        healthColor.withOpacity(0.95 * baseOpacity),
-        healthColor.withOpacity(0.6 * baseOpacity),
+        healthColor.withOpacity((0.9 + energyShift) * baseOpacity),
+        Color.lerp(healthColor, const Color(0xFFFFFFFF), 0.3)!.withOpacity((0.7 + energyShift) * baseOpacity),
+        healthColor.withOpacity((0.85 - energyShift) * baseOpacity),
       ],
-    ).createShader(fillRect.outerRect);
+      stops: [0.0, 0.5 + math.sin(gradientPhase * 0.7) * 0.2, 1.0],
+    ).createShader(fillRect);
 
-    canvas.drawRRect(fillRect, Paint()..shader = gradient);
-
-    // Glow on health bar
+    _holoBarDataPaint
+      ..shader = healthGradient
+      ..style = PaintingStyle.fill;
     canvas.drawRRect(
-      fillRect,
-      Paint()
-        ..color = healthColor.withOpacity(0.55 * baseOpacity)
-        ..maskFilter = _blur(allowBlur, 3),
+      RRect.fromRectAndRadius(fillRect, const Radius.circular(1)),
+      _holoBarDataPaint,
     );
+    _holoBarDataPaint.shader = null;
+
+    // Energy pulse line on fill
+    if (!reduceFx && fillWidth > 5) {
+      final pulseX = -barWidth / 2 + (animPhase * 40) % fillWidth;
+      _holoBarEnergyPaint
+        ..color = Colors.white.withOpacity(0.6 * baseOpacity)
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke;
+      canvas.drawLine(
+        Offset(pulseX, fillRect.top),
+        Offset(pulseX, fillRect.bottom),
+        _holoBarEnergyPaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 5: Glow on health bar
+    // ═══════════════════════════════════════════════════════════════════════
+    if (allowBlur) {
+      _holoBarGlowPaint
+        ..color = healthColor.withOpacity(0.5 * baseOpacity);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(fillRect, const Radius.circular(1)),
+        _holoBarGlowPaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 6: Holographic frame with corner accents
+    // ═══════════════════════════════════════════════════════════════════════
+    _holoBarFramePaint
+      ..color = const Color(0xFF00FFFF).withOpacity(0.7 * baseOpacity);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(frameRect, const Radius.circular(1)),
+      _holoBarFramePaint,
+    );
+
+    // Animated corner brackets
+    const cornerLen = 4.0;
+    final cornerPulse = math.sin(animPhase * 3) * 0.2 + 0.8;
+    _holoBarCornerPaint
+      ..color = const Color(0xFF00FFFF).withOpacity(cornerPulse * baseOpacity);
+
+    // Top-left corner
+    canvas.drawLine(
+      Offset(frameRect.left, frameRect.top + cornerLen),
+      Offset(frameRect.left, frameRect.top),
+      _holoBarCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(frameRect.left, frameRect.top),
+      Offset(frameRect.left + cornerLen, frameRect.top),
+      _holoBarCornerPaint,
+    );
+
+    // Bottom-left corner
+    canvas.drawLine(
+      Offset(frameRect.left, frameRect.bottom - cornerLen),
+      Offset(frameRect.left, frameRect.bottom),
+      _holoBarCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(frameRect.left, frameRect.bottom),
+      Offset(frameRect.left + cornerLen, frameRect.bottom),
+      _holoBarCornerPaint,
+    );
+
+    // Top-right corner
+    canvas.drawLine(
+      Offset(frameRect.right, frameRect.top + cornerLen),
+      Offset(frameRect.right, frameRect.top),
+      _holoBarCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(frameRect.right, frameRect.top),
+      Offset(frameRect.right - cornerLen, frameRect.top),
+      _holoBarCornerPaint,
+    );
+
+    // Bottom-right corner
+    canvas.drawLine(
+      Offset(frameRect.right, frameRect.bottom - cornerLen),
+      Offset(frameRect.right, frameRect.bottom),
+      _holoBarCornerPaint,
+    );
+    canvas.drawLine(
+      Offset(frameRect.right, frameRect.bottom),
+      Offset(frameRect.right - cornerLen, frameRect.bottom),
+      _holoBarCornerPaint,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 7: Data readout panel (health %, threat level)
+    // ═══════════════════════════════════════════════════════════════════════
+    final dataX = barWidth / 2 + 3;
+    final dataY = barY;
+
+    // Health percentage with animated flicker
+    final healthPct = (healthPercent * 100).toInt();
+    final flickerIntensity = reduceFx ? 1.0 : (math.sin(animPhase * 8) * 0.1 + 0.9);
+
+    // Draw percentage digits
+    _drawHoloDigits(
+      canvas,
+      healthPct.toString().padLeft(3, '0'),
+      Offset(dataX, dataY - 2),
+      const Color(0xFF00FF88),
+      baseOpacity * flickerIntensity,
+      2.5,
+    );
+
+    // Percent symbol
+    _holoBarDataPaint
+      ..color = const Color(0xFF00FFFF).withOpacity(0.6 * baseOpacity * flickerIntensity)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(dataX + 11, dataY - 4), 1, _holoBarDataPaint);
+    canvas.drawCircle(Offset(dataX + 14, dataY), 1, _holoBarDataPaint);
+    canvas.drawLine(
+      Offset(dataX + 10, dataY + 1),
+      Offset(dataX + 15, dataY - 5),
+      _holoBarFramePaint..strokeWidth = 0.8,
+    );
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 8: Threat indicator bars
+    // ═══════════════════════════════════════════════════════════════════════
+    final threatLevel = (threatTier + 1).clamp(1, 5);
+    for (int i = 0; i < 5; i++) {
+      final barActive = i < threatLevel;
+      final threatX = dataX + i * 3;
+      final threatY = dataY + 4;
+      final barH = barActive ? 3.0 : 2.0;
+
+      _holoBarDataPaint
+        ..color = (barActive
+          ? (i < 2 ? const Color(0xFF00FF88) : i < 4 ? const Color(0xFFFFFF00) : const Color(0xFFFF0066))
+          : const Color(0xFF333333)).withOpacity(baseOpacity * (barActive ? flickerIntensity : 0.5));
+      canvas.drawRect(
+        Rect.fromLTWH(threatX, threatY - barH / 2, 2, barH),
+        _holoBarDataPaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 9: Glitch distortion effect (occasional)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!reduceFx) {
+      final glitchChance = _holoBarRandom.nextDouble();
+      if (glitchChance < 0.03 && healthPercent < 0.5) {
+        // Random horizontal slice displacement
+        final sliceY = frameRect.top + _holoBarRandom.nextDouble() * frameRect.height;
+        final sliceH = 1.0 + _holoBarRandom.nextDouble() * 2;
+        final sliceOffset = (_holoBarRandom.nextDouble() - 0.5) * 4;
+
+        _holoBarGlitchPaint
+          ..color = const Color(0xFFFF0066).withOpacity(0.4 * baseOpacity);
+        canvas.drawRect(
+          Rect.fromLTWH(frameRect.left + sliceOffset, sliceY, frameRect.width * 0.5, sliceH),
+          _holoBarGlitchPaint,
+        );
+
+        _holoBarGlitchPaint
+          ..color = const Color(0xFF00FFFF).withOpacity(0.3 * baseOpacity);
+        canvas.drawRect(
+          Rect.fromLTWH(frameRect.left - sliceOffset, sliceY + sliceH, frameRect.width * 0.3, sliceH),
+          _holoBarGlitchPaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 10: Critical health warning flash
+    // ═══════════════════════════════════════════════════════════════════════
+    if (healthPercent < 0.25) {
+      final warningPulse = math.sin(animPhase * 6) * 0.5 + 0.5;
+      _holoBarGlitchPaint
+        ..color = const Color(0xFFFF0066).withOpacity(0.2 * warningPulse * baseOpacity);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(frameRect, const Radius.circular(1)),
+        _holoBarGlitchPaint,
+      );
+
+      // Warning border flash
+      if (!reduceFx) {
+        _holoBarFramePaint
+          ..color = const Color(0xFFFF0066).withOpacity(0.8 * warningPulse * baseOpacity)
+          ..strokeWidth = 1.5;
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(frameRect, const Radius.circular(1)),
+          _holoBarFramePaint,
+        );
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 11: Holographic projection lines
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!reduceFx && allowBlur) {
+      final projectionOpacity = 0.3 * baseOpacity;
+      _holoBarEnergyPaint
+        ..color = const Color(0xFF00FFFF).withOpacity(projectionOpacity)
+        ..strokeWidth = 0.5;
+
+      // Vertical projection lines from corners
+      canvas.drawLine(
+        Offset(frameRect.left, frameRect.bottom),
+        Offset(frameRect.left - 2, frameRect.bottom + 4),
+        _holoBarEnergyPaint,
+      );
+      canvas.drawLine(
+        Offset(frameRect.right, frameRect.bottom),
+        Offset(frameRect.right + 2, frameRect.bottom + 4),
+        _holoBarEnergyPaint,
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // HOLOGRAPHIC STATUS ICONS (Above entity indicators)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /// Renders holographic status icons above the entity
+  void _renderStatusIcons(Canvas canvas, double visibility, bool reduceFx) {
+    final allowBlur = Enemy.allowBlur && !reduceFx;
+    final animPhase = _animationPhase;
+    final baseOpacity = visibility.clamp(0.4, 1.0);
+
+    // Calculate icon positions (horizontal stacking above health bar)
+    const iconSize = 10.0;
+    const iconSpacing = 14.0;
+    final iconY = -48.0 * type.sizeMult; // Above health bar
+
+    // Subtle bob animation using animation phase
+    final bobOffset = reduceFx ? 0.0 : math.sin(animPhase * 2.5) * 1.5;
+
+    // Collect active effects with their remaining durations
+    final activeEffects = <_StatusIconData>[];
+
+    if (isSlowed) {
+      activeEffects.add(_StatusIconData(
+        type: _StatusIconType.slow,
+        color: _slowIconColor,
+        duration: _slowDuration,
+        maxDuration: 3.0, // Typical slow duration
+      ));
+    }
+    if (isBurning) {
+      activeEffects.add(_StatusIconData(
+        type: _StatusIconType.burn,
+        color: _burnIconColor,
+        duration: _burnDuration,
+        maxDuration: 5.0, // Typical burn duration
+      ));
+    }
+    if (hasShield) {
+      activeEffects.add(_StatusIconData(
+        type: _StatusIconType.shield,
+        color: _shieldIconColor,
+        duration: _shieldDuration,
+        maxDuration: _shieldDuration > 0 ? _shieldDuration : 1.0,
+      ));
+    }
+    if (isBoosted) {
+      activeEffects.add(_StatusIconData(
+        type: _StatusIconType.boost,
+        color: _boostIconColor,
+        duration: _boostDuration,
+        maxDuration: 5.0, // Typical boost duration
+      ));
+    }
+    if (isStunned) {
+      activeEffects.add(_StatusIconData(
+        type: _StatusIconType.stun,
+        color: _stunIconColor,
+        duration: _stunDuration,
+        maxDuration: 2.0, // Typical stun duration
+      ));
+    }
+
+    if (activeEffects.isEmpty) return;
+
+    // Calculate total width for centering
+    final totalWidth = activeEffects.length * iconSpacing - (iconSpacing - iconSize);
+    final startX = -totalWidth / 2 + iconSize / 2;
+
+    for (int i = 0; i < activeEffects.length; i++) {
+      final effect = activeEffects[i];
+      final iconX = startX + i * iconSpacing;
+      final iconCenter = Offset(iconX, iconY + bobOffset);
+
+      // Pulsing animation (each icon has slight phase offset)
+      final pulsePhase = animPhase + i * 0.5;
+      final pulse = reduceFx ? 1.0 : 0.85 + math.sin(pulsePhase * 3) * 0.15;
+
+      _renderSingleStatusIcon(
+        canvas,
+        effect,
+        iconCenter,
+        iconSize * pulse,
+        baseOpacity,
+        animPhase,
+        allowBlur,
+        reduceFx,
+      );
+    }
+  }
+
+  /// Renders a single holographic status icon
+  void _renderSingleStatusIcon(
+    Canvas canvas,
+    _StatusIconData effect,
+    Offset center,
+    double size,
+    double opacity,
+    double animPhase,
+    bool allowBlur,
+    bool reduceFx,
+  ) {
+    final halfSize = size / 2;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 1: Outer glow effect
+    // ═══════════════════════════════════════════════════════════════════════
+    if (allowBlur) {
+      _statusIconGlowPaint
+        ..color = effect.color.withOpacity(0.4 * opacity);
+      canvas.drawCircle(center, halfSize * 1.3, _statusIconGlowPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 2: Holographic base shape
+    // ═══════════════════════════════════════════════════════════════════════
+    _statusIconBasePaint
+      ..color = effect.color.withOpacity(0.15 * opacity);
+    canvas.drawCircle(center, halfSize, _statusIconBasePaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 3: Timer arc (remaining duration)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (effect.duration > 0 && effect.maxDuration > 0) {
+      final progress = (effect.duration / effect.maxDuration).clamp(0.0, 1.0);
+      final sweepAngle = progress * math.pi * 2;
+
+      _statusIconTimerPaint
+        ..color = effect.color.withOpacity(0.6 * opacity);
+      canvas.drawArc(
+        Rect.fromCircle(center: center, radius: halfSize * 0.85),
+        -math.pi / 2, // Start from top
+        sweepAngle,
+        false,
+        _statusIconTimerPaint,
+      );
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 4: Icon shape (type-specific)
+    // ═══════════════════════════════════════════════════════════════════════
+    _statusIconPath.reset();
+    _statusIconStrokePaint
+      ..color = effect.color.withOpacity(0.9 * opacity);
+    _statusIconBasePaint
+      ..color = effect.color.withOpacity(0.7 * opacity);
+
+    switch (effect.type) {
+      case _StatusIconType.slow:
+        _drawSnowflakeIcon(canvas, center, halfSize * 0.7, opacity, effect.color);
+        break;
+      case _StatusIconType.burn:
+        _drawFlameIcon(canvas, center, halfSize * 0.7, opacity, effect.color, animPhase);
+        break;
+      case _StatusIconType.shield:
+        _drawHexagonIcon(canvas, center, halfSize * 0.7, opacity, effect.color);
+        break;
+      case _StatusIconType.boost:
+        _drawArrowIcon(canvas, center, halfSize * 0.7, opacity, effect.color);
+        break;
+      case _StatusIconType.stun:
+        _drawLightningIcon(canvas, center, halfSize * 0.7, opacity, effect.color, animPhase);
+        break;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Layer 5: Scanline overlay (holographic effect)
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!reduceFx) {
+      final scanY = (animPhase * 20) % (size * 2) - size;
+      if (scanY > -halfSize && scanY < halfSize) {
+        _statusIconScanlinePaint
+          ..color = Colors.white.withOpacity(0.3 * opacity);
+        canvas.drawLine(
+          Offset(center.dx - halfSize, center.dy + scanY),
+          Offset(center.dx + halfSize, center.dy + scanY),
+          _statusIconScanlinePaint,
+        );
+      }
+    }
+  }
+
+  /// Draws a snowflake icon for slow effect
+  void _drawSnowflakeIcon(Canvas canvas, Offset center, double size, double opacity, Color color) {
+    _statusIconStrokePaint
+      ..color = color.withOpacity(0.9 * opacity)
+      ..strokeWidth = 1.2;
+
+    // Six-pointed snowflake with branches
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3;
+      final cos = math.cos(angle);
+      final sin = math.sin(angle);
+
+      // Main branch
+      canvas.drawLine(
+        center,
+        Offset(center.dx + cos * size, center.dy + sin * size),
+        _statusIconStrokePaint,
+      );
+
+      // Small side branches
+      final branchLen = size * 0.4;
+      final branchStart = size * 0.5;
+      for (final offset in [-0.4, 0.4]) {
+        final branchAngle = angle + offset;
+        canvas.drawLine(
+          Offset(center.dx + cos * branchStart, center.dy + sin * branchStart),
+          Offset(
+            center.dx + cos * branchStart + math.cos(branchAngle) * branchLen,
+            center.dy + sin * branchStart + math.sin(branchAngle) * branchLen,
+          ),
+          _statusIconStrokePaint,
+        );
+      }
+    }
+
+    // Center dot
+    _statusIconBasePaint
+      ..color = color.withOpacity(0.8 * opacity);
+    canvas.drawCircle(center, size * 0.15, _statusIconBasePaint);
+  }
+
+  /// Draws a flame icon for burn effect
+  void _drawFlameIcon(Canvas canvas, Offset center, double size, double opacity, Color color, double animPhase) {
+    // Animated flame flicker
+    final flicker = math.sin(animPhase * 8) * 0.1;
+
+    _statusIconPath.reset();
+
+    // Outer flame shape
+    _statusIconPath.moveTo(center.dx, center.dy + size * 0.8);
+    _statusIconPath.quadraticBezierTo(
+      center.dx - size * (0.7 + flicker),
+      center.dy + size * 0.2,
+      center.dx - size * 0.3,
+      center.dy - size * 0.3,
+    );
+    _statusIconPath.quadraticBezierTo(
+      center.dx - size * 0.1,
+      center.dy - size * 0.1,
+      center.dx,
+      center.dy - size * (0.9 + flicker * 0.5),
+    );
+    _statusIconPath.quadraticBezierTo(
+      center.dx + size * 0.1,
+      center.dy - size * 0.1,
+      center.dx + size * 0.3,
+      center.dy - size * 0.3,
+    );
+    _statusIconPath.quadraticBezierTo(
+      center.dx + size * (0.7 + flicker),
+      center.dy + size * 0.2,
+      center.dx,
+      center.dy + size * 0.8,
+    );
+    _statusIconPath.close();
+
+    // Gradient-like effect with multiple layers
+    _statusIconBasePaint
+      ..color = color.withOpacity(0.7 * opacity);
+    canvas.drawPath(_statusIconPath, _statusIconBasePaint);
+
+    _statusIconStrokePaint
+      ..color = Colors.white.withOpacity(0.6 * opacity)
+      ..strokeWidth = 1.0;
+    canvas.drawPath(_statusIconPath, _statusIconStrokePaint);
+
+    // Inner bright core
+    _statusIconBasePaint
+      ..color = const Color(0xFFFFFF00).withOpacity(0.5 * opacity);
+    canvas.drawCircle(
+      Offset(center.dx, center.dy + size * 0.2),
+      size * 0.25,
+      _statusIconBasePaint,
+    );
+  }
+
+  /// Draws a hexagon icon for shield effect
+  void _drawHexagonIcon(Canvas canvas, Offset center, double size, double opacity, Color color) {
+    _statusIconPath.reset();
+
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3 - math.pi / 6; // Flat top hexagon
+      final x = center.dx + math.cos(angle) * size;
+      final y = center.dy + math.sin(angle) * size;
+      if (i == 0) {
+        _statusIconPath.moveTo(x, y);
+      } else {
+        _statusIconPath.lineTo(x, y);
+      }
+    }
+    _statusIconPath.close();
+
+    // Fill with semi-transparent color
+    _statusIconBasePaint
+      ..color = color.withOpacity(0.4 * opacity);
+    canvas.drawPath(_statusIconPath, _statusIconBasePaint);
+
+    // Stroke outline
+    _statusIconStrokePaint
+      ..color = color.withOpacity(0.9 * opacity)
+      ..strokeWidth = 1.5;
+    canvas.drawPath(_statusIconPath, _statusIconStrokePaint);
+
+    // Inner highlight hexagon
+    _statusIconPath.reset();
+    final innerSize = size * 0.5;
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3 - math.pi / 6;
+      final x = center.dx + math.cos(angle) * innerSize;
+      final y = center.dy + math.sin(angle) * innerSize;
+      if (i == 0) {
+        _statusIconPath.moveTo(x, y);
+      } else {
+        _statusIconPath.lineTo(x, y);
+      }
+    }
+    _statusIconPath.close();
+
+    _statusIconStrokePaint
+      ..color = Colors.white.withOpacity(0.5 * opacity)
+      ..strokeWidth = 0.8;
+    canvas.drawPath(_statusIconPath, _statusIconStrokePaint);
+  }
+
+  /// Draws an upward arrow icon for boost effect
+  void _drawArrowIcon(Canvas canvas, Offset center, double size, double opacity, Color color) {
+    _statusIconPath.reset();
+
+    // Arrow pointing up
+    _statusIconPath.moveTo(center.dx, center.dy - size); // Top point
+    _statusIconPath.lineTo(center.dx + size * 0.6, center.dy); // Right wing
+    _statusIconPath.lineTo(center.dx + size * 0.25, center.dy); // Right indent
+    _statusIconPath.lineTo(center.dx + size * 0.25, center.dy + size * 0.8); // Right bottom
+    _statusIconPath.lineTo(center.dx - size * 0.25, center.dy + size * 0.8); // Left bottom
+    _statusIconPath.lineTo(center.dx - size * 0.25, center.dy); // Left indent
+    _statusIconPath.lineTo(center.dx - size * 0.6, center.dy); // Left wing
+    _statusIconPath.close();
+
+    // Fill
+    _statusIconBasePaint
+      ..color = color.withOpacity(0.6 * opacity);
+    canvas.drawPath(_statusIconPath, _statusIconBasePaint);
+
+    // Stroke
+    _statusIconStrokePaint
+      ..color = color.withOpacity(0.9 * opacity)
+      ..strokeWidth = 1.2;
+    canvas.drawPath(_statusIconPath, _statusIconStrokePaint);
+
+    // Speed lines
+    _statusIconStrokePaint
+      ..color = Colors.white.withOpacity(0.4 * opacity)
+      ..strokeWidth = 0.8;
+    canvas.drawLine(
+      Offset(center.dx, center.dy - size * 0.5),
+      Offset(center.dx, center.dy - size * 0.2),
+      _statusIconStrokePaint,
+    );
+  }
+
+  /// Draws a lightning bolt icon for stun effect
+  void _drawLightningIcon(Canvas canvas, Offset center, double size, double opacity, Color color, double animPhase) {
+    // Flicker effect for lightning
+    final flicker = (math.sin(animPhase * 12) > 0.3) ? 1.0 : 0.7;
+
+    _statusIconPath.reset();
+
+    // Lightning bolt shape
+    _statusIconPath.moveTo(center.dx + size * 0.1, center.dy - size);
+    _statusIconPath.lineTo(center.dx - size * 0.4, center.dy - size * 0.1);
+    _statusIconPath.lineTo(center.dx, center.dy - size * 0.1);
+    _statusIconPath.lineTo(center.dx - size * 0.2, center.dy + size);
+    _statusIconPath.lineTo(center.dx + size * 0.3, center.dy + size * 0.1);
+    _statusIconPath.lineTo(center.dx - size * 0.1, center.dy + size * 0.1);
+    _statusIconPath.close();
+
+    // Fill with flicker
+    _statusIconBasePaint
+      ..color = color.withOpacity(0.7 * opacity * flicker);
+    canvas.drawPath(_statusIconPath, _statusIconBasePaint);
+
+    // Bright stroke
+    _statusIconStrokePaint
+      ..color = Colors.white.withOpacity(0.8 * opacity * flicker)
+      ..strokeWidth = 1.0;
+    canvas.drawPath(_statusIconPath, _statusIconStrokePaint);
+
+    // Electric sparks around
+    if (flicker > 0.9) {
+      _statusIconBasePaint
+        ..color = Colors.white.withOpacity(0.6 * opacity);
+      canvas.drawCircle(
+        Offset(center.dx - size * 0.5, center.dy - size * 0.3),
+        size * 0.1,
+        _statusIconBasePaint,
+      );
+      canvas.drawCircle(
+        Offset(center.dx + size * 0.4, center.dy + size * 0.4),
+        size * 0.08,
+        _statusIconBasePaint,
+      );
+    }
+  }
+
+  /// Draws holographic-style digits for data readouts
+  void _drawHoloDigits(Canvas canvas, String text, Offset pos, Color color, double opacity, double scale) {
+    // Simplified 7-segment style digit rendering
+    final segmentWidth = 1.5 * scale;
+    final digitWidth = 3.0 * scale;
+    final digitHeight = 5.0 * scale;
+    final spacing = 0.5 * scale;
+
+    _holoBarDataPaint
+      ..color = color.withOpacity(opacity)
+      ..style = PaintingStyle.fill;
+
+    for (int i = 0; i < text.length; i++) {
+      final char = text[i];
+      final dx = pos.dx + i * (digitWidth + spacing);
+      final dy = pos.dy - digitHeight / 2;
+
+      // Draw simplified digit segments
+      final segments = _getDigitSegments(char);
+      for (final seg in segments) {
+        switch (seg) {
+          case 'top':
+            canvas.drawRect(Rect.fromLTWH(dx, dy, digitWidth, segmentWidth), _holoBarDataPaint);
+            break;
+          case 'mid':
+            canvas.drawRect(Rect.fromLTWH(dx, dy + digitHeight / 2 - segmentWidth / 2, digitWidth, segmentWidth), _holoBarDataPaint);
+            break;
+          case 'bot':
+            canvas.drawRect(Rect.fromLTWH(dx, dy + digitHeight - segmentWidth, digitWidth, segmentWidth), _holoBarDataPaint);
+            break;
+          case 'tl':
+            canvas.drawRect(Rect.fromLTWH(dx, dy, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            break;
+          case 'tr':
+            canvas.drawRect(Rect.fromLTWH(dx + digitWidth - segmentWidth, dy, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            break;
+          case 'bl':
+            canvas.drawRect(Rect.fromLTWH(dx, dy + digitHeight / 2, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            break;
+          case 'br':
+            canvas.drawRect(Rect.fromLTWH(dx + digitWidth - segmentWidth, dy + digitHeight / 2, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            break;
+        }
+      }
+    }
+  }
+
+  /// Returns segments to draw for a digit character
+  List<String> _getDigitSegments(String char) {
+    switch (char) {
+      case '0': return ['top', 'bot', 'tl', 'tr', 'bl', 'br'];
+      case '1': return ['tr', 'br'];
+      case '2': return ['top', 'mid', 'bot', 'tr', 'bl'];
+      case '3': return ['top', 'mid', 'bot', 'tr', 'br'];
+      case '4': return ['mid', 'tl', 'tr', 'br'];
+      case '5': return ['top', 'mid', 'bot', 'tl', 'br'];
+      case '6': return ['top', 'mid', 'bot', 'tl', 'bl', 'br'];
+      case '7': return ['top', 'tr', 'br'];
+      case '8': return ['top', 'mid', 'bot', 'tl', 'tr', 'bl', 'br'];
+      case '9': return ['top', 'mid', 'bot', 'tl', 'tr', 'br'];
+      default: return [];
+    }
   }
 
   void _drawMegaGeometry(Canvas canvas, double radius, double phantomOpacity, bool allowBlur) {
     final color = type.color.withOpacity(phantomOpacity);
+
+    // 3D Extrusion Layer (drawn first, behind everything)
+    _draw3DExtrusion(canvas, radius, color, phantomOpacity, allowBlur);
 
     // Hull silhouette
     _drawHull(canvas, radius, color, phantomOpacity, allowBlur);
 
     // Core Layer
     _drawCore(canvas, radius, color, phantomOpacity);
-    
+
     // Shell Layer (Semi-transparent)
     _drawShell(canvas, radius, color, phantomOpacity, allowBlur);
-    
+
     // Armor Plates (Independent rotation)
     _drawArmorPlates(canvas, radius, color, phantomOpacity);
+
+    // 3D Highlight Rim (top edge lighting)
+    _draw3DHighlight(canvas, radius, color, phantomOpacity, allowBlur);
+  }
+
+  /// Draws 3D extrusion layers below the enemy body for depth perception
+  void _draw3DExtrusion(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+    // Extrusion depth based on enemy size
+    final extrusionDepth = radius * 0.35 * type.sizeMult.clamp(0.8, 1.5);
+
+    // Use fewer layers in lowFx mode but still show 3D effect
+    final layers = Enemy.lowFx ? 2 : 4;
+
+    // Light direction simulation (from top-left)
+    final lightOffsetX = -radius * 0.08;
+    final lightOffsetY = radius * 0.12;
+
+    for (int i = layers; i >= 1; i--) {
+      final layerOffset = (i / layers) * extrusionDepth;
+      final darkness = 0.3 + (i / layers) * 0.5; // Deeper = darker
+      final layerColor = Color.lerp(color, Colors.black, darkness)!;
+
+      canvas.save();
+      canvas.translate(
+        lightOffsetX * (i / layers),
+        lightOffsetY + layerOffset,
+      );
+
+      final extrusionPath = _createBodyPath(radius * (0.92 - i * 0.02));
+
+      _extrusionPaint.color = layerColor.withOpacity(opacity * (0.6 - i * 0.08));
+      _extrusionPaint.style = PaintingStyle.fill;
+
+      canvas.drawPath(extrusionPath, _extrusionPaint);
+      canvas.restore();
+    }
+
+    // Bottom edge glow for depth (skip blur in lowFx mode)
+    canvas.save();
+    canvas.translate(lightOffsetX * 0.5, lightOffsetY + extrusionDepth * 0.8);
+
+    final bottomGlowPath = _createBodyPath(radius * 0.88);
+    _bottomGlowPaint.color = Colors.black.withOpacity(opacity * 0.4);
+    _bottomGlowPaint.style = PaintingStyle.stroke;
+    _bottomGlowPaint.strokeWidth = 2.5;
+    _bottomGlowPaint.maskFilter = (allowBlur && !Enemy.lowFx) ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+
+    canvas.drawPath(bottomGlowPath, _bottomGlowPaint);
+    canvas.restore();
+  }
+
+  /// Draws 3D highlight rim on the top edge for lighting effect
+  void _draw3DHighlight(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+    final highlightPath = _createBodyPath(radius * 0.93);
+
+    // In lowFx mode, draw simplified highlight (just specular spot)
+    if (Enemy.lowFx) {
+      // Simple specular highlight - always visible for 3D effect
+      final specularRadius = radius * 0.2;
+      final specularOffset = Offset(-radius * 0.25, -radius * 0.3);
+
+      _specularPaint.color = Colors.white.withOpacity(opacity * 0.4);
+
+      canvas.drawCircle(specularOffset, specularRadius, _specularPaint);
+      return;
+    }
+
+    // Full quality: Top-left highlight (simulates light source)
+    _highlightPaint.shader = SweepGradient(
+      center: Alignment.center,
+      startAngle: -math.pi * 0.75,
+      endAngle: math.pi * 0.25,
+      colors: [
+        Colors.white.withOpacity(0.0),
+        Colors.white.withOpacity(opacity * 0.45),
+        Colors.white.withOpacity(opacity * 0.6),
+        Colors.white.withOpacity(opacity * 0.35),
+        Colors.white.withOpacity(0.0),
+      ],
+      stops: const [0.0, 0.2, 0.35, 0.5, 1.0],
+    ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
+    _highlightPaint.style = PaintingStyle.stroke;
+    _highlightPaint.strokeWidth = 1.8;
+    _highlightPaint.strokeCap = StrokeCap.round;
+    _highlightPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+
+    canvas.drawPath(highlightPath, _highlightPaint);
+
+    // Inner specular highlight (small bright spot)
+    final specularRadius = radius * 0.25;
+    final specularOffset = Offset(-radius * 0.3, -radius * 0.35);
+
+    _specularPaint.shader = RadialGradient(
+      colors: [
+        Colors.white.withOpacity(opacity * 0.55),
+        Colors.white.withOpacity(opacity * 0.2),
+        Colors.white.withOpacity(0.0),
+      ],
+      stops: const [0.0, 0.4, 1.0],
+    ).createShader(Rect.fromCircle(center: specularOffset, radius: specularRadius));
+
+    canvas.drawCircle(specularOffset, specularRadius, _specularPaint);
+
+    // Animated energy pulse on edge (gives life to 3D effect)
+    final pulsePhase = _animationTimer * 2;
+    final pulseAlpha = (math.sin(pulsePhase) * 0.5 + 0.5) * opacity * 0.3;
+
+    if (pulseAlpha > 0.05) {
+      _pulsePaint.color = color.withOpacity(pulseAlpha);
+      _pulsePaint.style = PaintingStyle.stroke;
+      _pulsePaint.strokeWidth = 1.2;
+      _pulsePaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
+
+      canvas.drawPath(highlightPath, _pulsePaint);
+    }
   }
 
   void _drawHull(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
     final hullPath = _createBodyPath(radius * 0.95);
     final baseColor = Color.lerp(color.withOpacity(1), Colors.black, 0.45)!;
-    final hullPaint = Paint()
-      ..color = baseColor.withOpacity(opacity * 0.65)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(hullPath, hullPaint);
+    _hullPaint.color = baseColor.withOpacity(opacity * 0.65);
+    _hullPaint.style = PaintingStyle.fill;
+    canvas.drawPath(hullPath, _hullPaint);
 
-    final outlinePaint = Paint()
-      ..color = color.withOpacity(opacity * 0.85)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.square;
-    if (allowBlur && !Enemy.lowFx) {
-      outlinePaint.maskFilter = _blur(true, 3);
-    }
-    canvas.drawPath(hullPath, outlinePaint);
+    _outlinePaint.color = color.withOpacity(opacity * 0.85);
+    _outlinePaint.style = PaintingStyle.stroke;
+    _outlinePaint.strokeWidth = 1.4;
+    _outlinePaint.strokeCap = StrokeCap.square;
+    _outlinePaint.maskFilter = (allowBlur && !Enemy.lowFx) ? _blur(true, 3) : null;
+    canvas.drawPath(hullPath, _outlinePaint);
   }
 
   void _drawCore(Canvas canvas, double radius, Color color, double opacity) {
     final coreRadius = radius * 0.6;
-    final corePaint = Paint()
-      ..shader = LinearGradient(
-        colors: [
-          Colors.black.withOpacity(opacity * 0.85),
-          color.withOpacity(opacity),
-          Colors.white.withOpacity(opacity * 0.35),
-        ],
-        stops: const [0.0, 0.65, 1.0],
-        begin: const Alignment(-0.6, -0.6),
-        end: const Alignment(0.8, 0.8),
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadius));
-      
-    final corePath = _createTypeLayerPath(coreRadius, 0);
-    canvas.drawPath(corePath, corePaint);
+    _corePaint.shader = LinearGradient(
+      colors: [
+        Colors.black.withOpacity(opacity * 0.85),
+        color.withOpacity(opacity),
+        Colors.white.withOpacity(opacity * 0.35),
+      ],
+      stops: const [0.0, 0.65, 1.0],
+      begin: const Alignment(-0.6, -0.6),
+      end: const Alignment(0.8, 0.8),
+    ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadius));
 
-    final slashPaint = Paint()
-      ..color = Colors.white.withOpacity(0.45 * opacity)
-      ..strokeWidth = coreRadius * 0.18
-      ..strokeCap = StrokeCap.square;
+    final corePath = _createTypeLayerPath(coreRadius, 0);
+    canvas.drawPath(corePath, _corePaint);
+
+    _slashPaint.color = Colors.white.withOpacity(0.45 * opacity);
+    _slashPaint.strokeWidth = coreRadius * 0.18;
+    _slashPaint.strokeCap = StrokeCap.square;
     canvas.save();
     canvas.clipPath(corePath);
     final slashLen = coreRadius * 1.1;
     canvas.drawLine(
       Offset(-slashLen * 0.4, -slashLen * 0.1),
       Offset(slashLen * 0.5, -slashLen * 0.25),
-      slashPaint,
+      _slashPaint,
     );
-    slashPaint.strokeWidth = coreRadius * 0.12;
+    _slashPaint.strokeWidth = coreRadius * 0.12;
     canvas.drawLine(
       Offset(-slashLen * 0.3, slashLen * 0.2),
       Offset(slashLen * 0.4, slashLen * 0.05),
-      slashPaint,
+      _slashPaint,
     );
     canvas.restore();
   }
 
   void _drawShell(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
-    final shellPaint = Paint()
-      ..color = color.withOpacity(opacity * 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-
-    if (allowBlur && !Enemy.lowFx) {
-      // Use fixed blur value to enable caching (animated blur is expensive)
-      shellPaint.maskFilter = _blur(true, 5);
-    }
+    _shellPaint.color = color.withOpacity(opacity * 0.3);
+    _shellPaint.style = PaintingStyle.stroke;
+    _shellPaint.strokeWidth = 2;
+    _shellPaint.maskFilter = (allowBlur && !Enemy.lowFx) ? _blur(true, 5) : null;
 
     final shellPath = _createTypeLayerPath(radius * 0.9, 1);
-    canvas.drawPath(shellPath, shellPaint);
+    canvas.drawPath(shellPath, _shellPaint);
   }
 
   void _drawArmorPlates(Canvas canvas, double radius, Color color, double opacity) {
     // Determine plate alpha based on speed (fast = less armor, slow = more armor)
     final plateAlpha = type.speedMult > 1.2 ? 0.45 : (type.healthMult > 2.0 ? 0.95 : 0.6);
-    final platePaint = Paint()
-      ..color = color.withOpacity(opacity * plateAlpha)
-      ..style = PaintingStyle.fill;
+    _platePaint.color = color.withOpacity(opacity * plateAlpha);
+    _platePaint.style = PaintingStyle.fill;
 
     // Plate count based on size/health
     final plateCount = type.healthMult > 2.5 ? 6 : (type.healthMult > 1.5 ? 5 : 4);
@@ -3119,7 +6101,7 @@ class Enemy extends PositionComponent {
         _reusableOverlayPath.close();
       }
 
-      canvas.drawPath(_reusableOverlayPath, platePaint);
+      canvas.drawPath(_reusableOverlayPath, _platePaint);
       canvas.restore();
     }
   }
@@ -3390,4 +6372,47 @@ class _PlasmaParticle {
     size -= dt * 2;
     if (opacity <= 0 || size <= 0) isActive = false;
   }
+}
+
+/// Particle used in spawn/materialize effect
+class _SpawnParticle {
+  _SpawnParticle({
+    required this.angle,
+    required this.distance,
+    required this.speed,
+    required this.size,
+  });
+
+  final double angle;
+  double distance;
+  final double speed;
+  final double size;
+
+  void update(double dt) {
+    distance -= speed * dt;
+  }
+}
+
+/// Types of status icons that can be displayed above enemies
+enum _StatusIconType {
+  slow,   // Snowflake - blue
+  burn,   // Flame - orange/red
+  shield, // Hexagon - cyan
+  boost,  // Arrow up - green
+  stun,   // Lightning - yellow
+}
+
+/// Data container for status icon rendering
+class _StatusIconData {
+  const _StatusIconData({
+    required this.type,
+    required this.color,
+    required this.duration,
+    required this.maxDuration,
+  });
+
+  final _StatusIconType type;
+  final Color color;
+  final double duration;
+  final double maxDuration;
 }

@@ -4,6 +4,21 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// CACHED STATIC PAINTS FOR ALL PARTICLES - Avoid per-frame allocations
+// ═══════════════════════════════════════════════════════════════════════════
+final Paint _particleGlowPaint = Paint();
+final Paint _particleMainPaint = Paint();
+final Paint _particleTrailPaint = Paint()
+  ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+final Paint _particleSparkCenterPaint = Paint();
+final Paint _particleSparkRayPaint = Paint()
+  ..strokeCap = StrokeCap.round;
+final Path _particleReusablePath = Path();
+
+// Cached MaskFilter for common blur values
+const MaskFilter _blur2 = MaskFilter.blur(BlurStyle.normal, 2);
+
 /// Particle shapes for visual variety
 enum ParticleShape {
   circle,
@@ -24,11 +39,99 @@ enum EmitterPattern {
   spiral,   // Spiral outward pattern
 }
 
-/// A simple particle for visual effects
+/// A simple particle for visual effects - with object pooling
 class Particle {
-  Particle({
-    required this.position,
-    required this.velocity,
+  // ═══════════════════════════════════════════════════════════════════════════
+  // OBJECT POOLING - Avoid per-particle allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static const int _maxPoolSize = 200;
+  static final List<Particle> _pool = [];
+
+  /// Pre-allocated trail vectors pool (max trail length = 10)
+  static const int _maxTrailLength = 10;
+
+  /// Spawn a particle from the pool or create new one
+  static Particle spawn({
+    required Vector2 position,
+    required Vector2 velocity,
+    required Color color,
+    required double lifetime,
+    double size = 4.0,
+    bool fadeOut = true,
+    ParticleShape shape = ParticleShape.circle,
+    double gravity = 0,
+    double drag = 0.98,
+    bool spin = false,
+    double spinSpeed = 3.0,
+    bool hasTrail = false,
+    int trailLength = 5,
+    Color? colorEnd,
+    bool glow = true,
+    double glowRadius = 4.0,
+    bool shrink = true,
+  }) {
+    Particle particle;
+    if (_pool.isNotEmpty) {
+      particle = _pool.removeLast();
+      particle._reset(
+        position: position,
+        velocity: velocity,
+        color: color,
+        lifetime: lifetime,
+        size: size,
+        fadeOut: fadeOut,
+        shape: shape,
+        gravity: gravity,
+        drag: drag,
+        spin: spin,
+        spinSpeed: spinSpeed,
+        hasTrail: hasTrail,
+        trailLength: trailLength,
+        colorEnd: colorEnd,
+        glow: glow,
+        glowRadius: glowRadius,
+        shrink: shrink,
+      );
+    } else {
+      particle = Particle._internal(
+        position: position,
+        velocity: velocity,
+        color: color,
+        lifetime: lifetime,
+        size: size,
+        fadeOut: fadeOut,
+        shape: shape,
+        gravity: gravity,
+        drag: drag,
+        spin: spin,
+        spinSpeed: spinSpeed,
+        hasTrail: hasTrail,
+        trailLength: trailLength,
+        colorEnd: colorEnd,
+        glow: glow,
+        glowRadius: glowRadius,
+        shrink: shrink,
+      );
+    }
+    return particle;
+  }
+
+  /// Return particle to pool for reuse
+  void recycle() {
+    if (_pool.length < _maxPoolSize) {
+      _pool.add(this);
+    }
+  }
+
+  /// Clear the pool (call between games)
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  // Private constructor for internal use
+  Particle._internal({
+    required Vector2 position,
+    required Vector2 velocity,
     required this.color,
     required this.lifetime,
     this.size = 4.0,
@@ -47,10 +150,106 @@ class Particle {
   }) : remainingLife = lifetime,
        _initialSize = size,
        _rotation = 0,
-       _trail = hasTrail ? List.generate(trailLength, (_) => position.clone()) : null;
+       // Pre-allocate position and velocity vectors
+       this.position = position.clone(),
+       this.velocity = velocity.clone() {
+    // Pre-allocate trail vectors if needed
+    if (hasTrail && trailLength > 0) {
+      final len = trailLength.clamp(1, _maxTrailLength);
+      _trail = List.generate(len, (_) => this.position.clone());
+    }
+  }
 
-  Vector2 position;
-  Vector2 velocity;
+  // Legacy constructor for backwards compatibility
+  Particle({
+    required Vector2 position,
+    required Vector2 velocity,
+    required this.color,
+    required this.lifetime,
+    this.size = 4.0,
+    this.fadeOut = true,
+    this.shape = ParticleShape.circle,
+    this.gravity = 0,
+    this.drag = 0.98,
+    this.spin = false,
+    this.spinSpeed = 3.0,
+    this.hasTrail = false,
+    this.trailLength = 5,
+    this.colorEnd,
+    this.glow = true,
+    this.glowRadius = 4.0,
+    this.shrink = true,
+  }) : remainingLife = lifetime,
+       _initialSize = size,
+       _rotation = 0,
+       this.position = position.clone(),
+       this.velocity = velocity.clone() {
+    if (hasTrail && trailLength > 0) {
+      final len = trailLength.clamp(1, _maxTrailLength);
+      _trail = List.generate(len, (_) => this.position.clone());
+    }
+  }
+
+  /// Reset particle state for reuse from pool
+  void _reset({
+    required Vector2 position,
+    required Vector2 velocity,
+    required Color color,
+    required double lifetime,
+    double size = 4.0,
+    bool fadeOut = true,
+    ParticleShape shape = ParticleShape.circle,
+    double gravity = 0,
+    double drag = 0.98,
+    bool spin = false,
+    double spinSpeed = 3.0,
+    bool hasTrail = false,
+    int trailLength = 5,
+    Color? colorEnd,
+    bool glow = true,
+    double glowRadius = 4.0,
+    bool shrink = true,
+  }) {
+    // Reuse existing Vector2 objects
+    this.position.setFrom(position);
+    this.velocity.setFrom(velocity);
+    this.color = color;
+    this.colorEnd = colorEnd;
+    this.lifetime = lifetime;
+    this.remainingLife = lifetime;
+    this.size = size;
+    _initialSize = size;
+    this.fadeOut = fadeOut;
+    this.shape = shape;
+    this.gravity = gravity;
+    this.drag = drag;
+    this.spin = spin;
+    this.spinSpeed = spinSpeed;
+    this.hasTrail = hasTrail;
+    this.trailLength = trailLength;
+    this.glow = glow;
+    this.glowRadius = glowRadius;
+    this.shrink = shrink;
+    _rotation = 0;
+
+    // Handle trail - reuse existing trail vectors if possible
+    if (hasTrail && trailLength > 0) {
+      final len = trailLength.clamp(1, _maxTrailLength);
+      if (_trail == null || _trail!.length != len) {
+        _trail = List.generate(len, (_) => this.position.clone());
+      } else {
+        // Reuse existing trail vectors
+        for (final v in _trail!) {
+          v.setFrom(this.position);
+        }
+      }
+    } else {
+      _trail = null;
+    }
+  }
+
+  final Vector2 position;
+  final Vector2 velocity;
   Color color;
   Color? colorEnd;
   double lifetime;
@@ -68,7 +267,7 @@ class Particle {
   double glowRadius;
   bool shrink;
 
-  final double _initialSize;
+  double _initialSize;
   double _rotation;
   List<Vector2>? _trail;
 
@@ -78,12 +277,12 @@ class Particle {
   double get progress => 1.0 - lifePercent;
 
   void update(double dt) {
-    // Update trail
+    // Update trail - reuse Vector2 objects instead of cloning
     if (_trail != null) {
       for (int i = _trail!.length - 1; i > 0; i--) {
-        _trail![i] = _trail![i - 1].clone();
+        _trail![i].setFrom(_trail![i - 1]);
       }
-      _trail![0] = position.clone();
+      _trail![0].setFrom(position);
     }
 
     // Apply gravity
@@ -92,8 +291,9 @@ class Particle {
     // Apply drag
     velocity.scale(drag);
 
-    // Move
-    position += velocity * dt;
+    // Move - avoid creating new Vector2
+    position.x += velocity.x * dt;
+    position.y += velocity.y * dt;
     remainingLife -= dt;
 
     // Update size
@@ -133,14 +333,15 @@ class Particle {
       _renderTrail(canvas, particleColor);
     }
 
-    // Render glow
+    // Render glow using cached paint
     if (glow && alpha > 0.1) {
+      _particleGlowPaint
+        ..color = particleColor.withOpacity(alpha * 0.3)
+        ..maskFilter = _blur2; // Use cached MaskFilter instead of creating new one
       canvas.drawCircle(
         Offset(position.x, position.y),
         size + glowRadius,
-        Paint()
-          ..color = particleColor.withOpacity(alpha * 0.3)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, glowRadius),
+        _particleGlowPaint,
       );
     }
 
@@ -151,38 +352,38 @@ class Particle {
       canvas.rotate(_rotation);
     }
 
-    final paint = Paint()..color = particleColor;
+    _particleMainPaint.color = particleColor;
 
     switch (shape) {
       case ParticleShape.circle:
-        canvas.drawCircle(Offset.zero, size, paint);
+        canvas.drawCircle(Offset.zero, size, _particleMainPaint);
         break;
 
       case ParticleShape.square:
         canvas.drawRect(
           Rect.fromCenter(center: Offset.zero, width: size * 2, height: size * 2),
-          paint,
+          _particleMainPaint,
         );
         break;
 
       case ParticleShape.triangle:
-        _drawTriangle(canvas, size, paint);
+        _drawTriangle(canvas, size);
         break;
 
       case ParticleShape.star:
-        _drawStar(canvas, size, paint);
+        _drawStar(canvas, size);
         break;
 
       case ParticleShape.diamond:
-        _drawDiamond(canvas, size, paint);
+        _drawDiamond(canvas, size);
         break;
 
       case ParticleShape.line:
-        _drawLine(canvas, size, paint);
+        _drawLine(canvas, size);
         break;
 
       case ParticleShape.spark:
-        _drawSpark(canvas, size, paint, particleColor);
+        _drawSpark(canvas, size, particleColor);
         break;
     }
 
@@ -192,32 +393,34 @@ class Particle {
   void _renderTrail(Canvas canvas, Color baseColor) {
     if (_trail == null) return;
 
+    // Set MaskFilter once for all trail segments
+    _particleTrailPaint.maskFilter = _blur2;
+
     for (int i = 1; i < _trail!.length; i++) {
       final t = i / _trail!.length;
       final trailAlpha = baseColor.opacity * (1 - t) * 0.5;
       final trailSize = size * (1 - t * 0.7);
 
+      _particleTrailPaint.color = baseColor.withOpacity(trailAlpha.clamp(0.0, 1.0));
       canvas.drawCircle(
         Offset(_trail![i].x, _trail![i].y),
         trailSize,
-        Paint()
-          ..color = baseColor.withOpacity(trailAlpha.clamp(0.0, 1.0))
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        _particleTrailPaint,
       );
     }
   }
 
-  void _drawTriangle(Canvas canvas, double size, Paint paint) {
-    final path = Path();
-    path.moveTo(0, -size);
-    path.lineTo(size * 0.866, size * 0.5);
-    path.lineTo(-size * 0.866, size * 0.5);
-    path.close();
-    canvas.drawPath(path, paint);
+  void _drawTriangle(Canvas canvas, double size) {
+    _particleReusablePath.reset();
+    _particleReusablePath.moveTo(0, -size);
+    _particleReusablePath.lineTo(size * 0.866, size * 0.5);
+    _particleReusablePath.lineTo(-size * 0.866, size * 0.5);
+    _particleReusablePath.close();
+    canvas.drawPath(_particleReusablePath, _particleMainPaint);
   }
 
-  void _drawStar(Canvas canvas, double size, Paint paint) {
-    final path = Path();
+  void _drawStar(Canvas canvas, double size) {
+    _particleReusablePath.reset();
     const points = 5;
     const innerRatio = 0.4;
 
@@ -228,49 +431,50 @@ class Particle {
       final y = math.sin(angle) * radius;
 
       if (i == 0) {
-        path.moveTo(x, y);
+        _particleReusablePath.moveTo(x, y);
       } else {
-        path.lineTo(x, y);
+        _particleReusablePath.lineTo(x, y);
       }
     }
-    path.close();
-    canvas.drawPath(path, paint);
+    _particleReusablePath.close();
+    canvas.drawPath(_particleReusablePath, _particleMainPaint);
   }
 
-  void _drawDiamond(Canvas canvas, double size, Paint paint) {
-    final path = Path();
-    path.moveTo(0, -size);
-    path.lineTo(size * 0.6, 0);
-    path.lineTo(0, size);
-    path.lineTo(-size * 0.6, 0);
-    path.close();
-    canvas.drawPath(path, paint);
+  void _drawDiamond(Canvas canvas, double size) {
+    _particleReusablePath.reset();
+    _particleReusablePath.moveTo(0, -size);
+    _particleReusablePath.lineTo(size * 0.6, 0);
+    _particleReusablePath.lineTo(0, size);
+    _particleReusablePath.lineTo(-size * 0.6, 0);
+    _particleReusablePath.close();
+    canvas.drawPath(_particleReusablePath, _particleMainPaint);
   }
 
-  void _drawLine(Canvas canvas, double size, Paint paint) {
+  void _drawLine(Canvas canvas, double size) {
     // Draw line in velocity direction
     final angle = math.atan2(velocity.y, velocity.x);
     canvas.rotate(angle);
+    _particleMainPaint.strokeWidth = size * 0.3;
     canvas.drawLine(
       Offset(-size, 0),
       Offset(size, 0),
-      paint..strokeWidth = size * 0.3,
+      _particleMainPaint,
     );
   }
 
-  void _drawSpark(Canvas canvas, double size, Paint paint, Color color) {
+  void _drawSpark(Canvas canvas, double size, Color color) {
     // Central bright point
+    _particleSparkCenterPaint.color = Colors.white.withOpacity(color.opacity);
     canvas.drawCircle(
       Offset.zero,
       size * 0.5,
-      Paint()..color = Colors.white.withOpacity(color.opacity),
+      _particleSparkCenterPaint,
     );
 
     // Four pointed rays
-    final rayPaint = Paint()
+    _particleSparkRayPaint
       ..color = color
-      ..strokeWidth = size * 0.3
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = size * 0.3;
 
     for (int i = 0; i < 4; i++) {
       final angle = i * math.pi / 2;
@@ -278,7 +482,7 @@ class Particle {
       canvas.drawLine(
         Offset.zero,
         Offset(math.cos(angle) * length, math.sin(angle) * length),
-        rayPaint,
+        _particleSparkRayPaint,
       );
     }
   }
@@ -523,8 +727,8 @@ class ParticleEmitter extends Component {
     final glow = config!.glow && quality.allowGlow;
     final trailLength = hasTrail ? config!.trailLength : 0;
 
-    _particles.add(Particle(
-      position: position.clone(),
+    _particles.add(Particle.spawn(
+      position: position,
       velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
       color: config!.color,
       colorEnd: config!.colorEnd,
@@ -562,8 +766,8 @@ class ParticleEmitter extends Component {
       final angle = _random.nextDouble() * math.pi * 2;
       final spd = speed * (0.5 + _random.nextDouble() * 0.5);
 
-      _particles.add(Particle(
-        position: center.clone(),
+      _particles.add(Particle.spawn(
+        position: center,
         velocity: Vector2(math.cos(angle) * spd, math.sin(angle) * spd),
         color: color,
         colorEnd: colorEnd,
@@ -597,8 +801,8 @@ class ParticleEmitter extends Component {
       final angle = baseAngle + (_random.nextDouble() - 0.5) * spread;
       final spd = speed * (0.7 + _random.nextDouble() * 0.3);
 
-      _particles.add(Particle(
-        position: start.clone(),
+      _particles.add(Particle.spawn(
+        position: start,
         velocity: Vector2(math.cos(angle) * spd, math.sin(angle) * spd),
         color: color,
         lifetime: lifetime * (0.7 + _random.nextDouble() * 0.3),
@@ -622,8 +826,8 @@ class ParticleEmitter extends Component {
     final quality = GameParticles.instance;
     if (!quality.allowTrails) return;
 
-    _particles.add(Particle(
-      position: position.clone(),
+    _particles.add(Particle.spawn(
+      position: position,
       velocity: Vector2(
         (_random.nextDouble() - 0.5) * 20,
         (_random.nextDouble() - 0.5) * 20,
@@ -654,7 +858,7 @@ class ParticleEmitter extends Component {
         center.y + math.sin(angle) * radius,
       );
 
-      _particles.add(Particle(
+      _particles.add(Particle.spawn(
         position: pos,
         velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
         color: color,
@@ -681,8 +885,8 @@ class ParticleEmitter extends Component {
       final angle = _random.nextDouble() * math.pi * 2;
       final spd = speed * (0.6 + _random.nextDouble() * 0.4);
 
-      _particles.add(Particle(
-        position: center.clone(),
+      _particles.add(Particle.spawn(
+        position: center,
         velocity: Vector2(math.cos(angle) * spd, math.sin(angle) * spd),
         color: color,
         colorEnd: Colors.white,
@@ -713,8 +917,8 @@ class ParticleEmitter extends Component {
       _spiralAngle += 0.4;
       final spd = speed * (0.5 + _random.nextDouble() * 0.5);
 
-      _particles.add(Particle(
-        position: center.clone(),
+      _particles.add(Particle.spawn(
+        position: center,
         velocity: Vector2(math.cos(_spiralAngle) * spd, math.sin(_spiralAngle) * spd),
         color: color,
         colorEnd: Colors.white,
@@ -754,7 +958,22 @@ class ParticleEmitter extends Component {
       particle.update(dt);
     }
 
-    _particles.removeWhere((p) => p.isDead);
+    // Recycle dead particles to pool using efficient single-pass removal
+    int writeIndex = 0;
+    for (int readIndex = 0; readIndex < _particles.length; readIndex++) {
+      final particle = _particles[readIndex];
+      if (particle.isDead) {
+        particle.recycle(); // Return to pool
+      } else {
+        if (writeIndex != readIndex) {
+          _particles[writeIndex] = particle;
+        }
+        writeIndex++;
+      }
+    }
+    if (writeIndex < _particles.length) {
+      _particles.removeRange(writeIndex, _particles.length);
+    }
 
     // Auto-remove when empty (for configured burst emitters)
     if (autoRemove && isEmpty && config != null && config!.pattern != EmitterPattern.stream) {

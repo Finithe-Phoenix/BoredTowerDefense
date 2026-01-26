@@ -350,6 +350,15 @@ class NeonTextStyles {
 
 /// App theme data
 class NeonTheme {
+  // Cyberpunk color palette for HUD elements
+  static const Color cyberCyan = Color(0xFF00FFFF);
+  static const Color cyberMagenta = Color(0xFFFF00FF);
+  static const Color cyberGreen = Color(0xFF00FF88);
+  static const Color cyberPurple = Color(0xFF9C27B0);
+  static const Color cyberRed = Color(0xFFFF0044);
+  static const Color cyberYellow = Color(0xFFFFFF00);
+  static const Color cyberOrange = Color(0xFFFF6600);
+
   static ThemeData get darkTheme => ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: NeonColors.darkBg,

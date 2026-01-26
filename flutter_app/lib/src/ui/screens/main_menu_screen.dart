@@ -5,6 +5,7 @@ import '../widgets/cyber_grid_background.dart';
 import '../widgets/epic_neon_title.dart';
 import '../widgets/tron_button.dart';
 import '../widgets/tron_dialog.dart';
+import '../../services/procedural_music_service.dart';
 
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
@@ -67,6 +68,9 @@ class _MainMenuScreenState extends State<MainMenuScreen>
 
     // Start glitch intro
     _glitchIntroController.forward();
+
+    // Start the epic main menu music "NEON HORIZON"
+    ProceduralMusicService.instance.playMainMenuMusic();
 
     // After glitch, show content
     await Future.delayed(const Duration(milliseconds: 400));
@@ -527,6 +531,7 @@ class _DecorativeLinePainter extends CustomPainter {
 
 enum _Corner { topLeft, topRight, bottomLeft, bottomRight }
 
+/// Epic corner decoration with HUD-style data readouts and effects
 class _CornerDecoration extends StatefulWidget {
   const _CornerDecoration({required this.corner});
 
@@ -537,34 +542,103 @@ class _CornerDecoration extends StatefulWidget {
 }
 
 class _CornerDecorationState extends State<_CornerDecoration>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+    with TickerProviderStateMixin {
+  late AnimationController _pulseController;
+  late AnimationController _rotationController;
+  late AnimationController _dataController;
+  late AnimationController _particleController;
+
+  final List<_CornerParticle> _particles = [];
+  final math.Random _random = math.Random();
+
+  // Simulated data values
+  double _powerLevel = 0.75;
+  double _systemLoad = 0.42;
+  double _networkPing = 0.15;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 3000),
+
+    _initializeParticles();
+
+    _pulseController = AnimationController(
+      duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
+
+    _rotationController = AnimationController(
+      duration: const Duration(milliseconds: 8000),
+      vsync: this,
+    )..repeat();
+
+    _dataController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    )..addListener(_updateData);
+    _dataController.repeat();
+
+    _particleController = AnimationController(
+      duration: const Duration(milliseconds: 50),
+      vsync: this,
+    )..addListener(_updateParticles);
+    _particleController.repeat();
+  }
+
+  void _initializeParticles() {
+    for (int i = 0; i < 6; i++) {
+      _particles.add(_CornerParticle(
+        angle: _random.nextDouble() * math.pi * 2,
+        radius: 20 + _random.nextDouble() * 40,
+        speed: 0.01 + _random.nextDouble() * 0.02,
+        size: 1 + _random.nextDouble() * 1.5,
+        opacity: 0.3 + _random.nextDouble() * 0.4,
+      ));
+    }
+  }
+
+  void _updateData() {
+    if (!mounted) return;
+    // Simulate fluctuating data values
+    _powerLevel = (_powerLevel + (_random.nextDouble() - 0.5) * 0.02).clamp(0.5, 1.0);
+    _systemLoad = (_systemLoad + (_random.nextDouble() - 0.5) * 0.03).clamp(0.2, 0.8);
+    _networkPing = (_networkPing + (_random.nextDouble() - 0.5) * 0.01).clamp(0.05, 0.4);
+    setState(() {});
+  }
+
+  void _updateParticles() {
+    if (!mounted) return;
+    for (final particle in _particles) {
+      particle.angle += particle.speed;
+      if (particle.angle > math.pi * 2) particle.angle -= math.pi * 2;
+    }
+    setState(() {});
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pulseController.dispose();
+    _rotationController.dispose();
+    _dataController.dispose();
+    _particleController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _controller,
+      animation: Listenable.merge([_pulseController, _rotationController]),
       builder: (context, child) {
         return CustomPaint(
-          size: const Size(60, 60),
-          painter: _CornerDecorationPainter(
+          size: const Size(100, 100),
+          painter: _EpicCornerDecorationPainter(
             corner: widget.corner,
-            pulseValue: _controller.value,
+            pulseValue: _pulseController.value,
+            rotationValue: _rotationController.value,
+            particles: _particles,
+            powerLevel: _powerLevel,
+            systemLoad: _systemLoad,
+            networkPing: _networkPing,
           ),
         );
       },
@@ -572,89 +646,551 @@ class _CornerDecorationState extends State<_CornerDecoration>
   }
 }
 
-class _CornerDecorationPainter extends CustomPainter {
-  _CornerDecorationPainter({required this.corner, required this.pulseValue});
+class _CornerParticle {
+  double angle;
+  double radius;
+  double speed;
+  double size;
+  double opacity;
+
+  _CornerParticle({
+    required this.angle,
+    required this.radius,
+    required this.speed,
+    required this.size,
+    required this.opacity,
+  });
+}
+
+class _EpicCornerDecorationPainter extends CustomPainter {
+  _EpicCornerDecorationPainter({
+    required this.corner,
+    required this.pulseValue,
+    required this.rotationValue,
+    required this.particles,
+    required this.powerLevel,
+    required this.systemLoad,
+    required this.networkPing,
+  });
 
   final _Corner corner;
   final double pulseValue;
+  final double rotationValue;
+  final List<_CornerParticle> particles;
+  final double powerLevel;
+  final double systemLoad;
+  final double networkPing;
 
   @override
   void paint(Canvas canvas, Size size) {
     final color = NeonColors.cyan;
-    final opacity = 0.4 + pulseValue * 0.3;
+    final secondaryColor = NeonColors.magenta;
+    final accentColor = const Color(0xFFFF6600);
+    final warningColor = NeonColors.yellow;
 
-    final linePaint = Paint()
-      ..color = color.withOpacity(opacity)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+    final baseOpacity = 0.5 + pulseValue * 0.3;
 
-    final glowPaint = Paint()
-      ..color = color.withOpacity(opacity * 0.4)
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-
-    const lineLength = 25.0;
-    late Offset corner1Start, corner1End, corner2Start, corner2End;
-    late Offset dotPos;
+    // Determine corner position and direction
+    late Offset cornerPos;
+    late double xDir, yDir;
 
     switch (corner) {
       case _Corner.topLeft:
-        corner1Start = const Offset(0, 0);
-        corner1End = Offset(lineLength, 0);
-        corner2Start = const Offset(0, 0);
-        corner2End = Offset(0, lineLength);
-        dotPos = const Offset(0, 0);
+        cornerPos = const Offset(0, 0);
+        xDir = 1;
+        yDir = 1;
         break;
       case _Corner.topRight:
-        corner1Start = Offset(size.width, 0);
-        corner1End = Offset(size.width - lineLength, 0);
-        corner2Start = Offset(size.width, 0);
-        corner2End = Offset(size.width, lineLength);
-        dotPos = Offset(size.width, 0);
+        cornerPos = Offset(size.width, 0);
+        xDir = -1;
+        yDir = 1;
         break;
       case _Corner.bottomLeft:
-        corner1Start = Offset(0, size.height);
-        corner1End = Offset(lineLength, size.height);
-        corner2Start = Offset(0, size.height);
-        corner2End = Offset(0, size.height - lineLength);
-        dotPos = Offset(0, size.height);
+        cornerPos = Offset(0, size.height);
+        xDir = 1;
+        yDir = -1;
         break;
       case _Corner.bottomRight:
-        corner1Start = Offset(size.width, size.height);
-        corner1End = Offset(size.width - lineLength, size.height);
-        corner2Start = Offset(size.width, size.height);
-        corner2End = Offset(size.width, size.height - lineLength);
-        dotPos = Offset(size.width, size.height);
+        cornerPos = Offset(size.width, size.height);
+        xDir = -1;
+        yDir = -1;
         break;
     }
 
-    // Draw glow
-    canvas.drawLine(corner1Start, corner1End, glowPaint);
-    canvas.drawLine(corner2Start, corner2End, glowPaint);
+    // ===== LAYER 1: Deep outer glow =====
+    _drawOuterGlow(canvas, cornerPos, color, baseOpacity);
 
-    // Draw lines
-    canvas.drawLine(corner1Start, corner1End, linePaint);
-    canvas.drawLine(corner2Start, corner2End, linePaint);
+    // ===== LAYER 2: Orbital particles =====
+    _drawOrbitalParticles(canvas, cornerPos, color, secondaryColor, baseOpacity);
 
-    // Draw corner dot
-    canvas.drawCircle(
-      dotPos,
-      3 + pulseValue * 2,
+    // ===== LAYER 3: Main bracket structure =====
+    _drawMainBracket(canvas, cornerPos, xDir, yDir, color, secondaryColor, baseOpacity);
+
+    // ===== LAYER 4: Inner brackets =====
+    _drawInnerBrackets(canvas, cornerPos, xDir, yDir, color, accentColor, baseOpacity);
+
+    // ===== LAYER 5: Energy bars =====
+    _drawEnergyBars(canvas, cornerPos, xDir, yDir, color, warningColor, baseOpacity);
+
+    // ===== LAYER 6: Data readouts =====
+    _drawDataReadouts(canvas, cornerPos, xDir, yDir, color, secondaryColor, baseOpacity);
+
+    // ===== LAYER 7: Rotating rings =====
+    _drawRotatingRings(canvas, cornerPos, color, secondaryColor, baseOpacity);
+
+    // ===== LAYER 8: Power core =====
+    _drawPowerCore(canvas, cornerPos, color, baseOpacity);
+
+    // ===== LAYER 9: Energy pulses =====
+    _drawEnergyPulses(canvas, cornerPos, xDir, yDir, color, accentColor, baseOpacity);
+
+    // ===== LAYER 10: Hexagonal pattern =====
+    _drawHexPattern(canvas, cornerPos, xDir, yDir, color, baseOpacity);
+
+    // ===== LAYER 11: Electric arcs =====
+    _drawElectricArcs(canvas, cornerPos, xDir, yDir, color, baseOpacity);
+
+    // ===== LAYER 12: Data stream indicators =====
+    _drawDataStreamIndicators(canvas, cornerPos, xDir, yDir, color, secondaryColor, baseOpacity);
+  }
+
+  void _drawOuterGlow(Canvas canvas, Offset pos, Color color, double opacity) {
+    // Multi-layered glow
+    for (int i = 4; i >= 1; i--) {
+      canvas.drawCircle(
+        pos,
+        12.0 * i + pulseValue * 4,
+        Paint()
+          ..color = color.withOpacity(opacity * 0.05 * (5 - i) / 4)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6.0 * i),
+      );
+    }
+  }
+
+  void _drawOrbitalParticles(Canvas canvas, Offset pos, Color color, Color secondary, double opacity) {
+    for (final particle in particles) {
+      final x = pos.dx + math.cos(particle.angle) * particle.radius;
+      final y = pos.dy + math.sin(particle.angle) * particle.radius;
+
+      // Particle glow
+      canvas.drawCircle(
+        Offset(x, y),
+        particle.size * 2,
+        Paint()
+          ..color = (particle.opacity > 0.5 ? color : secondary).withOpacity(particle.opacity * opacity * 0.3)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      );
+
+      // Particle core
+      canvas.drawCircle(
+        Offset(x, y),
+        particle.size,
+        Paint()..color = Colors.white.withOpacity(particle.opacity * opacity * 0.6),
+      );
+    }
+  }
+
+  void _drawMainBracket(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, Color secondary, double opacity) {
+    const mainLength = 40.0;
+    const thickness = 2.5;
+
+    final glowPaint = Paint()
+      ..color = color.withOpacity(opacity * 0.4)
+      ..strokeWidth = thickness + 4
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    final mainPaint = Paint()
+      ..color = color.withOpacity(opacity)
+      ..strokeWidth = thickness
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.square;
+
+    // Horizontal line
+    final hEnd = Offset(pos.dx + mainLength * xDir, pos.dy);
+    canvas.drawLine(pos, hEnd, glowPaint);
+    canvas.drawLine(pos, hEnd, mainPaint);
+
+    // Vertical line
+    final vEnd = Offset(pos.dx, pos.dy + mainLength * yDir);
+    canvas.drawLine(pos, vEnd, glowPaint);
+    canvas.drawLine(pos, vEnd, mainPaint);
+
+    // Tick marks
+    final tickPaint = Paint()
+      ..color = color.withOpacity(opacity * 0.6)
+      ..strokeWidth = 1;
+
+    for (int i = 1; i <= 6; i++) {
+      final dist = 6.0 * i;
+      final tickLength = i % 2 == 0 ? 4.0 : 2.5;
+
+      // Horizontal ticks
+      canvas.drawLine(
+        Offset(pos.dx + dist * xDir, pos.dy),
+        Offset(pos.dx + dist * xDir, pos.dy + tickLength * yDir),
+        tickPaint,
+      );
+
+      // Vertical ticks
+      canvas.drawLine(
+        Offset(pos.dx, pos.dy + dist * yDir),
+        Offset(pos.dx + tickLength * xDir, pos.dy + dist * yDir),
+        tickPaint,
+      );
+    }
+  }
+
+  void _drawInnerBrackets(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, Color accent, double opacity) {
+    const inset = 10.0;
+    const length = 20.0;
+
+    final innerPos = Offset(pos.dx + inset * xDir, pos.dy + inset * yDir);
+
+    final bracketPaint = Paint()
+      ..color = accent.withOpacity(opacity * 0.7)
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    // L-bracket
+    canvas.drawLine(innerPos, Offset(innerPos.dx + length * xDir, innerPos.dy), bracketPaint);
+    canvas.drawLine(innerPos, Offset(innerPos.dx, innerPos.dy + length * yDir), bracketPaint);
+
+    // Second inner bracket
+    final innerPos2 = Offset(pos.dx + inset * 1.8 * xDir, pos.dy + inset * 1.8 * yDir);
+    final bracket2Paint = Paint()
+      ..color = color.withOpacity(opacity * 0.4)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    canvas.drawLine(innerPos2, Offset(innerPos2.dx + 12 * xDir, innerPos2.dy), bracket2Paint);
+    canvas.drawLine(innerPos2, Offset(innerPos2.dx, innerPos2.dy + 12 * yDir), bracket2Paint);
+  }
+
+  void _drawEnergyBars(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, Color warning, double opacity) {
+    // Power level bar
+    final barStartX = pos.dx + 45 * xDir;
+    final barY = pos.dy + 8 * yDir;
+    const barWidth = 30.0;
+    const barHeight = 4.0;
+
+    // Bar background
+    canvas.drawRect(
+      Rect.fromLTWH(
+        xDir > 0 ? barStartX : barStartX - barWidth,
+        yDir > 0 ? barY : barY - barHeight,
+        barWidth,
+        barHeight,
+      ),
+      Paint()..color = color.withOpacity(opacity * 0.2),
+    );
+
+    // Bar fill
+    final fillWidth = barWidth * powerLevel;
+    final barColor = powerLevel < 0.6 ? warning : color;
+    canvas.drawRect(
+      Rect.fromLTWH(
+        xDir > 0 ? barStartX : barStartX - fillWidth,
+        yDir > 0 ? barY : barY - barHeight,
+        fillWidth,
+        barHeight,
+      ),
+      Paint()..color = barColor.withOpacity(opacity * 0.8),
+    );
+
+    // Bar glow
+    canvas.drawRect(
+      Rect.fromLTWH(
+        xDir > 0 ? barStartX : barStartX - fillWidth,
+        yDir > 0 ? barY : barY - barHeight,
+        fillWidth,
+        barHeight,
+      ),
       Paint()
-        ..color = color.withOpacity(opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        ..color = barColor.withOpacity(opacity * 0.4)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+  }
+
+  void _drawDataReadouts(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, Color secondary, double opacity) {
+    // System load mini bars
+    final dataX = pos.dx + 45 * xDir;
+    final dataY = pos.dy + 18 * yDir;
+
+    for (int i = 0; i < 5; i++) {
+      final barHeight = 3.0 + (i == 2 ? systemLoad * 8 : (i % 2 == 0 ? 2 : 4));
+      final barX = xDir > 0 ? dataX + i * 4 : dataX - i * 4 - 3;
+      final barYStart = yDir > 0 ? dataY : dataY - barHeight;
+
+      canvas.drawRect(
+        Rect.fromLTWH(barX, barYStart, 3, barHeight),
+        Paint()..color = (i == 2 ? secondary : color).withOpacity(opacity * 0.6),
+      );
+    }
+
+    // Network ping indicator (blinking dot)
+    final pingX = pos.dx + 55 * xDir;
+    final pingY = pos.dy + 30 * yDir;
+    final pingActive = (rotationValue * 4).floor() % 2 == 0;
+
+    canvas.drawCircle(
+      Offset(pingX, pingY),
+      3,
+      Paint()
+        ..color = (pingActive ? color : color.withOpacity(0.3)).withOpacity(opacity)
+        ..maskFilter = pingActive ? const MaskFilter.blur(BlurStyle.normal, 2) : null,
+    );
+  }
+
+  void _drawRotatingRings(Canvas canvas, Offset pos, Color color, Color secondary, double opacity) {
+    // Outer rotating ring
+    final outerArcPaint = Paint()
+      ..color = color.withOpacity(opacity * 0.5)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5
+      ..strokeCap = StrokeCap.round;
+
+    final outerAngle = rotationValue * math.pi * 2;
+    canvas.drawArc(
+      Rect.fromCircle(center: pos, radius: 22),
+      outerAngle,
+      math.pi * 0.4,
+      false,
+      outerArcPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: pos, radius: 22),
+      outerAngle + math.pi,
+      math.pi * 0.4,
+      false,
+      outerArcPaint,
+    );
+
+    // Inner counter-rotating ring
+    final innerArcPaint = Paint()
+      ..color = secondary.withOpacity(opacity * 0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..strokeCap = StrokeCap.round;
+
+    final innerAngle = -rotationValue * math.pi * 2 * 1.5;
+    canvas.drawArc(
+      Rect.fromCircle(center: pos, radius: 15),
+      innerAngle,
+      math.pi * 0.3,
+      false,
+      innerArcPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: pos, radius: 15),
+      innerAngle + math.pi * 0.67,
+      math.pi * 0.3,
+      false,
+      innerArcPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: pos, radius: 15),
+      innerAngle + math.pi * 1.33,
+      math.pi * 0.3,
+      false,
+      innerArcPaint,
+    );
+  }
+
+  void _drawPowerCore(Canvas canvas, Offset pos, Color color, double opacity) {
+    final coreRadius = 4 + pulseValue * 2;
+
+    // Outer glow layers
+    canvas.drawCircle(pos, coreRadius + 8, Paint()
+      ..color = color.withOpacity(opacity * 0.1)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+
+    canvas.drawCircle(pos, coreRadius + 5, Paint()
+      ..color = color.withOpacity(opacity * 0.2)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+
+    canvas.drawCircle(pos, coreRadius + 2, Paint()
+      ..color = color.withOpacity(opacity * 0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+
+    // Core ring
+    canvas.drawCircle(pos, coreRadius, Paint()
+      ..color = color.withOpacity(opacity * 0.7)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5);
+
+    // Core center
+    canvas.drawCircle(pos, 3, Paint()
+      ..color = Colors.white.withOpacity(opacity * 0.9));
+
+    // Inner pulse
+    canvas.drawCircle(pos, 2, Paint()
+      ..color = color.withOpacity(opacity)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+  }
+
+  void _drawEnergyPulses(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, Color accent, double opacity) {
+    // Traveling pulses along the bracket lines
+    final pulseProgress = (rotationValue * 2) % 1.0;
+
+    // Horizontal pulse
+    final hPulseX = pos.dx + pulseProgress * 35 * xDir;
+    canvas.drawCircle(
+      Offset(hPulseX, pos.dy),
+      3,
+      Paint()
+        ..color = accent.withOpacity(opacity * 0.7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
     canvas.drawCircle(
-      dotPos,
+      Offset(hPulseX, pos.dy),
+      1.5,
+      Paint()..color = Colors.white.withOpacity(opacity * 0.9),
+    );
+
+    // Vertical pulse (offset timing)
+    final vPulseProgress = ((rotationValue * 2) + 0.5) % 1.0;
+    final vPulseY = pos.dy + vPulseProgress * 35 * yDir;
+    canvas.drawCircle(
+      Offset(pos.dx, vPulseY),
+      3,
+      Paint()
+        ..color = color.withOpacity(opacity * 0.7)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+    );
+    canvas.drawCircle(
+      Offset(pos.dx, vPulseY),
+      1.5,
+      Paint()..color = Colors.white.withOpacity(opacity * 0.9),
+    );
+  }
+
+  void _drawHexPattern(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, double opacity) {
+    final hexCenter = Offset(pos.dx + 35 * xDir, pos.dy + 35 * yDir);
+    const hexSize = 8.0;
+
+    final hexPaint = Paint()
+      ..color = color.withOpacity(opacity * 0.25)
+      ..strokeWidth = 0.8
+      ..style = PaintingStyle.stroke;
+
+    // Draw small hexagon
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60 - 30) * math.pi / 180;
+      final point = Offset(
+        hexCenter.dx + hexSize * math.cos(angle),
+        hexCenter.dy + hexSize * math.sin(angle),
+      );
+      if (i == 0) {
+        path.moveTo(point.dx, point.dy);
+      } else {
+        path.lineTo(point.dx, point.dy);
+      }
+    }
+    path.close();
+    canvas.drawPath(path, hexPaint);
+
+    // Animated fill segment
+    final fillAngle = rotationValue * math.pi * 2;
+    final fillPoint = Offset(
+      hexCenter.dx + hexSize * 0.6 * math.cos(fillAngle),
+      hexCenter.dy + hexSize * 0.6 * math.sin(fillAngle),
+    );
+    canvas.drawCircle(fillPoint, 2, Paint()
+      ..color = color.withOpacity(opacity * 0.5));
+  }
+
+  void _drawElectricArcs(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, double opacity) {
+    // Small electric arc effect near corner
+    if (pulseValue > 0.7) {
+      final arcOpacity = (pulseValue - 0.7) / 0.3;
+      final arcPaint = Paint()
+        ..color = color.withOpacity(arcOpacity * opacity * 0.6)
+        ..strokeWidth = 1
+        ..style = PaintingStyle.stroke
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1);
+
+      final path = Path();
+      path.moveTo(pos.dx + 8 * xDir, pos.dy + 2 * yDir);
+      path.lineTo(pos.dx + 12 * xDir, pos.dy + 5 * yDir);
+      path.lineTo(pos.dx + 10 * xDir, pos.dy + 8 * yDir);
+      path.lineTo(pos.dx + 14 * xDir, pos.dy + 12 * yDir);
+
+      canvas.drawPath(path, arcPaint);
+
+      // Arc glow
+      canvas.drawPath(path, Paint()
+        ..color = Colors.white.withOpacity(arcOpacity * opacity * 0.3)
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+    }
+  }
+
+  void _drawDataStreamIndicators(Canvas canvas, Offset pos, double xDir, double yDir,
+      Color color, Color secondary, double opacity) {
+    // Row of blinking status indicators
+    final indicatorY = pos.dy + 50 * yDir;
+    final numIndicators = 4;
+
+    for (int i = 0; i < numIndicators; i++) {
+      final indicatorX = pos.dx + (15 + i * 8) * xDir;
+      final phase = (rotationValue * 6 + i * 0.25) % 1.0;
+      final isActive = phase < 0.5;
+      final indicatorColor = i == 0 ? secondary : color;
+
+      canvas.drawRect(
+        Rect.fromCenter(center: Offset(indicatorX, indicatorY), width: 4, height: 4),
+        Paint()..color = indicatorColor.withOpacity(isActive ? opacity * 0.8 : opacity * 0.2),
+      );
+
+      if (isActive) {
+        canvas.drawRect(
+          Rect.fromCenter(center: Offset(indicatorX, indicatorY), width: 4, height: 4),
+          Paint()
+            ..color = indicatorColor.withOpacity(opacity * 0.4)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        );
+      }
+    }
+
+    // Horizontal data line
+    final lineY = pos.dy + 60 * yDir;
+    final lineStart = pos.dx + 10 * xDir;
+    final lineEnd = pos.dx + 50 * xDir;
+
+    canvas.drawLine(
+      Offset(lineStart, lineY),
+      Offset(lineEnd, lineY),
+      Paint()
+        ..color = color.withOpacity(opacity * 0.3)
+        ..strokeWidth = 1,
+    );
+
+    // Moving data point on line
+    final dataPointX = lineStart + (lineEnd - lineStart) * ((rotationValue * 3) % 1.0);
+    canvas.drawCircle(
+      Offset(dataPointX, lineY),
       2,
-      Paint()..color = Colors.white.withOpacity(opacity),
+      Paint()..color = secondary.withOpacity(opacity * 0.8),
     );
   }
 
   @override
-  bool shouldRepaint(_CornerDecorationPainter oldDelegate) =>
-      oldDelegate.pulseValue != pulseValue;
+  bool shouldRepaint(_EpicCornerDecorationPainter oldDelegate) {
+    return pulseValue != oldDelegate.pulseValue ||
+        rotationValue != oldDelegate.rotationValue ||
+        powerLevel != oldDelegate.powerLevel ||
+        systemLoad != oldDelegate.systemLoad;
+  }
 }
 
 class _SubtitleWidget extends StatefulWidget {

@@ -39,33 +39,41 @@ class ImpactEffect extends PositionComponent {
     _activeCount = 0;
   }
 
-  // Cached Paint objects to avoid per-frame allocations
-  final Paint _ringGlowPaint = Paint()
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _ringGlowPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 4
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-  final Paint _ringCorePaint = Paint()
+  static final Paint _ringCorePaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
-  final Paint _particleGlowPaint = Paint()
+  static final Paint _particleGlowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-  final Paint _particleCorePaint = Paint();
-  final Paint _sparkGlowPaint = Paint()
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _sparkGlowPaint = Paint()
     ..strokeWidth = 3
     ..strokeCap = StrokeCap.round
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-  final Paint _sparkCorePaint = Paint()
+  static final Paint _sparkCorePaint = Paint()
     ..strokeWidth = 1.5
     ..strokeCap = StrokeCap.round;
-  final Paint _electricPaint = Paint()
+  static final Paint _electricPaint = Paint()
     ..strokeWidth = 2
     ..style = PaintingStyle.stroke
     ..strokeCap = StrokeCap.round
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-  final Paint _starPaint = Paint()
+  static final Paint _starPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-  final Paint _spritePaint = Paint();
-  final Path _reusablePath = Path();
+  static final Paint _bubbleDropletGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _bubbleDropletCorePaint = Paint();
+  static final Paint _bubbleDropletRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _spritePaint = Paint();
+  static final Path _reusablePath = Path();
 
   static ImpactEffect? spawn({
     required Vector2 position,
@@ -120,7 +128,7 @@ class ImpactEffect extends PositionComponent {
     required TowerType towerType,
     required double duration,
   }) {
-    this.position = position.clone();
+    this.position.setFrom(position);
     anchor = Anchor.center;
     this.color = color;
     this.towerType = towerType;
@@ -237,13 +245,48 @@ class ImpactEffect extends PositionComponent {
       case TowerType.resonanceSiphon:
       case TowerType.neuralDisruptor:
         // Default spark burst
-        final sparkCount = _scaledCount(10, allowZero: true);
-        for (int i = 0; i < sparkCount; i++) {
+        final defaultSparkCount = _scaledCount(10, allowZero: true);
+        for (int i = 0; i < defaultSparkCount; i++) {
           _sparks.add(_Spark(
             angle: _random.nextDouble() * math.pi * 2,
             speed: 100 + _random.nextDouble() * 50,
             length: 10 + _random.nextDouble() * 5,
             lifetime: 0.2,
+          ));
+        }
+        break;
+      case TowerType.plasmaBubble:
+        // Pop/burst effect - bubble membrane fragments flying outward
+        // Multiple expanding rings for pop effect
+        final bubbleRingCount = _scaledCount(4);
+        for (int i = 0; i < bubbleRingCount; i++) {
+          _rings.add(_ImpactRing(
+            startRadius: 8 + i * 4,
+            endRadius: 35 + i * 8,
+            duration: 0.2 + i * 0.05,
+          ));
+        }
+        // Plasma droplets flying outward
+        final dropletCount = _scaledCount(14, allowZero: true);
+        for (int i = 0; i < dropletCount; i++) {
+          _particles.add(_ImpactParticle(
+            angle: _random.nextDouble() * math.pi * 2,
+            speed: 60 + _random.nextDouble() * 80,
+            size: 2 + _random.nextDouble() * 3,
+            lifetime: 0.35 + _random.nextDouble() * 0.15,
+            rotationSpeed: (_random.nextDouble() - 0.5) * 8,
+            isBubbleDroplet: true,
+          ));
+        }
+        // Electric discharge from popped bubble
+        final bubbleSparkCount = _scaledCount(6, allowZero: true);
+        for (int i = 0; i < bubbleSparkCount; i++) {
+          _sparks.add(_Spark(
+            angle: _random.nextDouble() * math.pi * 2,
+            speed: 70 + _random.nextDouble() * 50,
+            length: 10 + _random.nextDouble() * 8,
+            lifetime: 0.25,
+            isElectric: true,
           ));
         }
         break;
@@ -342,6 +385,27 @@ class ImpactEffect extends PositionComponent {
       } else if (particle.isStar) {
         // Draw star
         _drawStar(canvas, Offset.zero, particle.size, color.withOpacity(alpha));
+      } else if (particle.isBubbleDroplet) {
+        // Draw plasma bubble droplet - looks like a mini bubble fragment
+        // Get pink color variant
+        final hslColor = HSLColor.fromColor(color);
+        final pinkColor = hslColor.withHue((hslColor.hue + 20) % 360).toColor();
+
+        // Outer glow
+        _bubbleDropletGlowPaint.color = color.withOpacity(alpha * 0.5);
+        canvas.drawCircle(Offset.zero, particle.size * 1.5, _bubbleDropletGlowPaint);
+
+        // Membrane ring
+        _bubbleDropletRingPaint.color = pinkColor.withOpacity(alpha * 0.7);
+        canvas.drawCircle(Offset.zero, particle.size, _bubbleDropletRingPaint);
+
+        // Bright core
+        _bubbleDropletCorePaint.color = const Color(0xFFFFFFFF).withOpacity(alpha * 0.8);
+        canvas.drawCircle(Offset.zero, particle.size * 0.4, _bubbleDropletCorePaint);
+
+        // Secondary pink core
+        _bubbleDropletCorePaint.color = pinkColor.withOpacity(alpha * 0.6);
+        canvas.drawCircle(Offset.zero, particle.size * 0.6, _bubbleDropletCorePaint);
       } else {
         // Draw circle particle
         _particleGlowPaint.color = color.withOpacity(alpha * 0.4);
@@ -509,6 +573,7 @@ class _ImpactParticle {
     this.rotationSpeed = 0,
     this.isRune = false,
     this.isStar = false,
+    this.isBubbleDroplet = false,
   }) : distance = 0,
        rotation = 0,
        _timer = 0;
@@ -520,6 +585,7 @@ class _ImpactParticle {
   final double rotationSpeed;
   final bool isRune;
   final bool isStar;
+  final bool isBubbleDroplet;
 
   double distance;
   double rotation;

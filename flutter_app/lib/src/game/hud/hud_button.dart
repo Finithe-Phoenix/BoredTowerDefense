@@ -23,6 +23,22 @@ class HudButton extends PositionComponent with TapCallbacks {
     anchor = Anchor.topLeft;
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _glowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _bgPaint = Paint();
+  static final Paint _gradientPaint = Paint();
+  static final Paint _borderPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _linePaint = Paint()..strokeCap = StrokeCap.round;
+  static final Paint _pressPaint = Paint();
+  static final Paint _hoverGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _highlightPaint = Paint();
+  static final Paint _shadowPaint = Paint()..strokeWidth = 1;
+  static final Paint _scanPaint = Paint();
+
   final String label;
   final VoidCallback onPressed;
   final Vector2 buttonSize;
@@ -67,22 +83,19 @@ class HudButton extends PositionComponent with TapCallbacks {
 
     // Outer glow when selected
     if (isSelected) {
-      canvas.drawRRect(
-        rrect.inflate(3),
-        Paint()
-          ..color = color.withOpacity(0.4)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-      );
+      _glowPaint.color = color.withOpacity(0.4);
+      canvas.drawRRect(rrect.inflate(3), _glowPaint);
     }
 
     // Main background - glassmorphic style
     final bgColor = isSelected
         ? color.withOpacity(0.25)
         : (isEnabled ? const Color(0xFF0a0a18).withOpacity(0.8) : const Color(0xFF0a0a18).withOpacity(0.4));
-    canvas.drawRRect(rrect, Paint()..color = bgColor);
+    _bgPaint.color = bgColor;
+    canvas.drawRRect(rrect, _bgPaint);
 
     // Gradient overlay for depth
-    final gradientShader = LinearGradient(
+    _gradientPaint.shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
@@ -92,39 +105,28 @@ class HudButton extends PositionComponent with TapCallbacks {
       ],
       stops: const [0.0, 0.3, 1.0],
     ).createShader(rect);
-    canvas.drawRRect(rrect, Paint()..shader = gradientShader);
+    canvas.drawRRect(rrect, _gradientPaint);
 
     // Border
     final borderColor = isSelected
         ? color
         : (isEnabled ? color.withOpacity(0.4) : color.withOpacity(0.15));
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = borderColor
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isSelected ? 2 : 1,
-    );
+    _borderPaint.color = borderColor;
+    _borderPaint.strokeWidth = isSelected ? 2 : 1;
+    canvas.drawRRect(rrect, _borderPaint);
 
     // Bottom accent line when selected
     if (isSelected) {
       final lineY = buttonSize.y - 3;
-      canvas.drawLine(
-        Offset(8, lineY),
-        Offset(buttonSize.x - 8, lineY),
-        Paint()
-          ..color = color
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round,
-      );
+      _linePaint.color = color;
+      _linePaint.strokeWidth = 2;
+      canvas.drawLine(Offset(8, lineY), Offset(buttonSize.x - 8, lineY), _linePaint);
     }
 
     // === PRESS EFFECT ===
     if (_pressAnimation > 0) {
-      canvas.drawRRect(
-        rrect,
-        Paint()..color = color.withOpacity(0.3 * _pressAnimation),
-      );
+      _pressPaint.color = color.withOpacity(0.3 * _pressAnimation);
+      canvas.drawRRect(rrect, _pressPaint);
     }
 
     // === TEXT ===
@@ -136,14 +138,12 @@ class HudButton extends PositionComponent with TapCallbacks {
 
     // Outer glow when selected/hovered
     if (_hoverScale > 0) {
-      final glowPaint = Paint()
-        ..color = color.withOpacity(0.25 * _hoverScale)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-      canvas.drawRRect(rrect.inflate(4), glowPaint);
+      _hoverGlowPaint.color = color.withOpacity(0.25 * _hoverScale);
+      canvas.drawRRect(rrect.inflate(4), _hoverGlowPaint);
     }
 
     // Main background gradient
-    final bgGradient = LinearGradient(
+    _gradientPaint.shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
@@ -154,11 +154,11 @@ class HudButton extends PositionComponent with TapCallbacks {
       stops: const [0.0, 0.5, 1.0],
     ).createShader(rect);
 
-    canvas.drawRRect(rrect, Paint()..shader = bgGradient);
+    canvas.drawRRect(rrect, _gradientPaint);
 
     // Inner highlight at top
     final highlightRect = Rect.fromLTWH(2, 2, buttonSize.x - 4, 12);
-    final highlightGradient = LinearGradient(
+    _highlightPaint.shader = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
       colors: [
@@ -169,16 +169,15 @@ class HudButton extends PositionComponent with TapCallbacks {
 
     canvas.save();
     canvas.clipRRect(RRect.fromRectAndRadius(rect.deflate(2), const Radius.circular(4)));
-    canvas.drawRect(highlightRect, Paint()..shader = highlightGradient);
+    canvas.drawRect(highlightRect, _highlightPaint);
     canvas.restore();
 
     // Bottom shadow line
+    _shadowPaint.color = Colors.black.withOpacity(0.3);
     canvas.drawLine(
       Offset(4, buttonSize.y - 2),
       Offset(buttonSize.x - 4, buttonSize.y - 2),
-      Paint()
-        ..color = Colors.black.withOpacity(0.3)
-        ..strokeWidth = 1,
+      _shadowPaint,
     );
   }
 
@@ -204,7 +203,8 @@ class HudButton extends PositionComponent with TapCallbacks {
 
       canvas.save();
       canvas.clipRRect(rrect);
-      canvas.drawRect(Rect.fromLTWH(0, scanY - 10, buttonSize.x, 20), Paint()..shader = scanGradient);
+      _scanPaint.shader = scanGradient;
+      canvas.drawRect(Rect.fromLTWH(0, scanY - 10, buttonSize.x, 20), _scanPaint);
       canvas.restore();
     }
 

@@ -33,12 +33,41 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   // Cached random for consistent glitch patterns
   final _random = math.Random();
 
-  // Precomputed paint objects for performance
-  final Paint _bgPaint = Paint();
-  final Paint _gridPaint = Paint()..strokeWidth = 0.5;
-  final Paint _scanPaint = Paint()..strokeWidth = 2..strokeCap = StrokeCap.round;
-  final Paint _glowPaint = Paint();
-  final Paint _framePaint = Paint()..style = PaintingStyle.stroke;
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _bgPaint = Paint();
+  static final Paint _gridPaint = Paint()..strokeWidth = 0.5;
+  static final Paint _scanPaint = Paint()..strokeWidth = 2..strokeCap = StrokeCap.round;
+  static final Paint _glowPaint = Paint();
+  static final Paint _framePaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _noisePaint = Paint();
+  static final Paint _outerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _pathPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _pathGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _towerFillPaint = Paint();
+  static final Paint _towerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _enemyPaint = Paint();
+  static final Paint _enemyGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _bossPaint = Paint();
+  static final Paint _bossGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _radarSweepPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _corruptionPaint = Paint();
+  static final Paint _statusPaint = Paint();
+  static final Paint _glitchBarPaint = Paint();
 
   @override
   void update(double dt) {

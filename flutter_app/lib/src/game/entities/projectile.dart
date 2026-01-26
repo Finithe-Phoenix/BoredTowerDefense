@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flame/components.dart';
-import 'package:flutter/painting.dart' show RadialGradient;
+import 'package:flutter/painting.dart' show HSLColor, RadialGradient;
 
 import 'enemy.dart';
 import 'tower.dart';
@@ -36,10 +36,10 @@ class Projectile extends PositionComponent {
   static final Paint _simplePaint = Paint();
   static final Paint _glowPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
   static final Paint _strokePaint = Paint()..style = PaintingStyle.stroke;
-  static final Paint _trailGlowPaint = Paint();
+  static final Paint _trailGlowPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
   static final Paint _trailCorePaint = Paint();
   static final Paint _trailLinePaint = Paint()..strokeCap = StrokeCap.round;
-  static final Paint _particlePaint = Paint();
+  static final Paint _particlePaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
   static final Paint _arcPaint = Paint()
     ..strokeWidth = 1.5
     ..style = PaintingStyle.stroke
@@ -48,11 +48,119 @@ class Projectile extends PositionComponent {
     ..strokeWidth = 2
     ..strokeCap = StrokeCap.round;
 
+  // Additional cached paints for optimization
+  static final Paint _energyRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _orbPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _phasePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _phaseGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+  static final Paint _sparkPaint = Paint();
+  static final Paint _flickerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PLASMA TRAIL EFFECT PAINTS
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _plasmaOuterGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _plasmaCorePaint = Paint();
+  static final Paint _plasmaRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _plasmaWispPaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  static final Paint _plasmaSparkPaint = Paint();
+  static final Paint _plasmaEnergyPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _plasmaArcPaint = Paint()
+    ..strokeWidth = 1.2
+    ..strokeCap = StrokeCap.round
+    ..style = PaintingStyle.stroke;
+  static final Paint _plasmaHeatPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _plasmaChromaPaint = Paint();
+  static final Paint _plasmaVortexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PLASMA BUBBLE PROJECTILE PAINTS
+  // ═══════════════════════════════════════════════════════════════════════
+  static final Paint _bubbleMembraneGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _bubbleMembranePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _bubblePlasmaCorePaint = Paint();
+  static final Paint _bubbleInnerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _bubbleSwirlPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _bubbleShimmerPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _bubbleEnergyCorePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _bubbleOrbitPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _bubbleDistortionPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _bubbleHighlightPaint = Paint();
+
   // Reusable paths to avoid per-frame allocations
   static final Path _reusableArrowPath = Path();
   static final Path _reusableArcPath = Path();
   static final Path _reusableRunePath = Path();
   static final Path _reusableStarPath = Path();
+  static final Path _reusablePlasmaPath = Path();
+  static final Path _reusablePlasmaWispPath = Path();
+  static final Path _reusablePlasmaVortexPath = Path();
+  static final Path _reusableBubbleSwirlPath = Path();
+
+  // Reusable Offset objects for loops
+  static Offset _tempOffset1 = Offset.zero;
+  static Offset _tempOffset2 = Offset.zero;
+
+  // Reusable Vector2 objects for calculations - avoid per-frame allocations
+  static final Vector2 _tempDirection = Vector2.zero();
+  static final Vector2 _tempStep = Vector2.zero();
+  static final Vector2 _tempPerpendicular = Vector2.zero();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // COLOR PALETTE CACHE - Avoid per-frame Color.withOpacity() allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Map<int, _ColorPalette> _colorPaletteCache = {};
+  static const int _maxPaletteCacheSize = 32;
+
+  /// Get or create a cached color palette for the given color
+  static _ColorPalette _getPalette(Color color) {
+    final key = color.value;
+    var palette = _colorPaletteCache[key];
+    if (palette == null) {
+      // Evict oldest entry if cache is full
+      if (_colorPaletteCache.length >= _maxPaletteCacheSize) {
+        _colorPaletteCache.remove(_colorPaletteCache.keys.first);
+      }
+      palette = _ColorPalette(color);
+      _colorPaletteCache[key] = palette;
+    }
+    return palette;
+  }
+
+  /// Clear palette cache (call between games)
+  static void clearPaletteCache() {
+    _colorPaletteCache.clear();
+  }
 
   Projectile({
     required Vector2 startPosition,
@@ -67,7 +175,7 @@ class Projectile extends PositionComponent {
     this.towerType = TowerType.pulseArcher,
   }) : _active = true,
        _random = math.Random() {
-    position = startPosition.clone();
+    position.setFrom(startPosition);
     size = Vector2.all(6);
     anchor = Anchor.center;
     _initializeTypeEffects();
@@ -89,10 +197,16 @@ class Projectile extends PositionComponent {
   double _rotationAngle = 0;
   final math.Random _random;
 
-  // Trail system - varies by type
+  // Trail system - circular buffer for O(1) updates instead of O(n) shifting
   int _maxTrailLength = 12;
   final List<Vector2> _trailPositions = [];
   final List<double> _trailAlphas = [];
+  int _trailHead = 0; // Current write position in circular buffer
+
+  /// Get physical index from logical index (0 = newest, _maxTrailLength-1 = oldest)
+  int _getTrailPhysicalIndex(int logicalIndex) {
+    return (_trailHead - logicalIndex + _maxTrailLength) % _maxTrailLength;
+  }
 
   // Particle system
   int _particleCount = 8;
@@ -153,6 +267,12 @@ class Projectile extends PositionComponent {
         _maxTrailLength = 12;
         _particleCount = 8;
         break;
+      case TowerType.plasmaBubble:
+        _maxTrailLength = 14;
+        _particleCount = 6; // Orbiting particles around bubble
+        _wobbleAmount = 0.5; // Bubble wobbles while moving
+        size = Vector2.all(14); // Larger bubble projectile
+        break;
     }
 
     // Ajustar calidad según nivel de estrés
@@ -176,6 +296,7 @@ class Projectile extends PositionComponent {
   void _initializeTrail() {
     _trailPositions.clear();
     _trailAlphas.clear();
+    _trailHead = 0; // Reset circular buffer head
     if (allowTrails && !lowFx && _maxTrailLength > 1) {
       for (int i = 0; i < _maxTrailLength; i++) {
         _trailPositions.add(position.clone());
@@ -214,7 +335,7 @@ class Projectile extends PositionComponent {
     double slowDuration = 0,
     TowerType towerType = TowerType.pulseArcher,
   }) {
-    position = startPosition.clone();
+    position.setFrom(startPosition);
     this.targetPosition.setFrom(targetPosition);
     this.speed = speed;
     this.damage = damage;
@@ -289,9 +410,11 @@ class Projectile extends PositionComponent {
       }
     }
 
-    // Move toward target position
-    final direction = targetPosition - position;
-    final distance = direction.length;
+    // Move toward target position - use static vectors to avoid allocations
+    _tempDirection
+      ..setFrom(targetPosition)
+      ..sub(position);
+    final distance = _tempDirection.length;
 
     if (distance < 5) {
       // Hit - apply damage and effects if target still valid
@@ -313,19 +436,25 @@ class Projectile extends PositionComponent {
       return;
     }
 
-    // Move projectile with type-specific behavior
-    var step = direction.normalized() * speed * dt;
+    // Move projectile with type-specific behavior - reuse static vector
+    _tempStep
+      ..setFrom(_tempDirection)
+      ..normalize()
+      ..scale(speed * dt);
 
     // Add wobble for Phase Mage
     if (_wobbleAmount > 0) {
-      final perpendicular = Vector2(-direction.y, direction.x).normalized();
-      step += perpendicular * math.sin(_spiralPhase) * _wobbleAmount * dt * 100;
+      _tempPerpendicular
+        ..setValues(-_tempDirection.y, _tempDirection.x)
+        ..normalize()
+        ..scale(math.sin(_spiralPhase) * _wobbleAmount * dt * 100);
+      _tempStep.add(_tempPerpendicular);
     }
 
-    if (step.length >= distance) {
-      position = targetPosition.clone();
+    if (_tempStep.length >= distance) {
+      position.setFrom(targetPosition);
     } else {
-      position += step;
+      position.add(_tempStep);
     }
   }
 
@@ -341,18 +470,36 @@ class Projectile extends PositionComponent {
   }
 
   void _updateTrail() {
-    // Shift trail positions
-    for (int i = _maxTrailLength - 1; i > 0; i--) {
-      _trailPositions[i].setFrom(_trailPositions[i - 1]);
-      _trailAlphas[i] = _trailAlphas[i - 1] * 0.85;
+    // CIRCULAR BUFFER: O(1) update instead of O(n) array shifting
+    // Decay all alphas first (applied once per update)
+    for (int i = 0; i < _maxTrailLength; i++) {
+      _trailAlphas[i] *= 0.85;
     }
-    _trailPositions[0].setFrom(position);
-    _trailAlphas[0] = 1.0;
+
+    // Move head forward and write new position
+    _trailHead = (_trailHead + 1) % _maxTrailLength;
+    _trailPositions[_trailHead].setFrom(position);
+    _trailAlphas[_trailHead] = 1.0;
   }
 
   @override
   void render(Canvas canvas) {
     if (!_active) return;
+
+    // OFF-SCREEN CULLING - Skip rendering projectiles outside visible area
+    // This saves significant GPU time when many projectiles are off-screen
+    final parent = this.parent;
+    if (parent != null && parent is PositionComponent) {
+      final screenPos = parent.position + position;
+      const cullPadding = 50.0; // Extra padding for trails
+      if (screenPos.x < -cullPadding ||
+          screenPos.y < -cullPadding ||
+          screenPos.x > Enemy.screenSize.x + cullPadding ||
+          screenPos.y > Enemy.screenSize.y + cullPadding) {
+        return; // Skip rendering - off-screen
+      }
+    }
+
     super.render(canvas);
 
     // Use cached sprites for maximum performance in high-stress mode
@@ -380,6 +527,9 @@ class Projectile extends PositionComponent {
       case TowerType.resonanceSiphon:
       case TowerType.neuralDisruptor:
         _renderPulseArcher(canvas); // Fallback to basic for now
+        break;
+      case TowerType.plasmaBubble:
+        _renderPlasmaBubble(canvas);
         break;
     }
   }
@@ -507,14 +657,15 @@ class Projectile extends PositionComponent {
     canvas.rotate(_rotationAngle * 0.5);
 
     _circuitLinePaint.color = color.withOpacity(0.6);
+    final innerR = size.x * 0.3;
+    final outerR = size.x * 0.7;
     for (int i = 0; i < 4; i++) {
       final angle = i * math.pi / 2;
-      final startX = math.cos(angle) * size.x * 0.3;
-      final startY = math.sin(angle) * size.x * 0.3;
-      final endX = math.cos(angle) * size.x * 0.7;
-      final endY = math.sin(angle) * size.x * 0.7;
-
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _circuitLinePaint);
+      final cosA = math.cos(angle);
+      final sinA = math.sin(angle);
+      _tempOffset1 = Offset(cosA * innerR, sinA * innerR);
+      _tempOffset2 = Offset(cosA * outerR, sinA * outerR);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _circuitLinePaint);
     }
 
     canvas.restore();
@@ -615,8 +766,9 @@ class Projectile extends PositionComponent {
       final sparkAlpha = 0.4 + math.sin(_pulsePhase * 2 + i * 1.5) * 0.4;
 
       if (sparkAlpha > 0.2) {
-        // Star shape for each sparkle
-        _drawStar(canvas, Offset(sparkX, sparkY), 2, color.withOpacity(sparkAlpha));
+        _tempOffset1 = Offset(sparkX, sparkY);
+        _sparkPaint.color = color.withOpacity(sparkAlpha);
+        _drawStar(canvas, _tempOffset1, 2, _sparkPaint.color);
       }
     }
 
@@ -635,6 +787,236 @@ class Projectile extends PositionComponent {
 
     // Extra particles
     _drawParticles(canvas);
+  }
+
+  void _renderPlasmaBubble(Canvas canvas) {
+    // Plasma bubble projectile with 7 visual layers
+    // Uses purple/pink plasma colors with wobble effect
+
+    final bubbleRadius = size.x * 0.5;
+    final pulseScale = 1.0 + math.sin(_pulsePhase * 1.5) * 0.08;
+    final wobbleX = math.sin(_time * 8) * 1.5 * _wobbleAmount;
+    final wobbleY = math.cos(_time * 6) * 1.0 * _wobbleAmount;
+
+    // Get color variations for plasma effect
+    final hslColor = HSLColor.fromColor(color);
+    final pinkColor = hslColor.withHue((hslColor.hue + 20) % 360).toColor();
+    final purpleColor = hslColor.withHue((hslColor.hue - 30) % 360).toColor();
+    final brightColor = hslColor.withLightness((hslColor.lightness + 0.2).clamp(0, 1)).toColor();
+
+    canvas.save();
+    canvas.translate(wobbleX, wobbleY);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: DISTORTION TRAIL BEHIND BUBBLE
+    // ═══════════════════════════════════════════════════════════════════════
+    if (allowTrails && _trailPositions.length > 2) {
+      for (int i = 1; i < _trailPositions.length; i++) {
+        final physIdx = _getTrailPhysicalIndex(i);
+        final alpha = _trailAlphas[physIdx];
+        if (alpha < 0.1) continue;
+
+        final trailOffset = _trailPositions[physIdx] - position;
+        final progress = i / _maxTrailLength;
+        final distortRadius = bubbleRadius * (1.2 - progress * 0.5);
+
+        // Distortion ripples
+        final ripplePhase = _time * 10 - i * 0.5;
+        final rippleScale = 1.0 + math.sin(ripplePhase) * 0.15;
+
+        _tempOffset1 = Offset(trailOffset.x - wobbleX, trailOffset.y - wobbleY);
+        _bubbleDistortionPaint.color = purpleColor.withOpacity(alpha * 0.25);
+        canvas.drawCircle(_tempOffset1, distortRadius * rippleScale, _bubbleDistortionPaint);
+
+        // Secondary pink distortion
+        if (alpha > 0.3) {
+          _bubbleDistortionPaint.color = pinkColor.withOpacity(alpha * 0.15);
+          canvas.drawCircle(_tempOffset1, distortRadius * 0.7 * rippleScale, _bubbleDistortionPaint);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: OUTER BUBBLE MEMBRANE (translucent sphere outline)
+    // ═══════════════════════════════════════════════════════════════════════
+    final membraneRadius = bubbleRadius * pulseScale;
+
+    // Outer glow for bubble membrane
+    if (allowGlow) {
+      _bubbleMembraneGlowPaint.color = color.withOpacity(0.4);
+      canvas.drawCircle(Offset.zero, membraneRadius * 1.2, _bubbleMembraneGlowPaint);
+
+      // Secondary pink glow
+      _bubbleMembraneGlowPaint.color = pinkColor.withOpacity(0.25);
+      canvas.drawCircle(Offset.zero, membraneRadius * 1.4, _bubbleMembraneGlowPaint);
+    }
+
+    // Main membrane outline with varying thickness
+    for (int ring = 0; ring < 3; ring++) {
+      final ringOffset = ring * 0.08;
+      final ringAlpha = 0.5 - ring * 0.15;
+      final ringRadius = membraneRadius * (1.0 - ringOffset);
+
+      _bubbleMembranePaint
+        ..color = Color.lerp(color, pinkColor, ring / 3)!.withOpacity(ringAlpha)
+        ..strokeWidth = 2.0 - ring * 0.5;
+      canvas.drawCircle(Offset.zero, ringRadius, _bubbleMembranePaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: INNER PLASMA SWIRL (animated rotating pattern)
+    // ═══════════════════════════════════════════════════════════════════════
+    final swirlAngle = _spiralPhase * 1.5;
+
+    // Draw multiple swirl arms
+    for (int arm = 0; arm < 3; arm++) {
+      _reusableBubbleSwirlPath.reset();
+
+      final armAngle = swirlAngle + arm * math.pi * 2 / 3;
+      var started = false;
+
+      // Create spiral from center outward
+      for (int i = 0; i < 20; i++) {
+        final progress = i / 20;
+        final spiralRadius = membraneRadius * 0.15 + progress * membraneRadius * 0.65;
+        final spiralAngle = armAngle + progress * math.pi * 2;
+
+        // Add wobble to spiral
+        final wobbleFactor = math.sin(_time * 12 + i * 0.5) * 0.1;
+        final adjustedRadius = spiralRadius * (1.0 + wobbleFactor);
+
+        final sx = math.cos(spiralAngle) * adjustedRadius;
+        final sy = math.sin(spiralAngle) * adjustedRadius;
+
+        if (!started) {
+          _reusableBubbleSwirlPath.moveTo(sx, sy);
+          started = true;
+        } else {
+          _reusableBubbleSwirlPath.lineTo(sx, sy);
+        }
+      }
+
+      final swirlColor = Color.lerp(purpleColor, pinkColor, arm / 3)!;
+      _bubbleSwirlPaint.color = swirlColor.withOpacity(0.6);
+      if (allowGlow) {
+        _bubbleSwirlPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      } else {
+        _bubbleSwirlPaint.maskFilter = null;
+      }
+      canvas.drawPath(_reusableBubbleSwirlPath, _bubbleSwirlPaint);
+    }
+
+    // Inner plasma glow
+    _bubbleInnerGlowPaint.color = color.withOpacity(0.3);
+    canvas.drawCircle(Offset.zero, membraneRadius * 0.7, _bubbleInnerGlowPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: SURFACE SHIMMER HIGHLIGHTS
+    // ═══════════════════════════════════════════════════════════════════════
+    // Multiple shimmer points on the bubble surface
+    for (int shimmer = 0; shimmer < 5; shimmer++) {
+      final shimmerAngle = _time * 3 + shimmer * math.pi * 2 / 5;
+      final shimmerPhase = math.sin(_time * 8 + shimmer * 1.3);
+
+      // Only show shimmer when phase is positive (creates flickering effect)
+      if (shimmerPhase > 0) {
+        final shimmerDist = membraneRadius * (0.7 + shimmerPhase * 0.25);
+        final shimmerX = math.cos(shimmerAngle) * shimmerDist;
+        final shimmerY = math.sin(shimmerAngle) * shimmerDist;
+        final shimmerSize = 2.0 + shimmerPhase * 1.5;
+
+        _bubbleShimmerPaint.color = brightColor.withOpacity(shimmerPhase * 0.7);
+        canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize, _bubbleShimmerPaint);
+
+        // White highlight core
+        _bubbleHighlightPaint.color = const Color(0xFFFFFFFF).withOpacity(shimmerPhase * 0.5);
+        canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize * 0.5, _bubbleHighlightPaint);
+      }
+    }
+
+    // Main specular highlight (top-left)
+    final mainHighlightX = -membraneRadius * 0.35;
+    final mainHighlightY = -membraneRadius * 0.35;
+    final highlightPulse = 0.6 + math.sin(_time * 5) * 0.2;
+
+    _bubbleShimmerPaint.color = const Color(0xFFFFFFFF).withOpacity(highlightPulse * 0.6);
+    canvas.drawCircle(Offset(mainHighlightX, mainHighlightY), membraneRadius * 0.25, _bubbleShimmerPaint);
+
+    _bubbleHighlightPaint.color = const Color(0xFFFFFFFF).withOpacity(highlightPulse * 0.8);
+    canvas.drawCircle(Offset(mainHighlightX, mainHighlightY), membraneRadius * 0.12, _bubbleHighlightPaint);
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: ENERGY CORE GLOW AT CENTER
+    // ═══════════════════════════════════════════════════════════════════════
+    final coreRadius = membraneRadius * 0.3;
+    final corePulse = 1.0 + math.sin(_pulsePhase * 2) * 0.2;
+
+    // Outer core glow
+    if (allowGlow) {
+      _bubbleEnergyCorePaint.color = pinkColor.withOpacity(0.5);
+      canvas.drawCircle(Offset.zero, coreRadius * 1.8 * corePulse, _bubbleEnergyCorePaint);
+
+      _bubbleEnergyCorePaint.color = color.withOpacity(0.6);
+      canvas.drawCircle(Offset.zero, coreRadius * 1.3 * corePulse, _bubbleEnergyCorePaint);
+    }
+
+    // Core gradient
+    final coreGradient = RadialGradient(
+      colors: [
+        const Color(0xFFFFFFFF),
+        brightColor,
+        color,
+        purpleColor.withOpacity(0.5),
+      ],
+      stops: const [0.0, 0.3, 0.6, 1.0],
+    ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadius * corePulse));
+
+    _bubblePlasmaCorePaint.shader = coreGradient;
+    canvas.drawCircle(Offset.zero, coreRadius * corePulse, _bubblePlasmaCorePaint);
+    _bubblePlasmaCorePaint.shader = null;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: SMALL ORBITING PARTICLES AROUND BUBBLE
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 0; i < 6; i++) {
+      final orbitAngle = _time * 5 + i * math.pi / 3;
+      final orbitRadius = membraneRadius * (1.1 + math.sin(_time * 3 + i) * 0.15);
+      final particleX = math.cos(orbitAngle) * orbitRadius;
+      final particleY = math.sin(orbitAngle) * orbitRadius;
+
+      // Varying particle sizes
+      final particleSize = 1.5 + math.sin(_time * 8 + i * 2) * 0.5;
+      final particleAlpha = 0.5 + math.sin(_time * 6 + i * 1.5) * 0.3;
+
+      // Particle glow
+      final particleColor = Color.lerp(pinkColor, purpleColor, i / 6)!;
+      _bubbleOrbitPaint.color = particleColor.withOpacity(particleAlpha * 0.7);
+      canvas.drawCircle(Offset(particleX, particleY), particleSize * 2, _bubbleOrbitPaint);
+
+      // Bright particle core
+      _bubbleHighlightPaint.color = brightColor.withOpacity(particleAlpha);
+      canvas.drawCircle(Offset(particleX, particleY), particleSize, _bubbleHighlightPaint);
+    }
+
+    // Inner orbiting particles (smaller, faster)
+    for (int i = 0; i < 4; i++) {
+      final innerOrbitAngle = -_time * 8 + i * math.pi / 2;
+      final innerOrbitRadius = membraneRadius * 0.5;
+      final innerParticleX = math.cos(innerOrbitAngle) * innerOrbitRadius;
+      final innerParticleY = math.sin(innerOrbitAngle) * innerOrbitRadius;
+
+      final innerSize = 1.0 + math.sin(_time * 12 + i) * 0.3;
+
+      _bubbleHighlightPaint.color = const Color(0xFFFFFFFF).withOpacity(0.6);
+      canvas.drawCircle(Offset(innerParticleX, innerParticleY), innerSize, _bubbleHighlightPaint);
+    }
+
+    canvas.restore();
+
+    // Draw additional particles around the projectile
+    if (!lowFx) {
+      _drawParticles(canvas);
+    }
   }
 
   void _drawStar(Canvas canvas, Offset center, double radius, Color starColor) {
@@ -663,56 +1045,363 @@ class Projectile extends PositionComponent {
   void _drawTrail(Canvas canvas) {
     if (_trailPositions.length < 2) return;
 
-    for (int i = 1; i < _trailPositions.length; i++) {
-      final alpha = _trailAlphas[i];
-      if (alpha < 0.05) continue;
+    // Get secondary and tertiary colors for gradient effects
+    final hslColor = HSLColor.fromColor(color);
+    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
+    final tertiaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final complementColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
 
-      final trailOffset = _trailPositions[i] - position;
-      final trailSize = size.x * 0.5 * (1 - i / _maxTrailLength);
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 1: DEEP OUTER PLASMA GLOW WITH COLOR GRADIENT
+    // ═══════════════════════════════════════════════════════════════════════
+    if (allowGlow) {
+      for (int i = 1; i < _trailPositions.length; i++) {
+        final physIdx = _getTrailPhysicalIndex(i);
+        final alpha = _trailAlphas[physIdx];
+        if (alpha < 0.05) continue;
 
-      // Trail glow
-      if (allowGlow) {
-        _trailGlowPaint
-          ..color = color.withOpacity(alpha * 0.3)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 + i * 0.5);
-        canvas.drawCircle(Offset(trailOffset.x, trailOffset.y), trailSize * 1.5, _trailGlowPaint);
+        final trailOffset = _trailPositions[physIdx] - position;
+        final progress = i / _maxTrailLength;
+        final trailSize = size.x * (1.2 - progress * 0.6);
+        _tempOffset1 = Offset(trailOffset.x, trailOffset.y);
+
+        // Outer plasma glow with gradient from primary to secondary color
+        final gradientColor = Color.lerp(color, secondaryColor, progress)!;
+        _plasmaOuterGlowPaint.color = gradientColor.withOpacity(alpha * 0.25);
+        canvas.drawCircle(_tempOffset1, trailSize * 2.5, _plasmaOuterGlowPaint);
+
+        // Secondary glow layer with tertiary color
+        _plasmaOuterGlowPaint.color = tertiaryColor.withOpacity(alpha * 0.15);
+        canvas.drawCircle(_tempOffset1, trailSize * 1.8, _plasmaOuterGlowPaint);
       }
-
-      // Trail core
-      _trailCorePaint.color = color.withOpacity(alpha * 0.6);
-      canvas.drawCircle(Offset(trailOffset.x, trailOffset.y), trailSize, _trailCorePaint);
     }
 
-    // Draw connecting line between trail points
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 2: PLASMA ENERGY RINGS EXPANDING FROM TRAIL
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 1; i < _trailPositions.length; i += 2) {
+      final physIdx = _getTrailPhysicalIndex(i);
+      final alpha = _trailAlphas[physIdx];
+      if (alpha < 0.1) continue;
+
+      final trailOffset = _trailPositions[physIdx] - position;
+      final progress = i / _maxTrailLength;
+      _tempOffset1 = Offset(trailOffset.x, trailOffset.y);
+
+      // Multiple concentric rings with phase offset
+      for (int ring = 0; ring < 3; ring++) {
+        final ringPhase = _time * 8 + ring * 0.5 + i * 0.2;
+        final ringPulse = (math.sin(ringPhase) * 0.5 + 0.5);
+        final ringRadius = size.x * (0.4 + ring * 0.25 + ringPulse * 0.3) * (1 - progress * 0.5);
+        final ringAlpha = alpha * (0.4 - ring * 0.1) * (1 - ringPulse * 0.3);
+
+        if (ringAlpha > 0.05) {
+          final ringColor = Color.lerp(color, secondaryColor, ring / 3)!;
+          _plasmaRingPaint
+            ..color = ringColor.withOpacity(ringAlpha)
+            ..strokeWidth = 1.5 - ring * 0.3;
+          canvas.drawCircle(_tempOffset1, ringRadius, _plasmaRingPaint);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 3: WISPY ENERGY TENDRILS FLOWING FROM PROJECTILE
+    // ═══════════════════════════════════════════════════════════════════════
+    if (_trailPositions.length > 3) {
+      for (int tendril = 0; tendril < 4; tendril++) {
+        _reusablePlasmaWispPath.reset();
+
+        final tendrilAngle = _time * 3 + tendril * math.pi / 2;
+        final tendrilOffset = math.sin(_time * 5 + tendril) * 3;
+
+        bool started = false;
+        for (int i = 0; i < _trailPositions.length - 1; i++) {
+          final physIdx = _getTrailPhysicalIndex(i);
+          final alpha = _trailAlphas[physIdx];
+          if (alpha < 0.1) continue;
+
+          final trailOffset = _trailPositions[physIdx] - position;
+          final wispAngle = tendrilAngle + i * 0.3;
+          final wispRadius = (3 + math.sin(_time * 6 + i * 0.5) * 2) * alpha;
+
+          final wx = trailOffset.x + math.cos(wispAngle) * wispRadius + tendrilOffset;
+          final wy = trailOffset.y + math.sin(wispAngle) * wispRadius;
+
+          if (!started) {
+            _reusablePlasmaWispPath.moveTo(wx, wy);
+            started = true;
+          } else {
+            _reusablePlasmaWispPath.lineTo(wx, wy);
+          }
+        }
+
+        if (started) {
+          final tendrilColor = Color.lerp(color, tertiaryColor, tendril / 4)!;
+          _plasmaWispPaint
+            ..color = tendrilColor.withOpacity(0.4)
+            ..strokeWidth = 2 - tendril * 0.3;
+          if (allowGlow) {
+            _plasmaWispPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+          }
+          canvas.drawPath(_reusablePlasmaWispPath, _plasmaWispPaint);
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: COLOR-SHIFTING CHROMATIC PLASMA BANDS
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int band = 0; band < 3; band++) {
+      final bandOffset = (band - 1) * 2.0;
+
+      for (int i = 1; i < _trailPositions.length; i++) {
+        final physIdx = _getTrailPhysicalIndex(i);
+        final alpha = _trailAlphas[physIdx];
+        if (alpha < 0.15) continue;
+
+        final trailOffset = _trailPositions[physIdx] - position;
+        final progress = i / _maxTrailLength;
+        final trailSize = size.x * 0.3 * (1 - progress * 0.7);
+
+        // Chromatic split effect - each band slightly offset
+        final chromaColor = band == 0
+            ? Color.fromARGB((alpha * 180).toInt(), 255, 100, 100)
+            : band == 1
+                ? Color.fromARGB((alpha * 180).toInt(), 100, 255, 100)
+                : Color.fromARGB((alpha * 180).toInt(), 100, 100, 255);
+
+        _tempOffset1 = Offset(trailOffset.x + bandOffset, trailOffset.y + bandOffset * 0.5);
+        _plasmaChromaPaint.color = chromaColor;
+        canvas.drawCircle(_tempOffset1, trailSize, _plasmaChromaPaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 5: PLASMA VORTEX SPIRAL EFFECT
+    // ═══════════════════════════════════════════════════════════════════════
+    _reusablePlasmaVortexPath.reset();
+    bool vortexStarted = false;
+
+    for (int arm = 0; arm < 2; arm++) {
+      final armAngle = _time * 4 + arm * math.pi;
+
+      for (int i = 0; i < _trailPositions.length; i++) {
+        final physIdx = _getTrailPhysicalIndex(i);
+        final alpha = _trailAlphas[physIdx];
+        if (alpha < 0.1) continue;
+
+        final trailOffset = _trailPositions[physIdx] - position;
+        final spiralAngle = armAngle + i * 0.4;
+        final spiralRadius = (2 + i * 0.3) * alpha;
+
+        final sx = trailOffset.x + math.cos(spiralAngle) * spiralRadius;
+        final sy = trailOffset.y + math.sin(spiralAngle) * spiralRadius;
+
+        if (!vortexStarted) {
+          _reusablePlasmaVortexPath.moveTo(sx, sy);
+          vortexStarted = true;
+        } else {
+          _reusablePlasmaVortexPath.lineTo(sx, sy);
+        }
+      }
+    }
+
+    if (vortexStarted) {
+      _plasmaVortexPaint.color = secondaryColor.withOpacity(0.35);
+      if (allowGlow) {
+        _plasmaVortexPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      }
+      canvas.drawPath(_reusablePlasmaVortexPath, _plasmaVortexPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 6: ELECTRIC MICRO-ARCS BETWEEN TRAIL POINTS
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 0; i < _trailPositions.length - 2; i += 2) {
+      final physIdxStart = _getTrailPhysicalIndex(i);
+      final physIdxEnd = _getTrailPhysicalIndex(i + 2);
+      final alpha = _trailAlphas[physIdxStart];
+      if (alpha < 0.2) continue;
+
+      final start = _trailPositions[physIdxStart] - position;
+      final end = _trailPositions[physIdxEnd] - position;
+
+      _reusablePlasmaPath.reset();
+      _reusablePlasmaPath.moveTo(start.x, start.y);
+
+      // Create zigzag lightning effect
+      const segments = 4;
+      for (int seg = 1; seg <= segments; seg++) {
+        final progress = seg / segments;
+        final baseX = start.x + (end.x - start.x) * progress;
+        final baseY = start.y + (end.y - start.y) * progress;
+
+        // Add jitter perpendicular to line
+        final perpAngle = math.atan2(end.y - start.y, end.x - start.x) + math.pi / 2;
+        final jitter = math.sin(_time * 25 + i * 3 + seg * 2) * 2 * alpha;
+
+        _reusablePlasmaPath.lineTo(
+          baseX + math.cos(perpAngle) * jitter,
+          baseY + math.sin(perpAngle) * jitter,
+        );
+      }
+
+      _plasmaArcPaint.color = color.withOpacity(alpha * 0.6);
+      if (allowGlow) {
+        _plasmaArcPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      }
+      canvas.drawPath(_reusablePlasmaPath, _plasmaArcPaint);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 7: HOT PLASMA CORE WITH WHITE CENTER
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 1; i < _trailPositions.length; i++) {
+      final physIdx = _getTrailPhysicalIndex(i);
+      final alpha = _trailAlphas[physIdx];
+      if (alpha < 0.1) continue;
+
+      final trailOffset = _trailPositions[physIdx] - position;
+      final progress = i / _maxTrailLength;
+      final coreSize = size.x * 0.4 * (1 - progress * 0.6);
+      _tempOffset1 = Offset(trailOffset.x, trailOffset.y);
+
+      // Create gradient for hot core
+      final coreGradient = RadialGradient(
+        colors: [
+          const Color(0xFFFFFFFF).withOpacity(alpha * 0.9),
+          color.withOpacity(alpha * 0.7),
+          secondaryColor.withOpacity(alpha * 0.3),
+        ],
+        stops: const [0.0, 0.4, 1.0],
+      ).createShader(Rect.fromCircle(center: _tempOffset1, radius: coreSize));
+
+      _plasmaCorePaint.shader = coreGradient;
+      canvas.drawCircle(_tempOffset1, coreSize, _plasmaCorePaint);
+      _plasmaCorePaint.shader = null;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 8: FLOATING PLASMA SPARKS AND EMBERS
+    // ═══════════════════════════════════════════════════════════════════════
+    for (int i = 0; i < _trailPositions.length; i += 2) {
+      final physIdx = _getTrailPhysicalIndex(i);
+      final alpha = _trailAlphas[physIdx];
+      if (alpha < 0.15) continue;
+
+      final trailOffset = _trailPositions[physIdx] - position;
+
+      // Generate multiple sparks around each trail point
+      for (int spark = 0; spark < 3; spark++) {
+        final sparkAngle = _time * 10 + i * 1.5 + spark * 2.1;
+        final sparkDist = (4 + math.sin(_time * 8 + spark) * 3) * alpha;
+        final sparkSize = (1.5 + _random.nextDouble()) * alpha;
+
+        final sparkX = trailOffset.x + math.cos(sparkAngle) * sparkDist;
+        final sparkY = trailOffset.y + math.sin(sparkAngle) * sparkDist;
+
+        final sparkColor = Color.lerp(color, const Color(0xFFFFFFFF), 0.3 + spark * 0.2)!;
+        _plasmaSparkPaint.color = sparkColor.withOpacity(alpha * 0.7);
+        canvas.drawCircle(Offset(sparkX, sparkY), sparkSize, _plasmaSparkPaint);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 9: HEAT DISTORTION WAVE EFFECT
+    // ═══════════════════════════════════════════════════════════════════════
+    if (allowGlow && _trailPositions.length > 4) {
+      for (int wave = 0; wave < 2; wave++) {
+        final wavePhase = _time * 6 + wave * math.pi;
+        final waveIndex = (wavePhase * 2).toInt() % _trailPositions.length;
+
+        if (waveIndex > 0 && waveIndex < _trailPositions.length) {
+          final physIdx = _getTrailPhysicalIndex(waveIndex);
+          final alpha = _trailAlphas[physIdx];
+          if (alpha > 0.2) {
+            final trailOffset = _trailPositions[physIdx] - position;
+            final waveRadius = size.x * (0.8 + math.sin(wavePhase) * 0.3);
+
+            _tempOffset1 = Offset(trailOffset.x, trailOffset.y);
+            _plasmaHeatPaint.color = complementColor.withOpacity(alpha * 0.2);
+            canvas.drawCircle(_tempOffset1, waveRadius, _plasmaHeatPaint);
+          }
+        }
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 10: TRAILING ENERGY RIBBON
+    // ═══════════════════════════════════════════════════════════════════════
+    if (_trailPositions.length > 2) {
+      _reusablePlasmaPath.reset();
+      bool ribbonStarted = false;
+
+      // Draw smooth ribbon through trail points
+      for (int i = 0; i < _trailPositions.length; i++) {
+        final physIdx = _getTrailPhysicalIndex(i);
+        final alpha = _trailAlphas[physIdx];
+        if (alpha < 0.05) continue;
+
+        final trailOffset = _trailPositions[physIdx] - position;
+        final ribbonWave = math.sin(_time * 4 + i * 0.8) * 2;
+
+        if (!ribbonStarted) {
+          _reusablePlasmaPath.moveTo(trailOffset.x, trailOffset.y + ribbonWave);
+          ribbonStarted = true;
+        } else {
+          _reusablePlasmaPath.lineTo(trailOffset.x, trailOffset.y + ribbonWave);
+        }
+      }
+
+      if (ribbonStarted) {
+        _plasmaEnergyPaint.color = tertiaryColor.withOpacity(0.5);
+        _trailLinePaint
+          ..color = tertiaryColor.withOpacity(0.5)
+          ..strokeWidth = 3
+          ..style = PaintingStyle.stroke;
+        canvas.drawPath(_reusablePlasmaPath, _trailLinePaint);
+        _trailLinePaint.style = PaintingStyle.fill;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 11: CONNECTING PLASMA BRIDGES
+    // ═══════════════════════════════════════════════════════════════════════
     _trailLinePaint
-      ..color = color.withOpacity(0.4)
-      ..strokeWidth = 2
-      ..maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+      ..color = color.withOpacity(0.5)
+      ..strokeWidth = 2.5
+      ..maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
 
     for (int i = 0; i < _trailPositions.length - 1; i++) {
-      if (_trailAlphas[i] < 0.1 || _trailAlphas[i + 1] < 0.1) continue;
+      final physIdxStart = _getTrailPhysicalIndex(i);
+      final physIdxEnd = _getTrailPhysicalIndex(i + 1);
+      if (_trailAlphas[physIdxStart] < 0.1 || _trailAlphas[physIdxEnd] < 0.1) continue;
 
-      final start = _trailPositions[i] - position;
-      final end = _trailPositions[i + 1] - position;
+      final start = _trailPositions[physIdxStart] - position;
+      final end = _trailPositions[physIdxEnd] - position;
+      _tempOffset1 = Offset(start.x, start.y);
+      _tempOffset2 = Offset(end.x, end.y);
 
-      _trailLinePaint.color = color.withOpacity(_trailAlphas[i] * 0.3);
-      canvas.drawLine(Offset(start.x, start.y), Offset(end.x, end.y), _trailLinePaint);
+      // Color gradient along the trail
+      final progress = i / _maxTrailLength;
+      final bridgeColor = Color.lerp(color, secondaryColor, progress)!;
+      _trailLinePaint.color = bridgeColor.withOpacity(_trailAlphas[physIdxStart] * 0.5);
+      canvas.drawLine(_tempOffset1, _tempOffset2, _trailLinePaint);
     }
   }
 
   void _drawParticles(Canvas canvas) {
+    // Set up paint once before loop - no per-particle MaskFilter allocation
+    _particlePaint.maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+
     for (final particle in _particles) {
       final px = math.cos(particle.angle + _time * particle.speed * 0.1) * particle.offset.x;
       final py = math.sin(particle.angle + _time * particle.speed * 0.1) * particle.offset.y;
 
       _particlePaint.color = color.withOpacity(particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3));
-      if (allowGlow) {
-        _particlePaint.maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size);
-      } else {
-        _particlePaint.maskFilter = null;
-      }
-
-      canvas.drawCircle(Offset(px, py), particle.size, _particlePaint);
+      _tempOffset1 = Offset(px, py);
+      canvas.drawCircle(_tempOffset1, particle.size, _particlePaint);
     }
   }
 }
@@ -758,4 +1447,33 @@ class _ElectricSegment {
       offset = random.nextDouble() * math.pi * 2;
     }
   }
+}
+
+/// Pre-computed color palette to avoid per-frame Color.withOpacity() allocations.
+/// Each projectile color gets a cached palette with common opacity variations.
+class _ColorPalette {
+  _ColorPalette(Color base)
+      : o20 = base.withOpacity(0.2),
+        o25 = base.withOpacity(0.25),
+        o30 = base.withOpacity(0.3),
+        o40 = base.withOpacity(0.4),
+        o50 = base.withOpacity(0.5),
+        o60 = base.withOpacity(0.6),
+        o70 = base.withOpacity(0.7),
+        o80 = base.withOpacity(0.8),
+        o85 = base.withOpacity(0.85),
+        o90 = base.withOpacity(0.9),
+        base = base;
+
+  final Color base;
+  final Color o20;
+  final Color o25;
+  final Color o30;
+  final Color o40;
+  final Color o50;
+  final Color o60;
+  final Color o70;
+  final Color o80;
+  final Color o85;
+  final Color o90;
 }

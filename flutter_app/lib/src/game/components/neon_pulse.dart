@@ -28,6 +28,88 @@ class NeonPulse extends PositionComponent {
     _initializeParticles();
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _empHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _linePaint = Paint()
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _noisePaint = Paint();
+  static final Paint _redPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..blendMode = BlendMode.plus
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _cyanPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..blendMode = BlendMode.plus
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _dataPaint = Paint()
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round;
+  static final Paint _particleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _arcPaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _ringGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _ringCorePaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _fillPaint = Paint();
+  static final Path _hexPath = Path();
+
+  // Additional cached paints for render methods - avoid per-frame allocations
+  static final Paint _innerRingGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _innerRingLinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _outerRingGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 12
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+  static final Paint _outerRingMainPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _outerRingEdgePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _secondWaveGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _secondWaveLinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _centerFlashPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _centerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _centerPulsePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _energyLinePaint = Paint()
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _arcGlowPaint = Paint()
+    ..strokeWidth = 3
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _arcCorePaint = Paint()
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+
   final double radius;
   final double slowFactor;
   final double slowDuration;
@@ -124,9 +206,11 @@ class NeonPulse extends PositionComponent {
   }
 
   void _applySlowToEnemiesInRange() {
+    final radiusSq = _currentRadius * _currentRadius; // Pre-compute squared
     for (final enemy in enemies()) {
-      final distance = (enemy.position - position).length;
-      if (distance <= _currentRadius && !_affectedEnemies.contains(enemy)) {
+      // Use squared distance to avoid sqrt
+      final distanceSq = (enemy.position - position).length2;
+      if (distanceSq <= radiusSq && !_affectedEnemies.contains(enemy)) {
         enemy.applySlow(slowFactor, slowDuration);
         _affectedEnemies.add(enemy);
       }
@@ -169,6 +253,229 @@ class NeonPulse extends PositionComponent {
     if (!reducedFx) {
       _drawEnergyField(canvas, opacity);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // EMP ENHANCEMENT EFFECTS
+    // ═══════════════════════════════════════════════════════════════════════
+    if (!reducedFx) {
+      _drawEmpHexDisruption(canvas, opacity);
+      _drawEmpInterferenceLines(canvas, opacity);
+      _drawEmpStaticNoise(canvas, opacity);
+      _drawEmpChromaticEdge(canvas, opacity);
+      _drawEmpDataCorruption(canvas, opacity);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EMP VISUAL EFFECT: HEXAGONAL GRID DISRUPTION
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawEmpHexDisruption(Canvas canvas, double opacity) {
+    if (_phase == _PulsePhase.fading) return;
+
+    const hexSize = 20.0;
+
+    // Draw disrupted hexagons near the wave edge
+    final waveEdge = _currentRadius;
+    const distortionWidth = 40.0;
+
+    for (double angle = 0; angle < math.pi * 2; angle += math.pi / 8) {
+      for (double dist = waveEdge - distortionWidth; dist < waveEdge + distortionWidth * 0.5; dist += hexSize * 1.2) {
+        if (dist < 0) continue;
+
+        final distFromEdge = (dist - waveEdge).abs();
+        final hexAlpha = (1 - distFromEdge / distortionWidth) * opacity * 0.6;
+        if (hexAlpha < 0.05) continue;
+
+        final cx = math.cos(angle) * dist;
+        final cy = math.sin(angle) * dist;
+
+        // Glitch offset
+        final glitchX = (_random.nextDouble() - 0.5) * 4 * (1 - distFromEdge / distortionWidth);
+        final glitchY = (_random.nextDouble() - 0.5) * 4 * (1 - distFromEdge / distortionWidth);
+
+        _hexPath.reset();
+        for (int i = 0; i < 6; i++) {
+          final hexAngle = (i * 60 - 30) * math.pi / 180;
+          final hx = cx + glitchX + math.cos(hexAngle) * hexSize * 0.5;
+          final hy = cy + glitchY + math.sin(hexAngle) * hexSize * 0.5;
+          if (i == 0) {
+            _hexPath.moveTo(hx, hy);
+          } else {
+            _hexPath.lineTo(hx, hy);
+          }
+        }
+        _hexPath.close();
+
+        _empHexPaint.color = NeonColors.cyan.withOpacity(hexAlpha);
+        canvas.drawPath(_hexPath, _empHexPaint);
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EMP VISUAL EFFECT: INTERFERENCE LINES
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawEmpInterferenceLines(Canvas canvas, double opacity) {
+    if (_phase == _PulsePhase.fading) return;
+
+    // Radial interference lines
+    const lineCount = 24;
+    for (int i = 0; i < lineCount; i++) {
+      final angle = (i / lineCount) * math.pi * 2 + _timer * 3;
+      final lineAlpha = (0.2 + math.sin(_timer * 10 + i * 0.5) * 0.15) * opacity;
+
+      // Line with segments that flicker
+      final innerR = _currentRadius * 0.6;
+      final outerR = _currentRadius;
+
+      for (double r = innerR; r < outerR; r += 8) {
+        if (_random.nextDouble() > 0.7) continue;
+
+        final x1 = math.cos(angle) * r;
+        final y1 = math.sin(angle) * r;
+        final x2 = math.cos(angle) * (r + 6);
+        final y2 = math.sin(angle) * (r + 6);
+
+        _linePaint.color = NeonColors.cyan.withOpacity(lineAlpha);
+        canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _linePaint);
+      }
+    }
+
+    // Circular interference bands
+    for (int i = 0; i < 3; i++) {
+      final bandRadius = _currentRadius * (0.5 + i * 0.2);
+      final bandAlpha = (0.15 + math.sin(_timer * 8 + i * 2) * 0.1) * opacity;
+
+      _linePaint.color = NeonColors.cyan.withOpacity(bandAlpha);
+      _linePaint.style = PaintingStyle.stroke;
+      _linePaint.strokeWidth = 1;
+
+      // Draw partial arc
+      final arcStart = _timer * 5 + i;
+      const arcSweep = math.pi * 0.5;
+      canvas.drawArc(
+        Rect.fromCircle(center: Offset.zero, radius: bandRadius),
+        arcStart,
+        arcSweep,
+        false,
+        _linePaint,
+      );
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EMP VISUAL EFFECT: STATIC NOISE
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawEmpStaticNoise(Canvas canvas, double opacity) {
+    if (_phase == _PulsePhase.fading && _timer > 0.15) return;
+
+    final noiseIntensity = _phase == _PulsePhase.expanding
+        ? 1.0
+        : (_phase == _PulsePhase.holding ? 0.5 : (1 - _timer / 0.15));
+
+    // Draw noise dots at the wave edge
+    final noiseCount = (40 * noiseIntensity).toInt();
+    for (int i = 0; i < noiseCount; i++) {
+      final angle = _random.nextDouble() * math.pi * 2;
+      final dist = _currentRadius * (0.85 + _random.nextDouble() * 0.3);
+
+      final nx = math.cos(angle) * dist;
+      final ny = math.sin(angle) * dist;
+
+      final noiseAlpha = _random.nextDouble() * 0.6 * opacity * noiseIntensity;
+      final noiseSize = 1 + _random.nextDouble() * 2;
+
+      // Alternate between cyan and white
+      final noiseColor = _random.nextBool() ? NeonColors.cyan : Colors.white;
+      _noisePaint.color = noiseColor.withOpacity(noiseAlpha);
+
+      canvas.drawCircle(Offset(nx, ny), noiseSize, _noisePaint);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EMP VISUAL EFFECT: CHROMATIC ABERRATION AT EDGE
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawEmpChromaticEdge(Canvas canvas, double opacity) {
+    if (_phase == _PulsePhase.fading) return;
+
+    final chromaOffset = 3.0;
+
+    // Red channel (shifted outward) - use cached paint
+    _redPaint.color = Colors.red.withOpacity(0.25 * opacity);
+    canvas.drawCircle(Offset.zero, _currentRadius + chromaOffset, _redPaint);
+
+    // Blue/Cyan channel (shifted inward) - use cached paint
+    _cyanPaint.color = NeonColors.cyan.withOpacity(0.25 * opacity);
+    canvas.drawCircle(Offset.zero, _currentRadius - chromaOffset, _cyanPaint);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EMP VISUAL EFFECT: DATA CORRUPTION PATTERNS
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _drawEmpDataCorruption(Canvas canvas, double opacity) {
+    if (_phase == _PulsePhase.fading) return;
+
+    // Use cached data paint
+
+    // Binary-style data bars at random positions within the pulse
+    final barCount = 15;
+    for (int i = 0; i < barCount; i++) {
+      final angle = (i / barCount) * math.pi * 2 + _timer * 1.5;
+      final dist = _currentRadius * (0.3 + _random.nextDouble() * 0.6);
+
+      final cx = math.cos(angle) * dist;
+      final cy = math.sin(angle) * dist;
+
+      // Draw a short horizontal bar
+      final barWidth = 8 + _random.nextDouble() * 12;
+      final barAlpha = (0.3 + math.sin(_timer * 15 + i) * 0.2) * opacity;
+
+      // Random color variation
+      final barColor = i % 3 == 0 ? NeonColors.magenta : NeonColors.cyan;
+      _dataPaint.color = barColor.withOpacity(barAlpha);
+
+      canvas.drawLine(
+        Offset(cx - barWidth / 2, cy),
+        Offset(cx + barWidth / 2, cy),
+        _dataPaint,
+      );
+
+      // Sometimes add a perpendicular tick
+      if (_random.nextDouble() > 0.6) {
+        final tickHeight = 4 + _random.nextDouble() * 6;
+        canvas.drawLine(
+          Offset(cx, cy - tickHeight / 2),
+          Offset(cx, cy + tickHeight / 2),
+          _dataPaint,
+        );
+      }
+    }
+
+    // Glitchy text-like patterns - use cached noise paint
+    _noisePaint.color = NeonColors.cyan.withOpacity(0.4 * opacity);
+    _noisePaint.strokeWidth = 1;
+
+    for (int i = 0; i < 6; i++) {
+      final gx = (_random.nextDouble() - 0.5) * _currentRadius * 1.5;
+      final gy = (_random.nextDouble() - 0.5) * _currentRadius * 1.5;
+
+      // Only draw if within radius
+      if (gx * gx + gy * gy > _currentRadius * _currentRadius) continue;
+
+      // Draw 3-4 short horizontal lines (simulating corrupted text)
+      for (int j = 0; j < 3; j++) {
+        final lineLen = 5 + _random.nextDouble() * 10;
+        final ly = gy + j * 4;
+        if (_random.nextDouble() > 0.3) {
+          canvas.drawLine(
+            Offset(gx, ly),
+            Offset(gx + lineLen, ly),
+            _noisePaint,
+          );
+        }
+      }
+    }
   }
 
   void _drawParticles(Canvas canvas, double opacity) {
@@ -185,21 +492,13 @@ class NeonPulse extends PositionComponent {
       final alpha = (1 - progress) * opacity;
       final size = particle.size * (1 - progress * 0.5);
 
-      // Particle glow
-      canvas.drawCircle(
-        Offset(x, y),
-        size * 2,
-        Paint()
-          ..color = NeonColors.cyan.withOpacity(alpha * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      // Particle glow - use cached paint
+      _particleGlowPaint.color = NeonColors.cyan.withOpacity(alpha * 0.3);
+      canvas.drawCircle(Offset(x, y), size * 2, _particleGlowPaint);
 
-      // Particle core
-      canvas.drawCircle(
-        Offset(x, y),
-        size,
-        Paint()..color = NeonColors.cyan.withOpacity(alpha * 0.8),
-      );
+      // Particle core - use cached paint
+      _particleCorePaint.color = NeonColors.cyan.withOpacity(alpha * 0.8);
+      canvas.drawCircle(Offset(x, y), size, _particleCorePaint);
     }
   }
 
@@ -230,84 +529,40 @@ class NeonPulse extends PositionComponent {
 
       final arcAlpha = arc.alphaValue * opacity;
 
-      // Arc glow
-      canvas.drawPath(
-        arcPath,
-        Paint()
-          ..color = NeonColors.cyan.withOpacity(arcAlpha * 0.5)
-          ..strokeWidth = 3
-          ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      // Arc glow - use cached paint
+      _arcGlowPaint.color = NeonColors.cyan.withOpacity(arcAlpha * 0.5);
+      canvas.drawPath(arcPath, _arcGlowPaint);
 
-      // Arc core
-      canvas.drawPath(
-        arcPath,
-        Paint()
-          ..color = Colors.white.withOpacity(arcAlpha * 0.8)
-          ..strokeWidth = 1
-          ..style = PaintingStyle.stroke,
-      );
+      // Arc core - use cached paint
+      _arcCorePaint.color = Colors.white.withOpacity(arcAlpha * 0.8);
+      canvas.drawPath(arcPath, _arcCorePaint);
     }
   }
 
   void _drawInnerRing(Canvas canvas, double opacity) {
     final innerRadius = _currentRadius * 0.85;
 
-    // Inner ring glow
-    canvas.drawCircle(
-      Offset.zero,
-      innerRadius,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.15 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-    );
+    // Inner ring glow - use cached paint
+    _innerRingGlowPaint.color = NeonColors.cyan.withOpacity(0.15 * opacity);
+    canvas.drawCircle(Offset.zero, innerRadius, _innerRingGlowPaint);
 
-    // Inner ring line
-    canvas.drawCircle(
-      Offset.zero,
-      innerRadius,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.4 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    // Inner ring line - use cached paint
+    _innerRingLinePaint.color = NeonColors.cyan.withOpacity(0.4 * opacity);
+    canvas.drawCircle(Offset.zero, innerRadius, _innerRingLinePaint);
   }
 
   void _drawOuterRing(Canvas canvas, double opacity) {
-    // Outer ring glow (intense)
-    canvas.drawCircle(
-      Offset.zero,
-      _currentRadius,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.4 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 12
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12),
-    );
+    // Outer ring glow (intense) - use cached paint
+    _outerRingGlowPaint.color = NeonColors.cyan.withOpacity(0.4 * opacity);
+    canvas.drawCircle(Offset.zero, _currentRadius, _outerRingGlowPaint);
 
-    // Outer ring main
-    canvas.drawCircle(
-      Offset.zero,
-      _currentRadius,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.7 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-    );
+    // Outer ring main - use cached paint
+    _outerRingMainPaint.color = NeonColors.cyan.withOpacity(0.7 * opacity);
+    canvas.drawCircle(Offset.zero, _currentRadius, _outerRingMainPaint);
 
-    // Outer ring bright edge
-    canvas.drawCircle(
-      Offset.zero,
-      _currentRadius,
-      Paint()
-        ..color = Colors.white.withOpacity(0.5 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    // Outer ring bright edge - use cached paint
+    _outerRingEdgePaint.color = Colors.white.withOpacity(0.5 * opacity);
+    canvas.drawCircle(Offset.zero, _currentRadius, _outerRingEdgePaint);
   }
 
   void _drawDoubleWave(Canvas canvas, double opacity) {
@@ -316,26 +571,13 @@ class NeonPulse extends PositionComponent {
     final secondWaveRadius = secondWaveProgress * radius * 0.9;
 
     if (secondWaveProgress > 0 && _phase != _PulsePhase.fading) {
-      // Second wave glow
-      canvas.drawCircle(
-        Offset.zero,
-        secondWaveRadius,
-        Paint()
-          ..color = NeonColors.magenta.withOpacity(0.2 * opacity * (1 - secondWaveProgress))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-      );
+      // Second wave glow - use cached paint
+      _secondWaveGlowPaint.color = NeonColors.magenta.withOpacity(0.2 * opacity * (1 - secondWaveProgress));
+      canvas.drawCircle(Offset.zero, secondWaveRadius, _secondWaveGlowPaint);
 
-      // Second wave line
-      canvas.drawCircle(
-        Offset.zero,
-        secondWaveRadius,
-        Paint()
-          ..color = NeonColors.magenta.withOpacity(0.4 * opacity * (1 - secondWaveProgress))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
+      // Second wave line - use cached paint
+      _secondWaveLinePaint.color = NeonColors.magenta.withOpacity(0.4 * opacity * (1 - secondWaveProgress));
+      canvas.drawCircle(Offset.zero, secondWaveRadius, _secondWaveLinePaint);
     }
   }
 
@@ -346,38 +588,22 @@ class NeonPulse extends PositionComponent {
 
     if (centerIntensity <= 0) return;
 
-    // Bright flash at origin
-    canvas.drawCircle(
-      Offset.zero,
-      15 * centerIntensity,
-      Paint()
-        ..color = Colors.white.withOpacity(0.9 * centerIntensity * opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
+    // Bright flash at origin - use cached paint
+    _centerFlashPaint.color = Colors.white.withOpacity(0.9 * centerIntensity * opacity);
+    canvas.drawCircle(Offset.zero, 15 * centerIntensity, _centerFlashPaint);
 
-    // Colored glow
-    canvas.drawCircle(
-      Offset.zero,
-      25 * centerIntensity,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.5 * centerIntensity * opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15),
-    );
+    // Colored glow - use cached paint
+    _centerGlowPaint.color = NeonColors.cyan.withOpacity(0.5 * centerIntensity * opacity);
+    canvas.drawCircle(Offset.zero, 25 * centerIntensity, _centerGlowPaint);
 
-    // Pulsing ring at origin
+    // Pulsing ring at origin - use cached paint
     final pulseScale = 1 + math.sin(_timer * 20) * 0.2;
-    canvas.drawCircle(
-      Offset.zero,
-      10 * pulseScale * centerIntensity,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.8 * centerIntensity * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+    _centerPulsePaint.color = NeonColors.cyan.withOpacity(0.8 * centerIntensity * opacity);
+    canvas.drawCircle(Offset.zero, 10 * pulseScale * centerIntensity, _centerPulsePaint);
   }
 
   void _drawEnergyField(Canvas canvas, double opacity) {
-    // Subtle radial gradient fill
+    // Subtle radial gradient fill (shader must be dynamic due to _currentRadius)
     final gradient = RadialGradient(
       colors: [
         NeonColors.cyan.withOpacity(0.08 * opacity),
@@ -387,14 +613,15 @@ class NeonPulse extends PositionComponent {
       stops: const [0.0, 0.7, 1.0],
     ).createShader(Rect.fromCircle(center: Offset.zero, radius: _currentRadius));
 
-    canvas.drawCircle(
-      Offset.zero,
-      _currentRadius,
-      Paint()..shader = gradient,
-    );
+    // Use cached fill paint for gradient
+    _fillPaint.shader = gradient;
+    canvas.drawCircle(Offset.zero, _currentRadius, _fillPaint);
 
     // Animated energy lines
     if (_phase != _PulsePhase.fading) {
+      // Set energy line paint color once per frame
+      _energyLinePaint.color = NeonColors.cyan.withOpacity(0.15 * opacity);
+
       const lineCount = 12;
       for (int i = 0; i < lineCount; i++) {
         final baseAngle = (i / lineCount) * math.pi * 2;
@@ -409,10 +636,7 @@ class NeonPulse extends PositionComponent {
         canvas.drawLine(
           Offset(startX, startY),
           Offset(endX, endY),
-          Paint()
-            ..color = NeonColors.cyan.withOpacity(0.15 * opacity)
-            ..strokeWidth = 1
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+          _energyLinePaint,
         );
       }
     }

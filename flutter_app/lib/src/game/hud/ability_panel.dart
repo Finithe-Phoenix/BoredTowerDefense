@@ -22,6 +22,32 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
   static const double abilitySize = 56.0;
   static const double spacing = 10.0;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _bgPaint = Paint();
+  static final Paint _borderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _glowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _arcPaint = Paint();
+  static final Paint _pulsingBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _iconPaint = Paint()
+    ..strokeWidth = 2.5
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _iconFillPaint = Paint();
+  static final Paint _countBadgePaint = Paint();
+  static final Paint _overdriveBgPaint = Paint();
+  static final Paint _overdriveGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+  static final Paint _overdriveFillPaint = Paint();
+  static final Paint _overdriveBorderPaint = Paint()
+    ..style = PaintingStyle.stroke;
+
   @override
   void update(double dt) {
     super.update(dt);

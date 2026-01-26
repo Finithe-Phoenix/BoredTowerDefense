@@ -50,6 +50,7 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
   final Paint _chromaPaint = Paint()
     ..strokeWidth = 1.6
     ..strokeCap = StrokeCap.round;
+  final Paint _layerPaint = Paint();
 
   void registerHit(Vector2 screenPos, {required bool critical}) {
     if (_hitMarkers.length >= 6) {
@@ -295,6 +296,7 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
       case TowerType.teslaTerminal:
       case TowerType.resonanceSiphon:
       case TowerType.neuralDisruptor:
+      case TowerType.plasmaBubble:
         canvas.drawCircle(center, 25, paint);
         break;
     }
@@ -495,10 +497,8 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     }
 
     // Apply opacity via saveLayer for cached painter
-    canvas.saveLayer(
-      null,
-      Paint()..color = Color.fromRGBO(255, 255, 255, pulse),
-    );
+    _layerPaint.color = Color.fromRGBO(255, 255, 255, pulse);
+    canvas.saveLayer(null, _layerPaint);
     _focusLabelPainter!.paint(
       canvas,
       Offset(width / 2 - _focusLabelPainter!.width / 2, 6),

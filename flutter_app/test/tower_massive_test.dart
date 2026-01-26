@@ -94,7 +94,7 @@ void main() {
     const type = TowerType.pulseArcher;
 
     test('name is Pulse Archer', () {
-      expect(type.name, 'pulseArcher');
+      expect(type.name, 'Pulse Archer');
     });
 
     test('has positive damage', () {

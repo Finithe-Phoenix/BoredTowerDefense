@@ -79,6 +79,832 @@ class ProceduralMusicService {
   bool get isPlaying => _isPlaying;
   double get volume => _volume;
 
+  // Main Menu specific player
+  AudioPlayer? _mainMenuPlayer;
+  bool _isMainMenuPlaying = false;
+
+  // ============================================================
+  // MAIN MENU EPIC THEME - "NEON HORIZON"
+  // A majestic synthwave anthem for the main menu
+  // Inspired by TRON Legacy, Blade Runner, and Daft Punk
+  // ============================================================
+
+  /// Play the epic main menu theme "NEON HORIZON"
+  /// A slow-burning, atmospheric synthwave masterpiece
+  Future<void> playMainMenuMusic() async {
+    if (!_initialized) await initialize();
+
+    // Stop any currently playing music
+    await stop();
+    await stopFinalBossMusic();
+
+    _mainMenuPlayer?.dispose();
+    _mainMenuPlayer = AudioPlayer();
+    await _mainMenuPlayer?.setReleaseMode(ReleaseMode.loop);
+
+    // Generate the epic main menu track
+    final epicMenuTrack = _generateMainMenuTrack();
+
+    if (_tempDir != null) {
+      final file = File('${_tempDir!.path}/main_menu.wav');
+      await file.writeAsBytes(epicMenuTrack);
+      _trackFilePaths['main_menu'] = file.path;
+      await _mainMenuPlayer?.play(DeviceFileSource(file.path), volume: _volume);
+    }
+
+    _isMainMenuPlaying = true;
+    _isPlaying = true;
+
+    if (kDebugMode) {
+      debugPrint('Playing MAIN MENU theme: NEON HORIZON');
+    }
+  }
+
+  /// Stop main menu music
+  Future<void> stopMainMenuMusic() async {
+    _isMainMenuPlaying = false;
+    await _mainMenuPlayer?.stop();
+  }
+
+  /// Generate the epic main menu track "NEON HORIZON"
+  /// Structure: Ambient Intro -> Build -> Main Theme -> Breakdown -> Reprise
+  Uint8List _generateMainMenuTrack() {
+    // 95 BPM - Slow, majestic, epic
+    const bpm = 95;
+    const rootNote = 33; // A1 - Deep, powerful foundation
+
+    // 48 bars for a full epic loop (~2 minutes)
+    const beatsPerBar = 4;
+    const bars = 48;
+    const totalBeats = bars * beatsPerBar;
+    final beatDuration = 60.0 / bpm;
+    final totalDuration = totalBeats * beatDuration;
+
+    final samples = (totalDuration * _sampleRate).toInt();
+    final leftChannel = Float32List(samples);
+    final rightChannel = Float32List(samples);
+
+    // Generate each layer with epic, cinematic quality
+    _generateMenuSubBass(leftChannel, rightChannel, bpm, rootNote, bars);
+    _generateMenuPads(leftChannel, rightChannel, bpm, rootNote, bars);
+    _generateMenuArpeggio(leftChannel, rightChannel, bpm, rootNote, bars);
+    _generateMenuLead(leftChannel, rightChannel, bpm, rootNote, bars);
+    _generateMenuDrums(leftChannel, rightChannel, bpm, bars);
+    _generateMenuAmbience(leftChannel, rightChannel, bpm, bars);
+    _generateMenuRisers(leftChannel, rightChannel, bpm, bars);
+
+    return _mixToStereoSource(leftChannel, rightChannel);
+  }
+
+  /// Get menu section based on bar number
+  _MenuSection _getMenuSection(int bar, int totalBars) {
+    if (bar < 8) return _MenuSection.ambientIntro;
+    if (bar < 16) return _MenuSection.build;
+    if (bar < 32) return _MenuSection.mainTheme;
+    if (bar < 40) return _MenuSection.breakdown;
+    return _MenuSection.reprise;
+  }
+
+  /// Deep sub-bass with sidechained pulse - the heartbeat of the menu
+  void _generateMenuSubBass(
+    Float32List left, Float32List right,
+    int bpm, int rootNote, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+    final totalBeats = bars * 4;
+
+    // Epic chord progression for bass: Am - F - C - G (i - VI - III - VII)
+    final bassProgression = [0, 8, 3, 10, 0, 8, 5, 10]; // Root notes relative to A
+
+    for (int beat = 0; beat < totalBeats; beat++) {
+      final bar = beat ~/ 4;
+      final section = _getMenuSection(bar, bars);
+      final beatInBar = beat % 4;
+
+      // Skip some beats in ambient intro for sparse feel
+      if (section == _MenuSection.ambientIntro && bar < 4 && beatInBar != 0) continue;
+
+      // Get bass note from progression
+      final progIndex = (bar ~/ 2) % bassProgression.length;
+      final noteOffset = bassProgression[progIndex];
+
+      double volume;
+      double noteLength;
+
+      switch (section) {
+        case _MenuSection.ambientIntro:
+          volume = 0.3 + (bar / 8) * 0.1;
+          noteLength = 0.9;
+          break;
+        case _MenuSection.build:
+          volume = 0.45;
+          noteLength = 0.85;
+          break;
+        case _MenuSection.mainTheme:
+          volume = 0.55;
+          noteLength = 0.8;
+          break;
+        case _MenuSection.breakdown:
+          volume = 0.35;
+          noteLength = 1.2;
+          break;
+        case _MenuSection.reprise:
+          volume = 0.5;
+          noteLength = 0.85;
+          break;
+      }
+
+      final freq = _midiToFreq(rootNote + noteOffset);
+      final startSample = (beat * beatDuration * _sampleRate).toInt();
+      final noteSamples = (noteLength * beatDuration * _sampleRate).toInt();
+
+      _renderMenuBassNote(left, right, startSample, noteSamples, freq, volume, section);
+    }
+  }
+
+  void _renderMenuBassNote(
+    Float32List left, Float32List right,
+    int startSample, int numSamples,
+    double frequency, double volume, _MenuSection section,
+  ) {
+    for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final progress = i / numSamples;
+
+      // Smooth sidechain pump effect
+      final sidechain = section == _MenuSection.mainTheme || section == _MenuSection.reprise
+          ? (progress < 0.08 ? math.pow(progress / 0.08, 0.7) : 1.0) * 0.85 + 0.15
+          : 1.0;
+
+      // Deep sub (sine) - the foundation
+      final sub = math.sin(2 * math.pi * frequency * t);
+
+      // Warm saw for character, heavily filtered
+      final saw = 2.0 * ((frequency * t) % 1.0) - 1.0;
+      final filteredSaw = saw * 0.2 * (1.0 - progress * 0.5);
+
+      // Sub-octave for extra depth in main sections
+      final subOctave = section == _MenuSection.mainTheme || section == _MenuSection.reprise
+          ? math.sin(2 * math.pi * (frequency / 2) * t) * 0.25
+          : 0.0;
+
+      // Smooth envelope
+      final envelope = _smoothEnvelope(progress, 0.02, 0.25);
+
+      final sample = (sub * 0.55 + filteredSaw + subOctave) * envelope * volume * sidechain;
+
+      left[startSample + i] += sample;
+      right[startSample + i] += sample;
+    }
+  }
+
+  /// Lush atmospheric pads - the soul of the cyberpunk aesthetic
+  void _generateMenuPads(
+    Float32List left, Float32List right,
+    int bpm, int rootNote, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+    final padOctave = rootNote + 12;
+
+    // Cinematic chord progression with extensions
+    // Am9 - Fmaj7 - Cmaj9 - Gsus4
+    final lushChords = [
+      [0, 3, 7, 10, 14],      // Am9
+      [8, 12, 15, 19, 20],    // Fmaj7
+      [3, 7, 10, 14, 17],     // Cmaj9
+      [10, 14, 17, 22, 15],   // Gsus4add9
+    ];
+
+    for (int bar = 0; bar < bars; bar++) {
+      final section = _getMenuSection(bar, bars);
+
+      // Pads start from bar 2 for atmosphere
+      if (bar < 2) continue;
+
+      final chordIndex = (bar ~/ 4) % lushChords.length;
+      final chord = lushChords[chordIndex];
+
+      final startBeat = bar * 4;
+      final startSample = (startBeat * beatDuration * _sampleRate).toInt();
+      final barSamples = (4 * beatDuration * _sampleRate).toInt();
+
+      double volume;
+      switch (section) {
+        case _MenuSection.ambientIntro:
+          volume = 0.12 + (bar - 2) * 0.015;
+          break;
+        case _MenuSection.build:
+          volume = 0.18 + ((bar - 8) / 8) * 0.08;
+          break;
+        case _MenuSection.mainTheme:
+          volume = 0.2;
+          break;
+        case _MenuSection.breakdown:
+          volume = 0.28;
+          break;
+        case _MenuSection.reprise:
+          volume = 0.22;
+          break;
+      }
+
+      // Render each note in the chord
+      for (int noteIdx = 0; noteIdx < chord.length; noteIdx++) {
+        final interval = chord[noteIdx];
+        final freq = _midiToFreq(padOctave + interval);
+        _renderMenuPadNote(left, right, startSample, barSamples, freq, volume, section, noteIdx);
+      }
+    }
+  }
+
+  void _renderMenuPadNote(
+    Float32List left, Float32List right,
+    int startSample, int numSamples,
+    double frequency, double volume, _MenuSection section, int voiceIndex,
+  ) {
+    for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final progress = i / numSamples;
+
+      // Very slow, organic swell envelope
+      final envelope = progress < 0.4
+          ? math.pow(progress / 0.4, 0.6)
+          : progress > 0.85
+              ? math.pow((1.0 - progress) / 0.15, 0.5)
+              : 1.0;
+
+      // Evolving pad with 7 detuned voices + chorus LFO
+      double sample = 0;
+      for (int voice = 0; voice < 7; voice++) {
+        final detune = (voice - 3) * 0.8;
+        final lfoPhase = voice * 0.143;
+        final chorusLfo = math.sin(2 * math.pi * 0.2 * t + lfoPhase) * 1.2;
+        final voiceFreq = frequency + detune + chorusLfo;
+
+        // Smooth triangle wave for warm pad
+        final phase = (voiceFreq * t) % 1.0;
+        final triangle = 4.0 * (phase < 0.5 ? phase : 1.0 - phase) - 1.0;
+
+        // Add slight saw for brightness in main section
+        final saw = section == _MenuSection.mainTheme
+            ? (2.0 * ((voiceFreq * t) % 1.0) - 1.0) * 0.1
+            : 0.0;
+
+        sample += (triangle + saw) / 7.0;
+      }
+
+      // Subtle filter sweep
+      final filterMod = 0.7 + 0.3 * math.sin(2 * math.pi * 0.05 * t);
+      sample *= filterMod;
+
+      sample *= envelope * volume;
+
+      // Wide stereo spread based on voice index
+      final pan = math.sin(t * 0.15 + voiceIndex * 0.5) * 0.45;
+      left[startSample + i] += sample * (0.5 - pan);
+      right[startSample + i] += sample * (0.5 + pan);
+    }
+  }
+
+  /// TRON-style arpeggio - iconic and deliberate
+  void _generateMenuArpeggio(
+    Float32List left, Float32List right,
+    int bpm, int rootNote, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+    final arpOctave = rootNote + 24;
+    final notesPerBeat = 4; // 16th notes
+    final noteLength = beatDuration / notesPerBeat;
+
+    // Iconic TRON-style arpeggio pattern (up then down with octave)
+    final arpPattern = [0, 4, 7, 12, 16, 12, 7, 4];
+
+    // Chord tones that shift with the progression
+    final arpChords = [
+      [0, 3, 7, 12],  // Am
+      [8, 12, 15, 20], // F
+      [3, 7, 10, 15], // C
+      [10, 14, 17, 22], // G
+    ];
+
+    for (int bar = 0; bar < bars; bar++) {
+      final section = _getMenuSection(bar, bars);
+
+      // Arpeggio starts from bar 6
+      if (bar < 6) continue;
+      if (section == _MenuSection.breakdown && bar < 36) continue; // Sparse in breakdown
+
+      final chordIndex = (bar ~/ 4) % arpChords.length;
+      final baseChord = arpChords[chordIndex];
+
+      final startBeat = bar * 4;
+
+      for (int beat = 0; beat < 4; beat++) {
+        for (int sub = 0; sub < notesPerBeat; sub++) {
+          final patternIndex = (beat * notesPerBeat + sub) % arpPattern.length;
+          final arpOffset = arpPattern[patternIndex];
+
+          // Map arpeggio to chord tones
+          final chordToneIndex = arpOffset ~/ 4;
+          final octaveOffset = (arpOffset ~/ 12) * 12;
+          final interval = baseChord[chordToneIndex % baseChord.length] + octaveOffset;
+
+          final freq = _midiToFreq(arpOctave + interval - 12);
+          final absoluteBeat = startBeat + beat;
+          final startSample = ((absoluteBeat * beatDuration + sub * noteLength) * _sampleRate).toInt();
+          final noteSamples = (noteLength * 0.65 * _sampleRate).toInt();
+
+          double volume;
+          switch (section) {
+            case _MenuSection.ambientIntro:
+              volume = 0.15;
+              break;
+            case _MenuSection.build:
+              volume = 0.2 + ((bar - 8) / 8) * 0.05;
+              break;
+            case _MenuSection.mainTheme:
+              volume = 0.28;
+              break;
+            case _MenuSection.breakdown:
+              volume = 0.18;
+              break;
+            case _MenuSection.reprise:
+              volume = 0.25;
+              break;
+          }
+
+          // Accent pattern for groove
+          if (sub == 0) volume *= 1.2;
+          if (sub == 2) volume *= 1.1;
+
+          _renderMenuArpNote(left, right, startSample, noteSamples, freq, volume, section, sub);
+        }
+      }
+    }
+  }
+
+  void _renderMenuArpNote(
+    Float32List left, Float32List right,
+    int startSample, int numSamples,
+    double frequency, double volume, _MenuSection section, int subBeat,
+  ) {
+    for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final envelope = _adsrEnvelope(i, numSamples, 0.008, 0.04, 0.35, 0.15);
+
+      // Classic square wave with slight pulse width modulation
+      final pwm = 0.5 + 0.05 * math.sin(2 * math.pi * 0.3 * t);
+      final phase = (frequency * t) % 1.0;
+      final square = phase < pwm ? 1.0 : -1.0;
+
+      // Add subtle detuned layer for width
+      final detunedSaw = (2.0 * (((frequency + 2) * t) % 1.0) - 1.0) * 0.15;
+
+      final sample = (square * 0.85 + detunedSaw) * envelope * volume;
+
+      // Ping-pong stereo based on sub-beat
+      final pan = (subBeat % 2 == 0 ? 0.35 : -0.35) * (section == _MenuSection.mainTheme ? 1.0 : 0.7);
+      left[startSample + i] += sample * (0.5 - pan);
+      right[startSample + i] += sample * (0.5 + pan);
+    }
+  }
+
+  /// Heroic lead melody - the emotional core
+  void _generateMenuLead(
+    Float32List left, Float32List right,
+    int bpm, int rootNote, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+    final leadOctave = rootNote + 24;
+
+    // Epic, memorable melody inspired by heroic synthwave
+    final heroicMelody = _getMenuHeroicMelody(bars);
+
+    for (final note in heroicMelody) {
+      if (note.pitch < 0) continue;
+
+      final section = _getMenuSection(note.bar, bars);
+
+      // Lead plays only in key sections
+      if (section == _MenuSection.ambientIntro) continue;
+      if (section == _MenuSection.build && note.bar < 12) continue;
+
+      final freq = _midiToFreq(leadOctave + note.pitch);
+      final startSample = (note.startBeat * beatDuration * _sampleRate).toInt();
+      final noteSamples = (note.duration * beatDuration * _sampleRate).toInt();
+
+      double volume;
+      switch (section) {
+        case _MenuSection.ambientIntro:
+          volume = 0.0;
+          break;
+        case _MenuSection.build:
+          volume = 0.25;
+          break;
+        case _MenuSection.mainTheme:
+          volume = 0.38;
+          break;
+        case _MenuSection.breakdown:
+          volume = 0.32;
+          break;
+        case _MenuSection.reprise:
+          volume = 0.4;
+          break;
+      }
+
+      _renderMenuLeadNote(left, right, startSample, noteSamples, freq, volume, section);
+    }
+  }
+
+  List<_EpicMelodyNote> _getMenuHeroicMelody(int bars) {
+    // Heroic, soaring melody with emotional contour
+    // Inspired by classic synthwave anthems
+    return [
+      // Build section (bars 12-15) - Teaser melody
+      _EpicMelodyNote(bar: 12, startBeat: 48, pitch: 0, duration: 4),
+      _EpicMelodyNote(bar: 13, startBeat: 52, pitch: 3, duration: 2),
+      _EpicMelodyNote(bar: 13, startBeat: 54, pitch: 5, duration: 2),
+      _EpicMelodyNote(bar: 14, startBeat: 56, pitch: 7, duration: 4),
+      _EpicMelodyNote(bar: 15, startBeat: 60, pitch: 5, duration: 4),
+
+      // Main Theme (bars 16-31) - Full heroic melody
+      _EpicMelodyNote(bar: 16, startBeat: 64, pitch: 7, duration: 2),
+      _EpicMelodyNote(bar: 16, startBeat: 66, pitch: 10, duration: 2),
+      _EpicMelodyNote(bar: 17, startBeat: 68, pitch: 12, duration: 4),
+      _EpicMelodyNote(bar: 18, startBeat: 72, pitch: 10, duration: 2),
+      _EpicMelodyNote(bar: 18, startBeat: 74, pitch: 7, duration: 2),
+      _EpicMelodyNote(bar: 19, startBeat: 76, pitch: 5, duration: 4),
+
+      _EpicMelodyNote(bar: 20, startBeat: 80, pitch: 7, duration: 2),
+      _EpicMelodyNote(bar: 20, startBeat: 82, pitch: 10, duration: 2),
+      _EpicMelodyNote(bar: 21, startBeat: 84, pitch: 14, duration: 4),
+      _EpicMelodyNote(bar: 22, startBeat: 88, pitch: 12, duration: 2),
+      _EpicMelodyNote(bar: 22, startBeat: 90, pitch: 10, duration: 2),
+      _EpicMelodyNote(bar: 23, startBeat: 92, pitch: 7, duration: 4),
+
+      // Second phrase - higher energy
+      _EpicMelodyNote(bar: 24, startBeat: 96, pitch: 12, duration: 2),
+      _EpicMelodyNote(bar: 24, startBeat: 98, pitch: 14, duration: 2),
+      _EpicMelodyNote(bar: 25, startBeat: 100, pitch: 17, duration: 4),
+      _EpicMelodyNote(bar: 26, startBeat: 104, pitch: 15, duration: 2),
+      _EpicMelodyNote(bar: 26, startBeat: 106, pitch: 12, duration: 2),
+      _EpicMelodyNote(bar: 27, startBeat: 108, pitch: 10, duration: 4),
+
+      _EpicMelodyNote(bar: 28, startBeat: 112, pitch: 12, duration: 2),
+      _EpicMelodyNote(bar: 28, startBeat: 114, pitch: 14, duration: 2),
+      _EpicMelodyNote(bar: 29, startBeat: 116, pitch: 19, duration: 4),
+      _EpicMelodyNote(bar: 30, startBeat: 120, pitch: 17, duration: 2),
+      _EpicMelodyNote(bar: 30, startBeat: 122, pitch: 14, duration: 2),
+      _EpicMelodyNote(bar: 31, startBeat: 124, pitch: 12, duration: 4),
+
+      // Breakdown (bars 32-39) - Sparse, emotional
+      _EpicMelodyNote(bar: 33, startBeat: 132, pitch: 7, duration: 6),
+      _EpicMelodyNote(bar: 35, startBeat: 140, pitch: 10, duration: 6),
+      _EpicMelodyNote(bar: 37, startBeat: 148, pitch: 12, duration: 6),
+      _EpicMelodyNote(bar: 39, startBeat: 156, pitch: 14, duration: 4),
+
+      // Reprise (bars 40-47) - Triumphant return
+      _EpicMelodyNote(bar: 40, startBeat: 160, pitch: 12, duration: 2),
+      _EpicMelodyNote(bar: 40, startBeat: 162, pitch: 14, duration: 2),
+      _EpicMelodyNote(bar: 41, startBeat: 164, pitch: 17, duration: 4),
+      _EpicMelodyNote(bar: 42, startBeat: 168, pitch: 19, duration: 2),
+      _EpicMelodyNote(bar: 42, startBeat: 170, pitch: 17, duration: 2),
+      _EpicMelodyNote(bar: 43, startBeat: 172, pitch: 14, duration: 4),
+
+      _EpicMelodyNote(bar: 44, startBeat: 176, pitch: 12, duration: 2),
+      _EpicMelodyNote(bar: 44, startBeat: 178, pitch: 14, duration: 2),
+      _EpicMelodyNote(bar: 45, startBeat: 180, pitch: 19, duration: 4),
+      _EpicMelodyNote(bar: 46, startBeat: 184, pitch: 17, duration: 2),
+      _EpicMelodyNote(bar: 46, startBeat: 186, pitch: 14, duration: 2),
+      _EpicMelodyNote(bar: 47, startBeat: 188, pitch: 12, duration: 4),
+    ];
+  }
+
+  void _renderMenuLeadNote(
+    Float32List left, Float32List right,
+    int startSample, int numSamples,
+    double frequency, double volume, _MenuSection section,
+  ) {
+    // Expressive vibrato
+    final vibratoRate = 5.2;
+    final vibratoDepth = section == _MenuSection.reprise ? 5.0 : 3.5;
+
+    for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final progress = i / numSamples;
+      final envelope = _adsrEnvelope(i, numSamples, 0.04, 0.12, 0.65, 0.28);
+
+      // Delayed vibrato for expression
+      final vibrato = progress > 0.18
+          ? math.sin(2 * math.pi * vibratoRate * t) * vibratoDepth * math.min(1.0, (progress - 0.18) * 5)
+          : 0.0;
+
+      final freq = frequency + vibrato;
+
+      // Rich supersaw with 6 voices
+      double sample = 0;
+      for (int voice = 0; voice < 6; voice++) {
+        final detune = (voice - 2.5) * 4.0;
+        final voiceFreq = freq + detune;
+        sample += (2.0 * ((voiceFreq * t) % 1.0) - 1.0) / 6.0;
+      }
+
+      // Add sub-layer for power in reprise
+      if (section == _MenuSection.reprise) {
+        sample += math.sin(2 * math.pi * (freq / 2) * t) * 0.12;
+      }
+
+      // Subtle filter motion
+      final filterEnv = 0.8 + 0.2 * math.sin(2 * math.pi * 0.1 * t);
+      sample *= filterEnv;
+
+      sample *= envelope * volume;
+
+      // Gentle stereo motion
+      final pan = math.sin(t * 0.6) * 0.3;
+      left[startSample + i] += sample * (0.5 - pan);
+      right[startSample + i] += sample * (0.5 + pan);
+    }
+  }
+
+  /// Half-time drums for epic grandeur
+  void _generateMenuDrums(
+    Float32List left, Float32List right,
+    int bpm, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+    final totalBeats = bars * 4;
+
+    for (int beat = 0; beat < totalBeats; beat++) {
+      final bar = beat ~/ 4;
+      final section = _getMenuSection(bar, bars);
+      final beatInBar = beat % 4;
+      final startSample = (beat * beatDuration * _sampleRate).toInt();
+
+      switch (section) {
+        case _MenuSection.ambientIntro:
+          // Very sparse - just occasional deep hits
+          if (bar >= 4 && beatInBar == 0 && bar % 2 == 0) {
+            _renderMenuKick(left, right, startSample, 0.4);
+          }
+          break;
+
+        case _MenuSection.build:
+          // Building energy
+          if (beatInBar == 0) {
+            _renderMenuKick(left, right, startSample, 0.5);
+          }
+          if (beatInBar == 2 && bar >= 12) {
+            _renderMenuSnare(left, right, startSample, 0.35);
+          }
+          // Soft hi-hats on eighths
+          if (bar >= 10) {
+            _renderMenuHiHat(left, right, startSample, false, 0.18);
+          }
+          break;
+
+        case _MenuSection.mainTheme:
+          // Full half-time beat
+          if (beatInBar == 0) {
+            _renderMenuKick(left, right, startSample, 0.65);
+          }
+          if (beatInBar == 2) {
+            _renderMenuSnare(left, right, startSample, 0.55);
+          }
+          // Hi-hats
+          _renderMenuHiHat(left, right, startSample, false, 0.22);
+          // Off-beat open hat
+          final offbeat = startSample + (beatDuration / 2 * _sampleRate).toInt();
+          if (offbeat < left.length && beatInBar % 2 == 1) {
+            _renderMenuHiHat(left, right, offbeat, true, 0.25);
+          }
+          // Crash on section start
+          if (bar == 16 && beatInBar == 0) {
+            _renderMenuCrash(left, right, startSample, 0.5);
+          }
+          break;
+
+        case _MenuSection.breakdown:
+          // Minimal, atmospheric
+          if (beatInBar == 0 && bar % 2 == 0) {
+            _renderMenuKick(left, right, startSample, 0.4);
+          }
+          if (beatInBar == 2 && bar % 4 == 2) {
+            _renderMenuSnare(left, right, startSample, 0.35);
+          }
+          break;
+
+        case _MenuSection.reprise:
+          // Full power return
+          if (beatInBar == 0) {
+            _renderMenuKick(left, right, startSample, 0.7);
+          }
+          if (beatInBar == 2) {
+            _renderMenuSnare(left, right, startSample, 0.6);
+          }
+          _renderMenuHiHat(left, right, startSample, false, 0.24);
+          final offbeat2 = startSample + (beatDuration / 2 * _sampleRate).toInt();
+          if (offbeat2 < left.length) {
+            _renderMenuHiHat(left, right, offbeat2, beatInBar % 2 == 1, 0.22);
+          }
+          if (bar == 40 && beatInBar == 0) {
+            _renderMenuCrash(left, right, startSample, 0.55);
+          }
+          break;
+      }
+    }
+  }
+
+  void _renderMenuKick(Float32List left, Float32List right, int startSample, double volume) {
+    final duration = 0.2;
+    final samples = (duration * _sampleRate).toInt();
+
+    for (int i = 0; i < samples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final progress = i / samples;
+
+      // Deep, punchy kick with smooth pitch drop
+      final freq = 160.0 - (110.0 * math.pow(progress, 0.7));
+      final sine = math.sin(2 * math.pi * freq * t);
+
+      // Soft click for attack
+      final click = progress < 0.015 ? (1.0 - progress / 0.015) * 0.4 : 0.0;
+
+      final envelope = math.pow(1.0 - progress, 2.0);
+      final value = (sine + click) * envelope * volume;
+
+      left[startSample + i] += value;
+      right[startSample + i] += value;
+    }
+  }
+
+  void _renderMenuSnare(Float32List left, Float32List right, int startSample, double volume) {
+    final duration = 0.18;
+    final samples = (duration * _sampleRate).toInt();
+
+    for (int i = 0; i < samples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final progress = i / samples;
+
+      // Body with harmonics
+      final body = math.sin(2 * math.pi * 200 * t) * 0.35;
+      final body2 = math.sin(2 * math.pi * 320 * t) * 0.15;
+
+      // Noise layer
+      final noise = (_random.nextDouble() * 2 - 1) * 0.6;
+
+      final envelope = math.pow(1.0 - progress, 1.4);
+      final value = (body + body2 + noise) * envelope * volume;
+
+      left[startSample + i] += value;
+      right[startSample + i] += value;
+    }
+  }
+
+  void _renderMenuHiHat(Float32List left, Float32List right, int startSample, bool open, double volume) {
+    final duration = open ? 0.18 : 0.05;
+    final samples = (duration * _sampleRate).toInt();
+
+    for (int i = 0; i < samples && startSample + i < left.length; i++) {
+      final progress = i / samples;
+      final noise = _random.nextDouble() * 2 - 1;
+      final envelope = math.pow(1.0 - progress, open ? 1.3 : 3.2);
+      final value = noise * envelope * volume;
+
+      left[startSample + i] += value * 0.55;
+      right[startSample + i] += value * 0.45;
+    }
+  }
+
+  void _renderMenuCrash(Float32List left, Float32List right, int startSample, double volume) {
+    final duration = 2.0;
+    final samples = (duration * _sampleRate).toInt();
+
+    for (int i = 0; i < samples && startSample + i < left.length; i++) {
+      final t = i / _sampleRate;
+      final progress = i / samples;
+
+      // Metallic shimmer with multiple frequencies
+      double sample = 0;
+      final freqs = [2200.0, 2900.0, 3700.0, 4800.0, 6100.0];
+      for (final f in freqs) {
+        sample += math.sin(2 * math.pi * f * t + _random.nextDouble() * 0.5) * 0.2;
+      }
+      sample += (_random.nextDouble() * 2 - 1) * 0.4;
+
+      final envelope = math.pow(1.0 - progress, 0.6);
+      final value = sample * envelope * volume;
+
+      left[startSample + i] += value * 0.5;
+      right[startSample + i] += value * 0.5;
+    }
+  }
+
+  /// Ambient textures - the atmosphere
+  void _generateMenuAmbience(
+    Float32List left, Float32List right,
+    int bpm, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+    final totalDuration = bars * 4 * beatDuration;
+    final samples = left.length;
+
+    // Subtle background texture throughout
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+      final progress = i / samples;
+      final bar = (t / (4 * beatDuration)).floor();
+      final section = _getMenuSection(bar, bars);
+
+      // Volume based on section
+      double volume;
+      switch (section) {
+        case _MenuSection.ambientIntro:
+          volume = 0.08;
+          break;
+        case _MenuSection.build:
+          volume = 0.06;
+          break;
+        case _MenuSection.mainTheme:
+          volume = 0.04;
+          break;
+        case _MenuSection.breakdown:
+          volume = 0.1;
+          break;
+        case _MenuSection.reprise:
+          volume = 0.05;
+          break;
+      }
+
+      // Filtered noise with slow modulation
+      final noise = _random.nextDouble() * 2 - 1;
+      final filterLfo = 0.5 + 0.5 * math.sin(2 * math.pi * 0.02 * t);
+      final filtered = noise * filterLfo;
+
+      // Very subtle drone
+      final drone = math.sin(2 * math.pi * 55 * t) * 0.02;
+      final drone2 = math.sin(2 * math.pi * 82.5 * t) * 0.015;
+
+      final sample = (filtered * 0.15 + drone + drone2) * volume;
+
+      // Wide stereo spread
+      final pan = math.sin(t * 0.08) * 0.5;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+  }
+
+  /// Risers for section transitions
+  void _generateMenuRisers(
+    Float32List left, Float32List right,
+    int bpm, int bars,
+  ) {
+    final beatDuration = 60.0 / bpm;
+
+    // Risers before main sections
+    final riserPoints = [
+      (14, 16),  // Before main theme
+      (38, 40),  // Before reprise
+    ];
+
+    for (final (startBar, endBar) in riserPoints) {
+      final startSample = (startBar * 4 * beatDuration * _sampleRate).toInt();
+      final endSample = (endBar * 4 * beatDuration * _sampleRate).toInt();
+      final riserSamples = endSample - startSample;
+
+      for (int i = 0; i < riserSamples && startSample + i < left.length; i++) {
+        final t = i / _sampleRate;
+        final progress = i / riserSamples;
+
+        // Rising noise sweep
+        final noise = _random.nextDouble() * 2 - 1;
+
+        // Exponential filter sweep
+        final filterSweep = math.pow(progress, 2.5);
+
+        // Rising pitch
+        final freq = 150 + progress * 1500;
+        final tone = math.sin(2 * math.pi * freq * t);
+
+        // Combine with crescendo
+        final envelope = filterSweep * 0.35;
+        final value = (noise * 0.25 + tone * 0.75) * envelope;
+
+        left[startSample + i] += value;
+        right[startSample + i] += value;
+      }
+    }
+  }
+
+  /// Smooth envelope helper for organic sounds
+  double _smoothEnvelope(double progress, double attack, double release) {
+    if (progress < attack) {
+      return math.pow(progress / attack, 0.5).toDouble();
+    } else if (progress > 1.0 - release) {
+      return math.pow((1.0 - progress) / release, 0.5).toDouble();
+    }
+    return 1.0;
+  }
+
   /// Initialize the music system
   Future<void> initialize() async {
     if (_initialized) return;
@@ -1670,6 +2496,7 @@ class ProceduralMusicService {
 
   Future<void> dispose() async {
     await stop();
+    await stopMainMenuMusic();
 
     // CRITICAL: Delete all temp files to free disk space
     await cleanupTempFiles();
@@ -1680,12 +2507,14 @@ class ProceduralMusicService {
     await _safeDisposePlayer(_drumPlayer);
     await _safeDisposePlayer(_arpeggioPlayer);
     await _safeDisposePlayer(_finalBossPlayer);
+    await _safeDisposePlayer(_mainMenuPlayer);
     _bassPlayer = null;
     _leadPlayer = null;
     _padPlayer = null;
     _drumPlayer = null;
     _arpeggioPlayer = null;
     _finalBossPlayer = null;
+    _mainMenuPlayer = null;
     _initialized = false;
 
     if (kDebugMode) {
@@ -1732,6 +2561,15 @@ enum _EpicSection {
   drop,       // Bars 8-15: First climax
   breakdown,  // Bars 16-23: Emotional respite
   finalDrop,  // Bars 24-31: MAXIMUM POWER
+}
+
+/// Section markers for the main menu track "NEON HORIZON"
+enum _MenuSection {
+  ambientIntro,  // Bars 0-7: Atmospheric, sparse entry
+  build,         // Bars 8-15: Rising energy, introducing elements
+  mainTheme,     // Bars 16-31: Full epic theme with melody
+  breakdown,     // Bars 32-39: Emotional respite, sparse
+  reprise,       // Bars 40-47: Triumphant return, full power
 }
 
 /// Melody note for the epic final boss track

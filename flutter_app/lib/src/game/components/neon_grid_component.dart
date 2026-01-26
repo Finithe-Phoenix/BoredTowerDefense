@@ -25,6 +25,139 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   double _time = 0;
   final math.Random _random = math.Random(42);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  static final Paint _bgPaint = Paint()..color = const Color(0xFF000000);
+  static final Paint _gridPaint = Paint()..strokeWidth = 1;
+  static final Paint _glowPaint = Paint()
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _horizonPaint = Paint()..strokeWidth = 1;
+  static final Paint _nodeOuterPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _nodeCorePaint = Paint();
+  static final Paint _nodeCenterPaint = Paint();
+  static final Paint _linePaint = Paint()..strokeWidth = 1;
+  static final Paint _pulseOuterPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _pulseInnerPaint = Paint();
+  static final Paint _waveRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _waveInnerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _scanPaint1 = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 25);
+  static final Paint _scanPaint2 = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
+  static final Paint _thinScanPaint = Paint()..strokeWidth = 1;
+  static final Paint _hScanPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _headGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _headPaint = Paint();
+  static final Paint _charPaint = Paint();
+  static final Paint _trailGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _ambientGlowPaint = Paint();
+  static final Paint _hexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _framePaint = Paint()
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke;
+  static final Paint _frameGlowPaint = Paint()
+    ..strokeWidth = 4
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _detailPaint = Paint()..strokeWidth = 1;
+  static final Paint _cornerNodePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _cornerCenterPaint = Paint();
+  static final Paint _edgeGlowPaint = Paint();
+  static final Paint _vignettePaint = Paint();
+  static final Paint _flickerPaint = Paint();
+  static final Path _hexPath = Path();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SHADER CACHE - Avoid per-frame createShader() allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  Shader? _cachedVignetteShader;
+  Shader? _cachedAmbientGlowShader;
+  Shader? _cachedHorizonGlowShader;
+  Vector2 _cachedShaderSize = Vector2.zero();
+
+  /// Invalidate shader cache when size changes
+  void _invalidateShaderCache() {
+    _cachedVignetteShader = null;
+    _cachedAmbientGlowShader = null;
+    _cachedHorizonGlowShader = null;
+  }
+
+  /// Get or create vignette shader (only recreated on resize)
+  Shader _getVignetteShader() {
+    if (_cachedVignetteShader == null || _cachedShaderSize != size) {
+      final center = Offset(size.x / 2, size.y / 2);
+      final radius = math.max(size.x, size.y) * 0.8;
+      _cachedVignetteShader = const RadialGradient(
+        center: Alignment.center,
+        radius: 1.0,
+        colors: [
+          Color(0x00000000),
+          Color(0x00000000),
+          Color(0x40000000),
+          Color(0x90000000),
+        ],
+        stops: [0.0, 0.5, 0.75, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
+      _cachedShaderSize.setFrom(size);
+    }
+    return _cachedVignetteShader!;
+  }
+
+  /// Get or create ambient glow shader (only recreated on resize)
+  Shader _getAmbientGlowShader() {
+    if (_cachedAmbientGlowShader == null || _cachedShaderSize != size) {
+      const matrixGreen = Color(0xFF00FF41);
+      const matrixDarkGreen = Color(0xFF003B00);
+      _cachedAmbientGlowShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          matrixGreen.withOpacity(0.02),
+          matrixGreen.withOpacity(0.01),
+          matrixDarkGreen.withOpacity(0.02),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.x, size.y));
+      _cachedShaderSize.setFrom(size);
+    }
+    return _cachedAmbientGlowShader!;
+  }
+
+  /// Get or create horizon glow shader (only recreated on resize)
+  Shader _getHorizonGlowShader() {
+    if (_cachedHorizonGlowShader == null || _cachedShaderSize != size) {
+      final horizonY = size.y * 0.35;
+      _cachedHorizonGlowShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0x00000000),
+          glowColor.withOpacity(0.05),
+          glowColor.withOpacity(0.1),
+          glowColor.withOpacity(0.05),
+          const Color(0x00000000),
+        ],
+        stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
+      ).createShader(Rect.fromLTWH(0, horizonY - 20, size.x, 40));
+      _cachedShaderSize.setFrom(size);
+    }
+    return _cachedHorizonGlowShader!;
+  }
+
   // Pulse waves triggered by game events
   final List<_PulseWave> _pulseWaves = [];
 
@@ -86,6 +219,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   void onGameResize(Vector2 gameSize) {
     super.onGameResize(gameSize);
     size = gameSize;
+    _invalidateShaderCache(); // Invalidate cached shaders on resize
     _initializeGridNodes();
   }
 
@@ -94,12 +228,20 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     super.update(dt);
     _time += dt;
 
-    // Update pulse waves
-    for (final wave in _pulseWaves) {
+    // Update pulse waves with single-pass removal
+    int writeIdx = 0;
+    for (int i = 0; i < _pulseWaves.length; i++) {
+      final wave = _pulseWaves[i];
       wave.radius += wave.speed * dt;
       wave.alpha -= dt / wave.duration;
+      if (wave.alpha > 0) {
+        if (writeIdx != i) _pulseWaves[writeIdx] = wave;
+        writeIdx++;
+      }
     }
-    _pulseWaves.removeWhere((w) => w.alpha <= 0);
+    if (writeIdx < _pulseWaves.length) {
+      _pulseWaves.removeRange(writeIdx, _pulseWaves.length);
+    }
   }
 
   /// Trigger a pulse wave from a position (e.g., when enemy dies, tower fires)
@@ -163,8 +305,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   }
 
   void _drawBackground(Canvas canvas) {
-    final bgPaint = Paint()..color = const Color(0xFF000000);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), bgPaint);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _bgPaint);
   }
 
   void _drawPerspectiveGrid(Canvas canvas) {
@@ -172,17 +313,8 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     final horizonY = size.y * 0.3;
     final vanishingX = size.x / 2;
 
-    final gridPaint = Paint()
-      ..color = glowColor.withOpacity(0.03)
-      ..strokeWidth = 1;
-
-    final glowPaint = Paint()
-      ..color = glowColor.withOpacity(0.02)
-      ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-
     // Horizontal lines with perspective (get closer together toward horizon)
-    final lineCount = 20;
+    const lineCount = 20;
     for (int i = 0; i <= lineCount; i++) {
       final t = i / lineCount;
       final perspectiveT = math.pow(t, 1.5); // Non-linear for perspective effect
@@ -190,50 +322,36 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
       // Lines fade as they approach horizon
       final alpha = 0.03 * t;
-      gridPaint.color = glowColor.withOpacity(alpha);
+      _gridPaint.color = glowColor.withOpacity(alpha);
 
-      canvas.drawLine(Offset(0, y), Offset(size.x, y), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.x, y), _gridPaint);
     }
 
     // Vertical converging lines
-    final vLineCount = 15;
+    const vLineCount = 15;
     for (int i = 0; i <= vLineCount; i++) {
       final t = i / vLineCount;
       final bottomX = size.x * t;
 
       // Converge toward vanishing point
-      final convergeFactor = 0.4;
+      const convergeFactor = 0.4;
       final topX = vanishingX + (bottomX - vanishingX) * convergeFactor;
 
       final alpha = 0.02 + 0.01 * math.sin(_time * 2 + i);
-      gridPaint.color = glowColor.withOpacity(alpha);
-      glowPaint.color = glowColor.withOpacity(alpha * 0.5);
+      _gridPaint.color = glowColor.withOpacity(alpha);
+      _glowPaint.color = glowColor.withOpacity(alpha * 0.5);
 
-      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), glowPaint);
-      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), gridPaint);
+      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), _glowPaint);
+      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), _gridPaint);
     }
 
     // Horizon line
-    final horizonPaint = Paint()
-      ..color = glowColor.withOpacity(0.1)
-      ..strokeWidth = 1;
-    canvas.drawLine(Offset(0, horizonY), Offset(size.x, horizonY), horizonPaint);
+    _horizonPaint.color = glowColor.withOpacity(0.1);
+    canvas.drawLine(Offset(0, horizonY), Offset(size.x, horizonY), _horizonPaint);
 
-    // Horizon glow
-    final horizonGlow = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          const Color(0x00000000),
-          glowColor.withOpacity(0.05),
-          glowColor.withOpacity(0.1),
-          glowColor.withOpacity(0.05),
-          const Color(0x00000000),
-        ],
-        stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
-      ).createShader(Rect.fromLTWH(0, horizonY - 20, size.x, 40));
-    canvas.drawRect(Rect.fromLTWH(0, horizonY - 20, size.x, 40), horizonGlow);
+    // Horizon glow (using cached shader)
+    _edgeGlowPaint.shader = _getHorizonGlowShader();
+    canvas.drawRect(Rect.fromLTWH(0, horizonY - 20, size.x, 40), _edgeGlowPaint);
   }
 
   void _drawGridNodes(Canvas canvas) {
@@ -243,27 +361,16 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       final nodeSize = node.size * (0.8 + pulse * 0.4);
 
       // Outer glow
-      canvas.drawCircle(
-        Offset(node.x, node.y),
-        nodeSize + 4,
-        Paint()
-          ..color = glowColor.withOpacity(alpha * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      _nodeOuterPaint.color = glowColor.withOpacity(alpha * 0.3);
+      canvas.drawCircle(Offset(node.x, node.y), nodeSize + 4, _nodeOuterPaint);
 
       // Core
-      canvas.drawCircle(
-        Offset(node.x, node.y),
-        nodeSize,
-        Paint()..color = glowColor.withOpacity(alpha),
-      );
+      _nodeCorePaint.color = glowColor.withOpacity(alpha);
+      canvas.drawCircle(Offset(node.x, node.y), nodeSize, _nodeCorePaint);
 
       // Bright center
-      canvas.drawCircle(
-        Offset(node.x, node.y),
-        nodeSize * 0.5,
-        Paint()..color = Color.lerp(glowColor, const Color(0xFFFFFFFF), pulse)!.withOpacity(alpha * 1.2),
-      );
+      _nodeCenterPaint.color = Color.lerp(glowColor, const Color(0xFFFFFFFF), pulse)!.withOpacity(alpha * 1.2);
+      canvas.drawCircle(Offset(node.x, node.y), nodeSize * 0.5, _nodeCenterPaint);
     }
   }
 
@@ -277,124 +384,225 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       final endY = line.endY * size.y;
 
       // Draw the base line
-      final linePaint = Paint()
-        ..color = glowColor.withOpacity(0.03)
-        ..strokeWidth = 1;
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), linePaint);
+      _linePaint.color = glowColor.withOpacity(0.03);
+      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _linePaint);
 
       // Draw traveling energy pulse
       final pulseX = startX + (endX - startX) * progress;
       final pulseY = startY + (endY - startY) * progress;
 
-      canvas.drawCircle(
-        Offset(pulseX, pulseY),
-        4,
-        Paint()
-          ..color = glowColor.withOpacity(0.4)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
-      canvas.drawCircle(
-        Offset(pulseX, pulseY),
-        2,
-        Paint()..color = glowColor.withOpacity(0.8),
-      );
+      _pulseOuterPaint.color = glowColor.withOpacity(0.4);
+      canvas.drawCircle(Offset(pulseX, pulseY), 4, _pulseOuterPaint);
+
+      _pulseInnerPaint.color = glowColor.withOpacity(0.8);
+      canvas.drawCircle(Offset(pulseX, pulseY), 2, _pulseInnerPaint);
     }
   }
 
   void _drawPulseWaves(Canvas canvas) {
     for (final wave in _pulseWaves) {
-      final ringPaint = Paint()
-        ..color = wave.color.withOpacity(wave.alpha * 0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-      canvas.drawCircle(Offset(wave.x, wave.y), wave.radius, ringPaint);
+      _waveRingPaint.color = wave.color.withOpacity(wave.alpha * 0.5);
+      canvas.drawCircle(Offset(wave.x, wave.y), wave.radius, _waveRingPaint);
 
       // Inner ring
-      final innerRingPaint = Paint()
-        ..color = wave.color.withOpacity(wave.alpha * 0.8)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
-      canvas.drawCircle(Offset(wave.x, wave.y), wave.radius * 0.8, innerRingPaint);
+      _waveInnerPaint.color = wave.color.withOpacity(wave.alpha * 0.8);
+      canvas.drawCircle(Offset(wave.x, wave.y), wave.radius * 0.8, _waveInnerPaint);
     }
   }
 
   void _drawScanLines(Canvas canvas) {
     // Primary scan line
     final scanY1 = ((_time * 40) % (size.y + 100)) - 50;
-    final scanPaint1 = Paint()
-      ..color = glowColor.withOpacity(0.04)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 25);
-    canvas.drawRect(Rect.fromLTWH(0, scanY1 - 40, size.x, 80), scanPaint1);
+    _scanPaint1.color = glowColor.withOpacity(0.04);
+    canvas.drawRect(Rect.fromLTWH(0, scanY1 - 40, size.x, 80), _scanPaint1);
 
     // Secondary scan line (slower, different phase)
     final scanY2 = (((_time * 25) + size.y * 0.5) % (size.y + 100)) - 50;
-    final scanPaint2 = Paint()
-      ..color = const Color(0xFFFF0066).withOpacity(0.02)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30);
-    canvas.drawRect(Rect.fromLTWH(0, scanY2 - 30, size.x, 60), scanPaint2);
+    _scanPaint2.color = const Color(0xFFFF0066).withOpacity(0.02);
+    canvas.drawRect(Rect.fromLTWH(0, scanY2 - 30, size.x, 60), _scanPaint2);
 
     // Thin bright scan line
     final thinScanY = ((_time * 80) % (size.y + 20)) - 10;
-    final thinScanPaint = Paint()
-      ..color = glowColor.withOpacity(0.15)
-      ..strokeWidth = 1;
-    canvas.drawLine(
-      Offset(0, thinScanY),
-      Offset(size.x, thinScanY),
-      thinScanPaint,
-    );
+    _thinScanPaint.color = glowColor.withOpacity(0.15);
+    canvas.drawLine(Offset(0, thinScanY), Offset(size.x, thinScanY), _thinScanPaint);
 
     // Horizontal scan (left to right)
     final scanX = ((_time * 60) % (size.x + 50)) - 25;
-    final hScanPaint = Paint()
-      ..color = glowColor.withOpacity(0.02)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
-    canvas.drawRect(Rect.fromLTWH(scanX - 20, 0, 40, size.y), hScanPaint);
+    _hScanPaint.color = glowColor.withOpacity(0.02);
+    canvas.drawRect(Rect.fromLTWH(scanX - 20, 0, 40, size.y), _hScanPaint);
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MATRIX-STYLE FALLING CODE RAIN
+  // ═══════════════════════════════════════════════════════════════════════════
   void _drawDataRain(Canvas canvas) {
-    // Vertical data stream columns
-    final columnCount = (size.x / 50).floor();
-    final rainPaint = Paint()..strokeWidth = 1;
+    // Matrix green color palette
+    const matrixGreen = Color(0xFF00FF41);
+    const matrixBrightGreen = Color(0xFF88FF88);
+    const matrixDarkGreen = Color(0xFF003311);
 
+    const columnSpacing = 18.0;
+    final columnCount = (size.x / columnSpacing).ceil();
+    const charHeight = 14.0;
+
+    // Matrix characters (Katakana-like symbols represented as shapes)
     for (int col = 0; col < columnCount; col++) {
-      final x = 25 + col * 50.0;
-      final phase = col * 0.7;
-      final streamLength = 50 + math.sin(_time + phase) * 25;
-      final yOffset = ((_time * 120 + col * 40) % (size.y + streamLength)) - streamLength;
+      final x = col * columnSpacing + columnSpacing / 2;
 
-      // Draw fading stream with varying characters
-      for (int i = 0; i < 6; i++) {
-        final segmentY = yOffset + i * 10;
-        if (segmentY > 0 && segmentY < size.y) {
-          final segmentAlpha = (1.0 - i / 6.0) * 0.1;
-          final segmentColor = i == 0
-              ? const Color(0xFFFFFFFF)
-              : (col % 2 == 0 ? glowColor : const Color(0xFFFF0066));
-          rainPaint.color = segmentColor.withOpacity(segmentAlpha);
+      // Each column has unique speed and phase
+      final seed = col * 137 + 42;
+      final colRandom = math.Random(seed);
+      final speed = 40 + colRandom.nextDouble() * 80;
+      final streamLength = 8 + colRandom.nextInt(20);
+      final phase = colRandom.nextDouble() * 500;
 
-          // Draw as small rectangle (simulating character)
-          canvas.drawRect(
-            Rect.fromLTWH(x - 2, segmentY, 4, 6),
-            rainPaint,
-          );
+      // Calculate head position (leading character)
+      final totalCycleHeight = size.y + streamLength * charHeight;
+      final headY = ((_time * speed + phase) % totalCycleHeight) - charHeight;
+
+      // ═══════════════════════════════════════════════════════════════════
+      // LAYER 1: HEAD CHARACTER (brightest, with glow)
+      // ═══════════════════════════════════════════════════════════════════
+      if (headY >= 0 && headY < size.y) {
+        // Outer glow
+        _headGlowPaint.color = matrixBrightGreen.withOpacity(0.6);
+        canvas.drawCircle(Offset(x, headY + charHeight / 2), 6, _headGlowPaint);
+
+        // Head character (bright white-green)
+        _headPaint.color = const Color(0xFFFFFFFF);
+        _drawMatrixChar(canvas, x, headY, charHeight, _headPaint, seed + (_time * 10).toInt());
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // LAYER 2: TRAILING CHARACTERS (fading green)
+      // ═══════════════════════════════════════════════════════════════════
+      for (int i = 1; i < streamLength; i++) {
+        final charY = headY - i * charHeight;
+        if (charY < -charHeight || charY > size.y) continue;
+
+        // Calculate fade based on position in trail
+        final fadeFactor = 1.0 - (i / streamLength);
+        final alpha = fadeFactor * fadeFactor * 0.7; // Quadratic falloff
+
+        if (alpha < 0.02) continue;
+
+        // Trail glow for first few characters
+        if (i < 4) {
+          _trailGlowPaint.color = matrixGreen.withOpacity(alpha * 0.4);
+          canvas.drawCircle(Offset(x, charY + charHeight / 2), 4, _trailGlowPaint);
+        }
+
+        // Character color gradient from bright to dark green
+        final charColor = Color.lerp(matrixBrightGreen, matrixDarkGreen, i / streamLength)!;
+        _charPaint.color = charColor.withOpacity(alpha);
+
+        // Occasional character change (flickering effect)
+        final charSeed = seed + i * 17 + (colRandom.nextDouble() < 0.02 ? (_time * 100).toInt() : 0);
+        _drawMatrixChar(canvas, x, charY, charHeight, _charPaint, charSeed);
+      }
+
+      // ═══════════════════════════════════════════════════════════════════
+      // LAYER 3: RANDOM FLICKERING CHARACTERS (sparse, adds depth)
+      // ═══════════════════════════════════════════════════════════════════
+      if (colRandom.nextDouble() < 0.15) {
+        final flickerY = (colRandom.nextDouble() * size.y).floorToDouble();
+        final flickerAlpha = 0.1 + colRandom.nextDouble() * 0.2;
+        final flickerPhase = math.sin(_time * 20 + col);
+
+        if (flickerPhase > 0.7) {
+          _charPaint.color = matrixGreen.withOpacity(flickerAlpha * flickerPhase);
+          _drawMatrixChar(canvas, x, flickerY, charHeight, _charPaint, seed + (_time * 50).toInt());
         }
       }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // LAYER 4: AMBIENT MATRIX GLOW OVERLAY (using cached shader)
+    // ═══════════════════════════════════════════════════════════════════════
+    _ambientGlowPaint.shader = _getAmbientGlowShader();
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _ambientGlowPaint);
+  }
+
+  /// Draws a matrix-style character (katakana-like symbols using geometric shapes)
+  void _drawMatrixChar(Canvas canvas, double x, double y, double height, Paint paint, int seed) {
+    final charRandom = math.Random(seed % 50); // Limited variety for consistency
+    final charType = charRandom.nextInt(12);
+    final halfH = height / 2;
+    final quarterH = height / 4;
+    final width = height * 0.6;
+    final halfW = width / 2;
+
+    paint.style = PaintingStyle.stroke;
+    paint.strokeWidth = 1.2;
+    paint.strokeCap = StrokeCap.round;
+
+    switch (charType) {
+      case 0: // ア-like
+        canvas.drawLine(Offset(x - halfW, y + quarterH), Offset(x + halfW, y + quarterH), paint);
+        canvas.drawLine(Offset(x, y + quarterH), Offset(x, y + height), paint);
+        canvas.drawLine(Offset(x + halfW, y + quarterH), Offset(x, y + height - quarterH), paint);
+        break;
+      case 1: // カ-like
+        canvas.drawLine(Offset(x - halfW, y), Offset(x + halfW, y), paint);
+        canvas.drawLine(Offset(x, y), Offset(x - halfW, y + height), paint);
+        canvas.drawLine(Offset(x + halfW, y), Offset(x + halfW, y + height), paint);
+        break;
+      case 2: // 二-like
+        canvas.drawLine(Offset(x - halfW, y + quarterH), Offset(x + halfW, y + quarterH), paint);
+        canvas.drawLine(Offset(x - halfW, y + height - quarterH), Offset(x + halfW, y + height - quarterH), paint);
+        break;
+      case 3: // ト-like
+        canvas.drawLine(Offset(x, y), Offset(x, y + height), paint);
+        canvas.drawLine(Offset(x, y + halfH), Offset(x + halfW, y + halfH - quarterH), paint);
+        break;
+      case 4: // ハ-like
+        canvas.drawLine(Offset(x - halfW, y), Offset(x, y + height), paint);
+        canvas.drawLine(Offset(x + halfW, y), Offset(x, y + height), paint);
+        break;
+      case 5: // 工-like
+        canvas.drawLine(Offset(x - halfW, y), Offset(x + halfW, y), paint);
+        canvas.drawLine(Offset(x, y), Offset(x, y + height), paint);
+        canvas.drawLine(Offset(x - halfW, y + height), Offset(x + halfW, y + height), paint);
+        break;
+      case 6: // 十-like (cross)
+        canvas.drawLine(Offset(x - halfW, y + halfH), Offset(x + halfW, y + halfH), paint);
+        canvas.drawLine(Offset(x, y), Offset(x, y + height), paint);
+        break;
+      case 7: // 口-like (box)
+        paint.style = PaintingStyle.stroke;
+        canvas.drawRect(Rect.fromLTWH(x - halfW * 0.8, y + quarterH * 0.5, width * 0.8, height * 0.7), paint);
+        break;
+      case 8: // ム-like (triangle)
+        final path = Path()
+          ..moveTo(x, y)
+          ..lineTo(x - halfW, y + height)
+          ..lineTo(x + halfW, y + height)
+          ..close();
+        canvas.drawPath(path, paint);
+        break;
+      case 9: // 7-like
+        canvas.drawLine(Offset(x - halfW, y), Offset(x + halfW, y), paint);
+        canvas.drawLine(Offset(x + halfW, y), Offset(x - halfW * 0.5, y + height), paint);
+        break;
+      case 10: // Z-like
+        canvas.drawLine(Offset(x - halfW, y), Offset(x + halfW, y), paint);
+        canvas.drawLine(Offset(x + halfW, y), Offset(x - halfW, y + height), paint);
+        canvas.drawLine(Offset(x - halfW, y + height), Offset(x + halfW, y + height), paint);
+        break;
+      case 11: // Single dot
+        paint.style = PaintingStyle.fill;
+        canvas.drawCircle(Offset(x, y + halfH), 2, paint);
+        break;
     }
   }
 
   void _drawHexPattern(Canvas canvas) {
     // Subtle hexagonal pattern overlay
-    final hexSize = 60.0;
-    final hexWidth = hexSize * 1.732; // sqrt(3)
-    final hexHeight = hexSize * 2;
+    const hexSize = 60.0;
+    const hexWidth = hexSize * 1.732; // sqrt(3)
+    const hexHeight = hexSize * 2;
 
-    final hexPaint = Paint()
-      ..color = glowColor.withOpacity(0.015)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
+    _hexPaint.color = glowColor.withOpacity(0.015);
 
     final cols = (size.x / hexWidth).ceil() + 1;
     final rows = (size.y / (hexHeight * 0.75)).ceil() + 1;
@@ -407,108 +615,93 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
         // Only draw some hexagons for performance and subtlety
         if ((row + col) % 3 == 0) {
-          _drawHexagon(canvas, centerX, centerY, hexSize * 0.5, hexPaint);
+          _drawHexagon(canvas, centerX, centerY, hexSize * 0.5);
         }
       }
     }
   }
 
-  void _drawHexagon(Canvas canvas, double cx, double cy, double radius, Paint paint) {
-    final path = Path();
+  void _drawHexagon(Canvas canvas, double cx, double cy, double radius) {
+    _hexPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = (i * 60 - 30) * math.pi / 180;
       final x = cx + radius * math.cos(angle);
       final y = cy + radius * math.sin(angle);
       if (i == 0) {
-        path.moveTo(x, y);
+        _hexPath.moveTo(x, y);
       } else {
-        path.lineTo(x, y);
+        _hexPath.lineTo(x, y);
       }
     }
-    path.close();
-    canvas.drawPath(path, paint);
+    _hexPath.close();
+    canvas.drawPath(_hexPath, _hexPaint);
   }
 
   void _drawCornerFrames(Canvas canvas) {
-    final framePaint = Paint()
-      ..color = glowColor.withOpacity(0.6)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final glowPaint = Paint()
-      ..color = glowColor.withOpacity(0.3)
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    _framePaint.color = glowColor.withOpacity(0.6);
+    _frameGlowPaint.color = glowColor.withOpacity(0.3);
 
     const cornerSize = 50.0;
     const margin = 15.0;
 
     // Top-left
-    _drawEnhancedCorner(canvas, margin, margin, cornerSize, true, true, framePaint, glowPaint);
+    _drawEnhancedCorner(canvas, margin, margin, cornerSize, true, true);
     // Top-right
-    _drawEnhancedCorner(canvas, size.x - margin, margin, cornerSize, false, true, framePaint, glowPaint);
+    _drawEnhancedCorner(canvas, size.x - margin, margin, cornerSize, false, true);
     // Bottom-left
-    _drawEnhancedCorner(canvas, margin, size.y - margin, cornerSize, true, false, framePaint, glowPaint);
+    _drawEnhancedCorner(canvas, margin, size.y - margin, cornerSize, true, false);
     // Bottom-right
-    _drawEnhancedCorner(canvas, size.x - margin, size.y - margin, cornerSize, false, false, framePaint, glowPaint);
+    _drawEnhancedCorner(canvas, size.x - margin, size.y - margin, cornerSize, false, false);
   }
 
   void _drawEnhancedCorner(Canvas canvas, double x, double y, double cornerSize,
-      bool left, bool top, Paint paint, Paint glow) {
+      bool left, bool top) {
     final hDir = left ? 1.0 : -1.0;
     final vDir = top ? 1.0 : -1.0;
 
     // Main corner bracket
-    final path = Path()
-      ..moveTo(x, y + cornerSize * vDir)
-      ..lineTo(x, y)
-      ..lineTo(x + cornerSize * hDir, y);
+    _hexPath.reset();
+    _hexPath.moveTo(x, y + cornerSize * vDir);
+    _hexPath.lineTo(x, y);
+    _hexPath.lineTo(x + cornerSize * hDir, y);
 
-    canvas.drawPath(path, glow);
-    canvas.drawPath(path, paint);
+    canvas.drawPath(_hexPath, _frameGlowPaint);
+    canvas.drawPath(_hexPath, _framePaint);
 
     // Inner detail lines
-    final detailPaint = Paint()
-      ..color = glowColor.withOpacity(0.3)
-      ..strokeWidth = 1;
+    _detailPaint.color = glowColor.withOpacity(0.3);
 
     canvas.drawLine(
       Offset(x + 8 * hDir, y + 8 * vDir),
       Offset(x + 8 * hDir, y + 20 * vDir),
-      detailPaint,
+      _detailPaint,
     );
     canvas.drawLine(
       Offset(x + 8 * hDir, y + 8 * vDir),
       Offset(x + 20 * hDir, y + 8 * vDir),
-      detailPaint,
+      _detailPaint,
     );
 
     // Additional tech details
     canvas.drawLine(
       Offset(x + 25 * hDir, y),
       Offset(x + 35 * hDir, y),
-      detailPaint,
+      _detailPaint,
     );
     canvas.drawLine(
       Offset(x, y + 25 * vDir),
       Offset(x, y + 35 * vDir),
-      detailPaint,
+      _detailPaint,
     );
 
     // Corner node with animation
     final pulseAlpha = 0.5 + math.sin(_time * 3) * 0.2;
-    final nodePaint = Paint()
-      ..color = glowColor.withOpacity(pulseAlpha)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawCircle(Offset(x + 4 * hDir, y + 4 * vDir), 3, nodePaint);
+    _cornerNodePaint.color = glowColor.withOpacity(pulseAlpha);
+    canvas.drawCircle(Offset(x + 4 * hDir, y + 4 * vDir), 3, _cornerNodePaint);
 
     // Bright center
-    canvas.drawCircle(
-      Offset(x + 4 * hDir, y + 4 * vDir),
-      1.5,
-      Paint()..color = const Color(0xFFFFFFFF).withOpacity(pulseAlpha),
-    );
+    _cornerCenterPaint.color = const Color(0xFFFFFFFF).withOpacity(pulseAlpha);
+    canvas.drawCircle(Offset(x + 4 * hDir, y + 4 * vDir), 1.5, _cornerCenterPaint);
   }
 
   void _drawEdgeGlows(Canvas canvas) {
@@ -516,89 +709,69 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     final edgePulse = 0.8 + math.sin(_time * 1.5) * 0.2;
 
     // Top edge glow
-    final topGlow = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          glowColor.withOpacity(0.15 * edgePulse),
-          const Color(0x00000000),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, size.x, 40));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, 40), topGlow);
+    _edgeGlowPaint.shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        glowColor.withOpacity(0.15 * edgePulse),
+        const Color(0x00000000),
+      ],
+    ).createShader(Rect.fromLTWH(0, 0, size.x, 40));
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, 40), _edgeGlowPaint);
 
     // Bottom edge glow (magenta)
-    final bottomGlow = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.bottomCenter,
-        end: Alignment.topCenter,
-        colors: [
-          const Color(0xFFFF0066).withOpacity(0.12 * edgePulse),
-          const Color(0x00000000),
-        ],
-      ).createShader(Rect.fromLTWH(0, size.y - 40, size.x, 40));
-    canvas.drawRect(Rect.fromLTWH(0, size.y - 40, size.x, 40), bottomGlow);
+    _edgeGlowPaint.shader = LinearGradient(
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+      colors: [
+        const Color(0xFFFF0066).withOpacity(0.12 * edgePulse),
+        const Color(0x00000000),
+      ],
+    ).createShader(Rect.fromLTWH(0, size.y - 40, size.x, 40));
+    canvas.drawRect(Rect.fromLTWH(0, size.y - 40, size.x, 40), _edgeGlowPaint);
 
     // Left edge
-    final leftGlow = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          glowColor.withOpacity(0.08 * edgePulse),
-          const Color(0x00000000),
-        ],
-      ).createShader(Rect.fromLTWH(0, 0, 25, size.y));
-    canvas.drawRect(Rect.fromLTWH(0, 0, 25, size.y), leftGlow);
+    _edgeGlowPaint.shader = LinearGradient(
+      begin: Alignment.centerLeft,
+      end: Alignment.centerRight,
+      colors: [
+        glowColor.withOpacity(0.08 * edgePulse),
+        const Color(0x00000000),
+      ],
+    ).createShader(Rect.fromLTWH(0, 0, 25, size.y));
+    canvas.drawRect(Rect.fromLTWH(0, 0, 25, size.y), _edgeGlowPaint);
 
     // Right edge
-    final rightGlow = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.centerRight,
-        end: Alignment.centerLeft,
-        colors: [
-          glowColor.withOpacity(0.08 * edgePulse),
-          const Color(0x00000000),
-        ],
-      ).createShader(Rect.fromLTWH(size.x - 25, 0, 25, size.y));
-    canvas.drawRect(Rect.fromLTWH(size.x - 25, 0, 25, size.y), rightGlow);
+    _edgeGlowPaint.shader = LinearGradient(
+      begin: Alignment.centerRight,
+      end: Alignment.centerLeft,
+      colors: [
+        glowColor.withOpacity(0.08 * edgePulse),
+        const Color(0x00000000),
+      ],
+    ).createShader(Rect.fromLTWH(size.x - 25, 0, 25, size.y));
+    canvas.drawRect(Rect.fromLTWH(size.x - 25, 0, 25, size.y), _edgeGlowPaint);
   }
 
   void _drawVignette(Canvas canvas) {
-    final center = Offset(size.x / 2, size.y / 2);
-    final radius = math.max(size.x, size.y) * 0.8;
-
-    final paint = Paint()
-      ..shader = RadialGradient(
-        center: Alignment.center,
-        radius: 1.0,
-        colors: const [
-          Color(0x00000000),
-          Color(0x00000000),
-          Color(0x40000000),
-          Color(0x90000000),
-        ],
-        stops: const [0.0, 0.5, 0.75, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius));
-
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), paint);
+    // Using cached vignette shader (only recreated on resize)
+    _vignettePaint.shader = _getVignetteShader();
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _vignettePaint);
   }
 
   void _drawAmbientFlicker(Canvas canvas) {
     // Random ambient flicker overlay
     final flickerValue = math.sin(_time * 15) * math.sin(_time * 23);
     if (flickerValue > 0.7) {
-      final flickerPaint = Paint()
-        ..color = glowColor.withOpacity(0.01 * (flickerValue - 0.7) / 0.3);
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), flickerPaint);
+      _flickerPaint.color = glowColor.withOpacity(0.01 * (flickerValue - 0.7) / 0.3);
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _flickerPaint);
     }
 
     // Occasional bright flash
     final flashValue = math.sin(_time * 0.5) * math.sin(_time * 1.3);
     if (flashValue > 0.95) {
-      final flashPaint = Paint()
-        ..color = glowColor.withOpacity(0.02);
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), flashPaint);
+      _flickerPaint.color = glowColor.withOpacity(0.02);
+      canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _flickerPaint);
     }
   }
 }

@@ -99,6 +99,9 @@ class FloatingText extends PositionComponent {
   String _cachedText = '';
   double _cachedFontSize = 0;
 
+  // Static cached Paint for render - avoids per-frame allocations
+  static final Paint _renderPaint = Paint();
+
   void _reset({
     required Vector2 position,
     required String text,
@@ -108,7 +111,7 @@ class FloatingText extends PositionComponent {
     required double duration,
     required double riseSpeed,
   }) {
-    this.position = position.clone();
+    this.position.setFrom(position);
     anchor = Anchor.center;
     this.text = text;
     this.type = type;
@@ -233,9 +236,9 @@ class FloatingText extends PositionComponent {
       Offset(-_cachedPainter!.width / 2 + 1 / scale, -_cachedPainter!.height / 2 + 1 / scale),
     );
 
-    // Draw main text with alpha
-    final paint = Paint()..color = _color.withOpacity(alpha);
-    canvas.saveLayer(null, paint);
+    // Draw main text with alpha - use static paint to avoid allocations
+    _renderPaint.color = _color.withOpacity(alpha);
+    canvas.saveLayer(null, _renderPaint);
     _cachedPainter!.paint(
       canvas,
       Offset(-_cachedPainter!.width / 2, -_cachedPainter!.height / 2),
@@ -257,6 +260,7 @@ class ResourcePopup extends PositionComponent {
   }) : _timer = 0 {
     this.position = position;
     anchor = Anchor.center;
+    _initPainters();
   }
 
   final int amount;
@@ -266,12 +270,49 @@ class ResourcePopup extends PositionComponent {
 
   double _timer;
 
+  // Cached TextPainters
+  TextPainter? _iconPainter;
+  TextPainter? _textPainter;
+  static final Paint _alphaPaint = Paint();
+
+  void _initPainters() {
+    final color = isGain ? const Color(0xFF00FF88) : const Color(0xFFFF0066);
+    final prefix = isGain ? '+' : '-';
+    final text = '$prefix$amount';
+
+    _iconPainter = TextPainter(
+      text: TextSpan(
+        text: icon,
+        style: const TextStyle(
+          fontSize: 14,
+          color: Colors.white,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    _textPainter = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
     _timer += dt;
 
     if (_timer >= duration) {
+      _iconPainter?.dispose();
+      _textPainter?.dispose();
       removeFromParent();
       return;
     }
@@ -282,6 +323,7 @@ class ResourcePopup extends PositionComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (_iconPainter == null || _textPainter == null) return;
 
     final progress = _timer / duration;
     final alpha = (1 - progress).clamp(0.0, 1.0);
@@ -294,43 +336,20 @@ class ResourcePopup extends PositionComponent {
       scale = 1.1 - progress * 0.15;
     }
 
-    final color = isGain
-        ? const Color(0xFF00FF88)
-        : const Color(0xFFFF0066);
+    final totalWidth = _iconPainter!.width + 4 + _textPainter!.width;
 
-    final prefix = isGain ? '+' : '-';
-    final text = '$prefix$amount';
+    canvas.save();
+    canvas.scale(scale, scale);
 
-    // Icon
-    final iconPainter = TextPainter(
-      text: TextSpan(
-        text: icon,
-        style: TextStyle(
-          fontSize: 14 * scale,
-          color: Colors.white.withOpacity(alpha),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    // Apply alpha via saveLayer
+    _alphaPaint.color = Color.fromRGBO(255, 255, 255, alpha);
+    canvas.saveLayer(null, _alphaPaint);
 
-    // Amount
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: color.withOpacity(alpha),
-          fontSize: 12 * scale,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    _iconPainter!.paint(canvas, Offset(-totalWidth / 2, -_iconPainter!.height / 2));
+    _textPainter!.paint(canvas, Offset(-totalWidth / 2 + _iconPainter!.width + 4, -_textPainter!.height / 2));
 
-    final totalWidth = iconPainter.width + 4 + textPainter.width;
-
-    iconPainter.paint(canvas, Offset(-totalWidth / 2, -iconPainter.height / 2));
-    textPainter.paint(canvas, Offset(-totalWidth / 2 + iconPainter.width + 4, -textPainter.height / 2));
+    canvas.restore(); // saveLayer
+    canvas.restore(); // scale
   }
 }
 
@@ -343,12 +362,21 @@ class KillStreakNotification extends PositionComponent {
   }) : _timer = 0 {
     this.position = position;
     anchor = Anchor.center;
+    _initPainter();
   }
 
   final int streakCount;
   final double duration;
 
   double _timer;
+
+  // Cached painters and paints
+  TextPainter? _textPainter;
+  static final Paint _bgPaint = Paint();
+  static final Paint _borderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _alphaPaint = Paint();
 
   String get _streakText {
     if (streakCount >= 10) return 'UNSTOPPABLE';
@@ -366,12 +394,29 @@ class KillStreakNotification extends PositionComponent {
     return const Color(0xFF00FF88);
   }
 
+  void _initPainter() {
+    _textPainter = TextPainter(
+      text: TextSpan(
+        text: _streakText,
+        style: TextStyle(
+          color: _color,
+          fontSize: 10,
+          fontFamily: 'monospace',
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
     _timer += dt;
 
     if (_timer >= duration) {
+      _textPainter?.dispose();
       removeFromParent();
       return;
     }
@@ -380,6 +425,7 @@ class KillStreakNotification extends PositionComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (_textPainter == null) return;
 
     final progress = _timer / duration;
     final alpha = progress < 0.7 ? 1.0 : (1 - (progress - 0.7) / 0.3);
@@ -392,43 +438,31 @@ class KillStreakNotification extends PositionComponent {
       scale = 1.1 - progress * 0.1;
     }
 
+    canvas.save();
+    canvas.scale(scale, scale);
+
     // Minimal pill background
     final pillRect = RRect.fromRectAndRadius(
-      Rect.fromCenter(center: Offset.zero, width: 80 * scale, height: 22 * scale),
+      Rect.fromCenter(center: Offset.zero, width: 80, height: 22),
       const Radius.circular(11),
     );
 
-    canvas.drawRRect(
-      pillRect,
-      Paint()..color = const Color(0xFF0a0a18).withOpacity(alpha * 0.85),
-    );
+    _bgPaint.color = const Color(0xFF0a0a18).withOpacity(alpha * 0.85);
+    canvas.drawRRect(pillRect, _bgPaint);
 
-    canvas.drawRRect(
-      pillRect,
-      Paint()
-        ..color = _color.withOpacity(alpha * 0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    _borderPaint.color = _color.withOpacity(alpha * 0.5);
+    canvas.drawRRect(pillRect, _borderPaint);
 
-    // Text
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: _streakText,
-        style: TextStyle(
-          color: _color.withOpacity(alpha),
-          fontSize: 10 * scale,
-          fontFamily: 'monospace',
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    // Text with alpha
+    _alphaPaint.color = Color.fromRGBO(255, 255, 255, alpha);
+    canvas.saveLayer(null, _alphaPaint);
 
-    textPainter.paint(
+    _textPainter!.paint(
       canvas,
-      Offset(-textPainter.width / 2, -textPainter.height / 2),
+      Offset(-_textPainter!.width / 2, -_textPainter!.height / 2),
     );
+
+    canvas.restore(); // saveLayer
+    canvas.restore(); // scale
   }
 }

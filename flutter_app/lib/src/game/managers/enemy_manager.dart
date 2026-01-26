@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flame/components.dart';
 
 import '../effects/explosion_effect.dart';
+import '../effects/pixel_disintegration_effect.dart';
 import '../effects/boss_entrance_effect.dart';
 import '../entities/enemy.dart';
 import '../entities/boss.dart';
@@ -349,9 +350,6 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     );
     add(entranceEffect);
 
-    // Play boss music/sound
-    AudioService.instance.playWaveStart();
-
     // Notify game of boss spawn for battle dialogue
     onBossSpawn?.call(boss.displayName);
   }
@@ -425,7 +423,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     final expSize =
         (30.0 + (enemy.type.sizeMult * 20)) * (1 + enemy.threatTier * 0.15);
     final effect = ExplosionEffect.spawn(
-      position: enemy.position.clone(),
+      position: enemy.position,
       color: enemy.type.color,
       explosionSize: expSize,
       duration: 0.5 + (enemy.type == EnemyType.juggernaut ? 0.2 : 0),
@@ -434,8 +432,16 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       add(effect);
     }
 
-    // Play explosion sound
-    AudioService.instance.playExplosion();
+    // Spawn pixel disintegration effect for cyberpunk death visual
+    final pixelEffect = PixelDisintegrationEffect.spawn(
+      position: enemy.position,
+      color: enemy.type.color,
+      effectSize: expSize * 0.8,
+      duration: 0.8 + (enemy.type == EnemyType.juggernaut ? 0.2 : 0),
+    );
+    if (pixelEffect != null) {
+      add(pixelEffect);
+    }
 
     onEnemyKilled?.call(enemy, enemy.goldReward);
     _checkWaveComplete();
@@ -532,9 +538,6 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       interval *= 1.05;
     }
     _spawnInterval = interval.clamp(0.35, 1.6);
-
-    // Play wave start sound
-    AudioService.instance.playWaveStart();
   }
 
   /// Reset to initial state
@@ -702,7 +705,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
       case WaveModifier.phantom:
         // Phantom type if available, otherwise fast phantom-like type
-        final phantoms = worldEnemies.where((e) => e.isPhantom).toList();
+        final phantoms = worldEnemies.where((e) => e.isPhantom);
         if (phantoms.isNotEmpty) return phantoms.first;
         // Fallback to fastest for sneaky feel
         return worldEnemies.reduce((a, b) => a.speedMult > b.speedMult ? a : b);

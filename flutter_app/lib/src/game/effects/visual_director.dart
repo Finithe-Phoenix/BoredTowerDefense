@@ -56,7 +56,7 @@ class VisualDirector {
     GameParticles.instance.sparks(enemy.position, enemy.type.color, count: 18);
 
     game.add(FloatingText(
-      position: _toScreen(enemy.position.clone()),
+      position: _toScreen(enemy.position),
       text: '+$goldReward',
       type: FloatingTextType.gold,
       fontSize: 16,
@@ -86,7 +86,7 @@ class VisualDirector {
     GameParticles.instance.sparks(enemy.position, NeonColors.red, count: 12);
 
     game.add(FloatingText(
-      position: _toScreen(enemy.position.clone()),
+      position: _toScreen(enemy.position),
       text: 'LEAK',
       type: FloatingTextType.damage,
       customColor: NeonColors.red,
@@ -140,7 +140,7 @@ class VisualDirector {
     GameParticles.instance.magic(center, NeonColors.cyan, count: 10);
 
     game.add(FloatingText(
-      position: _toScreen(center.clone()),
+      position: _toScreen(center),
       text: 'SLOW FIELD',
       type: FloatingTextType.combo,
       customColor: NeonColors.cyan,
