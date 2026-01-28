@@ -9,8 +9,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('TowerType', () {
-    test('has 8 tower types', () {
-      expect(TowerType.values.length, 8);
+    test('has 9 tower types', () {
+      expect(TowerType.values.length, 9);
     });
 
     test('pulseArcher is first tower type', () {

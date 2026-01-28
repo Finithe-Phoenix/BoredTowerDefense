@@ -6,6 +6,7 @@ import '../../game/bored_games_game.dart';
 import '../../models/level_config.dart';
 import '../../services/level_service.dart';
 import '../../services/procedural_music_service.dart';
+import '../../services/ambient_soundscape_service.dart';
 import '../../services/audio_service.dart';
 import '../overlays/pause_menu_overlay.dart';
 import '../overlays/game_over_overlay.dart';
@@ -53,6 +54,8 @@ class _GameScreenState extends State<GameScreen> {
     // Determine world from level ID (1-10 = world 1, 11-20 = world 2, etc.)
     final worldId = ((_levelConfig.id - 1) ~/ 10) + 1;
     await ProceduralMusicService.instance.playWorldMusic(worldId);
+    // Start ambient soundscape for immersive atmosphere
+    await AmbientSoundscapeService.instance.playWorldAmbient(worldId);
   }
 
   void _handleGameOver() {
@@ -108,9 +111,11 @@ class _GameScreenState extends State<GameScreen> {
       if (_isPaused) {
         _game.overlays.add('pause');
         ProceduralMusicService.instance.pause();
+        AmbientSoundscapeService.instance.pause();
       } else {
         _game.overlays.remove('pause');
         ProceduralMusicService.instance.resume();
+        AmbientSoundscapeService.instance.resume();
       }
     });
   }
@@ -121,6 +126,7 @@ class _GameScreenState extends State<GameScreen> {
       _game.paused = false;
       _game.overlays.remove('pause');
       ProceduralMusicService.instance.resume();
+      AmbientSoundscapeService.instance.resume();
     });
   }
 
@@ -145,6 +151,7 @@ class _GameScreenState extends State<GameScreen> {
     // CRITICAL: Cleanup game resources before navigation
     _game.onRemove();
     ProceduralMusicService.instance.stop();
+    AmbientSoundscapeService.instance.stop();
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
@@ -152,6 +159,7 @@ class _GameScreenState extends State<GameScreen> {
     // CRITICAL: Cleanup current game before navigation
     _game.onRemove();
     ProceduralMusicService.instance.stop();
+    AmbientSoundscapeService.instance.stop();
 
     final nextLevelId = _levelConfig.id + 1;
     final nextLevel = LevelService.instance.getLevel(nextLevelId);
@@ -168,6 +176,7 @@ class _GameScreenState extends State<GameScreen> {
     // CRITICAL: Ensure game resources are cleaned up when screen is disposed
     _game.onRemove();
     ProceduralMusicService.instance.stop();
+    AmbientSoundscapeService.instance.stop();
     AudioService.instance.reset();
     ProceduralMusicService.instance.reset();
     _refreshAudioIfNeeded();

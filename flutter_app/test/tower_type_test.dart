@@ -17,8 +17,8 @@ void main() {
       expect(TowerType.values, contains(TowerType.neuralDisruptor));
     });
 
-    test('tower type count is 8', () {
-      expect(TowerType.values.length, 8);
+    test('tower type count is 9', () {
+      expect(TowerType.values.length, 9);
     });
 
     test('tower types expose valid numeric stats', () {

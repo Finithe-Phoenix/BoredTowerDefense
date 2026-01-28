@@ -182,8 +182,8 @@ class _TronCardState extends State<TronCard>
       if (particle.y < 0) particle.y = 1;
       if (particle.y > 1) particle.y = 0;
 
-      // Pulsate opacity
-      particle.opacity = 0.2 + math.sin(DateTime.now().millisecondsSinceEpoch * 0.005 + particle.x * 10) * 0.3;
+      // Pulsate opacity (centered at 0.35 with amplitude 0.25, range [0.1, 0.6])
+      particle.opacity = (0.35 + math.sin(DateTime.now().millisecondsSinceEpoch * 0.005 + particle.x * 10) * 0.25).clamp(0.0, 1.0);
     }
     setState(() {});
   }

@@ -291,13 +291,15 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     for (final t in _towers) {
        t.resetResonanceBoost();
     }
-    
-    final siphons = _towers.where((t) => t.type == TowerType.resonanceSiphon);
-    if (siphons.isEmpty) return;
-    for (final siphon in siphons) {
+
+    // Use squared distance to avoid per-comparison sqrt()
+    const resonanceRangeSq = 100.0 * 100.0;
+
+    for (final siphon in _towers) {
+       if (siphon.type != TowerType.resonanceSiphon) continue;
        for (final tower in _towers) {
           if (tower == siphon) continue;
-          if (tower.position.distanceTo(siphon.position) < 100) {
+          if (tower.position.distanceToSquared(siphon.position) < resonanceRangeSq) {
              tower.setResonanceBoost(true);
           }
        }

@@ -49,19 +49,30 @@ class UpgradeStats {
     );
   }
 
+  /// Iterative power for integer exponents - avoids expensive math.pow()
+  static double _intPow(double base, int exp) {
+    if (exp <= 0) return 1.0;
+    if (exp == 1) return base;
+    double result = base;
+    for (int i = 1; i < exp; i++) {
+      result *= base;
+    }
+    return result;
+  }
+
   UpgradeStats scale(int level) {
     if (level <= 0) return const UpgradeStats();
     return UpgradeStats(
-      towerDamageMult: math.pow(towerDamageMult, level).toDouble(),
-      towerRangeMult: math.pow(towerRangeMult, level).toDouble(),
-      towerFireRateMult: math.pow(towerFireRateMult, level).toDouble(),
-      projectileSpeedMult: math.pow(projectileSpeedMult, level).toDouble(),
-      slowMult: math.pow(slowMult, level).toDouble(),
-      goldGainMult: math.pow(goldGainMult, level).toDouble(),
-      towerCostMult: math.pow(towerCostMult, level).toDouble(),
-      pulseCooldownMult: math.pow(pulseCooldownMult, level).toDouble(),
-      mineCooldownMult: math.pow(mineCooldownMult, level).toDouble(),
-      abilityCostMult: math.pow(abilityCostMult, level).toDouble(),
+      towerDamageMult: _intPow(towerDamageMult, level),
+      towerRangeMult: _intPow(towerRangeMult, level),
+      towerFireRateMult: _intPow(towerFireRateMult, level),
+      projectileSpeedMult: _intPow(projectileSpeedMult, level),
+      slowMult: _intPow(slowMult, level),
+      goldGainMult: _intPow(goldGainMult, level),
+      towerCostMult: _intPow(towerCostMult, level),
+      pulseCooldownMult: _intPow(pulseCooldownMult, level),
+      mineCooldownMult: _intPow(mineCooldownMult, level),
+      abilityCostMult: _intPow(abilityCostMult, level),
       startingGoldBonus: startingGoldBonus * level,
       startingLivesBonus: startingLivesBonus * level,
       maxMinesBonus: maxMinesBonus * level,

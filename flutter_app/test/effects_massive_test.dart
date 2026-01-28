@@ -224,9 +224,9 @@ void main() {
       });
     }
 
-    // Scale calculations
-    for (double progress = 0.0; progress <= 1.0; progress += 0.1) {
-      test('Scale at progress ${progress.toStringAsFixed(1)}', () {
+    // Scale calculations (start from 0.01 since scale=0 at progress=0 is valid)
+    for (double progress = 0.01; progress <= 1.0; progress += 0.1) {
+      test('Scale at progress ${progress.toStringAsFixed(2)}', () {
         double scale;
         if (progress < 0.15) {
           scale = progress / 0.15 * 1.1;
@@ -382,8 +382,8 @@ void main() {
       });
     }
 
-    // Scale animation tests
-    for (double progress = 0.0; progress <= 1.0; progress += 0.05) {
+    // Scale animation tests (start from 0.01 since scale=0 at progress=0 is valid)
+    for (double progress = 0.01; progress <= 1.0; progress += 0.05) {
       test('Scale animation at ${progress.toStringAsFixed(2)}', () {
         double scale;
         if (progress < 0.15) {

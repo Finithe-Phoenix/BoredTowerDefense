@@ -22,6 +22,21 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   final Color glowColor;
   final bool reducedFx;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED OPACITY COLORS - Avoid per-frame .withOpacity() allocations
+  // ═══════════════════════════════════════════════════════════════════════════
+  late final Color _glowO015 = glowColor.withOpacity(0.015);
+  late final Color _glowO02 = glowColor.withOpacity(0.02);
+  late final Color _glowO03 = glowColor.withOpacity(0.03);
+  late final Color _glowO04 = glowColor.withOpacity(0.04);
+  late final Color _glowO05 = glowColor.withOpacity(0.05);
+  late final Color _glowO10 = glowColor.withOpacity(0.1);
+  late final Color _glowO15 = glowColor.withOpacity(0.15);
+  late final Color _glowO30 = glowColor.withOpacity(0.3);
+  late final Color _glowO40 = glowColor.withOpacity(0.4);
+  late final Color _glowO60 = glowColor.withOpacity(0.6);
+  late final Color _glowO80 = glowColor.withOpacity(0.8);
+
   double _time = 0;
   final math.Random _random = math.Random(42);
 
@@ -81,6 +96,26 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   static final Paint _vignettePaint = Paint();
   static final Paint _flickerPaint = Paint();
   static final Path _hexPath = Path();
+
+  // Static pre-computed colors for non-glowColor constants used per-frame
+  static const Color _magentaO02 = Color(0x05FF0066);
+  static const Color _matrixBrightGreenO60 = Color(0x9988FF88);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRE-COMPUTED DATA RAIN COLORS - Avoid 500+ withOpacity/Color.lerp per frame
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Quantized matrixGreen opacity levels (20 steps from 0.0 to 0.7)
+  static final List<Color> _matrixGreenAlpha = List.generate(
+    21, (i) => const Color(0xFF00FF41).withOpacity(i * 0.035),
+  );
+  // Pre-computed Color.lerp gradient: matrixBrightGreen → matrixDarkGreen (30 steps)
+  static final List<Color> _matrixTrailGradient = List.generate(
+    30, (i) => Color.lerp(
+      const Color(0xFF88FF88),
+      const Color(0xFF003311),
+      i / 29.0,
+    )!,
+  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SHADER CACHE - Avoid per-frame createShader() allocations
@@ -146,9 +181,9 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
         end: Alignment.bottomCenter,
         colors: [
           const Color(0x00000000),
-          glowColor.withOpacity(0.05),
-          glowColor.withOpacity(0.1),
-          glowColor.withOpacity(0.05),
+          _glowO05,
+          _glowO10,
+          _glowO05,
           const Color(0x00000000),
         ],
         stops: const [0.0, 0.4, 0.5, 0.6, 1.0],
@@ -346,7 +381,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     }
 
     // Horizon line
-    _horizonPaint.color = glowColor.withOpacity(0.1);
+    _horizonPaint.color = _glowO10;
     canvas.drawLine(Offset(0, horizonY), Offset(size.x, horizonY), _horizonPaint);
 
     // Horizon glow (using cached shader)
@@ -384,17 +419,17 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       final endY = line.endY * size.y;
 
       // Draw the base line
-      _linePaint.color = glowColor.withOpacity(0.03);
+      _linePaint.color = _glowO03;
       canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _linePaint);
 
       // Draw traveling energy pulse
       final pulseX = startX + (endX - startX) * progress;
       final pulseY = startY + (endY - startY) * progress;
 
-      _pulseOuterPaint.color = glowColor.withOpacity(0.4);
+      _pulseOuterPaint.color = _glowO40;
       canvas.drawCircle(Offset(pulseX, pulseY), 4, _pulseOuterPaint);
 
-      _pulseInnerPaint.color = glowColor.withOpacity(0.8);
+      _pulseInnerPaint.color = _glowO80;
       canvas.drawCircle(Offset(pulseX, pulseY), 2, _pulseInnerPaint);
     }
   }
@@ -413,22 +448,22 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   void _drawScanLines(Canvas canvas) {
     // Primary scan line
     final scanY1 = ((_time * 40) % (size.y + 100)) - 50;
-    _scanPaint1.color = glowColor.withOpacity(0.04);
+    _scanPaint1.color = _glowO04;
     canvas.drawRect(Rect.fromLTWH(0, scanY1 - 40, size.x, 80), _scanPaint1);
 
     // Secondary scan line (slower, different phase)
     final scanY2 = (((_time * 25) + size.y * 0.5) % (size.y + 100)) - 50;
-    _scanPaint2.color = const Color(0xFFFF0066).withOpacity(0.02);
+    _scanPaint2.color = _magentaO02;
     canvas.drawRect(Rect.fromLTWH(0, scanY2 - 30, size.x, 60), _scanPaint2);
 
     // Thin bright scan line
     final thinScanY = ((_time * 80) % (size.y + 20)) - 10;
-    _thinScanPaint.color = glowColor.withOpacity(0.15);
+    _thinScanPaint.color = _glowO15;
     canvas.drawLine(Offset(0, thinScanY), Offset(size.x, thinScanY), _thinScanPaint);
 
     // Horizontal scan (left to right)
     final scanX = ((_time * 60) % (size.x + 50)) - 25;
-    _hScanPaint.color = glowColor.withOpacity(0.02);
+    _hScanPaint.color = _glowO02;
     canvas.drawRect(Rect.fromLTWH(scanX - 20, 0, 40, size.y), _hScanPaint);
   }
 
@@ -465,7 +500,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       // ═══════════════════════════════════════════════════════════════════
       if (headY >= 0 && headY < size.y) {
         // Outer glow
-        _headGlowPaint.color = matrixBrightGreen.withOpacity(0.6);
+        _headGlowPaint.color = _matrixBrightGreenO60;
         canvas.drawCircle(Offset(x, headY + charHeight / 2), 6, _headGlowPaint);
 
         // Head character (bright white-green)
@@ -488,13 +523,15 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
         // Trail glow for first few characters
         if (i < 4) {
-          _trailGlowPaint.color = matrixGreen.withOpacity(alpha * 0.4);
+          // Quantized matrixGreen opacity lookup (avoids per-char withOpacity allocation)
+          final glowIdx = ((alpha * 0.4) / 0.035).round().clamp(0, 20);
+          _trailGlowPaint.color = _matrixGreenAlpha[glowIdx];
           canvas.drawCircle(Offset(x, charY + charHeight / 2), 4, _trailGlowPaint);
         }
 
-        // Character color gradient from bright to dark green
-        final charColor = Color.lerp(matrixBrightGreen, matrixDarkGreen, i / streamLength)!;
-        _charPaint.color = charColor.withOpacity(alpha);
+        // Pre-computed gradient lookup (avoids per-char Color.lerp + withOpacity)
+        final gradIdx = ((i / streamLength) * 29).round().clamp(0, 29);
+        _charPaint.color = _matrixTrailGradient[gradIdx].withOpacity(alpha);
 
         // Occasional character change (flickering effect)
         final charSeed = seed + i * 17 + (colRandom.nextDouble() < 0.02 ? (_time * 100).toInt() : 0);
@@ -602,7 +639,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     const hexWidth = hexSize * 1.732; // sqrt(3)
     const hexHeight = hexSize * 2;
 
-    _hexPaint.color = glowColor.withOpacity(0.015);
+    _hexPaint.color = _glowO015;
 
     final cols = (size.x / hexWidth).ceil() + 1;
     final rows = (size.y / (hexHeight * 0.75)).ceil() + 1;
@@ -638,8 +675,8 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   }
 
   void _drawCornerFrames(Canvas canvas) {
-    _framePaint.color = glowColor.withOpacity(0.6);
-    _frameGlowPaint.color = glowColor.withOpacity(0.3);
+    _framePaint.color = _glowO60;
+    _frameGlowPaint.color = _glowO30;
 
     const cornerSize = 50.0;
     const margin = 15.0;
@@ -669,7 +706,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     canvas.drawPath(_hexPath, _framePaint);
 
     // Inner detail lines
-    _detailPaint.color = glowColor.withOpacity(0.3);
+    _detailPaint.color = _glowO30;
 
     canvas.drawLine(
       Offset(x + 8 * hDir, y + 8 * vDir),
@@ -704,52 +741,70 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     canvas.drawCircle(Offset(x + 4 * hDir, y + 4 * vDir), 1.5, _cornerCenterPaint);
   }
 
-  void _drawEdgeGlows(Canvas canvas) {
-    // Animated edge intensity
-    final edgePulse = 0.8 + math.sin(_time * 1.5) * 0.2;
+  // Edge glow shader cache - quantized by edgePulse (10 discrete levels)
+  int _cachedEdgePulseLevel = -1;
+  Shader? _cachedTopEdgeShader;
+  Shader? _cachedBottomEdgeShader;
+  Shader? _cachedLeftEdgeShader;
+  Shader? _cachedRightEdgeShader;
 
-    // Top edge glow
-    _edgeGlowPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        glowColor.withOpacity(0.15 * edgePulse),
-        const Color(0x00000000),
-      ],
-    ).createShader(Rect.fromLTWH(0, 0, size.x, 40));
+  void _drawEdgeGlows(Canvas canvas) {
+    // Animated edge intensity - quantize to 10 levels to cache shaders
+    final edgePulse = 0.8 + math.sin(_time * 1.5) * 0.2;
+    final pulseLevel = (edgePulse * 10).round();
+
+    // Only recreate shaders when quantized level changes or size changed
+    if (pulseLevel != _cachedEdgePulseLevel || _cachedTopEdgeShader == null) {
+      _cachedEdgePulseLevel = pulseLevel;
+
+      _cachedTopEdgeShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          glowColor.withOpacity(0.15 * edgePulse),
+          const Color(0x00000000),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, size.x, 40));
+
+      _cachedBottomEdgeShader = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          const Color(0xFFFF0066).withOpacity(0.12 * edgePulse),
+          const Color(0x00000000),
+        ],
+      ).createShader(Rect.fromLTWH(0, size.y - 40, size.x, 40));
+
+      _cachedLeftEdgeShader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          glowColor.withOpacity(0.08 * edgePulse),
+          const Color(0x00000000),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, 25, size.y));
+
+      _cachedRightEdgeShader = LinearGradient(
+        begin: Alignment.centerRight,
+        end: Alignment.centerLeft,
+        colors: [
+          glowColor.withOpacity(0.08 * edgePulse),
+          const Color(0x00000000),
+        ],
+      ).createShader(Rect.fromLTWH(size.x - 25, 0, 25, size.y));
+    }
+
+    // Draw using cached shaders
+    _edgeGlowPaint.shader = _cachedTopEdgeShader;
     canvas.drawRect(Rect.fromLTWH(0, 0, size.x, 40), _edgeGlowPaint);
 
-    // Bottom edge glow (magenta)
-    _edgeGlowPaint.shader = LinearGradient(
-      begin: Alignment.bottomCenter,
-      end: Alignment.topCenter,
-      colors: [
-        const Color(0xFFFF0066).withOpacity(0.12 * edgePulse),
-        const Color(0x00000000),
-      ],
-    ).createShader(Rect.fromLTWH(0, size.y - 40, size.x, 40));
+    _edgeGlowPaint.shader = _cachedBottomEdgeShader;
     canvas.drawRect(Rect.fromLTWH(0, size.y - 40, size.x, 40), _edgeGlowPaint);
 
-    // Left edge
-    _edgeGlowPaint.shader = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        glowColor.withOpacity(0.08 * edgePulse),
-        const Color(0x00000000),
-      ],
-    ).createShader(Rect.fromLTWH(0, 0, 25, size.y));
+    _edgeGlowPaint.shader = _cachedLeftEdgeShader;
     canvas.drawRect(Rect.fromLTWH(0, 0, 25, size.y), _edgeGlowPaint);
 
-    // Right edge
-    _edgeGlowPaint.shader = LinearGradient(
-      begin: Alignment.centerRight,
-      end: Alignment.centerLeft,
-      colors: [
-        glowColor.withOpacity(0.08 * edgePulse),
-        const Color(0x00000000),
-      ],
-    ).createShader(Rect.fromLTWH(size.x - 25, 0, 25, size.y));
+    _edgeGlowPaint.shader = _cachedRightEdgeShader;
     canvas.drawRect(Rect.fromLTWH(size.x - 25, 0, 25, size.y), _edgeGlowPaint);
   }
 
@@ -770,7 +825,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     // Occasional bright flash
     final flashValue = math.sin(_time * 0.5) * math.sin(_time * 1.3);
     if (flashValue > 0.95) {
-      _flickerPaint.color = glowColor.withOpacity(0.02);
+      _flickerPaint.color = _glowO02;
       canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _flickerPaint);
     }
   }

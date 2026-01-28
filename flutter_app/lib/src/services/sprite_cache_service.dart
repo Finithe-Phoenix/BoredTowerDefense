@@ -18,8 +18,8 @@ class SpriteCacheService {
   // LRU cache limit - max colors to cache before eviction
   static const int _maxCacheSize = 20;
 
-  // LRU tracking - most recently used colors at end
-  final List<int> _accessOrder = [];
+  // LRU tracking - LinkedHashSet for O(1) remove + add (insertion order preserved)
+  final Set<int> _accessOrder = <int>{};
 
   // Cached projectile sprites by color hash
   final Map<int, ui.Image> _projectileSprites = {};
@@ -102,9 +102,10 @@ class SpriteCacheService {
       return;
     }
 
-    // Evict oldest entries if cache is full
+    // Evict oldest entries if cache is full - O(1) with LinkedHashSet
     while (_accessOrder.length >= _maxCacheSize) {
-      final oldestKey = _accessOrder.removeAt(0);
+      final oldestKey = _accessOrder.first;
+      _accessOrder.remove(oldestKey);
       _evictColorFromAllCaches(oldestKey);
     }
 

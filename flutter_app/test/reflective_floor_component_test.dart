@@ -51,9 +51,10 @@ void main() {
     });
 
     test('different colors can be used', () {
-      final floor = makeFloor(glowColor: Colors.magenta);
+      const magenta = Color(0xFFFF00FF);
+      final floor = makeFloor(glowColor: magenta);
 
-      expect(floor.glowColor, Colors.magenta);
+      expect(floor.glowColor, magenta);
     });
 
     test('is a PositionComponent', () {

@@ -1018,7 +1018,7 @@ class GameResultOverlay extends PositionComponent {
 
   /// Smooth ease-out quart for dramatic entrance
   static double _easeOutQuart(double t) {
-    return 1 - math.pow(1 - t, 4);
+    return 1 - math.pow(1 - t, 4).toDouble();
   }
 
   @override

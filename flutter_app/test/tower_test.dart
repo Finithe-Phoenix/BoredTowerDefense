@@ -26,8 +26,8 @@ void main() {
   });
 
   group('TowerType enum', () {
-    test('has 8 tower types', () {
-      expect(TowerType.values.length, 8);
+    test('has 9 tower types', () {
+      expect(TowerType.values.length, 9);
     });
 
     test('all tower types have valid name', () {

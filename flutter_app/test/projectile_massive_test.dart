@@ -121,7 +121,8 @@ void main() {
       });
 
       test('${type.name} has valid projectile speed', () {
-        expect(type.projectileSpeed, greaterThan(0));
+        // Support towers (Tesla Terminal, Resonance Siphon) have 0 projectile speed
+        expect(type.projectileSpeed, greaterThanOrEqualTo(0));
       });
 
       test('${type.name} has non-null color', () {
@@ -271,12 +272,17 @@ void main() {
       expect(pulseDamage, greaterThan(0));
     });
 
-    for (final type in TowerType.values) {
+    // Test damage-to-cost ratio only for towers that deal damage
+    final damagingTowers = TowerType.values.where((t) => t.damage > 0);
+    for (final type in damagingTowers) {
       test('${type.name} damage-to-cost ratio', () {
         final ratio = type.damage / type.cost;
         expect(ratio, greaterThan(0));
       });
+    }
 
+    // Test DPS for all towers (support towers can have 0 DPS)
+    for (final type in TowerType.values) {
       test('${type.name} DPS estimation', () {
         final dps = type.damage * type.fireRate;
         expect(dps, greaterThanOrEqualTo(0));
@@ -345,7 +351,12 @@ void main() {
       expect(ionSpeed, greaterThan(200));
     });
 
-    for (final type in TowerType.values) {
+    // Support towers (Tesla Terminal, Resonance Siphon) have 0 projectile speed
+    final towersWithProjectiles = TowerType.values.where(
+      (t) => t.projectileSpeed > 0
+    ).toList();
+
+    for (final type in towersWithProjectiles) {
       test('${type.name} projectile speed is positive', () {
         expect(type.projectileSpeed, greaterThan(0));
       });
@@ -355,6 +366,11 @@ void main() {
         expect(type.projectileSpeed, lessThan(1000));
       });
     }
+
+    test('support towers have zero projectile speed', () {
+      expect(TowerType.teslaTerminal.projectileSpeed, 0);
+      expect(TowerType.resonanceSiphon.projectileSpeed, 0);
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -391,8 +407,8 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('Projectile - TowerType enum completeness', () {
-    test('TowerType has 8 values', () {
-      expect(TowerType.values.length, 8);
+    test('TowerType has 9 values', () {
+      expect(TowerType.values.length, 9);
     });
 
     test('pulseArcher exists', () {

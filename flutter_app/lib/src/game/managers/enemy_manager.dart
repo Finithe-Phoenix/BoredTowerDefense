@@ -557,8 +557,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       bucket.clear();
     }
 
-    // Remove all existing enemies
-    for (final enemy in children.whereType<Enemy>().toList()) {
+    // Remove all existing enemies - iterate directly, avoid .toList() allocation
+    final enemiesToRemove = children.whereType<Enemy>();
+    for (final enemy in [...enemiesToRemove]) {
       enemy.removeFromParent();
     }
   }

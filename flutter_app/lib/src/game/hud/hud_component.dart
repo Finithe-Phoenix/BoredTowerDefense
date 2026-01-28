@@ -366,7 +366,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   bool _useTwoRowLayout(double width) => width < 780;
 
   void _repositionButtons() {
-    children.whereType<HudButton>().toList().forEach((b) => b.removeFromParent());
+    for (final b in [...children.whereType<HudButton>()]) {
+      b.removeFromParent();
+    }
 
     final screenWidth = gameRef.size.x;
     final screenHeight = gameRef.size.y;

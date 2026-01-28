@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
@@ -48,6 +49,10 @@ class _LoadingScreenState extends State<LoadingScreen>
   // Data stream particles
   final List<_DataParticle> _particles = [];
   final math.Random _random = math.Random();
+
+  // Timers for cleanup
+  Timer? _glitchDelayTimer;
+  Timer? _glitchResetTimer;
 
   @override
   void initState() {
@@ -128,14 +133,16 @@ class _LoadingScreenState extends State<LoadingScreen>
   }
 
   void _startGlitchEffect() {
-    Future.delayed(Duration(milliseconds: 500 + _random.nextInt(2000)), () {
+    _glitchDelayTimer?.cancel();
+    _glitchDelayTimer = Timer(Duration(milliseconds: 500 + _random.nextInt(2000)), () {
       if (!mounted) return;
       setState(() {
         _isGlitching = true;
         _glitchOffset = (_random.nextDouble() - 0.5) * 10;
         _glitchFrame++;
       });
-      Future.delayed(const Duration(milliseconds: 100), () {
+      _glitchResetTimer?.cancel();
+      _glitchResetTimer = Timer(const Duration(milliseconds: 100), () {
         if (!mounted) return;
         setState(() {
           _isGlitching = false;
@@ -224,6 +231,8 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   void dispose() {
+    _glitchDelayTimer?.cancel();
+    _glitchResetTimer?.cancel();
     _gridController.dispose();
     _spinController.dispose();
     _pulseController.dispose();

@@ -621,17 +621,21 @@ void main() {
   // ═══════════════════════════════════════════════════════════════════════════
 
   group('BossType - Health thresholds', () {
-    // Phase calculation tests
+    // Phase calculation tests - Boss logic uses > not >=
+    // if (healthPercent > 0.75) return 1;
+    // if (healthPercent > 0.50) return 2;
+    // if (healthPercent > 0.25) return 3;
+    // return 4;
     final thresholds = [
       (percent: 1.0, phase: 1),
       (percent: 0.76, phase: 1),
-      (percent: 0.75, phase: 1),
+      (percent: 0.75, phase: 2), // exactly 75% is NOT > 0.75, so phase 2
       (percent: 0.74, phase: 2),
       (percent: 0.51, phase: 2),
-      (percent: 0.50, phase: 2),
+      (percent: 0.50, phase: 3), // exactly 50% is NOT > 0.50, so phase 3
       (percent: 0.49, phase: 3),
       (percent: 0.26, phase: 3),
-      (percent: 0.25, phase: 3),
+      (percent: 0.25, phase: 4), // exactly 25% is NOT > 0.25, so phase 4
       (percent: 0.24, phase: 4),
       (percent: 0.10, phase: 4),
       (percent: 0.01, phase: 4),

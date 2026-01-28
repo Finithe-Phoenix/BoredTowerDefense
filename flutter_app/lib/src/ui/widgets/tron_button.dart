@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
+import '../../services/audio_service.dart';
 
 /// TRON-style button with wireframe materialization, energy trails,
 /// electric arcs, hologram flicker, and reactive hover effects
@@ -146,13 +147,13 @@ class _TronButtonState extends State<TronButton>
     if (!mounted || !_isMaterialized) return;
 
     setState(() {
-      // Update existing particles
-      _particles = _particles.where((p) {
+      // Update existing particles - in-place removal avoids list allocation
+      _particles.removeWhere((p) {
         p.life -= 0.02;
         p.x += p.vx;
         p.y += p.vy;
-        return p.life > 0;
-      }).toList();
+        return p.life <= 0;
+      });
 
       // Add new particles on hover
       if (_isHovered && _random.nextDouble() > 0.7) {
@@ -230,7 +231,10 @@ class _TronButtonState extends State<TronButton>
         onTapUp: (_) {
           if (_isMaterialized) {
             setState(() => _isPressed = false);
-            if (widget.enabled) widget.onPressed();
+            if (widget.enabled) {
+              AudioService.instance.playButton();
+              widget.onPressed();
+            }
           }
         },
         onTapCancel: () => setState(() => _isPressed = false),

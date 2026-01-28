@@ -177,7 +177,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                     TronButton(
                                       text: 'CAMPAIGN',
                                       icon: Icons.play_arrow_rounded,
-                                      onPressed: () => Navigator.pushNamed(context, '/levels'),
+                                      onPressed: () => _navigateWithFadeOut('/levels'),
                                       color: NeonColors.cyan,
                                       delay: const Duration(milliseconds: 300),
                                     ),
@@ -186,7 +186,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                     TronButton(
                                       text: 'STORY',
                                       icon: Icons.auto_stories_rounded,
-                                      onPressed: () => Navigator.pushNamed(context, '/story'),
+                                      onPressed: () => _navigateWithFadeOut('/story'),
                                       color: NeonColors.yellow,
                                       delay: const Duration(milliseconds: 400),
                                     ),
@@ -213,8 +213,7 @@ class _MainMenuScreenState extends State<MainMenuScreen>
                                     TronButton(
                                       text: 'QUICK PLAY',
                                       icon: Icons.bolt_rounded,
-                                      onPressed: () =>
-                                          Navigator.pushNamed(context, '/game', arguments: 1),
+                                      onPressed: () => _navigateWithFadeOut('/game', arguments: 1),
                                       color: NeonColors.green,
                                       delay: const Duration(milliseconds: 550),
                                     ),
@@ -306,6 +305,16 @@ class _MainMenuScreenState extends State<MainMenuScreen>
         ),
       ),
     );
+  }
+
+  /// Navigate to a route with music fade-out for immersive transitions
+  void _navigateWithFadeOut(String route, {Object? arguments}) {
+    // Start fade-out (non-blocking, runs in background)
+    ProceduralMusicService.instance.fadeOutMainMenuMusic(
+      duration: const Duration(milliseconds: 800),
+    );
+    // Navigate immediately for responsive feel
+    Navigator.pushNamed(context, route, arguments: arguments);
   }
 
   void _showCreditsDialog(BuildContext context) {
@@ -599,20 +608,21 @@ class _CornerDecorationState extends State<_CornerDecoration>
 
   void _updateData() {
     if (!mounted) return;
-    // Simulate fluctuating data values
+    // Simulate fluctuating data values - no setState needed,
+    // AnimatedBuilder already rebuilds via pulse/rotation controllers
     _powerLevel = (_powerLevel + (_random.nextDouble() - 0.5) * 0.02).clamp(0.5, 1.0);
     _systemLoad = (_systemLoad + (_random.nextDouble() - 0.5) * 0.03).clamp(0.2, 0.8);
     _networkPing = (_networkPing + (_random.nextDouble() - 0.5) * 0.01).clamp(0.05, 0.4);
-    setState(() {});
   }
 
   void _updateParticles() {
     if (!mounted) return;
+    // Update particle angles - no setState needed,
+    // AnimatedBuilder already rebuilds via pulse/rotation controllers
     for (final particle in _particles) {
       particle.angle += particle.speed;
       if (particle.angle > math.pi * 2) particle.angle -= math.pi * 2;
     }
-    setState(() {});
   }
 
   @override

@@ -620,6 +620,21 @@ class Enemy extends PositionComponent {
   /// Whether this enemy is a phantom type
   bool get isPhantom => type.isPhantom;
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED HSL-DERIVED WARP COLORS - Avoid per-frame HSLColor.fromColor()
+  // ═══════════════════════════════════════════════════════════════════════════
+  late final Color _warpSecondaryColor = () {
+    final hsl = HSLColor.fromColor(type.color);
+    return hsl.withHue((hsl.hue + 180) % 360).toColor();
+  }();
+  late final Color _warpTertiaryColor = () {
+    final hsl = HSLColor.fromColor(type.color);
+    return hsl.withHue((hsl.hue + 90) % 360)
+        .withSaturation((hsl.saturation * 1.2).clamp(0.0, 1.0))
+        .withLightness((hsl.lightness * 1.1).clamp(0.0, 1.0))
+        .toColor();
+  }();
+
   /// Whether this enemy is a fast/warp type (speedMult >= 1.3)
   /// These enemies get special dimensional phasing visual effects
   bool get isFastWarpType =>
@@ -1348,13 +1363,9 @@ class Enemy extends PositionComponent {
     // Update flicker phase for teleport effect
     _warpFlickerPhase += 0.1;
 
-    // Get HSL color for secondary/tertiary color manipulation
-    final hslColor = HSLColor.fromColor(type.color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 90) % 360)
-        .withSaturation((hslColor.saturation * 1.2).clamp(0.0, 1.0))
-        .withLightness((hslColor.lightness * 1.1).clamp(0.0, 1.0))
-        .toColor();
+    // Use cached HSL-derived colors (computed once at init, not per-frame)
+    final secondaryColor = _warpSecondaryColor;
+    final tertiaryColor = _warpTertiaryColor;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: Trailing afterimages (3-4 dimensional ghosts behind)

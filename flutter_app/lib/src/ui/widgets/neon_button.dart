@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../theme/neon_theme.dart';
+import '../../services/audio_service.dart';
 
 /// Epic Neon Button with advanced visual effects:
 /// - Multiple animated energy pulses traveling around border
@@ -196,7 +197,10 @@ class _NeonButtonState extends State<NeonButton>
         onTapDown: (_) => setState(() => _isPressed = true),
         onTapUp: (_) {
           setState(() => _isPressed = false);
-          if (widget.enabled) widget.onPressed();
+          if (widget.enabled) {
+            AudioService.instance.playButton();
+            widget.onPressed();
+          }
         },
         onTapCancel: () => setState(() => _isPressed = false),
         child: AnimatedBuilder(
@@ -343,8 +347,32 @@ class _EpicNeonButtonPainter extends CustomPainter {
 
   final _random = math.Random(42);
 
+  // Reusable Paint objects - avoids ~80+ allocations per frame.
+  // Safe because painting is single-threaded; properties reset before each use.
+  static final Paint _fp = Paint();
+  static final Paint _sp = Paint()..style = PaintingStyle.stroke;
+
+  // Cached MaskFilter instances (const - zero allocation)
+  static const MaskFilter _blur2 = MaskFilter.blur(BlurStyle.normal, 2);
+  static const MaskFilter _blur3 = MaskFilter.blur(BlurStyle.normal, 3);
+  static const MaskFilter _blur4 = MaskFilter.blur(BlurStyle.normal, 4);
+  static const MaskFilter _blur6 = MaskFilter.blur(BlurStyle.normal, 6);
+  static const MaskFilter _blur10 = MaskFilter.blur(BlurStyle.normal, 10);
+  static const MaskFilter _blur15 = MaskFilter.blur(BlurStyle.normal, 15);
+
+  // Cached constant colors
+  static final Color _darkBg90 = NeonColors.darkBg.withOpacity(0.9);
+  static final Color _redAberration = const Color(0xFFFF0000).withOpacity(0.15);
+  static final Color _cyanAberration = const Color(0xFF00FFFF).withOpacity(0.15);
+
   @override
   void paint(Canvas canvas, Size size) {
+    // Reset shared paints to safe default state
+    _fp.shader = null;
+    _fp.maskFilter = null;
+    _sp.maskFilter = null;
+    _sp.strokeCap = StrokeCap.butt;
+
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
 
@@ -401,29 +429,24 @@ class _EpicNeonButtonPainter extends CustomPainter {
   }
 
   void _drawDeepGlow(Canvas canvas, Rect rect, RRect rrect) {
-    // Multiple glow layers for depth
     for (int i = 3; i >= 0; i--) {
       final glowRadius = 20.0 + i * 8;
       final glowOpacity = glowIntensity * (0.1 - i * 0.02);
       if (glowOpacity > 0) {
-        canvas.drawRRect(
-          rrect.inflate(glowRadius),
-          Paint()
-            ..color = color.withOpacity(glowOpacity)
-            ..maskFilter = MaskFilter.blur(BlurStyle.normal, glowRadius),
-        );
+        _fp.color = color.withOpacity(glowOpacity);
+        _fp.maskFilter = MaskFilter.blur(BlurStyle.normal, glowRadius);
+        canvas.drawRRect(rrect.inflate(glowRadius), _fp);
       }
     }
+    _fp.maskFilter = null;
   }
 
   void _drawBackground(Canvas canvas, Rect rect, RRect rrect) {
-    // Base dark background
-    final bgPaint = Paint()..color = NeonColors.darkBg.withOpacity(0.9);
-    canvas.drawRRect(rrect, bgPaint);
+    _fp.color = _darkBg90;
+    canvas.drawRRect(rrect, _fp);
 
-    // Gradient overlay based on hover state
     final gradientOpacity = isHovered ? 0.15 : 0.05;
-    final gradient = ui.Gradient.linear(
+    _fp.shader = ui.Gradient.linear(
       rect.topLeft,
       rect.bottomRight,
       [
@@ -433,12 +456,12 @@ class _EpicNeonButtonPainter extends CustomPainter {
       ],
       [0.0, 0.5, 1.0],
     );
-    canvas.drawRRect(rrect, Paint()..shader = gradient);
+    canvas.drawRRect(rrect, _fp);
+    _fp.shader = null;
 
-    // Energy field radial effect when hovered
     if (isHovered) {
       final center = rect.center;
-      final energyGradient = ui.Gradient.radial(
+      _fp.shader = ui.Gradient.radial(
         center,
         rect.width * 0.6,
         [
@@ -448,46 +471,39 @@ class _EpicNeonButtonPainter extends CustomPainter {
         ],
         [0.0, 0.5, 1.0],
       );
-      canvas.drawRRect(rrect, Paint()..shader = energyGradient);
+      canvas.drawRRect(rrect, _fp);
+      _fp.shader = null;
     }
   }
 
   void _drawCircuitPattern(Canvas canvas, Size size) {
-    final patternPaint = Paint()
-      ..color = color.withOpacity(0.04 + glowIntensity * 0.03)
-      ..strokeWidth = 0.5
-      ..style = PaintingStyle.stroke;
+    _sp.color = color.withOpacity(0.04 + glowIntensity * 0.03);
+    _sp.strokeWidth = 0.5;
 
-    final nodePaint = Paint()
-      ..color = color.withOpacity(0.08 + glowIntensity * 0.06);
-
-    // Horizontal lines with varying lengths
     for (int i = 1; i <= 4; i++) {
       final y = size.height * i / 5;
       final startX = 10.0 + (i % 2) * 15;
       final endX = size.width - 10 - ((i + 1) % 2) * 20;
-      canvas.drawLine(Offset(startX, y), Offset(endX, y), patternPaint);
+      canvas.drawLine(Offset(startX, y), Offset(endX, y), _sp);
 
-      // Add small perpendicular ticks
       for (double x = startX + 20; x < endX - 20; x += 25) {
         if ((x.toInt() + i) % 3 == 0) {
-          canvas.drawLine(Offset(x, y - 3), Offset(x, y + 3), patternPaint);
+          canvas.drawLine(Offset(x, y - 3), Offset(x, y + 3), _sp);
         }
       }
     }
 
-    // Vertical lines
     for (int i = 1; i <= 5; i++) {
       final x = size.width * i / 6;
       final startY = 8.0 + (i % 2) * 10;
       final endY = size.height - 8 - ((i + 1) % 2) * 10;
 
       if (i % 2 == 0) {
-        canvas.drawLine(Offset(x, startY), Offset(x, endY), patternPaint);
+        canvas.drawLine(Offset(x, startY), Offset(x, endY), _sp);
       }
     }
 
-    // Circuit nodes at key intersections
+    final nodeColor = color.withOpacity(0.08 + glowIntensity * 0.06);
     final nodePositions = [
       Offset(size.width * 0.2, size.height * 0.3),
       Offset(size.width * 0.5, size.height * 0.5),
@@ -497,45 +513,43 @@ class _EpicNeonButtonPainter extends CustomPainter {
     ];
 
     for (final pos in nodePositions) {
-      // Animated pulse on nodes
       final pulsePhase = (borderPulseProgress + pos.dx / size.width) % 1.0;
       final nodeOpacity = 0.2 + math.sin(pulsePhase * math.pi * 2) * 0.15;
 
-      canvas.drawCircle(pos, 3, Paint()
-        ..color = color.withOpacity(nodeOpacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
-      canvas.drawCircle(pos, 1.5, nodePaint);
+      _fp.color = color.withOpacity(nodeOpacity);
+      _fp.maskFilter = _blur3;
+      canvas.drawCircle(pos, 3, _fp);
+      _fp.maskFilter = null;
+      _fp.color = nodeColor;
+      canvas.drawCircle(pos, 1.5, _fp);
     }
   }
 
   void _drawEnergyGrid(Canvas canvas, Size size) {
     if (!isHovered) return;
 
-    final gridPaint = Paint()
-      ..color = color.withOpacity(0.03)
-      ..strokeWidth = 0.3;
+    _sp.color = color.withOpacity(0.03);
+    _sp.strokeWidth = 0.3;
 
-    // Diagonal grid pattern
     const gridSpacing = 15.0;
     for (double d = -size.height; d < size.width + size.height; d += gridSpacing) {
       canvas.drawLine(
         Offset(d, 0),
         Offset(d + size.height, size.height),
-        gridPaint,
+        _sp,
       );
       canvas.drawLine(
         Offset(d + size.height, 0),
         Offset(d, size.height),
-        gridPaint,
+        _sp,
       );
     }
   }
 
   void _drawHolographicInterference(Canvas canvas, Size size) {
-    // Moving interference bands
     final bandY = (shimmerProgress * size.height * 2) % (size.height + 40) - 20;
 
-    final bandGradient = ui.Gradient.linear(
+    _fp.shader = ui.Gradient.linear(
       Offset(0, bandY - 15),
       Offset(0, bandY + 15),
       [
@@ -554,20 +568,21 @@ class _EpicNeonButtonPainter extends CustomPainter {
     ));
     canvas.drawRect(
       Rect.fromLTWH(0, bandY - 15, size.width, 30),
-      Paint()..shader = bandGradient,
+      _fp,
     );
     canvas.restore();
+    _fp.shader = null;
 
-    // Secondary interference pattern
     final band2Y = ((shimmerProgress + 0.5) * size.height * 1.5) % (size.height + 30) - 15;
     canvas.save();
     canvas.clipRRect(RRect.fromRectAndRadius(
       Rect.fromLTWH(0, 0, size.width, size.height),
       const Radius.circular(4),
     ));
+    _fp.color = secondaryColor.withOpacity(0.03 * glowIntensity);
     canvas.drawRect(
       Rect.fromLTWH(0, band2Y - 5, size.width, 10),
-      Paint()..color = secondaryColor.withOpacity(0.03 * glowIntensity),
+      _fp,
     );
     canvas.restore();
   }
@@ -575,8 +590,7 @@ class _EpicNeonButtonPainter extends CustomPainter {
   void _drawShimmerWave(Canvas canvas, Size size) {
     final shimmerX = shimmerProgress * (size.width + 100) - 50;
 
-    // Multi-color shimmer gradient
-    final shimmerGradient = ui.Gradient.linear(
+    _fp.shader = ui.Gradient.linear(
       Offset(shimmerX - 40, 0),
       Offset(shimmerX + 40, size.height),
       [
@@ -598,33 +612,28 @@ class _EpicNeonButtonPainter extends CustomPainter {
     ));
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..shader = shimmerGradient,
+      _fp,
     );
     canvas.restore();
+    _fp.shader = null;
   }
 
   void _drawParticles(Canvas canvas, Size size) {
     for (final p in particles) {
-      if (p.life <= 0) continue;
+      if (p.life <= 0 || p.maxLife <= 0) continue;
 
-      final alpha = (p.life / p.maxLife) * (isHovered ? 0.8 : 0.3);
+      final alpha = ((p.life / p.maxLife) * (isHovered ? 0.8 : 0.3)).clamp(0.0, 1.0);
       final pos = Offset(p.x * size.width, p.y * size.height);
 
       // Particle glow
-      canvas.drawCircle(
-        pos,
-        p.size * 2,
-        Paint()
-          ..color = color.withOpacity(alpha * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      _fp.color = color.withOpacity((alpha * 0.3).clamp(0.0, 1.0));
+      _fp.maskFilter = _blur4;
+      canvas.drawCircle(pos, p.size * 2, _fp);
 
       // Particle core
-      canvas.drawCircle(
-        pos,
-        p.size,
-        Paint()..color = Colors.white.withOpacity(alpha),
-      );
+      _fp.maskFilter = null;
+      _fp.color = Colors.white.withOpacity(alpha);
+      canvas.drawCircle(pos, p.size, _fp);
     }
   }
 
@@ -649,38 +658,27 @@ class _EpicNeonButtonPainter extends CustomPainter {
       }
 
       // Arc glow
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color.withOpacity(arc.intensity * 0.4 * (arc.life * 10).clamp(0, 1))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 4
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-      );
+      _sp.color = color.withOpacity(arc.intensity * 0.4 * (arc.life * 10).clamp(0, 1));
+      _sp.strokeWidth = 4;
+      _sp.maskFilter = _blur6;
+      canvas.drawPath(path, _sp);
 
       // Arc core
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = Colors.white.withOpacity(arc.intensity * 0.8 * (arc.life * 10).clamp(0, 1))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
+      _sp.color = Colors.white.withOpacity(arc.intensity * 0.8 * (arc.life * 10).clamp(0, 1));
+      _sp.strokeWidth = 1.5;
+      _sp.maskFilter = null;
+      canvas.drawPath(path, _sp);
     }
   }
 
   void _drawMultiPulseBorder(Canvas canvas, RRect rrect, Size size) {
     // Base border
-    final borderPaint = Paint()
-      ..color = color.withOpacity(glowIntensity * 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isHovered ? 2.5 : 1.5;
-    canvas.drawRRect(rrect, borderPaint);
+    _sp.color = color.withOpacity(glowIntensity * 0.7);
+    _sp.strokeWidth = isHovered ? 2.5 : 1.5;
+    canvas.drawRRect(rrect, _sp);
 
-    // Calculate perimeter
     final perimeter = 2 * (size.width + size.height);
 
-    // Multiple energy pulses
     for (int pulseIndex = 0; pulseIndex < 4; pulseIndex++) {
       final pulseOffset = pulseIndex * 0.25;
       final pulseProgress = (borderPulseProgress + pulseOffset) % 1.0;
@@ -697,40 +695,29 @@ class _EpicNeonButtonPainter extends CustomPainter {
           pulsePath.lineTo(pulsePoints[i].dx, pulsePoints[i].dy);
         }
 
-        // Pulse color alternates
         final pulseColor = pulseIndex % 2 == 0 ? color : secondaryColor;
 
         // Glow
-        canvas.drawPath(
-          pulsePath,
-          Paint()
-            ..color = pulseColor.withOpacity(0.5 * pulseIntensity)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 8
-            ..strokeCap = StrokeCap.round
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
-        );
+        _sp.color = pulseColor.withOpacity(0.5 * pulseIntensity);
+        _sp.strokeWidth = 8;
+        _sp.strokeCap = StrokeCap.round;
+        _sp.maskFilter = _blur6;
+        canvas.drawPath(pulsePath, _sp);
 
         // Core
-        canvas.drawPath(
-          pulsePath,
-          Paint()
-            ..color = Colors.white.withOpacity(0.9 * pulseIntensity)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2
-            ..strokeCap = StrokeCap.round,
-        );
+        _sp.color = Colors.white.withOpacity(0.9 * pulseIntensity);
+        _sp.strokeWidth = 2;
+        _sp.maskFilter = null;
+        canvas.drawPath(pulsePath, _sp);
 
         // Head point
-        canvas.drawCircle(
-          pulsePoints.last,
-          4 * pulseIntensity,
-          Paint()
-            ..color = Colors.white
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
-        );
+        _fp.color = Colors.white;
+        _fp.maskFilter = _blur3;
+        canvas.drawCircle(pulsePoints.last, 4 * pulseIntensity, _fp);
+        _fp.maskFilter = null;
       }
     }
+    _sp.strokeCap = StrokeCap.butt;
   }
 
   List<Offset> _calculatePulsePoints(Size size, double position, double length) {
@@ -766,24 +753,19 @@ class _EpicNeonButtonPainter extends CustomPainter {
   void _drawEnergyRipples(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
 
-    // Multiple expanding rings
     for (int i = 0; i < 3; i++) {
       final rippleProgress = (borderPulseProgress + i * 0.33) % 1.0;
       final radius = rippleProgress * size.width * 0.8;
       final alpha = (1 - rippleProgress) * 0.15;
 
       if (alpha > 0.01) {
-        canvas.drawCircle(
-          center,
-          radius,
-          Paint()
-            ..color = color.withOpacity(alpha)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-        );
+        _sp.color = color.withOpacity(alpha);
+        _sp.strokeWidth = 1.5;
+        _sp.maskFilter = _blur2;
+        canvas.drawCircle(center, radius, _sp);
       }
     }
+    _sp.maskFilter = null;
   }
 
   void _drawCornerNodes(Canvas canvas, Size size) {
@@ -799,96 +781,98 @@ class _EpicNeonButtonPainter extends CustomPainter {
       final pulsePhase = (borderPulseProgress + i * 0.25) % 1.0;
       final nodeIntensity = 0.5 + math.sin(pulsePhase * math.pi * 2) * 0.3;
 
-      // Corner bracket lines
       const bracketLength = 12.0;
       final xDir = corner.dx == 0 ? 1.0 : -1.0;
       final yDir = corner.dy == 0 ? 1.0 : -1.0;
 
-      final bracketPaint = Paint()
-        ..color = color.withOpacity(glowIntensity * 0.8)
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke;
-
-      canvas.drawLine(corner, Offset(corner.dx + bracketLength * xDir, corner.dy), bracketPaint);
-      canvas.drawLine(corner, Offset(corner.dx, corner.dy + bracketLength * yDir), bracketPaint);
+      _sp.color = color.withOpacity(glowIntensity * 0.8);
+      _sp.strokeWidth = 2;
+      canvas.drawLine(corner, Offset(corner.dx + bracketLength * xDir, corner.dy), _sp);
+      canvas.drawLine(corner, Offset(corner.dx, corner.dy + bracketLength * yDir), _sp);
 
       // Node glow
-      canvas.drawCircle(
-        corner,
-        6 * nodeIntensity,
-        Paint()
-          ..color = color.withOpacity(0.3 * nodeIntensity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
+      _fp.color = color.withOpacity(0.3 * nodeIntensity);
+      _fp.maskFilter = _blur4;
+      canvas.drawCircle(corner, 6 * nodeIntensity, _fp);
 
       // Node core
-      canvas.drawCircle(
-        corner,
-        3,
-        Paint()..color = isHovered ? Colors.white.withOpacity(nodeIntensity) : color.withOpacity(nodeIntensity * 0.8),
-      );
+      _fp.maskFilter = null;
+      _fp.color = isHovered
+          ? Colors.white.withOpacity(nodeIntensity)
+          : color.withOpacity(nodeIntensity * 0.8);
+      canvas.drawCircle(corner, 3, _fp);
     }
   }
 
   void _drawScanlines(Canvas canvas, Size size) {
-    final scanPaint = Paint()..color = color.withOpacity(0.02 * glowIntensity);
+    _fp.color = color.withOpacity(0.02 * glowIntensity);
 
     for (double y = 0; y < size.height; y += 2) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), scanPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _fp);
     }
 
-    // Moving bright scanline
     final scanY = (borderPulseProgress * size.height * 3) % (size.height + 20) - 10;
+    _fp.color = color.withOpacity(0.08 * glowIntensity);
     canvas.drawRect(
       Rect.fromLTWH(0, scanY, size.width, 1),
-      Paint()..color = color.withOpacity(0.08 * glowIntensity),
+      _fp,
     );
   }
 
   void _drawChromaticAberration(Canvas canvas, Size size) {
     final aberrationAmount = isPressed ? 3.0 : 1.5;
 
-    // Red shift on left
+    _fp.color = _redAberration;
     canvas.drawRect(
       Rect.fromLTWH(0, 0, aberrationAmount, size.height),
-      Paint()..color = const Color(0xFFFF0000).withOpacity(0.15),
+      _fp,
     );
 
-    // Cyan shift on right
+    _fp.color = _cyanAberration;
     canvas.drawRect(
       Rect.fromLTWH(size.width - aberrationAmount, 0, aberrationAmount, size.height),
-      Paint()..color = const Color(0xFF00FFFF).withOpacity(0.15),
+      _fp,
     );
   }
 
   void _drawGlitchEffect(Canvas canvas, Size size) {
-    // Horizontal glitch bars
     for (int i = 0; i < 3; i++) {
       final y = _random.nextDouble() * size.height;
       final barHeight = 2 + _random.nextDouble() * 6;
       final xOffset = glitchOffset * (1 + i * 0.5);
 
+      _fp.color = color.withOpacity(0.3);
       canvas.drawRect(
         Rect.fromLTWH(xOffset, y, size.width, barHeight),
-        Paint()..color = color.withOpacity(0.3),
+        _fp,
       );
 
+      _fp.color = secondaryColor.withOpacity(0.2);
       canvas.drawRect(
         Rect.fromLTWH(-xOffset, y + 2, size.width, barHeight * 0.5),
-        Paint()..color = secondaryColor.withOpacity(0.2),
+        _fp,
       );
     }
   }
 
   void _drawFinalGlow(Canvas canvas, RRect rrect) {
-    final glowPaint = Paint()
-      ..color = color.withOpacity(glowIntensity * 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isHovered ? 12 : 8
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, isHovered ? 15.0 : 10.0);
-    canvas.drawRRect(rrect, glowPaint);
+    _sp.color = color.withOpacity(glowIntensity * 0.5);
+    _sp.strokeWidth = isHovered ? 12 : 8;
+    _sp.maskFilter = isHovered ? _blur15 : _blur10;
+    canvas.drawRRect(rrect, _sp);
+    _sp.maskFilter = null;
   }
 
   @override
-  bool shouldRepaint(_EpicNeonButtonPainter oldDelegate) => true;
+  bool shouldRepaint(_EpicNeonButtonPainter oldDelegate) {
+    // Quantize continuous animation values to reduce repaint frequency
+    return oldDelegate.color != color ||
+        oldDelegate.secondaryColor != secondaryColor ||
+        oldDelegate.isHovered != isHovered ||
+        oldDelegate.isPressed != isPressed ||
+        oldDelegate.showGlitch != showGlitch ||
+        (oldDelegate.glowIntensity * 20).round() != (glowIntensity * 20).round() ||
+        (oldDelegate.borderPulseProgress * 40).round() != (borderPulseProgress * 40).round() ||
+        (oldDelegate.shimmerProgress * 30).round() != (shimmerProgress * 30).round();
+  }
 }

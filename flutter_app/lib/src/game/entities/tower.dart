@@ -6381,7 +6381,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     for (int i = 0; i < droneCount; i++) {
       final droneCenter = dronePositions[i];
-      final tetherPulse = 0.4 + math.sin(_animationPhase * 5 + i * 1.5) * 0.6;
+      final tetherPulse = (0.5 + math.sin(_animationPhase * 5 + i * 1.5) * 0.5).clamp(0.0, 1.0);
 
       // Curved bezier tether from center to drone
       _dronePath.reset();
@@ -6626,7 +6626,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         );
 
         // Antenna tip glow
-        final tipPulse = 0.4 + math.sin(_animationPhase * 8 + i * 2 + a * 3) * 0.6;
+        final tipPulse = (0.5 + math.sin(_animationPhase * 8 + i * 2 + a * 3) * 0.5).clamp(0.0, 1.0);
         _droneHighlightPaint.color = primaryColor.withOpacity(droneIntensity * tipPulse * 0.8);
         canvas.drawCircle(Offset(antennaEndX, antennaEndY), 1, _droneHighlightPaint);
       }

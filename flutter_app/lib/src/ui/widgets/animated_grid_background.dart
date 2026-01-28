@@ -54,40 +54,48 @@ class _GridPainter extends CustomPainter {
   final double animation;
   static const double gridSize = 40;
 
+  // Static cached paints - avoid per-frame allocation
+  static final Paint _linePaint = Paint()
+    ..color = NeonColors.gridLine.withOpacity(0.5)
+    ..strokeWidth = 1;
+  static final Paint _scanPaint = Paint();
+  static final Paint _accentPaint = Paint()
+    ..color = NeonColors.cyan.withOpacity(0.3)
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke;
+
+  // Pre-computed scan gradient colors
+  static final List<Color> _scanColors = [
+    Colors.transparent,
+    NeonColors.cyan.withOpacity(0.3),
+    NeonColors.cyan.withOpacity(0.5),
+    NeonColors.cyan.withOpacity(0.3),
+    Colors.transparent,
+  ];
+
   @override
   void paint(Canvas canvas, Size size) {
-    final linePaint = Paint()
-      ..color = NeonColors.gridLine.withOpacity(0.5)
-      ..strokeWidth = 1;
-
     // Draw vertical lines
     for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), _linePaint);
     }
 
     // Draw horizontal lines
     for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _linePaint);
     }
 
     // Animated scan line (horizontal)
     final scanY = (animation * size.height * 2) % (size.height + 100) - 50;
-    final scanGradient = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          Colors.transparent,
-          NeonColors.cyan.withOpacity(0.3),
-          NeonColors.cyan.withOpacity(0.5),
-          NeonColors.cyan.withOpacity(0.3),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(0, scanY - 30, size.width, 60));
+    _scanPaint.shader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: _scanColors,
+    ).createShader(Rect.fromLTWH(0, scanY - 30, size.width, 60));
 
     canvas.drawRect(
       Rect.fromLTWH(0, scanY - 30, size.width, 60),
-      scanGradient,
+      _scanPaint,
     );
 
     // Corner accents
@@ -99,10 +107,6 @@ class _GridPainter extends CustomPainter {
 
   void _drawCornerAccent(
       Canvas canvas, Offset corner, Size size, bool isLeft, bool isTop) {
-    final accentPaint = Paint()
-      ..color = NeonColors.cyan.withOpacity(0.3)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
 
     const length = 50.0;
     final xDir = isLeft ? 1.0 : -1.0;
@@ -111,12 +115,12 @@ class _GridPainter extends CustomPainter {
     canvas.drawLine(
       corner,
       Offset(corner.dx + length * xDir, corner.dy),
-      accentPaint,
+      _accentPaint,
     );
     canvas.drawLine(
       corner,
       Offset(corner.dx, corner.dy + length * yDir),
-      accentPaint,
+      _accentPaint,
     );
   }
 

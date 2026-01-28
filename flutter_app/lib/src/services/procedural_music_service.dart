@@ -126,6 +126,35 @@ class ProceduralMusicService {
     await _mainMenuPlayer?.stop();
   }
 
+  /// Fade out main menu music smoothly over the specified duration
+  /// Perfect for transitioning to gameplay or other screens
+  Future<void> fadeOutMainMenuMusic({
+    Duration duration = const Duration(milliseconds: 1500),
+  }) async {
+    if (!_isMainMenuPlaying || _mainMenuPlayer == null) return;
+
+    final steps = 30; // Number of volume steps for smooth fade
+    final stepDuration = duration.inMilliseconds ~/ steps;
+    final initialVolume = _volume;
+
+    for (int i = steps; i >= 0; i--) {
+      if (!_isMainMenuPlaying) break; // Stop if already stopped
+
+      final fadeVolume = (initialVolume * i / steps);
+      await _mainMenuPlayer?.setVolume(fadeVolume);
+      await Future.delayed(Duration(milliseconds: stepDuration));
+    }
+
+    await stopMainMenuMusic();
+
+    // Restore volume setting for next time
+    await _mainMenuPlayer?.setVolume(_volume);
+
+    if (kDebugMode) {
+      debugPrint('Main menu music faded out');
+    }
+  }
+
   /// Generate the epic main menu track "NEON HORIZON"
   /// Structure: Ambient Intro -> Build -> Main Theme -> Breakdown -> Reprise
   Uint8List _generateMainMenuTrack() {

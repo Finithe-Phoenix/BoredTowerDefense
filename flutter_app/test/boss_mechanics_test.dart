@@ -266,7 +266,9 @@ void main() {
         maxHealth: 1000,
       );
 
-      boss.takeDamage(260); // Reduce to 74%
+      // Account for type.healthMult multiplier in actual health calculation
+      final actualMax = boss.maxHealth;
+      boss.takeDamage(actualMax * 0.26); // Reduce to ~74%
 
       expect(boss.currentPhase, 2);
     });
@@ -279,7 +281,9 @@ void main() {
         maxHealth: 1000,
       );
 
-      boss.takeDamage(510); // Reduce to 49%
+      // Account for type.healthMult multiplier in actual health calculation
+      final actualMax = boss.maxHealth;
+      boss.takeDamage(actualMax * 0.51); // Reduce to ~49%
 
       expect(boss.currentPhase, 3);
     });
@@ -292,7 +296,9 @@ void main() {
         maxHealth: 1000,
       );
 
-      boss.takeDamage(760); // Reduce to 24%
+      // Account for type.healthMult multiplier in actual health calculation
+      final actualMax = boss.maxHealth;
+      boss.takeDamage(actualMax * 0.76); // Reduce to ~24%
 
       expect(boss.currentPhase, 4);
     });
@@ -314,7 +320,9 @@ void main() {
         },
       );
 
-      boss.takeDamage(260);
+      // Account for type.healthMult multiplier - damage enough to trigger phase 2
+      final actualMax = boss.maxHealth;
+      boss.takeDamage(actualMax * 0.26);
       boss.update(0.1);
 
       expect(calledBoss, same(boss));
@@ -347,7 +355,8 @@ void main() {
         onDeath: (e) => deathCalled = true,
       );
 
-      boss.takeDamage(100);
+      // Kill the boss - damage more than actual maxHealth (accounts for healthMult)
+      boss.takeDamage(boss.maxHealth + 1);
 
       expect(deathCalled, isTrue);
       expect(boss.isAlive, isFalse);
@@ -436,7 +445,8 @@ void main() {
         maxHealth: 1000,
       );
 
-      boss.takeDamage(500);
+      // Use actual maxHealth (accounts for type.healthMult multiplier)
+      boss.takeDamage(boss.maxHealth * 0.5);
 
       expect(boss.healthPercent, closeTo(0.5, 0.01));
     });

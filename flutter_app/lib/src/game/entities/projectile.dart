@@ -178,6 +178,7 @@ class Projectile extends PositionComponent {
     position.setFrom(startPosition);
     size = Vector2.all(6);
     anchor = Anchor.center;
+    _cacheHSLColors();
     _initializeTypeEffects();
     _initializeTrail();
   }
@@ -196,6 +197,26 @@ class Projectile extends PositionComponent {
   double _time = 0;
   double _rotationAngle = 0;
   final math.Random _random;
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CACHED HSL-DERIVED COLORS - Avoid per-frame HSLColor.fromColor() calls
+  // ═══════════════════════════════════════════════════════════════════════════
+  late Color _hslPinkColor;
+  late Color _hslPurpleColor;
+  late Color _hslBrightColor;
+  late Color _hslSecondaryColor;  // hue + 30
+  late Color _hslTertiaryColor;   // hue + 60
+  late Color _hslComplementColor; // hue + 180
+
+  void _cacheHSLColors() {
+    final hsl = HSLColor.fromColor(color);
+    _hslPinkColor = hsl.withHue((hsl.hue + 20) % 360).toColor();
+    _hslPurpleColor = hsl.withHue((hsl.hue - 30) % 360).toColor();
+    _hslBrightColor = hsl.withLightness((hsl.lightness + 0.2).clamp(0.0, 1.0)).toColor();
+    _hslSecondaryColor = hsl.withHue((hsl.hue + 30) % 360).toColor();
+    _hslTertiaryColor = hsl.withHue((hsl.hue + 60) % 360).toColor();
+    _hslComplementColor = hsl.withHue((hsl.hue + 180) % 360).toColor();
+  }
 
   // Trail system - circular buffer for O(1) updates instead of O(n) shifting
   int _maxTrailLength = 12;
@@ -352,6 +373,7 @@ class Projectile extends PositionComponent {
     _pulsePhase = 0;
     size = Vector2.all(6);
     _electricSegments = [];
+    _cacheHSLColors();
     _initializeTypeEffects();
     _initializeTrail();
   }
@@ -391,20 +413,24 @@ class Projectile extends PositionComponent {
     _spiralPhase += dt * 8;
     _pulsePhase += dt * 15;
 
-    // Update trail
-    if (allowTrails && !lowFx) {
+    // Skip expensive visual updates for off-screen projectiles
+    final isOnScreen = position.x > -50 && position.x < Enemy.screenSize.x + 50 &&
+                       position.y > -50 && position.y < Enemy.screenSize.y + 50;
+
+    // Update trail (only if on-screen)
+    if (allowTrails && !lowFx && isOnScreen) {
       _updateTrail();
     }
 
-    // Update particles
-    if (!lowFx) {
+    // Update particles (only if on-screen)
+    if (!lowFx && isOnScreen) {
       for (final particle in _particles) {
         particle.update(dt);
       }
     }
 
-    // Update electric segments for Phase Mage
-    if (!lowFx) {
+    // Update electric segments for Phase Mage (only if on-screen)
+    if (!lowFx && isOnScreen) {
       for (final segment in _electricSegments) {
         segment.update(dt, _random);
       }
@@ -572,7 +598,7 @@ class Projectile extends PositionComponent {
       canvas.restore();
     } else {
       // Fallback to simple circle if cache not ready
-      _simplePaint.color = color.withOpacity(0.85);
+      _simplePaint.color = _getPalette(color).o85;
       canvas.drawCircle(Offset.zero, size.x * 0.4, _simplePaint);
     }
   }
@@ -594,6 +620,7 @@ class Projectile extends PositionComponent {
     }
 
     // Arrow shape glow
+    final palette = _getPalette(color);
     _reusableArrowPath.reset();
     _reusableArrowPath.moveTo(size.x * 0.8, 0);
     _reusableArrowPath.lineTo(-size.x * 0.4, -size.x * 0.3);
@@ -601,10 +628,10 @@ class Projectile extends PositionComponent {
     _reusableArrowPath.lineTo(-size.x * 0.4, size.x * 0.3);
     _reusableArrowPath.close();
 
-    _glowPaint.color = color.withOpacity(0.3);
+    _glowPaint.color = palette.o30;
     canvas.drawPath(_reusableArrowPath, _glowPaint);
 
-    _simplePaint.color = color.withOpacity(0.8);
+    _simplePaint.color = palette.o80;
     canvas.drawPath(_reusableArrowPath, _simplePaint);
 
     // Bright tip
@@ -623,32 +650,29 @@ class Projectile extends PositionComponent {
       _drawTrail(canvas);
     }
 
+    final palette = _getPalette(color);
     final pulseScale = 1.0 + math.sin(_pulsePhase * 0.5) * 0.2;
 
     // Outer shockwave ring
     _strokePaint
-      ..color = color.withOpacity(0.2)
+      ..color = palette.o20
       ..strokeWidth = 3
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.drawCircle(Offset.zero, size.x * 0.9 * pulseScale, _strokePaint);
 
-    // Heavy core with gradient
-    final coreGradient = RadialGradient(
-      colors: [
-        const Color(0xFFFFFFFF),
-        color,
-        color.withOpacity(0.5),
-      ],
-      stops: const [0.0, 0.4, 1.0],
-    ).createShader(Rect.fromCircle(center: Offset.zero, radius: size.x * 0.6));
-
-    _simplePaint.shader = coreGradient;
+    // Heavy core - layered circles (avoids per-frame RadialGradient allocation)
+    _simplePaint.color = palette.o50;
     canvas.drawCircle(Offset.zero, size.x * 0.6 * pulseScale, _simplePaint);
-    _simplePaint.shader = null;
+
+    _simplePaint.color = color;
+    canvas.drawCircle(Offset.zero, size.x * 0.4 * pulseScale, _simplePaint);
+
+    _simplePaint.color = const Color(0xFFFFFFFF);
+    canvas.drawCircle(Offset.zero, size.x * 0.15 * pulseScale, _simplePaint);
 
     // Outer glow
     _glowPaint
-      ..color = color.withOpacity(0.5)
+      ..color = palette.o50
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
     canvas.drawCircle(Offset.zero, size.x * 0.7 * pulseScale, _glowPaint);
 
@@ -656,7 +680,7 @@ class Projectile extends PositionComponent {
     canvas.save();
     canvas.rotate(_rotationAngle * 0.5);
 
-    _circuitLinePaint.color = color.withOpacity(0.6);
+    _circuitLinePaint.color = palette.o60;
     final innerR = size.x * 0.3;
     final outerR = size.x * 0.7;
     for (int i = 0; i < 4; i++) {
@@ -677,11 +701,12 @@ class Projectile extends PositionComponent {
       _drawTrail(canvas);
     }
 
+    final palette = _getPalette(color);
     final pulseScale = 1.0 + math.sin(_pulsePhase) * 0.15;
 
     // Electric arcs around projectile
     _arcPaint
-      ..color = color.withOpacity(0.7)
+      ..color = palette.o70
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
     for (final segment in _electricSegments) {
@@ -712,7 +737,7 @@ class Projectile extends PositionComponent {
 
     // Mystical core with inner glow
     _glowPaint
-      ..color = color.withOpacity(0.3)
+      ..color = palette.o30
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
     canvas.drawCircle(Offset.zero, size.x * 0.5 * pulseScale, _glowPaint);
 
@@ -755,6 +780,7 @@ class Projectile extends PositionComponent {
       _drawTrail(canvas);
     }
 
+    final palette = _getPalette(color);
     final pulseScale = 1.0 + math.sin(_pulsePhase * 2) * 0.2;
 
     // Multiple sparkle particles
@@ -773,12 +799,11 @@ class Projectile extends PositionComponent {
     }
 
     // Central burst
-    _glowPaint.color = color.withOpacity(0.4);
+    _glowPaint.color = palette.o40;
     canvas.drawCircle(Offset.zero, size.x * 0.4 * pulseScale, _glowPaint);
 
-    // Flickering core
-    final flickerIntensity = 0.7 + _random.nextDouble() * 0.3;
-    _simplePaint.color = color.withOpacity(flickerIntensity);
+    // Flickering core - use palette for closest match
+    _simplePaint.color = palette.o80;
     canvas.drawCircle(Offset.zero, size.x * 0.25 * pulseScale, _simplePaint);
 
     // Bright center
@@ -798,11 +823,15 @@ class Projectile extends PositionComponent {
     final wobbleX = math.sin(_time * 8) * 1.5 * _wobbleAmount;
     final wobbleY = math.cos(_time * 6) * 1.0 * _wobbleAmount;
 
-    // Get color variations for plasma effect
-    final hslColor = HSLColor.fromColor(color);
-    final pinkColor = hslColor.withHue((hslColor.hue + 20) % 360).toColor();
-    final purpleColor = hslColor.withHue((hslColor.hue - 30) % 360).toColor();
-    final brightColor = hslColor.withLightness((hslColor.lightness + 0.2).clamp(0, 1)).toColor();
+    // Use cached HSL-derived colors (computed once at init, not per-frame)
+    final pinkColor = _hslPinkColor;
+    final purpleColor = _hslPurpleColor;
+    final brightColor = _hslBrightColor;
+
+    // Cached palettes for constant-opacity lookups
+    final palette = _getPalette(color);
+    final pinkPalette = _getPalette(pinkColor);
+    final purplePalette = _getPalette(purpleColor);
 
     canvas.save();
     canvas.translate(wobbleX, wobbleY);
@@ -843,11 +872,11 @@ class Projectile extends PositionComponent {
 
     // Outer glow for bubble membrane
     if (allowGlow) {
-      _bubbleMembraneGlowPaint.color = color.withOpacity(0.4);
+      _bubbleMembraneGlowPaint.color = palette.o40;
       canvas.drawCircle(Offset.zero, membraneRadius * 1.2, _bubbleMembraneGlowPaint);
 
       // Secondary pink glow
-      _bubbleMembraneGlowPaint.color = pinkColor.withOpacity(0.25);
+      _bubbleMembraneGlowPaint.color = pinkPalette.o25;
       canvas.drawCircle(Offset.zero, membraneRadius * 1.4, _bubbleMembraneGlowPaint);
     }
 
@@ -953,27 +982,26 @@ class Projectile extends PositionComponent {
 
     // Outer core glow
     if (allowGlow) {
-      _bubbleEnergyCorePaint.color = pinkColor.withOpacity(0.5);
+      _bubbleEnergyCorePaint.color = pinkPalette.o50;
       canvas.drawCircle(Offset.zero, coreRadius * 1.8 * corePulse, _bubbleEnergyCorePaint);
 
-      _bubbleEnergyCorePaint.color = color.withOpacity(0.6);
+      _bubbleEnergyCorePaint.color = palette.o60;
       canvas.drawCircle(Offset.zero, coreRadius * 1.3 * corePulse, _bubbleEnergyCorePaint);
     }
 
-    // Core gradient
-    final coreGradient = RadialGradient(
-      colors: [
-        const Color(0xFFFFFFFF),
-        brightColor,
-        color,
-        purpleColor.withOpacity(0.5),
-      ],
-      stops: const [0.0, 0.3, 0.6, 1.0],
-    ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadius * corePulse));
+    // Core - layered circles (avoids per-frame RadialGradient allocation)
+    final coreR = coreRadius * corePulse;
+    _bubblePlasmaCorePaint.color = purplePalette.o50;
+    canvas.drawCircle(Offset.zero, coreR, _bubblePlasmaCorePaint);
 
-    _bubblePlasmaCorePaint.shader = coreGradient;
-    canvas.drawCircle(Offset.zero, coreRadius * corePulse, _bubblePlasmaCorePaint);
-    _bubblePlasmaCorePaint.shader = null;
+    _bubblePlasmaCorePaint.color = color;
+    canvas.drawCircle(Offset.zero, coreR * 0.6, _bubblePlasmaCorePaint);
+
+    _bubblePlasmaCorePaint.color = brightColor;
+    canvas.drawCircle(Offset.zero, coreR * 0.3, _bubblePlasmaCorePaint);
+
+    _bubblePlasmaCorePaint.color = const Color(0xFFFFFFFF);
+    canvas.drawCircle(Offset.zero, coreR * 0.1, _bubblePlasmaCorePaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 5: SMALL ORBITING PARTICLES AROUND BUBBLE
@@ -1007,7 +1035,7 @@ class Projectile extends PositionComponent {
 
       final innerSize = 1.0 + math.sin(_time * 12 + i) * 0.3;
 
-      _bubbleHighlightPaint.color = const Color(0xFFFFFFFF).withOpacity(0.6);
+      _bubbleHighlightPaint.color = const Color(0x99FFFFFF);
       canvas.drawCircle(Offset(innerParticleX, innerParticleY), innerSize, _bubbleHighlightPaint);
     }
 
@@ -1045,11 +1073,10 @@ class Projectile extends PositionComponent {
   void _drawTrail(Canvas canvas) {
     if (_trailPositions.length < 2) return;
 
-    // Get secondary and tertiary colors for gradient effects
-    final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
-    final complementColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    // Use cached HSL-derived colors (computed once at init, not per-frame)
+    final secondaryColor = _hslSecondaryColor;
+    final tertiaryColor = _hslTertiaryColor;
+    final complementColor = _hslComplementColor;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: DEEP OUTER PLASMA GLOW WITH COLOR GRADIENT
@@ -1267,19 +1294,15 @@ class Projectile extends PositionComponent {
       final coreSize = size.x * 0.4 * (1 - progress * 0.6);
       _tempOffset1 = Offset(trailOffset.x, trailOffset.y);
 
-      // Create gradient for hot core
-      final coreGradient = RadialGradient(
-        colors: [
-          const Color(0xFFFFFFFF).withOpacity(alpha * 0.9),
-          color.withOpacity(alpha * 0.7),
-          secondaryColor.withOpacity(alpha * 0.3),
-        ],
-        stops: const [0.0, 0.4, 1.0],
-      ).createShader(Rect.fromCircle(center: _tempOffset1, radius: coreSize));
-
-      _plasmaCorePaint.shader = coreGradient;
+      // Layered circles approximating gradient (avoids per-frame RadialGradient allocation)
+      _plasmaCorePaint.color = secondaryColor.withOpacity(alpha * 0.3);
       canvas.drawCircle(_tempOffset1, coreSize, _plasmaCorePaint);
-      _plasmaCorePaint.shader = null;
+
+      _plasmaCorePaint.color = color.withOpacity(alpha * 0.7);
+      canvas.drawCircle(_tempOffset1, coreSize * 0.4, _plasmaCorePaint);
+
+      _plasmaCorePaint.color = Color.fromRGBO(255, 255, 255, alpha * 0.9);
+      canvas.drawCircle(_tempOffset1, coreSize * 0.15, _plasmaCorePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1453,7 +1476,9 @@ class _ElectricSegment {
 /// Each projectile color gets a cached palette with common opacity variations.
 class _ColorPalette {
   _ColorPalette(Color base)
-      : o20 = base.withOpacity(0.2),
+      : o10 = base.withOpacity(0.1),
+        o15 = base.withOpacity(0.15),
+        o20 = base.withOpacity(0.2),
         o25 = base.withOpacity(0.25),
         o30 = base.withOpacity(0.3),
         o40 = base.withOpacity(0.4),
@@ -1466,6 +1491,8 @@ class _ColorPalette {
         base = base;
 
   final Color base;
+  final Color o10;
+  final Color o15;
   final Color o20;
   final Color o25;
   final Color o30;

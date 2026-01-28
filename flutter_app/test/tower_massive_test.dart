@@ -79,8 +79,8 @@ void main() {
   // ============================================
 
   group('TowerType enum - Basic', () {
-    test('TowerType has 8 values', () {
-      expect(TowerType.values.length, 8);
+    test('TowerType has 9 values', () {
+      expect(TowerType.values.length, 9);
     });
 
     for (final type in TowerType.values) {
@@ -339,11 +339,12 @@ void main() {
       expect(phantomDetectors.first, TowerType.phaseMage);
     });
 
-    test('two towers apply slow', () {
+    test('three towers apply slow', () {
       final slowTowers = TowerType.values.where((t) => t.appliesSlow).toList();
-      expect(slowTowers.length, 2);
+      expect(slowTowers.length, 3);
       expect(slowTowers, contains(TowerType.phaseMage));
       expect(slowTowers, contains(TowerType.glimmerField));
+      expect(slowTowers, contains(TowerType.plasmaBubble));
     });
   });
 

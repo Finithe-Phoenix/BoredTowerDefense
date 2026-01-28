@@ -88,7 +88,7 @@ void main() {
               difficulty: diff,
             );
             expect(health, greaterThan(0));
-            expect(health, isFinite);
+            expect(health.isFinite, isTrue);
           });
         }
       }
@@ -156,7 +156,7 @@ void main() {
               difficulty: diff,
             );
             expect(speed, greaterThan(0));
-            expect(speed, isFinite);
+            expect(speed.isFinite, isTrue);
           });
         }
       }
@@ -275,7 +275,9 @@ void main() {
       });
 
       test('${towerType.name} time to kill basic enemy', () {
-        final ttk = EnemyType.glitchDrone.baseHealth / (towerType.damage * towerType.fireRate);
+        // Use runner (world 1 basic enemy) with base health of 100
+        final effectiveHealth = 100 * EnemyType.runner.healthMult;
+        final ttk = effectiveHealth / (towerType.damage * towerType.fireRate);
         if (towerType.damage > 0) {
           expect(ttk, greaterThan(0));
         }
@@ -318,14 +320,19 @@ void main() {
     for (final towerType in TowerType.values) {
       for (final enemyType in EnemyType.values.take(10)) {
         test('${towerType.name} vs ${enemyType.name}', () {
-          final shotsToKill = (enemyType.baseHealth / towerType.damage).ceil();
-          if (towerType.damage > 0) {
-            expect(shotsToKill, greaterThan(0));
-          }
+          // Calculate effective health using base of 100 * healthMult
+          final effectiveHealth = 100 * enemyType.healthMult;
 
-          final timeToKill = shotsToKill / towerType.fireRate;
+          // Skip damage calculations for support towers with 0 damage
           if (towerType.damage > 0) {
+            final shotsToKill = (effectiveHealth / towerType.damage).ceil();
+            expect(shotsToKill, greaterThan(0));
+
+            final timeToKill = shotsToKill / towerType.fireRate;
             expect(timeToKill, greaterThan(0));
+          } else {
+            // Support tower - verify it exists and has valid properties
+            expect(towerType.cost, greaterThan(0));
           }
         });
       }
@@ -461,26 +468,25 @@ void main() {
   // ECONOMY BALANCE TESTS (100+ tests)
   // ============================================
 
-  group('Economy balance - Enemy gold values', () {
+  group('Economy balance - Enemy difficulty scaling', () {
     for (final type in EnemyType.values) {
-      test('${type.name} gold is proportional to health', () {
-        // Higher health enemies should give more gold
-        // This is a general guideline
-        expect(type.goldValue, greaterThanOrEqualTo(0));
+      test('${type.name} has valid health multiplier', () {
+        // All enemies should have positive health multiplier
+        expect(type.healthMult, greaterThan(0));
       });
     }
 
-    test('world 1 enemies give less gold than world 10', () {
-      final world1Gold = EnemyType.values
+    test('world 10 enemies are stronger than world 1', () {
+      final world1AvgHealth = EnemyType.values
           .where((t) => t.world == 1)
-          .map((t) => t.goldValue)
-          .reduce((a, b) => a + b);
-      final world10Gold = EnemyType.values
+          .map((t) => t.healthMult)
+          .reduce((a, b) => a + b) / 4;
+      final world10AvgHealth = EnemyType.values
           .where((t) => t.world == 10)
-          .map((t) => t.goldValue)
-          .reduce((a, b) => a + b);
+          .map((t) => t.healthMult)
+          .reduce((a, b) => a + b) / 4;
 
-      expect(world10Gold, greaterThanOrEqualTo(world1Gold));
+      expect(world10AvgHealth, greaterThanOrEqualTo(world1AvgHealth));
     });
   });
 

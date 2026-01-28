@@ -32,14 +32,14 @@ class BulletManager extends Component with HasGameRef<BoredGamesGame> {
     _updateStressLevel();
   }
 
-  /// Actualiza el nivel de estrés basado en cantidad de balas
+  static int _lastStressLevel = 0;
+
+  /// Actualiza el nivel de estrés solo cuando cruza un umbral
   static void _updateStressLevel() {
-    if (_activeCount < 80) {
-      Projectile.setStressLevel(0);
-    } else if (_activeCount < 150) {
-      Projectile.setStressLevel(1);
-    } else {
-      Projectile.setStressLevel(2);
+    final newLevel = _activeCount < 80 ? 0 : (_activeCount < 150 ? 1 : 2);
+    if (newLevel != _lastStressLevel) {
+      _lastStressLevel = newLevel;
+      Projectile.setStressLevel(newLevel);
     }
   }
 

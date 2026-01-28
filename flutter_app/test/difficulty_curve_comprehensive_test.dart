@@ -727,7 +727,7 @@ void main() {
     test('handles very high progress values', () {
       final health = DifficultyCurve.healthMultiplier(
         progressIndexValue: 1000, wave: 100, difficulty: 5);
-      expect(health, isFinite);
+      expect(health.isFinite, isTrue);
       expect(health, greaterThan(0));
     });
 

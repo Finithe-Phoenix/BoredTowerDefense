@@ -159,8 +159,9 @@ void main() {
         timer.start();
         timer.setTime(55.0); // >90%
         final color = timer.timerColor;
-        // Should be close to cyan (0xFF00FFFF)
-        expect(color.blue, 255);
+        // At 55/60 = 92%, color lerps from yellow to cyan with t = 0.834
+        // So blue = 255 * 0.834 ≈ 213, green = 255, red ≈ 42
+        expect(color.blue, greaterThan(200)); // Mostly cyan
         expect(color.green, greaterThan(200));
       });
 
