@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../bored_games_game.dart';
 import '../../ui/theme/neon_theme.dart';
+import '../../services/storage_service.dart';
 
 class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   TutorialGuide() {
@@ -62,6 +63,27 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
   double _stepTimer = 0;
   double _animTime = 0;
   double _fadeIn = 0;
+  bool _tutorialCompleted = false;
+  Rect? _dismissButtonRect;
+
+  @override
+  Future<void> onMount() async {
+    super.onMount();
+    _checkTutorialCompletion();
+  }
+
+  void _checkTutorialCompletion() {
+    _tutorialCompleted = StorageService.instance.isTutorialCompleted();
+    if (_tutorialCompleted) {
+      _hidden = true;
+    }
+  }
+
+  void _completeTutorial() {
+    _hidden = true;
+    _tutorialCompleted = true;
+    StorageService.instance.setTutorialCompleted(true);
+  }
 
   BoredGamesGame? _resolveGame() {
     final game = findGame();
@@ -78,7 +100,7 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (_step < _activeMessages.length - 1) {
       _step++;
     } else {
-      _hidden = true;
+      _completeTutorial();
     }
   }
 
@@ -179,8 +201,8 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
     final frameWidth = contentWidth + 48;
     final frameHeight = 36.0;
     final x = (screenWidth - frameWidth) / 2;
-    // Position below the countdown timer (timer now ends around y=250)
-    final y = 260.0;
+    // Position dynamically based on screen size - center upper third
+    final y = game.size.y * 0.15;
 
     _ensureFramePath(x, y, frameWidth, frameHeight);
 
@@ -327,6 +349,15 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
       opacity,
       accentColor,
       activeMessages.length,
+    );
+
+    // Dismiss button
+    _renderDismissButton(
+      canvas,
+      screenWidth,
+      y + frameHeight + 22,
+      opacity,
+      accentColor,
     );
   }
 
@@ -481,5 +512,67 @@ class TutorialGuide extends PositionComponent with HasGameRef<BoredGamesGame> {
       ..lineTo(x, y + frameHeight - cut)
       ..lineTo(x, y + cut)
       ..close();
+  }
+
+  void _renderDismissButton(
+    Canvas canvas,
+    double screenWidth,
+    double y,
+    double opacity,
+    Color accentColor,
+  ) {
+    final buttonText = 'SKIP';
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: buttonText,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.6 * opacity),
+          fontSize: 8,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.0,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    final buttonWidth = textPainter.width + 16;
+    final buttonHeight = textPainter.height + 8;
+    final buttonX = (screenWidth - buttonWidth) / 2;
+
+    // Store rect for tap detection
+    _dismissButtonRect = Rect.fromLTWH(buttonX, y, buttonWidth, buttonHeight);
+
+    // Button background
+    final bgPaint = Paint()
+      ..color = const Color(0xFF0a0a18).withOpacity(0.8 * opacity);
+    final rrect = RRect.fromRectAndRadius(
+      _dismissButtonRect!,
+      const Radius.circular(4),
+    );
+    canvas.drawRRect(rrect, bgPaint);
+
+    // Button border
+    final borderPaint = Paint()
+      ..color = accentColor.withOpacity(0.4 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawRRect(rrect, borderPaint);
+
+    // Button text
+    textPainter.paint(
+      canvas,
+      Offset(buttonX + 8, y + 4),
+    );
+  }
+
+  /// Handle tap on tutorial overlay
+  bool handleTap(Vector2 tapPosition) {
+    if (_hidden) return false;
+    if (_dismissButtonRect != null &&
+        _dismissButtonRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
+      _completeTutorial();
+      return true;
+    }
+    return false;
   }
 }

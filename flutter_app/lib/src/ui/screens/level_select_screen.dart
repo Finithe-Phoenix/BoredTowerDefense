@@ -158,16 +158,46 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
         backgroundColor: Colors.black,
         child: SafeArea(
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 400),
+            duration: const Duration(milliseconds: 700),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
+              // Enhanced transition with scale, rotation, and slide
+              final scaleAnimation = Tween<double>(
+                begin: 0.8,
+                end: 1.0,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutBack,
+              ));
+
+              final slideAnimation = Tween<Offset>(
+                begin: const Offset(0, 0.1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ));
+
+              final rotationAnimation = Tween<double>(
+                begin: 0.02,
+                end: 0.0,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutCubic,
+              ));
+
               return FadeTransition(
                 opacity: animation,
                 child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.1, 0),
-                    end: Offset.zero,
-                  ).animate(animation),
-                  child: child,
+                  position: slideAnimation,
+                  child: ScaleTransition(
+                    scale: scaleAnimation,
+                    child: Transform.rotate(
+                      angle: rotationAnimation.value,
+                      child: child,
+                    ),
+                  ),
                 ),
               );
             },
@@ -327,8 +357,11 @@ class _TronLevelCardState extends State<_TronLevelCard>
   late AnimationController _materializeController;
   late AnimationController _pulseController;
   late AnimationController _hoverController;
+  late AnimationController _clickController;
   late Animation<double> _materializeAnimation;
   late Animation<double> _pulseAnimation;
+  late Animation<double> _hoverAnimation;
+  late Animation<double> _clickAnimation;
 
   Timer? _materializeTimer;
   bool _isHovered = false;
@@ -339,13 +372,13 @@ class _TronLevelCardState extends State<_TronLevelCard>
     super.initState();
 
     _materializeController = AnimationController(
-      duration: const Duration(milliseconds: 600),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
 
     _materializeAnimation = CurvedAnimation(
       parent: _materializeController,
-      curve: Curves.easeOutCubic,
+      curve: Curves.elasticOut,
     );
 
     _pulseController = AnimationController(
@@ -358,8 +391,23 @@ class _TronLevelCardState extends State<_TronLevelCard>
     );
 
     _hoverController = AnimationController(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 300),
       vsync: this,
+    );
+
+    _hoverAnimation = CurvedAnimation(
+      parent: _hoverController,
+      curve: Curves.easeOutCubic,
+    );
+
+    _clickController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _clickAnimation = CurvedAnimation(
+      parent: _clickController,
+      curve: Curves.easeOutBack,
     );
 
     _materializeTimer = Timer(widget.delay, () {
@@ -376,6 +424,7 @@ class _TronLevelCardState extends State<_TronLevelCard>
     _materializeController.dispose();
     _pulseController.dispose();
     _hoverController.dispose();
+    _clickController.dispose();
     super.dispose();
   }
 
@@ -388,36 +437,65 @@ class _TronLevelCardState extends State<_TronLevelCard>
     final effectiveColor = isUnlocked ? widget.accentColor : Colors.grey;
 
     return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
+      onEnter: (_) {
+        setState(() => _isHovered = true);
+        if (isUnlocked) _hoverController.forward();
+      },
+      onExit: (_) {
+        setState(() => _isHovered = false);
+        _hoverController.reverse();
+      },
       child: GestureDetector(
-        onTapDown: (_) => setState(() => _isPressed = true),
+        onTapDown: (_) {
+          setState(() => _isPressed = true);
+          if (isUnlocked) _clickController.forward(from: 0);
+        },
         onTapUp: (_) {
           setState(() => _isPressed = false);
           if (isUnlocked) widget.onTap();
         },
         onTapCancel: () => setState(() => _isPressed = false),
         child: AnimatedBuilder(
-          animation: Listenable.merge([_materializeAnimation, _pulseAnimation]),
+          animation: Listenable.merge([
+            _materializeAnimation,
+            _pulseAnimation,
+            _hoverAnimation,
+            _clickAnimation,
+          ]),
           builder: (context, child) {
             final progress = _materializeAnimation.value;
             final pulse = _pulseAnimation.value;
-            final scale = _isPressed ? 0.95 : (_isHovered ? 1.05 : 1.0);
+            final hover = _hoverAnimation.value;
+            final click = _clickAnimation.value;
+
+            // Enhanced scale with bounce on click
+            final baseScale = _isPressed ? 0.95 : 1.0;
+            final hoverScale = 1.0 + (hover * 0.08);
+            final clickBounce = 1.0 + (click * 0.15 * math.sin(click * math.pi));
+            final totalScale = baseScale * hoverScale * clickBounce;
+
+            // Rotation on hover
+            final rotation = hover * 0.01 * math.sin(pulse * math.pi * 2);
 
             return Transform.scale(
-              scale: scale,
-              child: CustomPaint(
-                painter: _EpicLevelCardPainter(
-                  progress: progress,
-                  pulseValue: pulse,
-                  primaryColor: effectiveColor,
-                  isHovered: _isHovered && isUnlocked,
-                  isCompleted: isCompleted,
-                  isLocked: !isUnlocked,
-                  levelNumber: widget.level.id,
-                  stars: stars,
+              scale: totalScale,
+              child: Transform.rotate(
+                angle: rotation,
+                child: CustomPaint(
+                  painter: _EpicLevelCardPainter(
+                    progress: progress,
+                    pulseValue: pulse,
+                    primaryColor: effectiveColor,
+                    isHovered: _isHovered && isUnlocked,
+                    isCompleted: isCompleted,
+                    isLocked: !isUnlocked,
+                    levelNumber: widget.level.id,
+                    stars: stars,
+                    hoverProgress: hover,
+                    clickProgress: click,
+                  ),
+                  child: const SizedBox.expand(),
                 ),
-                child: const SizedBox.expand(),
               ),
             );
           },
@@ -437,6 +515,8 @@ class _EpicLevelCardPainter extends CustomPainter {
     required this.isLocked,
     required this.levelNumber,
     required this.stars,
+    this.hoverProgress = 0.0,
+    this.clickProgress = 0.0,
   });
 
   final double progress;
@@ -447,6 +527,8 @@ class _EpicLevelCardPainter extends CustomPainter {
   final bool isLocked;
   final int levelNumber;
   final int stars;
+  final double hoverProgress;
+  final double clickProgress;
 
   // Secondary color (orange for TRON effect)
   Color get secondaryColor => const Color(0xFFFF6600);
@@ -786,20 +868,40 @@ class _EpicLevelCardPainter extends CustomPainter {
 
   void _drawBorder(Canvas canvas, RRect rrect, Size size) {
     final borderFade = ((progress - 0.5) / 0.3).clamp(0.0, 1.0);
-    final glowIntensity = isHovered ? 1.0 : (0.4 + pulseValue * 0.3);
+    final baseGlow = 0.4 + pulseValue * 0.3;
+    final hoverGlow = 1.0 + hoverProgress * 0.5;
+    final clickGlow = 1.0 + clickProgress * 2.0;
+    final glowIntensity = baseGlow * hoverGlow * clickGlow;
+
+    // Click ripple effect
+    if (clickProgress > 0) {
+      final rippleRadius = clickProgress * size.width * 1.2;
+      final rippleOpacity = (1.0 - clickProgress) * 0.5;
+      final ripplePaint = Paint()
+        ..color = primaryColor.withOpacity(rippleOpacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+      canvas.drawCircle(
+        Offset(size.width / 2, size.height / 2),
+        rippleRadius,
+        ripplePaint,
+      );
+    }
 
     // Outer glow
     _borderGlowPaint
       ..color = primaryColor.withOpacity(glowIntensity * 0.4 * borderFade)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5;
+      ..strokeWidth = 5 + hoverProgress * 3;
     canvas.drawRRect(rrect, _borderGlowPaint);
 
     // Main border
     _borderPaint
-      ..color = primaryColor.withOpacity(borderFade * (isHovered ? 1.0 : 0.8))
+      ..color = primaryColor.withOpacity(borderFade * (0.8 + hoverProgress * 0.2))
       ..style = PaintingStyle.stroke
-      ..strokeWidth = isHovered ? 2.0 : 1.5;
+      ..strokeWidth = 1.5 + hoverProgress * 0.5;
     canvas.drawRRect(rrect, _borderPaint);
   }
 
@@ -856,17 +958,44 @@ class _EpicLevelCardPainter extends CustomPainter {
 
     final coreFade = ((progress - 0.5) / 0.3).clamp(0.0, 1.0);
     final coreRadius = size.width * 0.22;
-    final pulseRadius = coreRadius * (1.0 + pulseValue * 0.08);
+    final hoverBoost = 1.0 + hoverProgress * 0.15;
+    final pulseRadius = coreRadius * (1.0 + pulseValue * 0.08) * hoverBoost;
+
+    // Click burst effect
+    if (clickProgress > 0) {
+      for (int i = 0; i < 8; i++) {
+        final angle = (i / 8) * math.pi * 2;
+        final burstLength = clickProgress * coreRadius * 1.5;
+        final burstEnd = Offset(
+          center.dx + math.cos(angle) * burstLength,
+          center.dy + math.sin(angle) * burstLength,
+        );
+
+        final burstPaint = Paint()
+          ..shader = LinearGradient(
+            colors: [
+              primaryColor.withOpacity((1.0 - clickProgress) * 0.8),
+              primaryColor.withOpacity(0),
+            ],
+          ).createShader(Rect.fromPoints(center, burstEnd))
+          ..strokeWidth = 2
+          ..strokeCap = StrokeCap.round
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
+        canvas.drawLine(center, burstEnd, burstPaint);
+      }
+    }
 
     // Outer ring glow
-    _outerGlowPaint.color = primaryColor.withOpacity(0.2 * coreFade * pulseValue);
+    final glowIntensity = (0.2 + hoverProgress * 0.3) * coreFade * pulseValue;
+    _outerGlowPaint.color = primaryColor.withOpacity(glowIntensity);
     canvas.drawCircle(center, pulseRadius * 1.4, _outerGlowPaint);
 
     // Energy ring
     _ringPaint
-      ..color = primaryColor.withOpacity(0.5 * coreFade)
+      ..color = primaryColor.withOpacity((0.5 + hoverProgress * 0.3) * coreFade)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 1.5 + hoverProgress;
     canvas.drawCircle(center, pulseRadius, _ringPaint);
 
     // Inner glow
@@ -890,16 +1019,17 @@ class _EpicLevelCardPainter extends CustomPainter {
     canvas.restore();
 
     // Rotating segments when hovered
-    if (isHovered) {
+    if (hoverProgress > 0) {
       _segmentPaint
-        ..color = primaryColor.withOpacity(0.7 * coreFade)
+        ..color = primaryColor.withOpacity((0.5 + hoverProgress * 0.3) * coreFade)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round;
 
-      for (int i = 0; i < 4; i++) {
-        final startAngle = (i * 90 + pulseValue * 360) * math.pi / 180;
-        final sweepAngle = 40 * math.pi / 180;
+      final segmentCount = 4 + (hoverProgress * 4).round();
+      for (int i = 0; i < segmentCount; i++) {
+        final startAngle = (i * (360 / segmentCount) + pulseValue * 360) * math.pi / 180;
+        final sweepAngle = (30 + hoverProgress * 10) * math.pi / 180;
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: pulseRadius + 3),
           startAngle,
@@ -1113,7 +1243,9 @@ class _EpicLevelCardPainter extends CustomPainter {
   bool shouldRepaint(_EpicLevelCardPainter oldDelegate) {
     return progress != oldDelegate.progress ||
         pulseValue != oldDelegate.pulseValue ||
-        isHovered != oldDelegate.isHovered;
+        isHovered != oldDelegate.isHovered ||
+        hoverProgress != oldDelegate.hoverProgress ||
+        clickProgress != oldDelegate.clickProgress;
   }
 }
 

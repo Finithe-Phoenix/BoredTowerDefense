@@ -684,7 +684,12 @@ class BoredGamesGame extends FlameGame
     _isLongPressing = false;
     if (_draggingPlacement) return;
 
-    // Check speed control tap first
+    // Check tutorial guide tap first
+    if (tutorialGuide.handleTap(event.localPosition)) {
+      return;
+    }
+
+    // Check speed control tap
     if (hudComponent.handleSpeedTap(event.localPosition)) {
       return;
     }
@@ -1016,7 +1021,7 @@ class BoredGamesGame extends FlameGame
   void _onEnemyLeaked(Enemy enemy) {
     if (_gameEnded) return;
     lives -= 1;
-    AudioService.instance.playEnemyLeak();
+    // AudioService.instance.playEnemyLeak(); // Removed: enemy leak sound
     _applyVisual(() => visualDirector.handleEnemyLeak(enemy));
 
     // Trigger energy shield flash effect on base damage

@@ -23,6 +23,7 @@ class StorageService {
   static const String _keyUnlockedLevels = 'unlocked_levels';
   static const String _keyMetaCurrency = 'meta_currency';
   static const String _keyUpgradeLevels = 'upgrade_levels';
+  static const String _keyTutorialCompleted = 'tutorial_completed';
 
   /// Initialize storage - must be called before using any other methods
   Future<void> initialize() async {
@@ -358,5 +359,18 @@ class StorageService {
       _log('[StorageService] Failed to import data: $e');
       return false;
     }
+  }
+
+  /// Mark tutorial as completed
+  Future<void> setTutorialCompleted(bool completed) async {
+    if (!isReady) return;
+    await _prefs!.setBool(_keyTutorialCompleted, completed);
+    _log('[StorageService] Tutorial completion set to: $completed');
+  }
+
+  /// Check if tutorial has been completed
+  bool isTutorialCompleted() {
+    if (!isReady) return false;
+    return _prefs!.getBool(_keyTutorialCompleted) ?? false;
   }
 }

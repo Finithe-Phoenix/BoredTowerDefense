@@ -1400,8 +1400,8 @@ class AudioService {
   /// UI button click
   void playButton() => _playCached('button');
 
-  /// Enemy reaches base - warning
-  void playEnemyLeak() => _playCached('enemy_leak');
+  /// Enemy reaches base - warning (DISABLED - sound removed)
+  void playEnemyLeak() {} // No-op: enemy leak sound disabled
 
   /// Gold earned
   void playGoldEarned() => _playCached('gold');
