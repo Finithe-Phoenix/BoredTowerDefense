@@ -23,6 +23,13 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
   final List<_KillNotification> _notifications = [];
   static const int _maxNotifications = 2;
 
+  static final Paint _comboBarBgPaint = Paint();
+  static final Paint _comboBarFillPaint = Paint();
+  TextPainter? _comboPainter;
+  String _comboText = '';
+  int _comboColorValue = 0;
+  double _comboAlpha = -1;
+
   void registerKill({bool isCritical = false, bool isMultiKill = false}) {
     _currentCombo++;
     _comboTimer = comboTimeout;
@@ -131,26 +138,35 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
 
     // Minimal combo display
     final comboText = '${_displayedCombo}x';
-    final comboPainter = TextPainter(
-      text: TextSpan(
-        text: comboText,
-        style: TextStyle(
-          color: comboColor.withOpacity(alpha),
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-          letterSpacing: 1,
-          shadows: [
-            Shadow(color: comboColor.withOpacity(0.4 * alpha), blurRadius: 4),
-          ],
+    final comboColorValue = comboColor.value;
+    if (_comboPainter == null ||
+        _comboText != comboText ||
+        _comboColorValue != comboColorValue ||
+        _comboAlpha != alpha) {
+      _comboText = comboText;
+      _comboColorValue = comboColorValue;
+      _comboAlpha = alpha;
+      _comboPainter = TextPainter(
+        text: TextSpan(
+          text: comboText,
+          style: TextStyle(
+            color: comboColor.withOpacity(alpha),
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            letterSpacing: 1,
+            shadows: [
+              Shadow(color: comboColor.withOpacity(0.4 * alpha), blurRadius: 4),
+            ],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    comboPainter.paint(
+    _comboPainter!.paint(
       canvas,
-      Offset(x - comboPainter.width / 2, y),
+      Offset(x - _comboPainter!.width / 2, y),
     );
 
     // Minimal timeout bar
@@ -164,7 +180,7 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
           Rect.fromLTWH(x - barWidth / 2, barY, barWidth, 2),
           const Radius.circular(1),
         ),
-        Paint()..color = Colors.white.withOpacity(0.1 * alpha),
+        _comboBarBgPaint..color = Colors.white.withOpacity(0.1 * alpha),
       );
 
       canvas.drawRRect(
@@ -172,7 +188,7 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
           Rect.fromLTWH(x - barWidth / 2, barY, barWidth * barProgress, 2),
           const Radius.circular(1),
         ),
-        Paint()..color = comboColor.withOpacity(0.6 * alpha),
+        _comboBarFillPaint..color = comboColor.withOpacity(0.6 * alpha),
       );
     }
   }
@@ -193,6 +209,14 @@ class _KillNotification {
   final Color color;
   double _lifetime = 0;
   static const double duration = 1.0;
+  static final Paint _pillFillPaint = Paint();
+  static final Paint _pillBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final TextPainter _textPainter = TextPainter(textDirection: TextDirection.ltr);
+  String _cachedText = '';
+  int _cachedColorValue = 0;
+  double _cachedAlpha = -1;
 
   bool get isExpired => _lifetime >= duration;
 
@@ -205,8 +229,14 @@ class _KillNotification {
     final alpha = progress < 0.7 ? 1.0 : (1.0 - (progress - 0.7) / 0.3);
     final slideX = progress * 8;
 
-    final textPainter = TextPainter(
-      text: TextSpan(
+    final textColorValue = color.withOpacity(alpha * 0.9).value;
+    if (_cachedText != message ||
+        _cachedColorValue != textColorValue ||
+        _cachedAlpha != alpha) {
+      _cachedText = message;
+      _cachedColorValue = textColorValue;
+      _cachedAlpha = alpha;
+      _textPainter.text = TextSpan(
         text: message,
         style: TextStyle(
           color: color.withOpacity(alpha * 0.9),
@@ -215,11 +245,11 @@ class _KillNotification {
           fontFamily: 'monospace',
           letterSpacing: 1,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      );
+      _textPainter.layout();
+    }
 
-    final pillWidth = textPainter.width + 10;
+    final pillWidth = _textPainter.width + 10;
     final pillHeight = 14.0;
     final pillX = x - pillWidth / 2 + slideX;
 
@@ -231,20 +261,17 @@ class _KillNotification {
 
     canvas.drawRRect(
       pillRect,
-      Paint()..color = color.withOpacity(0.12 * alpha),
+      _pillFillPaint..color = color.withOpacity(0.12 * alpha),
     );
 
     canvas.drawRRect(
       pillRect,
-      Paint()
-        ..color = color.withOpacity(0.4 * alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
+      _pillBorderPaint..color = color.withOpacity(0.4 * alpha),
     );
 
-    textPainter.paint(
+    _textPainter.paint(
       canvas,
-      Offset(pillX + 5, y - textPainter.height / 2),
+      Offset(pillX + 5, y - _textPainter.height / 2),
     );
   }
 }

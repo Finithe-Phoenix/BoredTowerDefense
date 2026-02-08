@@ -3,6 +3,25 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Epic ground crack effect with shockwave for heavy impacts
 /// Layers: crater, radial cracks, secondary branches, glowing energy,
 /// debris particles, shockwave ring, ground displacement
@@ -11,7 +30,7 @@ class GroundCrackEffect extends PositionComponent {
     required Vector2 position,
     required double impactSize,
     required double duration,
-  }) : _random = math.Random() {
+  }) : _random = _FastRng() {
     _reset(
       position: position,
       impactSize: impactSize,
@@ -78,9 +97,11 @@ class GroundCrackEffect extends PositionComponent {
   final List<_DebrisParticle> _debris = [];
   final List<_EnergyPulse> _energyPulses = [];
   double _time = 0;
-  final math.Random _random;
+  final _FastRng _random;
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Shockwave properties
   double _shockwaveRadius = 0;
@@ -286,6 +307,17 @@ class GroundCrackEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _time += dt;
     final progress = _time / duration;
@@ -312,32 +344,50 @@ class GroundCrackEffect extends PositionComponent {
     }
 
     // Update cracks
-    for (final crack in _primaryCracks) {
-      crack.update(dt, _time);
+    if (_primaryCracks.isNotEmpty) {
+      for (final crack in _primaryCracks) {
+        crack.update(dt, _time);
+      }
     }
-    for (final crack in _secondaryCracks) {
-      crack.update(dt, _time);
+    if (_secondaryCracks.isNotEmpty) {
+      for (final crack in _secondaryCracks) {
+        crack.update(dt, _time);
+      }
     }
 
     // Update debris
-    for (final particle in _debris) {
-      particle.update(dt, _time);
+    if (_debris.isNotEmpty) {
+      for (final particle in _debris) {
+        particle.update(dt, _time);
+      }
     }
 
     // Update energy pulses
-    for (final pulse in _energyPulses) {
-      pulse.update(dt, _time);
+    if (_energyPulses.isNotEmpty) {
+      for (final pulse in _energyPulses) {
+        pulse.update(dt, _time);
+      }
     }
   }
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     final progress = _time / duration;
+    if (progress >= 1.0) return;
+    if (_craterScale <= 0.01 &&
+        _shockwaveAlpha <= 0.01 &&
+        _primaryCracks.isEmpty &&
+        _secondaryCracks.isEmpty &&
+        _debris.isEmpty &&
+        _energyPulses.isEmpty) {
+      return;
+    }
 
     // Layer 7: Ground displacement distortion (behind everything)
-    if (!lowFx) {
+    if (!lowFx && progress <= 0.5) {
       _drawGroundDistortion(canvas, progress);
     }
 
@@ -348,22 +398,35 @@ class GroundCrackEffect extends PositionComponent {
     _drawCrater(canvas, progress);
 
     // Layer 4: Energy seeping through cracks (beneath crack lines)
-    if (!lowFx) {
+    if (!lowFx && _primaryCracks.isNotEmpty) {
       _drawCrackEnergy(canvas, progress);
     }
 
     // Layer 2 & 3: Crack lines (primary and secondary)
-    _drawCracks(canvas, progress);
+    if (_primaryCracks.isNotEmpty || _secondaryCracks.isNotEmpty) {
+      _drawCracks(canvas, progress);
+    }
 
     // Layer 5: Debris particles
-    if (!lowFx) {
+    if (!lowFx && _debris.isNotEmpty) {
       _drawDebris(canvas);
     }
 
     // Draw energy pulses from crater
-    if (!lowFx) {
+    if (!lowFx && _energyPulses.isNotEmpty) {
       _drawEnergyPulses(canvas);
     }
+  }
+
+  bool _isOffscreen({double padding = 100}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   void _drawCrater(Canvas canvas, double progress) {
@@ -396,6 +459,7 @@ class GroundCrackEffect extends PositionComponent {
 
   void _drawCracks(Canvas canvas, double progress) {
     final fadeAlpha = progress < 0.7 ? 1.0 : (1 - (progress - 0.7) / 0.3);
+    if (fadeAlpha <= 0.01) return;
 
     // Draw primary cracks
     for (final crack in _primaryCracks) {
@@ -419,12 +483,12 @@ class GroundCrackEffect extends PositionComponent {
     double startX = 0;
     double startY = 0;
     if (crack.branchPoint != null && crack.parentAngle != null && crack.parentLength != null) {
-      startX = math.cos(crack.parentAngle!) * crack.parentLength! * crack.branchPoint!;
-      startY = math.sin(crack.parentAngle!) * crack.parentLength! * crack.branchPoint!;
+      startX = crack.parentDirX * crack.parentLength! * crack.branchPoint!;
+      startY = crack.parentDirY * crack.parentLength! * crack.branchPoint!;
     }
 
-    final endX = startX + math.cos(crack.angle) * crack.length * crack.currentProgress;
-    final endY = startY + math.sin(crack.angle) * crack.length * crack.currentProgress;
+    final endX = startX + crack.dirX * crack.length * crack.currentProgress;
+    final endY = startY + crack.dirY * crack.length * crack.currentProgress;
 
     // Build jagged crack path
     _reusablePath.reset();
@@ -438,8 +502,8 @@ class GroundCrackEffect extends PositionComponent {
 
       // Add jagged offset perpendicular to crack direction
       final jitter = i == segmentCount ? 0 : (_random.nextDouble() - 0.5) * 6 * crack.width;
-      final perpX = -math.sin(crack.angle) * jitter;
-      final perpY = math.cos(crack.angle) * jitter;
+      final perpX = crack.perpX * jitter;
+      final perpY = crack.perpY * jitter;
 
       _reusablePath.lineTo(baseX + perpX, baseY + perpY);
     }
@@ -469,6 +533,7 @@ class GroundCrackEffect extends PositionComponent {
         : math.max(0, 1 - (progress - 0.6) / 0.4);
 
     if (energyAlpha <= 0) return;
+    if (_primaryCracks.isEmpty) return;
 
     // Pulsating energy intensity
     final pulseIntensity = 0.6 + math.sin(_time * 12) * 0.4;
@@ -477,8 +542,8 @@ class GroundCrackEffect extends PositionComponent {
     for (final crack in _primaryCracks) {
       if (crack.currentProgress <= 0) continue;
 
-      final endX = math.cos(crack.angle) * crack.length * crack.currentProgress;
-      final endY = math.sin(crack.angle) * crack.length * crack.currentProgress;
+      final endX = crack.dirX * crack.length * crack.currentProgress;
+      final endY = crack.dirY * crack.length * crack.currentProgress;
 
       // Draw energy spots along crack
       final spotCount = (crack.segments * crack.currentProgress).ceil();
@@ -504,11 +569,12 @@ class GroundCrackEffect extends PositionComponent {
   }
 
   void _drawDebris(Canvas canvas) {
+    if (_debris.isEmpty) return;
     for (final particle in _debris) {
       if (!particle.isActive) continue;
 
-      final x = math.cos(particle.angle) * particle.distance;
-      final y = math.sin(particle.angle) * particle.distance + particle.fallOffset;
+      final x = particle.dirX * particle.distance;
+      final y = particle.dirY * particle.distance + particle.fallOffset;
       final alpha = particle.alphaValue;
 
       // Draw trail for glowing particles
@@ -554,6 +620,7 @@ class GroundCrackEffect extends PositionComponent {
   }
 
   void _drawEnergyPulses(Canvas canvas) {
+    if (_energyPulses.isEmpty) return;
     for (final pulse in _energyPulses) {
       if (!pulse.isActive) continue;
 
@@ -572,6 +639,7 @@ class GroundCrackEffect extends PositionComponent {
 
   void _drawShockwave(Canvas canvas) {
     if (_shockwaveAlpha <= 0.05) return;
+    if (_shockwaveRadius <= 0) return;
 
     // Outer glow ring
     _shockwaveOuterPaint.color = _energyColorOrange.withOpacity(_shockwaveAlpha * 0.3);
@@ -690,7 +758,13 @@ class _CrackLine {
     this.branchPoint,
     this.parentAngle,
     this.parentLength,
-  }) : currentProgress = 0;
+  }) : dirX = math.cos(angle),
+       dirY = math.sin(angle),
+       perpX = -math.sin(angle),
+       perpY = math.cos(angle),
+       parentDirX = parentAngle == null ? 0.0 : math.cos(parentAngle),
+       parentDirY = parentAngle == null ? 0.0 : math.sin(parentAngle),
+       currentProgress = 0;
 
   final double angle;
   final double length;
@@ -699,6 +773,12 @@ class _CrackLine {
   final double spreadDelay;
   final double spreadDuration;
   final double energyIntensity;
+  final double dirX;
+  final double dirY;
+  final double perpX;
+  final double perpY;
+  final double parentDirX;
+  final double parentDirY;
 
   // For secondary cracks branching off primary
   final double? branchPoint;
@@ -730,7 +810,9 @@ class _DebrisParticle {
     required this.rotation,
     required this.rotationSpeed,
     required this.isGlowing,
-  }) : _time = 0,
+  }) : dirX = math.cos(angle),
+       dirY = math.sin(angle),
+       _time = 0,
        distance = 0,
        fallOffset = 0,
        currentRotation = rotation,
@@ -739,6 +821,8 @@ class _DebrisParticle {
        _prevY = 0;
 
   final double angle;
+  final double dirX;
+  final double dirY;
   final double speed;
   final double size;
   final double lifetime;
@@ -773,8 +857,8 @@ class _DebrisParticle {
     if (!isActive) return;
 
     // Store previous position for trail
-    _prevX = math.cos(angle) * distance;
-    _prevY = math.sin(angle) * distance + fallOffset;
+    _prevX = dirX * distance;
+    _prevY = dirY * distance + fallOffset;
 
     final activeTime = totalTime - startDelay;
     final decay = 1 - activeTime / lifetime * 0.3;
@@ -826,3 +910,4 @@ class _EnergyPulse {
     currentRadius = maxRadius * progress;
   }
 }
+

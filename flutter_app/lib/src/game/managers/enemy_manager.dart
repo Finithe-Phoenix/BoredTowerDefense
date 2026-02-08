@@ -70,13 +70,14 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   Boss? _currentBoss;
   bool _bossSpawned = false;
   int _totalWavesInLevel = 0;
+  bool _spatialIndexDirty = false;
 
   /// Base stats for wave scaling
   static const double baseHealth = 100;
   static const double baseSpeed = 60;
   static const int baseGold = 10;
   static const int minEnemyCount = 3;
-  static const int maxEnemyCount = 80;  // Reduced from 160 to prevent OOM
+  static const int maxEnemyCount = 80; // Reduced from 160 to prevent OOM
   static const int minGoldReward = 4;
   static const double _nearBaseThreshold = 0.82;
   static const double _threatPulseInterval = 0.7;
@@ -136,7 +137,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     return bucket;
   }
 
-  void rebuildSpatialIndex() {
+  void rebuildSpatialIndex({bool force = true}) {
+    if (!force && !_spatialIndexDirty) return;
     // Return all buckets to pool instead of just clearing
     for (final bucket in _enemyBuckets.values) {
       bucket.clear();
@@ -153,28 +155,133 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       final cx = _cellFor(enemy.position.x);
       final cy = _cellFor(enemy.position.y);
       final key = _cellKey(cx, cy);
-      _getBucket(key).add(enemy);
+      final bucket = _getBucket(key);
+      enemy.spatialKey = key;
+      enemy.spatialIndex = bucket.length;
+      bucket.add(enemy);
     }
+    _spatialIndexDirty = false;
+  }
+
+  void _clearSpatialIndex() {
+    for (final bucket in _enemyBuckets.values) {
+      bucket.clear();
+      if (_bucketPool.length < _maxBucketPool) {
+        _bucketPool.add(bucket);
+      }
+    }
+    _enemyBuckets.clear();
+  }
+
+  void _registerEnemy(Enemy enemy) {
+    enemy.activeIndex = _activeEnemies.length;
+    _activeEnemies.add(enemy);
+    _aliveCount++;
+    _addToSpatialIndex(enemy);
+  }
+
+  void _unregisterEnemy(Enemy enemy) {
+    if (_aliveCount > 0) {
+      _aliveCount--;
+    }
+
+    final index = enemy.activeIndex;
+    if (index >= 0 &&
+        index < _activeEnemies.length &&
+        identical(_activeEnemies[index], enemy)) {
+      final last = _activeEnemies.removeLast();
+      if (!identical(last, enemy)) {
+        _activeEnemies[index] = last;
+        last.activeIndex = index;
+      }
+    } else {
+      _activeEnemies.remove(enemy);
+    }
+    enemy.activeIndex = -1;
+    _removeFromSpatialIndex(enemy);
+  }
+
+  void _addToSpatialIndex(Enemy enemy) {
+    final cx = _cellFor(enemy.position.x);
+    final cy = _cellFor(enemy.position.y);
+    final key = _cellKey(cx, cy);
+    final bucket = _getBucket(key);
+    enemy.spatialKey = key;
+    enemy.spatialIndex = bucket.length;
+    bucket.add(enemy);
+  }
+
+  void _removeFromSpatialIndex(Enemy enemy) {
+    final key = enemy.spatialKey;
+    if (key == -1) return;
+    final bucket = _enemyBuckets[key];
+    if (bucket == null) {
+      enemy.spatialKey = -1;
+      enemy.spatialIndex = -1;
+      return;
+    }
+
+    final index = enemy.spatialIndex;
+    if (index >= 0 &&
+        index < bucket.length &&
+        identical(bucket[index], enemy)) {
+      final last = bucket.removeLast();
+      if (!identical(last, enemy)) {
+        bucket[index] = last;
+        last.spatialIndex = index;
+      }
+    } else {
+      bucket.remove(enemy);
+    }
+
+    enemy.spatialKey = -1;
+    enemy.spatialIndex = -1;
+
+    if (bucket.isEmpty) {
+      _enemyBuckets.remove(key);
+      if (_bucketPool.length < _maxBucketPool) {
+        _bucketPool.add(bucket);
+      }
+    }
+  }
+
+  void _updateSpatialIndex(Enemy enemy) {
+    final cx = _cellFor(enemy.position.x);
+    final cy = _cellFor(enemy.position.y);
+    final key = _cellKey(cx, cy);
+    if (key == enemy.spatialKey) return;
+    _removeFromSpatialIndex(enemy);
+    final bucket = _getBucket(key);
+    enemy.spatialKey = key;
+    enemy.spatialIndex = bucket.length;
+    bucket.add(enemy);
+  }
+
+  void _onEnemyMoved(Enemy enemy) {
+    _updateSpatialIndex(enemy);
   }
 
   void queryEnemiesInRange(Vector2 center, double range, List<Enemy> out) {
     out.clear();
     if (_activeEnemies.isEmpty) return;
 
-    final minX = _cellFor(center.x - range);
-    final maxX = _cellFor(center.x + range);
-    final minY = _cellFor(center.y - range);
-    final maxY = _cellFor(center.y + range);
+    final centerX = center.x;
+    final centerY = center.y;
+    final minX = _cellFor(centerX - range);
+    final maxX = _cellFor(centerX + range);
+    final minY = _cellFor(centerY - range);
+    final maxY = _cellFor(centerY + range);
     final rangeSq = range * range;
 
     for (int cy = minY; cy <= maxY; cy++) {
       for (int cx = minX; cx <= maxX; cx++) {
         final bucket = _enemyBuckets[_cellKey(cx, cy)];
         if (bucket == null || bucket.isEmpty) continue;
-        for (final enemy in bucket) {
+        for (int i = 0; i < bucket.length; i++) {
+          final enemy = bucket[i];
           if (!enemy.isAlive) continue;
-          final dx = enemy.position.x - center.x;
-          final dy = enemy.position.y - center.y;
+          final dx = enemy.position.x - centerX;
+          final dy = enemy.position.y - centerY;
           if ((dx * dx) + (dy * dy) <= rangeSq) {
             out.add(enemy);
           }
@@ -257,8 +364,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     }
 
     final threatTier = _resolveThreatTier();
-    final adjustedGold =
-        (scaledGold * (1 + threatTier * 0.18)).round().clamp(minGoldReward, 9999);
+    final adjustedGold = (scaledGold * (1 + threatTier * 0.18))
+        .round()
+        .clamp(minGoldReward, 9999);
 
     final enemy = Enemy(
       path: world.waypoints,
@@ -271,12 +379,12 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       worldIndex: _levelWorld,
       onDeath: _onEnemyDeath,
       onReachBase: _onEnemyReachBase,
+      onMoved: _onEnemyMoved,
     );
 
-    _aliveCount++;
     _spawnIndex++;
+    _registerEnemy(enemy);
     add(enemy);
-    _activeEnemies.add(enemy);
   }
 
   bool _shouldSpawnBoss() {
@@ -335,13 +443,13 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
       onReachBase: _onEnemyReachBase,
       onPhaseChange: _onBossPhaseChange,
       onAbilityUsed: _onBossAbility,
+      onMoved: _onEnemyMoved,
     );
 
     _currentBoss = boss;
-    _aliveCount++;
     _spawnIndex++;
+    _registerEnemy(boss);
     add(boss);
-    _activeEnemies.add(boss);
 
     // Create epic entrance effect
     final entranceEffect = BossEntranceEffect(
@@ -356,17 +464,28 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
   BossType _getBossTypeForLevel(int levelId) {
     switch (levelId) {
-      case 10: return BossType.citadelCore;
-      case 20: return BossType.abyssGate;
-      case 30: return BossType.voidlineApex;
-      case 40: return BossType.shardVault;
-      case 50: return BossType.arcFortress;
-      case 60: return BossType.coreHunter;
-      case 70: return BossType.omegaGrid;
-      case 80: return BossType.stormTower;
-      case 90: return BossType.finalGate;
-      case 100: return BossType.omegaNexus;
-      default: return BossType.miniBoss;
+      case 10:
+        return BossType.citadelCore;
+      case 20:
+        return BossType.abyssGate;
+      case 30:
+        return BossType.voidlineApex;
+      case 40:
+        return BossType.shardVault;
+      case 50:
+        return BossType.arcFortress;
+      case 60:
+        return BossType.coreHunter;
+      case 70:
+        return BossType.omegaGrid;
+      case 80:
+        return BossType.stormTower;
+      case 90:
+        return BossType.finalGate;
+      case 100:
+        return BossType.omegaNexus;
+      default:
+        return BossType.miniBoss;
     }
   }
 
@@ -401,11 +520,11 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
             type: EnemyType.runner,
             onDeath: _onEnemyDeath,
             onReachBase: _onEnemyReachBase,
+            onMoved: _onEnemyMoved,
           );
 
-          _aliveCount++;
+          _registerEnemy(minion);
           add(minion);
-          _activeEnemies.add(minion);
         }
         break;
       // Future abilities can be handled here
@@ -416,8 +535,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   }
 
   void _onEnemyDeath(Enemy enemy) {
-    _aliveCount--;
-    _activeEnemies.remove(enemy);
+    _unregisterEnemy(enemy);
 
     // Spawn epic explosion effect at enemy position
     final expSize =
@@ -448,8 +566,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   }
 
   void _onEnemyReachBase(Enemy enemy) {
-    _aliveCount--;
-    _activeEnemies.remove(enemy);
+    _unregisterEnemy(enemy);
     onEnemyLeaked?.call(enemy);
     _checkWaveComplete();
   }
@@ -513,9 +630,13 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     if (_currentModifier == WaveModifier.overload) {
       enemyCount = (enemyCount * 1.25).ceil(); // More but weaker
     } else if (_currentModifier == WaveModifier.juggernaut) {
-      enemyCount = (enemyCount * 0.7).ceil().clamp(2, maxEnemyCount); // Fewer but stronger
+      enemyCount = (enemyCount * 0.7)
+          .ceil()
+          .clamp(2, maxEnemyCount); // Fewer but stronger
     } else if (_currentModifier == WaveModifier.phantom) {
-      enemyCount = (enemyCount * 0.85).ceil().clamp(3, maxEnemyCount); // Moderate count, tricky
+      enemyCount = (enemyCount * 0.85)
+          .ceil()
+          .clamp(3, maxEnemyCount); // Moderate count, tricky
     } else if (_currentModifier == WaveModifier.mixed) {
       enemyCount = (enemyCount * 1.1).ceil();
     }
@@ -553,9 +674,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     _bossSpawned = false;
     _currentBoss = null;
     _activeEnemies.clear();
-    for (final bucket in _enemyBuckets.values) {
-      bucket.clear();
-    }
+    _clearSpatialIndex();
+    _spatialIndexDirty = false;
 
     // Remove all existing enemies - iterate directly, avoid .toList() allocation
     final enemiesToRemove = children.whereType<Enemy>();
@@ -592,8 +712,7 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   }
 
   double _goldScaleForProgress() {
-    final scale =
-        0.92 -
+    final scale = 0.92 -
         (_levelWorld - 1) * 0.03 -
         (_localIndex - 1) * 0.006 -
         (_difficulty - 1) * 0.02;
@@ -702,7 +821,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
       case WaveModifier.juggernaut:
         // Tank enemy type (highest health multiplier)
-        return worldEnemies.reduce((a, b) => a.healthMult > b.healthMult ? a : b);
+        return worldEnemies
+            .reduce((a, b) => a.healthMult > b.healthMult ? a : b);
 
       case WaveModifier.phantom:
         // Phantom type if available, otherwise fast phantom-like type

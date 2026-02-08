@@ -11,10 +11,16 @@ class NoiseTexture {
     int size = 512,
     int seed = 0,
   }) {
-    final rng = Random(seed);
+    int rngState = seed & 0x7fffffff;
+    int next() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+
+    int nextInt(int max) => max <= 0 ? 0 : next() % max;
     final pixels = Uint8List(size * size * 4);
     for (var i = 0; i < size * size; i++) {
-      final noiseValue = rng.nextInt(256);
+      final noiseValue = nextInt(256);
       final offset = i * 4;
       pixels[offset] = noiseValue;
       pixels[offset + 1] = noiseValue;
@@ -33,3 +39,4 @@ class NoiseTexture {
     return completer.future;
   }
 }
+

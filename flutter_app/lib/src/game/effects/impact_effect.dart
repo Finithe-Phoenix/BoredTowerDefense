@@ -5,6 +5,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
 import '../../services/sprite_cache_service.dart';
+import '../entities/enemy.dart';
 import '../entities/tower.dart';
 
 /// Visual effect spawned when a projectile hits an enemy
@@ -14,7 +15,7 @@ class ImpactEffect extends PositionComponent {
     required Color color,
     required TowerType towerType,
     required double duration,
-  }) : _random = math.Random() {
+  }) : _rngState = 0x2a3b4c5d {
     _reset(
       position: position,
       color: color,
@@ -26,6 +27,7 @@ class ImpactEffect extends PositionComponent {
   static const int maxPool = 30;
   static const int maxActive = 40;
   static final List<ImpactEffect> _pool = [];
+  static final Set<ImpactEffect> _live = <ImpactEffect>{};
   static int _activeCount = 0;
   static double fxScale = 1.0;
   static int get activeCount => _activeCount;
@@ -35,8 +37,37 @@ class ImpactEffect extends PositionComponent {
 
   /// Clear the static pool to prevent memory accumulation between games
   static void clearPool() {
+    _ImpactParticle.clearPool();
+    _ImpactRing.clearPool();
+    _Spark.clearPool();
     _pool.clear();
+    _live.clear();
     _activeCount = 0;
+  }
+
+  static void _reclaimDetachedActives() {
+    if (_live.isEmpty) return;
+    final detached = <ImpactEffect>[];
+    for (final effect in _live) {
+      if (effect._wasMounted && effect.parent == null && !effect.isMounted) {
+        detached.add(effect);
+      }
+    }
+    if (detached.isEmpty) return;
+
+    for (final effect in detached) {
+      if (effect._counted) {
+        if (_activeCount > 0) {
+          _activeCount -= 1;
+        }
+        effect._counted = false;
+      }
+      if (!effect._inPool && _pool.length < maxPool) {
+        effect._inPool = true;
+        _pool.add(effect);
+      }
+      _live.remove(effect);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -81,7 +112,10 @@ class ImpactEffect extends PositionComponent {
     required TowerType towerType,
     double duration = 0.3,
   }) {
-    if (_activeCount >= maxActive) return null;
+    if (_activeCount >= maxActive) {
+      _reclaimDetachedActives();
+      if (_activeCount >= maxActive) return null;
+    }
     ImpactEffect effect;
     if (_pool.isNotEmpty) {
       effect = _pool.removeLast();
@@ -106,20 +140,50 @@ class ImpactEffect extends PositionComponent {
   Color color = Colors.white;
   TowerType towerType = TowerType.pulseArcher;
   double duration = 0.3;
-  final math.Random _random;
+  int _rngState;
+  int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  double _nextUnit() {
+    _rngState = _lcgNext(_rngState);
+    return _rngState / 0x7fffffff;
+  }
 
   double _timer = 0;
   bool _counted = false;
   bool _inPool = false;
+  bool _wasMounted = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
   final List<_ImpactParticle> _particles = [];
   final List<_ImpactRing> _rings = [];
   final List<_Spark> _sparks = [];
+
+  void _recycleParticles() {
+    for (final particle in _particles) {
+      particle.recycle();
+    }
+    _particles.clear();
+  }
+
+  void _recycleRings() {
+    for (final ring in _rings) {
+      ring.recycle();
+    }
+    _rings.clear();
+  }
+
+  void _recycleSparks() {
+    for (final spark in _sparks) {
+      spark.recycle();
+    }
+    _sparks.clear();
+  }
 
   void _markActive() {
     if (_counted) return;
     _counted = true;
     _inPool = false;
     _activeCount++;
+    _live.add(this);
   }
 
   void _reset({
@@ -134,10 +198,16 @@ class ImpactEffect extends PositionComponent {
     this.towerType = towerType;
     this.duration = duration;
     _timer = 0;
-    _particles.clear();
-    _rings.clear();
-    _sparks.clear();
+    _recycleParticles();
+    _recycleRings();
+    _recycleSparks();
     _initializeParticles();
+  }
+
+  @override
+  void onMount() {
+    _wasMounted = true;
+    super.onMount();
   }
 
   void _initializeParticles() {
@@ -146,15 +216,15 @@ class ImpactEffect extends PositionComponent {
         // Fast, directional sparks
         final sparkCount = _scaledCount(8, allowZero: true);
         for (int i = 0; i < sparkCount; i++) {
-          _sparks.add(_Spark(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 80 + _random.nextDouble() * 60,
-            length: 8 + _random.nextDouble() * 6,
-            lifetime: 0.15 + _random.nextDouble() * 0.1,
+          _sparks.add(_Spark.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 80 + _nextUnit() * 60,
+            length: 8 + _nextUnit() * 6,
+            lifetime: 0.15 + _nextUnit() * 0.1,
           ));
         }
         if (fxScale > 0.2) {
-          _rings.add(_ImpactRing(
+          _rings.add(_ImpactRing.obtain(
             startRadius: 5,
             endRadius: 25,
             duration: 0.2,
@@ -166,7 +236,7 @@ class ImpactEffect extends PositionComponent {
         // Heavy explosion with multiple rings
         final ringCount = _scaledCount(3);
         for (int i = 0; i < ringCount; i++) {
-          _rings.add(_ImpactRing(
+          _rings.add(_ImpactRing.obtain(
             startRadius: 5 + i * 5,
             endRadius: 40 + i * 10,
             duration: 0.25 + i * 0.05,
@@ -175,12 +245,12 @@ class ImpactEffect extends PositionComponent {
         // Large debris particles
         final particleCount = _scaledCount(12, allowZero: true);
         for (int i = 0; i < particleCount; i++) {
-          _particles.add(_ImpactParticle(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 40 + _random.nextDouble() * 80,
-            size: 3 + _random.nextDouble() * 4,
-            lifetime: 0.3 + _random.nextDouble() * 0.2,
-            rotationSpeed: (_random.nextDouble() - 0.5) * 10,
+          _particles.add(_ImpactParticle.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 40 + _nextUnit() * 80,
+            size: 3 + _nextUnit() * 4,
+            lifetime: 0.3 + _nextUnit() * 0.2,
+            rotationSpeed: (_nextUnit() - 0.5) * 10,
           ));
         }
         break;
@@ -189,9 +259,9 @@ class ImpactEffect extends PositionComponent {
         // Mystical burst with arcane symbols
         final runeCount = _scaledCount(6, allowZero: true);
         for (int i = 0; i < runeCount; i++) {
-          _particles.add(_ImpactParticle(
+          _particles.add(_ImpactParticle.obtain(
             angle: i * math.pi / 3,
-            speed: 30 + _random.nextDouble() * 20,
+            speed: 30 + _nextUnit() * 20,
             size: 4,
             lifetime: 0.4,
             rotationSpeed: 5,
@@ -201,16 +271,16 @@ class ImpactEffect extends PositionComponent {
         // Electric discharge
         final sparkCount = _scaledCount(5, allowZero: true);
         for (int i = 0; i < sparkCount; i++) {
-          _sparks.add(_Spark(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 60 + _random.nextDouble() * 40,
-            length: 12 + _random.nextDouble() * 8,
+          _sparks.add(_Spark.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 60 + _nextUnit() * 40,
+            length: 12 + _nextUnit() * 8,
             lifetime: 0.2,
             isElectric: true,
           ));
         }
         if (fxScale > 0.2) {
-          _rings.add(_ImpactRing(
+          _rings.add(_ImpactRing.obtain(
             startRadius: 8,
             endRadius: 30,
             duration: 0.3,
@@ -222,18 +292,18 @@ class ImpactEffect extends PositionComponent {
         // Sparkle burst
         final sparkleCount = _scaledCount(16, allowZero: true);
         for (int i = 0; i < sparkleCount; i++) {
-          _particles.add(_ImpactParticle(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 50 + _random.nextDouble() * 50,
-            size: 1.5 + _random.nextDouble() * 2,
-            lifetime: 0.2 + _random.nextDouble() * 0.15,
-            rotationSpeed: (_random.nextDouble() - 0.5) * 15,
+          _particles.add(_ImpactParticle.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 50 + _nextUnit() * 50,
+            size: 1.5 + _nextUnit() * 2,
+            lifetime: 0.2 + _nextUnit() * 0.15,
+            rotationSpeed: (_nextUnit() - 0.5) * 15,
             isStar: true,
           ));
         }
         // Quick flash ring
         if (fxScale > 0.2) {
-          _rings.add(_ImpactRing(
+          _rings.add(_ImpactRing.obtain(
             startRadius: 3,
             endRadius: 20,
             duration: 0.15,
@@ -247,10 +317,10 @@ class ImpactEffect extends PositionComponent {
         // Default spark burst
         final defaultSparkCount = _scaledCount(10, allowZero: true);
         for (int i = 0; i < defaultSparkCount; i++) {
-          _sparks.add(_Spark(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 100 + _random.nextDouble() * 50,
-            length: 10 + _random.nextDouble() * 5,
+          _sparks.add(_Spark.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 100 + _nextUnit() * 50,
+            length: 10 + _nextUnit() * 5,
             lifetime: 0.2,
           ));
         }
@@ -260,7 +330,7 @@ class ImpactEffect extends PositionComponent {
         // Multiple expanding rings for pop effect
         final bubbleRingCount = _scaledCount(4);
         for (int i = 0; i < bubbleRingCount; i++) {
-          _rings.add(_ImpactRing(
+          _rings.add(_ImpactRing.obtain(
             startRadius: 8 + i * 4,
             endRadius: 35 + i * 8,
             duration: 0.2 + i * 0.05,
@@ -269,22 +339,22 @@ class ImpactEffect extends PositionComponent {
         // Plasma droplets flying outward
         final dropletCount = _scaledCount(14, allowZero: true);
         for (int i = 0; i < dropletCount; i++) {
-          _particles.add(_ImpactParticle(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 60 + _random.nextDouble() * 80,
-            size: 2 + _random.nextDouble() * 3,
-            lifetime: 0.35 + _random.nextDouble() * 0.15,
-            rotationSpeed: (_random.nextDouble() - 0.5) * 8,
+          _particles.add(_ImpactParticle.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 60 + _nextUnit() * 80,
+            size: 2 + _nextUnit() * 3,
+            lifetime: 0.35 + _nextUnit() * 0.15,
+            rotationSpeed: (_nextUnit() - 0.5) * 8,
             isBubbleDroplet: true,
           ));
         }
         // Electric discharge from popped bubble
         final bubbleSparkCount = _scaledCount(6, allowZero: true);
         for (int i = 0; i < bubbleSparkCount; i++) {
-          _sparks.add(_Spark(
-            angle: _random.nextDouble() * math.pi * 2,
-            speed: 70 + _random.nextDouble() * 50,
-            length: 10 + _random.nextDouble() * 8,
+          _sparks.add(_Spark.obtain(
+            angle: _nextUnit() * math.pi * 2,
+            speed: 70 + _nextUnit() * 50,
+            length: 10 + _nextUnit() * 8,
             lifetime: 0.25,
             isElectric: true,
           ));
@@ -304,6 +374,17 @@ class ImpactEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
     _timer += dt;
 
     // Update particles
@@ -329,10 +410,12 @@ class ImpactEffect extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     final progress = (_timer / duration).clamp(0.0, 1.0);
     final fadeOut = 1.0 - progress;
+    if (fadeOut <= 0.01) return;
 
     // Use cached sprites under high stress for better performance
     if (_useCachedSprites) {
@@ -347,6 +430,7 @@ class ImpactEffect extends PositionComponent {
       final ringProgress = ring.progress;
       final radius = ring.currentRadius;
       final alpha = (1 - ringProgress) * fadeOut;
+      if (alpha <= 0.01) continue;
 
       // Ring glow
       _ringGlowPaint.color = color.withOpacity(alpha * 0.3);
@@ -361,9 +445,12 @@ class ImpactEffect extends PositionComponent {
     for (final particle in _particles) {
       if (!particle.isActive) continue;
 
-      final px = math.cos(particle.angle) * particle.distance;
-      final py = math.sin(particle.angle) * particle.distance;
+      final px = particle.dirX * particle.distance;
+      final py = particle.dirY * particle.distance;
       final alpha = particle.alpha * fadeOut;
+      if (alpha <= 0.01) {
+        continue;
+      }
 
       canvas.save();
       canvas.translate(px, py);
@@ -393,19 +480,23 @@ class ImpactEffect extends PositionComponent {
 
         // Outer glow
         _bubbleDropletGlowPaint.color = color.withOpacity(alpha * 0.5);
-        canvas.drawCircle(Offset.zero, particle.size * 1.5, _bubbleDropletGlowPaint);
+        canvas.drawCircle(
+            Offset.zero, particle.size * 1.5, _bubbleDropletGlowPaint);
 
         // Membrane ring
         _bubbleDropletRingPaint.color = pinkColor.withOpacity(alpha * 0.7);
         canvas.drawCircle(Offset.zero, particle.size, _bubbleDropletRingPaint);
 
         // Bright core
-        _bubbleDropletCorePaint.color = const Color(0xFFFFFFFF).withOpacity(alpha * 0.8);
-        canvas.drawCircle(Offset.zero, particle.size * 0.4, _bubbleDropletCorePaint);
+        _bubbleDropletCorePaint.color =
+            const Color(0xFFFFFFFF).withOpacity(alpha * 0.8);
+        canvas.drawCircle(
+            Offset.zero, particle.size * 0.4, _bubbleDropletCorePaint);
 
         // Secondary pink core
         _bubbleDropletCorePaint.color = pinkColor.withOpacity(alpha * 0.6);
-        canvas.drawCircle(Offset.zero, particle.size * 0.6, _bubbleDropletCorePaint);
+        canvas.drawCircle(
+            Offset.zero, particle.size * 0.6, _bubbleDropletCorePaint);
       } else {
         // Draw circle particle
         _particleGlowPaint.color = color.withOpacity(alpha * 0.4);
@@ -422,10 +513,11 @@ class ImpactEffect extends PositionComponent {
       if (!spark.isActive) continue;
 
       final alpha = spark.alpha * fadeOut;
-      final startX = math.cos(spark.angle) * spark.distance;
-      final startY = math.sin(spark.angle) * spark.distance;
-      final endX = math.cos(spark.angle) * (spark.distance + spark.length);
-      final endY = math.sin(spark.angle) * (spark.distance + spark.length);
+      if (alpha <= 0.01) continue;
+      final startX = spark.dirX * spark.distance;
+      final startY = spark.dirY * spark.distance;
+      final endX = spark.dirX * (spark.distance + spark.length);
+      final endY = spark.dirY * (spark.distance + spark.length);
 
       if (spark.isElectric) {
         // Draw zigzag electric spark using reusable path
@@ -438,10 +530,9 @@ class ImpactEffect extends PositionComponent {
           final baseX = startX + (endX - startX) * stepProgress;
           final baseY = startY + (endY - startY) * stepProgress;
 
-          final perpAngle = spark.angle + math.pi / 2;
           final jitter = math.sin(_timer * 30 + i * 2) * 3;
-          final jitterX = math.cos(perpAngle) * jitter;
-          final jitterY = math.sin(perpAngle) * jitter;
+          final jitterX = spark.perpX * jitter;
+          final jitterY = spark.perpY * jitter;
 
           _reusablePath.lineTo(baseX + jitterX, baseY + jitterY);
         }
@@ -466,6 +557,17 @@ class ImpactEffect extends PositionComponent {
     }
 
     // Central flash removed to reduce hit strobing.
+  }
+
+  bool _isOffscreen({double padding = 60}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   /// Renders using pre-cached sprites for high-performance mode
@@ -536,6 +638,10 @@ class ImpactEffect extends PositionComponent {
   }
 
   void _recycle() {
+    _recycleParticles();
+    _recycleRings();
+    _recycleSparks();
+    _live.remove(this);
     if (_counted) {
       if (_activeCount > 0) {
         _activeCount -= 1;
@@ -554,6 +660,7 @@ class ImpactEffect extends PositionComponent {
 
   @override
   void onRemove() {
+    _live.remove(this);
     if (_counted) {
       if (_activeCount > 0) {
         _activeCount -= 1;
@@ -565,31 +672,112 @@ class ImpactEffect extends PositionComponent {
 }
 
 class _ImpactParticle {
-  _ImpactParticle({
+  _ImpactParticle._internal({
     required this.angle,
+    required this.dirX,
+    required this.dirY,
     required this.speed,
     required this.size,
     required this.lifetime,
-    this.rotationSpeed = 0,
-    this.isRune = false,
-    this.isStar = false,
-    this.isBubbleDroplet = false,
-  }) : distance = 0,
-       rotation = 0,
-       _timer = 0;
+    required this.rotationSpeed,
+    required this.isRune,
+    required this.isStar,
+    required this.isBubbleDroplet,
+  })  : distance = 0,
+        rotation = 0,
+        _timer = 0;
 
-  final double angle;
-  final double speed;
-  final double size;
-  final double lifetime;
-  final double rotationSpeed;
-  final bool isRune;
-  final bool isStar;
-  final bool isBubbleDroplet;
+  static const int _maxPool = 220;
+  static final List<_ImpactParticle> _pool = [];
+
+  static _ImpactParticle obtain({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    double rotationSpeed = 0,
+    bool isRune = false,
+    bool isStar = false,
+    bool isBubbleDroplet = false,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        angle: angle,
+        speed: speed,
+        size: size,
+        lifetime: lifetime,
+        rotationSpeed: rotationSpeed,
+        isRune: isRune,
+        isStar: isStar,
+        isBubbleDroplet: isBubbleDroplet,
+      );
+      return item;
+    }
+    final dirX = math.cos(angle);
+    final dirY = math.sin(angle);
+    return _ImpactParticle._internal(
+      angle: angle,
+      dirX: dirX,
+      dirY: dirY,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      rotationSpeed: rotationSpeed,
+      isRune: isRune,
+      isStar: isStar,
+      isBubbleDroplet: isBubbleDroplet,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double angle;
+  double dirX;
+  double dirY;
+  double speed;
+  double size;
+  double lifetime;
+  double rotationSpeed;
+  bool isRune;
+  bool isStar;
+  bool isBubbleDroplet;
 
   double distance;
   double rotation;
   double _timer;
+
+  void _reset({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double rotationSpeed,
+    required bool isRune,
+    required bool isStar,
+    required bool isBubbleDroplet,
+  }) {
+    this.angle = angle;
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    this.speed = speed;
+    this.size = size;
+    this.lifetime = lifetime;
+    this.rotationSpeed = rotationSpeed;
+    this.isRune = isRune;
+    this.isStar = isStar;
+    this.isBubbleDroplet = isBubbleDroplet;
+    distance = 0;
+    rotation = 0;
+    _timer = 0;
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    _pool.add(this);
+  }
 
   bool get isActive => _timer < lifetime;
   double get alpha => (1 - _timer / lifetime).clamp(0.0, 1.0);
@@ -602,23 +790,96 @@ class _ImpactParticle {
 }
 
 class _Spark {
-  _Spark({
+  _Spark._internal({
     required this.angle,
+    required this.dirX,
+    required this.dirY,
+    required this.perpX,
+    required this.perpY,
     required this.speed,
     required this.length,
     required this.lifetime,
-    this.isElectric = false,
-  }) : distance = 0,
-       _timer = 0;
+    required this.isElectric,
+  })  : distance = 0,
+        _timer = 0;
 
-  final double angle;
-  final double speed;
-  final double length;
-  final double lifetime;
-  final bool isElectric;
+  static const int _maxPool = 260;
+  static final List<_Spark> _pool = [];
+
+  static _Spark obtain({
+    required double angle,
+    required double speed,
+    required double length,
+    required double lifetime,
+    bool isElectric = false,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        angle: angle,
+        speed: speed,
+        length: length,
+        lifetime: lifetime,
+        isElectric: isElectric,
+      );
+      return item;
+    }
+    final dirX = math.cos(angle);
+    final dirY = math.sin(angle);
+    return _Spark._internal(
+      angle: angle,
+      dirX: dirX,
+      dirY: dirY,
+      perpX: -dirY,
+      perpY: dirX,
+      speed: speed,
+      length: length,
+      lifetime: lifetime,
+      isElectric: isElectric,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double angle;
+  double dirX;
+  double dirY;
+  double perpX;
+  double perpY;
+  double speed;
+  double length;
+  double lifetime;
+  bool isElectric;
 
   double distance;
   double _timer;
+
+  void _reset({
+    required double angle,
+    required double speed,
+    required double length,
+    required double lifetime,
+    required bool isElectric,
+  }) {
+    this.angle = angle;
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    perpX = -dirY;
+    perpY = dirX;
+    this.speed = speed;
+    this.length = length;
+    this.lifetime = lifetime;
+    this.isElectric = isElectric;
+    distance = 0;
+    _timer = 0;
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    _pool.add(this);
+  }
 
   bool get isActive => _timer < lifetime;
   double get alpha => (1 - _timer / lifetime).clamp(0.0, 1.0);
@@ -630,21 +891,66 @@ class _Spark {
 }
 
 class _ImpactRing {
-  _ImpactRing({
+  _ImpactRing._internal({
     required this.startRadius,
     required this.endRadius,
     required this.duration,
   }) : _timer = 0;
 
-  final double startRadius;
-  final double endRadius;
-  final double duration;
+  static const int _maxPool = 120;
+  static final List<_ImpactRing> _pool = [];
+
+  static _ImpactRing obtain({
+    required double startRadius,
+    required double endRadius,
+    required double duration,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        startRadius: startRadius,
+        endRadius: endRadius,
+        duration: duration,
+      );
+      return item;
+    }
+    return _ImpactRing._internal(
+      startRadius: startRadius,
+      endRadius: endRadius,
+      duration: duration,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double startRadius;
+  double endRadius;
+  double duration;
 
   double _timer;
 
+  void _reset({
+    required double startRadius,
+    required double endRadius,
+    required double duration,
+  }) {
+    this.startRadius = startRadius;
+    this.endRadius = endRadius;
+    this.duration = duration;
+    _timer = 0;
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    _pool.add(this);
+  }
+
   bool get isActive => _timer < duration;
   double get progress => (_timer / duration).clamp(0.0, 1.0);
-  double get currentRadius => startRadius + (endRadius - startRadius) * progress;
+  double get currentRadius =>
+      startRadius + (endRadius - startRadius) * progress;
 
   void update(double dt) {
     _timer += dt;

@@ -6,6 +6,23 @@ import 'package:flutter/material.dart';
 import '../../data/story_data.dart';
 import '../bored_games_game.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// In-game dialogue system for epic battle moments
 class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   BattleDialogueComponent() {
@@ -37,6 +54,26 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
   static final Paint _avatarBorderPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
+  static final Paint _cursorPaint = Paint();
+  static final Paint _moodPaint = Paint();
+
+  final TextPainter _letterPainter = TextPainter(textDirection: TextDirection.ltr);
+  final TextPainter _namePainter = TextPainter(textDirection: TextDirection.ltr);
+  final TextPainter _dialoguePainter = TextPainter(
+    textDirection: TextDirection.ltr,
+    maxLines: 2,
+    ellipsis: '...',
+  );
+  String _letterText = '';
+  int _letterColorValue = 0;
+  double _letterFontSize = 0;
+  String _nameText = '';
+  int _nameColorValue = 0;
+  double _nameFontSize = 0;
+  String _dialogueText = '';
+  int _dialogueColorValue = 0;
+  double _dialogueFontSize = 0;
+  double _dialogueMaxWidth = 0;
 
   /// Queue a battle dialogue to show
   void showDialogue({
@@ -92,7 +129,7 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
 
   /// Trigger when boss health reaches 50%
   void onBossHalfHealth(String bossName) {
-    final random = math.Random();
+    final random = _FastRng();
     if (random.nextBool()) {
       showDialogue(
         speaker: StoryData.aria,
@@ -155,7 +192,7 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
 
   /// Trigger randomly during battle
   void onRandomBattleMoment() {
-    final random = math.Random();
+    final random = _FastRng();
     final messages = [
       (StoryData.aria, '¡Excelente posicionamiento, Arquitecto!', BriefingMood.hopeful),
       (StoryData.aria, 'Los patrones de ataque son predecibles. Aprovéchalo.', BriefingMood.analytical),
@@ -174,7 +211,7 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
 
   /// Decompiler taunts during final boss
   void onDecompilerTaunt() {
-    final random = math.Random();
+    final random = _FastRng();
     final taunts = [
       '¿Crees que puedes detenerme? Soy inevitable.',
       'El Vacío es paz. ¿Por qué resistes?',
@@ -192,7 +229,7 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
 
   /// Echo encouragement
   void onEchoEncouragement() {
-    final random = math.Random();
+    final random = _FastRng();
     final messages = [
       'No te rindas. Yo no lo hice... hasta el final.',
       'Eres más fuerte de lo que crees, Arquitecto.',
@@ -304,27 +341,19 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
       const Radius.circular(8),
     );
 
-    canvas.drawRRect(
-      bgRect,
-      Paint()..color = Colors.black.withAlpha((alpha * 0.85).round()),
-    );
+    _bgPaint.color = Colors.black.withAlpha((alpha * 0.85).round());
+    canvas.drawRRect(bgRect, _bgPaint);
 
     // Border with speaker color
-    canvas.drawRRect(
-      bgRect,
-      Paint()
-        ..color = dialogue.speaker.avatarColor.withAlpha((alpha * 0.8).round())
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+    _borderPaint
+      ..color = dialogue.speaker.avatarColor.withAlpha((alpha * 0.8).round())
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRRect(bgRect, _borderPaint);
 
     // Glow effect
-    canvas.drawRRect(
-      bgRect.inflate(3),
-      Paint()
-        ..color = dialogue.speaker.avatarColor.withAlpha((alpha * 0.3).round())
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
+    _glowPaint.color = dialogue.speaker.avatarColor.withAlpha((alpha * 0.3).round());
+    canvas.drawRRect(bgRect.inflate(3), _glowPaint);
 
     // Speaker avatar
     final avatarSize = compact ? 36.0 : 44.0;
@@ -333,55 +362,68 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
       const Radius.circular(6),
     );
 
-    canvas.drawRRect(
-      avatarRect,
-      Paint()..color = dialogue.speaker.avatarColor.withAlpha((alpha * 0.2).round()),
-    );
+    _avatarBgPaint.color =
+        dialogue.speaker.avatarColor.withAlpha((alpha * 0.2).round());
+    canvas.drawRRect(avatarRect, _avatarBgPaint);
 
-    canvas.drawRRect(
-      avatarRect,
-      Paint()
-        ..color = dialogue.speaker.avatarColor.withAlpha(alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+    _avatarBorderPaint
+      ..color = dialogue.speaker.avatarColor.withAlpha(alpha)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawRRect(avatarRect, _avatarBorderPaint);
 
     // Avatar letter
-    final letterPainter = TextPainter(
-      text: TextSpan(
-        text: dialogue.speaker.name[0],
+    final letter = dialogue.speaker.name[0];
+    final letterColor = dialogue.speaker.avatarColor.withAlpha(alpha);
+    final letterFontSize = compact ? 18.0 : 22.0;
+    if (_letterText != letter ||
+        _letterColorValue != letterColor.value ||
+        _letterFontSize != letterFontSize) {
+      _letterText = letter;
+      _letterColorValue = letterColor.value;
+      _letterFontSize = letterFontSize;
+      _letterPainter.text = TextSpan(
+        text: letter,
         style: TextStyle(
-          color: dialogue.speaker.avatarColor.withAlpha(alpha),
-          fontSize: compact ? 18 : 22,
+          color: letterColor,
+          fontSize: letterFontSize,
           fontWeight: FontWeight.bold,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      );
+      _letterPainter.layout();
+    }
 
-    letterPainter.paint(
+    _letterPainter.paint(
       canvas,
       Offset(
-        10 + (avatarSize - letterPainter.width) / 2,
-        (compact ? 70 : 80 - letterPainter.height) / 2,
+        10 + (avatarSize - _letterPainter.width) / 2,
+        (compact ? 70 : 80 - _letterPainter.height) / 2,
       ),
     );
 
     // Speaker name
-    final namePainter = TextPainter(
-      text: TextSpan(
-        text: dialogue.speaker.dialoguePrefix,
+    final name = dialogue.speaker.dialoguePrefix;
+    final nameColor = dialogue.speaker.avatarColor.withAlpha(alpha);
+    final nameFontSize = compact ? 10.0 : 11.0;
+    if (_nameText != name ||
+        _nameColorValue != nameColor.value ||
+        _nameFontSize != nameFontSize) {
+      _nameText = name;
+      _nameColorValue = nameColor.value;
+      _nameFontSize = nameFontSize;
+      _namePainter.text = TextSpan(
+        text: name,
         style: TextStyle(
-          color: dialogue.speaker.avatarColor.withAlpha(alpha),
-          fontSize: compact ? 10 : 11,
+          color: nameColor,
+          fontSize: nameFontSize,
           fontWeight: FontWeight.bold,
           letterSpacing: 1,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      );
+      _namePainter.layout();
+    }
 
-    namePainter.paint(canvas, Offset(20 + avatarSize, compact ? 10 : 12));
+    _namePainter.paint(canvas, Offset(20 + avatarSize, compact ? 10 : 12));
 
     // Dialogue text (with typewriter effect)
     final displayedChars = _typewriterProgress.floor();
@@ -390,43 +432,50 @@ class BattleDialogueComponent extends PositionComponent with HasGameRef<BoredGam
       displayedChars.clamp(0, dialogue.text.length),
     );
 
-    final textPainter = TextPainter(
-      text: TextSpan(
+    final dialogueColor =
+        Colors.white.withAlpha((alpha * 0.95).round());
+    final dialogueFontSize = compact ? 12.0 : 13.0;
+    final maxWidth = boxWidth - avatarSize - 40;
+    if (_dialogueText != displayedText ||
+        _dialogueColorValue != dialogueColor.value ||
+        _dialogueFontSize != dialogueFontSize ||
+        _dialogueMaxWidth != maxWidth) {
+      _dialogueText = displayedText;
+      _dialogueColorValue = dialogueColor.value;
+      _dialogueFontSize = dialogueFontSize;
+      _dialogueMaxWidth = maxWidth;
+      _dialoguePainter.text = TextSpan(
         text: displayedText,
         style: TextStyle(
-          color: Colors.white.withAlpha((alpha * 0.95).round()),
-          fontSize: compact ? 12 : 13,
+          color: dialogueColor,
+          fontSize: dialogueFontSize,
           height: 1.3,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 2,
-      ellipsis: '...',
-    )..layout(maxWidth: boxWidth - avatarSize - 40);
+      );
+      _dialoguePainter.layout(maxWidth: maxWidth);
+    }
 
-    textPainter.paint(canvas, Offset(20 + avatarSize, compact ? 28 : 32));
+    _dialoguePainter.paint(canvas, Offset(20 + avatarSize, compact ? 28 : 32));
 
     // Typing indicator
     if (displayedChars < dialogue.text.length) {
-      final cursorX = 20 + avatarSize + textPainter.width + 2;
+      final cursorX = 20 + avatarSize + _dialoguePainter.width + 2;
       final cursorY = compact ? 30.0 : 34.0;
 
       final blink = ((_displayTime * 3) % 1) < 0.5;
       if (blink) {
+        _cursorPaint.color = dialogue.speaker.avatarColor.withAlpha(alpha);
         canvas.drawRect(
           Rect.fromLTWH(cursorX, cursorY, 2, compact ? 14.0 : 16.0),
-          Paint()..color = dialogue.speaker.avatarColor.withAlpha(alpha),
+          _cursorPaint,
         );
       }
     }
 
     // Mood indicator (small dot)
     final moodColor = _getMoodColor(dialogue.mood);
-    canvas.drawCircle(
-      Offset(boxWidth - 15, 15),
-      4,
-      Paint()..color = moodColor.withAlpha(alpha),
-    );
+    _moodPaint.color = moodColor.withAlpha(alpha);
+    canvas.drawCircle(Offset(boxWidth - 15, 15), 4, _moodPaint);
 
     canvas.restore();
   }
@@ -474,3 +523,4 @@ class _BattleDialogue {
     required this.mood,
   });
 }
+

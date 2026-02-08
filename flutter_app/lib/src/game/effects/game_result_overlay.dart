@@ -6,6 +6,23 @@ import 'package:flutter/material.dart';
 
 import '../../ui/theme/neon_theme.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Game result type
 enum GameResultType {
   victory,
@@ -17,11 +34,11 @@ class GameResultOverlay extends PositionComponent {
   GameResultOverlay({
     required this.gameSize,
     this.onComplete,
-  }) : _random = math.Random();
+  }) : _random = _FastRng();
 
   final Vector2 gameSize;
   final VoidCallback? onComplete;
-  final math.Random _random;
+  final _FastRng _random;
 
   // State
   bool _isActive = false;
@@ -112,8 +129,22 @@ class GameResultOverlay extends PositionComponent {
   TextPainter? _titlePainter;
   TextPainter? _subtitlePainter;
   final List<TextPainter?> _statPainters = [null, null, null, null];
+  final List<int> _statTextLengths = [0, 0, 0, 0];
   String? _lastTitle;
   GameResultType? _lastPainterType;
+
+  // Cached scanline layers to avoid per-frame line allocations
+  Picture? _titleScanlineLayer;
+  double _titleScanlineWidth = 0;
+  double _titleScanlineHeight = 0;
+  Picture? _glitchScanlineLayer;
+  double _glitchScanlineWidth = 0;
+  double _glitchScanlineHeight = 0;
+  final Paint _scanlineLayerPaint = Paint();
+  final Map<int, ColorFilter> _scanlineFilterCache = {};
+
+  // Reusable paths to avoid per-frame allocations
+  final Path _borderPath = Path();
 
   /// Whether the overlay is currently active
   bool get isActive => _isActive;
@@ -274,9 +305,15 @@ class GameResultOverlay extends PositionComponent {
     for (int i = 0; i < _statPainters.length; i++) {
       _statPainters[i]?.dispose();
       _statPainters[i] = null;
+      _statTextLengths[i] = 0;
     }
     _lastTitle = null;
     _lastPainterType = null;
+
+    _titleScanlineLayer?.dispose();
+    _titleScanlineLayer = null;
+    _titleScanlineWidth = 0;
+    _titleScanlineHeight = 0;
   }
 
   void _ensurePaintersValid() {
@@ -341,6 +378,7 @@ class GameResultOverlay extends PositionComponent {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
+      _statTextLengths[i] = statLines[i].length;
     }
 
     _lastTitle = titleText;
@@ -525,6 +563,13 @@ class GameResultOverlay extends PositionComponent {
     canvas.save();
     canvas.translate(centerX, titleY);
     canvas.scale(textScale, textScale);
+    final titlePad = allowBlur ? 80.0 : 30.0;
+    final titleRect = Rect.fromLTWH(
+      -_titlePainter!.width / 2 - titlePad,
+      -titlePad,
+      _titlePainter!.width + titlePad * 2,
+      _titlePainter!.height + titlePad * 2,
+    );
 
     // ═══════════════════════════════════════════════════════════════════════
     // TITLE TEXT LAYERS
@@ -533,7 +578,7 @@ class GameResultOverlay extends PositionComponent {
     // Outer glow
     if (allowBlur) {
       _textOuterGlowPaint.color = primaryColor.withOpacity(textAlpha * 0.3 * flicker);
-      canvas.saveLayer(null, _textOuterGlowPaint);
+      canvas.saveLayer(titleRect, _textOuterGlowPaint);
       _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2, 0));
       canvas.restore();
     }
@@ -541,51 +586,57 @@ class GameResultOverlay extends PositionComponent {
     // Mid glow
     if (allowBlur) {
       _textGlowPaint.color = primaryColor.withOpacity(textAlpha * 0.5 * flicker);
-      canvas.saveLayer(null, _textGlowPaint);
+      canvas.saveLayer(titleRect, _textGlowPaint);
       _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2, 0));
       canvas.restore();
     }
 
     // Hologram scanlines effect
     if (!reduceFx) {
-      canvas.save();
-      canvas.clipRect(Rect.fromLTWH(
-        -_titlePainter!.width / 2 - 10,
-        -10,
-        _titlePainter!.width + 20,
-        _titlePainter!.height + 20,
-      ));
-
-      for (double y = (_animationTime * 100) % 8; y < _titlePainter!.height + 20; y += 8) {
-        _textScanlinePaint.color = primaryColor.withOpacity(0.1 * textAlpha);
-        canvas.drawRect(
-          Rect.fromLTWH(-_titlePainter!.width / 2 - 10, y - 10, _titlePainter!.width + 20, 2),
-          _textScanlinePaint,
+      _ensureTitleScanlineLayer();
+      if (_titleScanlineLayer != null) {
+        final clipRect = Rect.fromLTWH(
+          -_titlePainter!.width / 2 - 10,
+          -10,
+          _titlePainter!.width + 20,
+          _titlePainter!.height + 20,
         );
+        final lineOffset = (_animationTime * 100) % 8;
+        _scanlineLayerPaint.colorFilter = _getScanlineFilter(primaryColor, 0.1 * textAlpha);
+        canvas.save();
+        canvas.clipRect(clipRect);
+        canvas.saveLayer(clipRect, _scanlineLayerPaint);
+        canvas.translate(-_titlePainter!.width / 2 - 10, -10 + lineOffset);
+        canvas.drawPicture(_titleScanlineLayer!);
+        canvas.restore();
+        canvas.restore();
       }
-      canvas.restore();
     }
 
     // Chromatic aberration (hologram split)
     if (!reduceFx && allowBlur) {
       // Red channel offset
       _textHologramPaint.color = Colors.red.withOpacity(textAlpha * 0.3);
-      canvas.saveLayer(null, _textHologramPaint);
+      canvas.saveLayer(titleRect, _textHologramPaint);
       _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2 - 3 + hologramOffset, 0));
       canvas.restore();
 
       // Cyan channel offset
       _textHologramPaint.color = Colors.cyan.withOpacity(textAlpha * 0.3);
-      canvas.saveLayer(null, _textHologramPaint);
+      canvas.saveLayer(titleRect, _textHologramPaint);
       _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2 + 3 - hologramOffset, 0));
       canvas.restore();
     }
 
     // Core text
     _textCorePaint.color = Colors.white.withOpacity(textAlpha * flicker);
-    canvas.saveLayer(null, _textCorePaint);
-    _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2, 0));
-    canvas.restore();
+    if (textAlpha * flicker >= 0.99) {
+      _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2, 0));
+    } else {
+      canvas.saveLayer(titleRect, _textCorePaint);
+      _titlePainter!.paint(canvas, Offset(-_titlePainter!.width / 2, 0));
+      canvas.restore();
+    }
 
     canvas.restore();
 
@@ -597,20 +648,31 @@ class GameResultOverlay extends PositionComponent {
 
       canvas.save();
       canvas.translate(centerX, subtitleY);
+      final subtitlePad = allowBlur ? 60.0 : 20.0;
+      final subtitleRect = Rect.fromLTWH(
+        -_subtitlePainter!.width / 2 - subtitlePad,
+        -subtitlePad,
+        _subtitlePainter!.width + subtitlePad * 2,
+        _subtitlePainter!.height + subtitlePad * 2,
+      );
 
       // Glow
       if (allowBlur) {
         _textGlowPaint.color = primaryColor.withOpacity(subtitleAlpha * 0.4);
-        canvas.saveLayer(null, _textGlowPaint);
+        canvas.saveLayer(subtitleRect, _textGlowPaint);
         _subtitlePainter!.paint(canvas, Offset(-_subtitlePainter!.width / 2, 0));
         canvas.restore();
       }
 
       // Core
       _textCorePaint.color = Colors.white.withOpacity(subtitleAlpha * 0.9);
-      canvas.saveLayer(null, _textCorePaint);
-      _subtitlePainter!.paint(canvas, Offset(-_subtitlePainter!.width / 2, 0));
-      canvas.restore();
+      if (subtitleAlpha >= 0.99) {
+        _subtitlePainter!.paint(canvas, Offset(-_subtitlePainter!.width / 2, 0));
+      } else {
+        canvas.saveLayer(subtitleRect, _textCorePaint);
+        _subtitlePainter!.paint(canvas, Offset(-_subtitlePainter!.width / 2, 0));
+        canvas.restore();
+      }
 
       canvas.restore();
     }
@@ -625,6 +687,7 @@ class GameResultOverlay extends PositionComponent {
 
       final lifeRatio = (p.life / p.maxLife).clamp(0.0, 1.0);
       final alpha = lifeRatio * progress;
+      if (alpha <= 0.01) continue;
 
       canvas.save();
       canvas.translate(p.x, p.y);
@@ -652,14 +715,11 @@ class GameResultOverlay extends PositionComponent {
           canvas.drawCircle(Offset.zero, p.size * 0.8, _particleGlowPaint);
         }
 
-        final path = Path()
-          ..moveTo(0, -p.size * 0.6)
-          ..lineTo(p.size * 0.4, p.size * 0.3)
-          ..lineTo(-p.size * 0.5, p.size * 0.4)
-          ..close();
-
         _particlePaint.color = p.color.withOpacity(alpha);
-        canvas.drawPath(path, _particlePaint);
+        final debrisPath = p.debrisPath;
+        if (debrisPath != null) {
+          canvas.drawPath(debrisPath, _particlePaint);
+        }
       }
 
       canvas.restore();
@@ -701,38 +761,38 @@ class GameResultOverlay extends PositionComponent {
     final totalPerimeter = 2 * (borderRect.width + borderRect.height);
     final drawnLength = totalPerimeter * borderProgress;
 
-    final borderPath = Path();
+    _borderPath.reset();
     var remaining = drawnLength;
 
     // Top edge
     if (remaining > 0) {
       final segLen = math.min(remaining, borderRect.width);
-      borderPath.moveTo(borderRect.left, borderRect.top);
-      borderPath.lineTo(borderRect.left + segLen, borderRect.top);
+      _borderPath.moveTo(borderRect.left, borderRect.top);
+      _borderPath.lineTo(borderRect.left + segLen, borderRect.top);
       remaining -= segLen;
     }
 
     // Right edge
     if (remaining > 0) {
       final segLen = math.min(remaining, borderRect.height);
-      borderPath.lineTo(borderRect.right, borderRect.top + segLen);
+      _borderPath.lineTo(borderRect.right, borderRect.top + segLen);
       remaining -= segLen;
     }
 
     // Bottom edge
     if (remaining > 0) {
       final segLen = math.min(remaining, borderRect.width);
-      borderPath.lineTo(borderRect.right - segLen, borderRect.bottom);
+      _borderPath.lineTo(borderRect.right - segLen, borderRect.bottom);
       remaining -= segLen;
     }
 
     // Left edge
     if (remaining > 0) {
       final segLen = math.min(remaining, borderRect.height);
-      borderPath.lineTo(borderRect.left, borderRect.bottom - segLen);
+      _borderPath.lineTo(borderRect.left, borderRect.bottom - segLen);
     }
 
-    canvas.drawPath(borderPath, _borderCorePaint);
+    canvas.drawPath(_borderPath, _borderCorePaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // CORNER NODES
@@ -904,18 +964,20 @@ class GameResultOverlay extends PositionComponent {
       canvas.save();
 
       // Clip to show only typed characters
-      final charWidth = painter.width / painter.text!.toPlainText().length;
+      final textLength = _statTextLengths[i];
+      final charWidth = textLength > 0 ? painter.width / textLength : painter.width;
       final visibleWidth = charWidth * visibleChars;
 
-      canvas.clipRect(Rect.fromLTWH(
+      final lineRect = Rect.fromLTWH(
         centerX - boxWidth / 2 + 20,
         textStartY + i * lineHeight - 5,
         visibleWidth,
         lineHeight,
-      ));
+      );
+      canvas.clipRect(lineRect);
 
       _textCorePaint.color = Colors.white.withOpacity(lineAlpha);
-      canvas.saveLayer(null, _textCorePaint);
+      canvas.saveLayer(lineRect, _textCorePaint);
       painter.paint(canvas, Offset(centerX - boxWidth / 2 + 20, textStartY + i * lineHeight));
       canvas.restore();
 
@@ -954,6 +1016,7 @@ class GameResultOverlay extends PositionComponent {
 
       final waveProgress = (w.radius / w.maxRadius).clamp(0.0, 1.0);
       final alpha = w.alpha * (1 - waveProgress) * progress;
+      if (alpha <= 0.01) continue;
 
       _wavePaint.color = primaryColor.withOpacity(alpha);
       canvas.drawCircle(Offset(centerX, centerY), w.radius, _wavePaint);
@@ -962,18 +1025,28 @@ class GameResultOverlay extends PositionComponent {
 
   void _renderGlitchOverlay(Canvas canvas, Rect screenRect, double progress) {
     if (progress < 0.2) return;
+    if (reduceFx) return;
 
     final glitchAlpha = progress * 0.15;
+    if (glitchAlpha <= 0.01) return;
 
     // ═══════════════════════════════════════════════════════════════════════
     // SCANLINES
     // ═══════════════════════════════════════════════════════════════════════
-    _scanlinePaint.color = Colors.black.withOpacity(glitchAlpha * 0.3);
-    for (double y = 0; y < screenRect.height; y += 4) {
-      canvas.drawRect(
-        Rect.fromLTWH(0, y, screenRect.width, 1),
-        _scanlinePaint,
-      );
+    _ensureGlitchScanlineLayer(screenRect);
+    if (_glitchScanlineLayer != null) {
+      _scanlineLayerPaint.colorFilter = _getScanlineFilter(Colors.black, glitchAlpha * 0.3);
+      canvas.saveLayer(screenRect, _scanlineLayerPaint);
+      canvas.drawPicture(_glitchScanlineLayer!);
+      canvas.restore();
+    } else {
+      _scanlinePaint.color = Colors.black.withOpacity(glitchAlpha * 0.3);
+      for (double y = 0; y < screenRect.height; y += 4) {
+        canvas.drawRect(
+          Rect.fromLTWH(0, y, screenRect.width, 1),
+          _scanlinePaint,
+        );
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -989,6 +1062,7 @@ class GameResultOverlay extends PositionComponent {
 
         final glitchProgress = g.timer / g.duration;
         final alpha = (1 - glitchProgress) * progress * 0.4;
+        if (alpha <= 0.01) continue;
 
         // Horizontal displacement block
         _glitchBlockPaint.color = Colors.black.withOpacity(alpha * 0.5);
@@ -1010,7 +1084,7 @@ class GameResultOverlay extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     // NOISE FLICKER
     // ═══════════════════════════════════════════════════════════════════════
-    if (_random.nextDouble() < 0.05) {
+    if (progress > 0.4 && _random.nextDouble() < 0.05) {
       _noisePaint.color = Colors.white.withOpacity(_random.nextDouble() * 0.03);
       canvas.drawRect(screenRect, _noisePaint);
     }
@@ -1024,7 +1098,71 @@ class GameResultOverlay extends PositionComponent {
   @override
   void onRemove() {
     _invalidatePainterCache();
+    _glitchScanlineLayer?.dispose();
+    _glitchScanlineLayer = null;
     super.onRemove();
+  }
+
+  void _ensureTitleScanlineLayer() {
+    if (_titlePainter == null) return;
+    final width = _titlePainter!.width + 20;
+    final height = _titlePainter!.height + 28; // +20 plus one extra step
+    if (_titleScanlineLayer != null &&
+        _titleScanlineWidth == width &&
+        _titleScanlineHeight == height) {
+      return;
+    }
+
+    final recorder = PictureRecorder();
+    final staticCanvas = Canvas(recorder);
+    for (double y = 0; y < height; y += 8) {
+      staticCanvas.drawRect(
+        Rect.fromLTWH(0, y, width, 2),
+        _textScanlinePaint..color = Colors.white,
+      );
+    }
+
+    _titleScanlineLayer?.dispose();
+    _titleScanlineLayer = recorder.endRecording();
+    _titleScanlineWidth = width;
+    _titleScanlineHeight = height;
+  }
+
+  void _ensureGlitchScanlineLayer(Rect screenRect) {
+    final width = screenRect.width;
+    final height = screenRect.height + 4;
+    if (_glitchScanlineLayer != null &&
+        _glitchScanlineWidth == width &&
+        _glitchScanlineHeight == height) {
+      return;
+    }
+
+    final recorder = PictureRecorder();
+    final staticCanvas = Canvas(recorder);
+    for (double y = 0; y < height; y += 4) {
+      staticCanvas.drawRect(
+        Rect.fromLTWH(0, y, width, 1),
+        _textScanlinePaint..color = Colors.white,
+      );
+    }
+
+    _glitchScanlineLayer?.dispose();
+    _glitchScanlineLayer = recorder.endRecording();
+    _glitchScanlineWidth = width;
+    _glitchScanlineHeight = height;
+  }
+
+  ColorFilter _getScanlineFilter(Color color, double alpha) {
+    const levels = 32;
+    final level = (alpha * levels).round().clamp(0, levels);
+    final key = (color.value << 6) ^ level;
+    return _scanlineFilterCache.putIfAbsent(
+      key,
+      () => ColorFilter.mode(
+        color.withOpacity(level / levels),
+        BlendMode.modulate,
+      ),
+    );
   }
 }
 
@@ -1051,7 +1189,15 @@ class _ResultParticle {
     required this.color,
     required this.type,
     required this.delay,
-  });
+  }) {
+    if (type == _ParticleType.debris) {
+      debrisPath = Path()
+        ..moveTo(0, -size * 0.6)
+        ..lineTo(size * 0.4, size * 0.3)
+        ..lineTo(-size * 0.5, size * 0.4)
+        ..close();
+    }
+  }
 
   double x;
   double y;
@@ -1065,6 +1211,7 @@ class _ResultParticle {
   final Color color;
   final _ParticleType type;
   final double delay;
+  Path? debrisPath;
 }
 
 class _EnergyWave {
@@ -1102,3 +1249,4 @@ class _GlitchLine {
   double timer;
   final double interval;
 }
+

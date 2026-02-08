@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 /// Type of damage for different visual styles
 enum DamageNumberType {
   /// Normal damage (red/orange)
@@ -27,7 +29,7 @@ class DamageNumberEffect extends PositionComponent {
     required int damageAmount,
     required DamageNumberType type,
     required double duration,
-  }) : _random = math.Random() {
+  }) : _rngState = 0x1234abcd {
     _reset(
       position: position,
       damageAmount: damageAmount,
@@ -121,7 +123,12 @@ class DamageNumberEffect extends PositionComponent {
 
   // Reusable path for scanlines
   static final Path _scanlinePath = Path();
-  static final math.Random _staticRandom = math.Random();
+  static int _staticRngState = 0x5f3759df;
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _staticUnit() {
+    _staticRngState = _lcgNext(_staticRngState);
+    return _staticRngState / 0x7fffffff;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // INSTANCE PROPERTIES
@@ -130,10 +137,17 @@ class DamageNumberEffect extends PositionComponent {
   DamageNumberType type = DamageNumberType.damage;
   double duration = 1.5;
 
-  final math.Random _random;
+  int _rngState;
+  int _lcgNextLocal(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  double _nextUnit() {
+    _rngState = _lcgNextLocal(_rngState);
+    return _rngState / 0x7fffffff;
+  }
   double _timer = 0;
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Physics simulation
   double _velocityY = 0;
@@ -156,6 +170,9 @@ class DamageNumberEffect extends PositionComponent {
   TextPainter? _cachedPainter;
   String _cachedText = '';
   double _cachedFontSize = 0;
+  double _cachedTextWidth = 0;
+  double _cachedTextHeight = 0;
+  Rect? _cachedTextLayerRect;
 
   void _markActive() {
     if (_counted) return;
@@ -180,14 +197,14 @@ class DamageNumberEffect extends PositionComponent {
     _bounceCount = 0;
 
     // Initialize physics with random horizontal velocity
-    _velocityY = _initialUpwardVelocity * (0.8 + _random.nextDouble() * 0.4);
-    _velocityX = (_random.nextDouble() - 0.5) * 40;
+    _velocityY = _initialUpwardVelocity * (0.8 + _nextUnit() * 0.4);
+    _velocityX = (_nextUnit() - 0.5) * 40;
 
     // Visual effect randomization
     _flickerTimer = 0;
     _glitchOffset = 0;
-    _wobblePhase = _random.nextDouble() * math.pi * 2;
-    _scaleVariation = 0.9 + _random.nextDouble() * 0.2;
+    _wobblePhase = _nextUnit() * math.pi * 2;
+    _scaleVariation = 0.9 + _nextUnit() * 0.2;
   }
 
   /// Get the base color for damage type
@@ -251,6 +268,17 @@ class DamageNumberEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _timer += dt;
     _flickerTimer += dt;
@@ -280,20 +308,21 @@ class DamageNumberEffect extends PositionComponent {
       _bounceCount++;
 
       // Add a glitch effect on bounce
-      _glitchOffset = (_random.nextDouble() - 0.5) * 8;
+      _glitchOffset = (_nextUnit() - 0.5) * 8;
     }
 
     // Gradually reduce glitch offset
     _glitchOffset *= 0.9;
 
     // Random flicker for holographic effect
-    if (_flickerTimer > 0.05 + _random.nextDouble() * 0.1) {
+    if (_flickerTimer > 0.05 + _nextUnit() * 0.1) {
       _flickerTimer = 0;
     }
   }
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     if (lowFx) {
@@ -310,6 +339,7 @@ class DamageNumberEffect extends PositionComponent {
     } else {
       alpha = 1.0 - ((progress - 0.7) / 0.3);
     }
+    if (alpha <= 0.01) return;
 
     // Scale animation - pop in, then slight shrink
     double scale;
@@ -340,23 +370,24 @@ class DamageNumberEffect extends PositionComponent {
     // Apply scale
     canvas.scale(scale, scale);
 
-    final textWidth = _cachedPainter!.width;
-    final textHeight = _cachedPainter!.height;
+    final textWidth = _cachedTextWidth;
+    final textHeight = _cachedTextHeight;
     final textOffset = Offset(-textWidth / 2, -textHeight / 2);
+    final textLayerRect = _cachedTextLayerRect!;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: GLOW BEHIND TEXT
     // ═══════════════════════════════════════════════════════════════════════
     if (!reduceFx) {
       _glowPaint.color = _glowColor.withOpacity(alpha * 0.5);
-      canvas.saveLayer(null, _glowPaint);
+      canvas.saveLayer(textLayerRect, _glowPaint);
       _cachedPainter!.paint(canvas, textOffset);
       canvas.restore();
 
       // Secondary softer glow
       _textShadowPaint.color = _baseColor.withOpacity(alpha * 0.3);
       _textShadowPaint.maskFilter = _blur(12);
-      canvas.saveLayer(null, _textShadowPaint);
+      canvas.saveLayer(textLayerRect, _textShadowPaint);
       _cachedPainter!.paint(canvas, textOffset);
       canvas.restore();
     }
@@ -369,13 +400,13 @@ class DamageNumberEffect extends PositionComponent {
 
       // Red channel offset
       _chromaRedPaint.color = const Color(0xFFFF0000).withOpacity(alpha * 0.25);
-      canvas.saveLayer(null, _chromaRedPaint);
+      canvas.saveLayer(textLayerRect, _chromaRedPaint);
       _cachedPainter!.paint(canvas, textOffset + Offset(-chromaOffset, 0));
       canvas.restore();
 
       // Blue channel offset
       _chromaBluePaint.color = const Color(0xFF0066FF).withOpacity(alpha * 0.25);
-      canvas.saveLayer(null, _chromaBluePaint);
+      canvas.saveLayer(textLayerRect, _chromaBluePaint);
       _cachedPainter!.paint(canvas, textOffset + Offset(chromaOffset, 0));
       canvas.restore();
     }
@@ -383,27 +414,31 @@ class DamageNumberEffect extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: MAIN TEXT
     // ═══════════════════════════════════════════════════════════════════════
-    _alphaPaint.color = Color.fromRGBO(255, 255, 255, alpha);
-    canvas.saveLayer(null, _alphaPaint);
-    _cachedPainter!.paint(canvas, textOffset);
-    canvas.restore();
+    if (alpha >= 0.99) {
+      _cachedPainter!.paint(canvas, textOffset);
+    } else {
+      _alphaPaint.color = Color.fromRGBO(255, 255, 255, alpha);
+      canvas.saveLayer(textLayerRect, _alphaPaint);
+      _cachedPainter!.paint(canvas, textOffset);
+      canvas.restore();
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 4: SCANLINES ACROSS TEXT
     // ═══════════════════════════════════════════════════════════════════════
-    if (!reduceFx) {
+    if (!reduceFx && alpha > 0.2) {
       _drawScanlines(canvas, textOffset, textWidth, textHeight, alpha);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 5: HOLOGRAPHIC OUTLINE
     // ═══════════════════════════════════════════════════════════════════════
-    if (!reduceFx && type == DamageNumberType.critical) {
+    if (!reduceFx && type == DamageNumberType.critical && alpha > 0.25) {
       // Draw pulsing outline for critical hits
       final outlineAlpha = alpha * (0.4 + math.sin(_timer * 20) * 0.2);
       _outlinePaint.color = Colors.white.withOpacity(outlineAlpha);
       _outlinePaint.maskFilter = _blur(2);
-      canvas.saveLayer(null, _outlinePaint);
+      canvas.saveLayer(textLayerRect, _outlinePaint);
       _cachedPainter!.paint(canvas, textOffset + const Offset(-1, -1));
       _cachedPainter!.paint(canvas, textOffset + const Offset(1, -1));
       _cachedPainter!.paint(canvas, textOffset + const Offset(-1, 1));
@@ -414,15 +449,26 @@ class DamageNumberEffect extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: HOLOGRAPHIC FLICKER
     // ═══════════════════════════════════════════════════════════════════════
-    if (!reduceFx && _flickerTimer < 0.02) {
+    if (!reduceFx && _flickerTimer < 0.02 && alpha > 0.25) {
       // Brief bright flash
       _flickerPaint.color = Colors.white.withOpacity(alpha * 0.3);
-      canvas.saveLayer(null, _flickerPaint);
+      canvas.saveLayer(textLayerRect, _flickerPaint);
       _cachedPainter!.paint(canvas, textOffset);
       canvas.restore();
     }
 
     canvas.restore();
+  }
+
+  bool _isOffscreen({double padding = 40}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   /// Render simplified version for low FX mode
@@ -436,13 +482,16 @@ class DamageNumberEffect extends PositionComponent {
     canvas.save();
     canvas.translate(0, _yOffset);
 
-    _alphaPaint.color = Color.fromRGBO(255, 255, 255, alpha);
-    canvas.saveLayer(null, _alphaPaint);
-    _cachedPainter!.paint(
-      canvas,
-      Offset(-_cachedPainter!.width / 2, -_cachedPainter!.height / 2),
-    );
-    canvas.restore();
+    final textLayerRect = _cachedTextLayerRect!;
+    final textOffset = Offset(-_cachedTextWidth / 2, -_cachedTextHeight / 2);
+    if (alpha >= 0.99) {
+      _cachedPainter!.paint(canvas, textOffset);
+    } else {
+      _alphaPaint.color = Color.fromRGBO(255, 255, 255, alpha);
+      canvas.saveLayer(textLayerRect, _alphaPaint);
+      _cachedPainter!.paint(canvas, textOffset);
+      canvas.restore();
+    }
 
     canvas.restore();
   }
@@ -474,8 +523,8 @@ class DamageNumberEffect extends PositionComponent {
     canvas.drawPath(_scanlinePath, _scanlinePaint);
 
     // Occasional brighter scanline
-    if (_staticRandom.nextDouble() > 0.97) {
-      final brightY = textOffset.dy + _staticRandom.nextDouble() * textHeight;
+    if (_staticUnit() > 0.97) {
+      final brightY = textOffset.dy + _staticUnit() * textHeight;
       _scanlinePaint.color = Colors.white.withOpacity(alpha * 0.3);
       canvas.drawLine(
         Offset(textOffset.dx - 4, brightY),
@@ -511,6 +560,14 @@ class DamageNumberEffect extends PositionComponent {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
+    _cachedTextWidth = _cachedPainter!.width;
+    _cachedTextHeight = _cachedPainter!.height;
+    _cachedTextLayerRect = Rect.fromLTWH(
+      -_cachedTextWidth / 2 - 24,
+      -_cachedTextHeight / 2 - 24,
+      _cachedTextWidth + 48,
+      _cachedTextHeight + 48,
+    );
   }
 
   void _recycle() {
@@ -530,6 +587,9 @@ class DamageNumberEffect extends PositionComponent {
     _cachedPainter = null;
     _cachedText = '';
     _cachedFontSize = 0;
+    _cachedTextWidth = 0;
+    _cachedTextHeight = 0;
+    _cachedTextLayerRect = null;
 
     if (_pool.length < maxPool) {
       _inPool = true;
@@ -549,6 +609,11 @@ class DamageNumberEffect extends PositionComponent {
     // Dispose painter on removal
     _cachedPainter?.dispose();
     _cachedPainter = null;
+    _cachedText = '';
+    _cachedFontSize = 0;
+    _cachedTextWidth = 0;
+    _cachedTextHeight = 0;
+    _cachedTextLayerRect = null;
 
     super.onRemove();
   }

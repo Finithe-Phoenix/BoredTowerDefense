@@ -21,7 +21,7 @@ class ReflectiveFloor extends PositionComponent {
     this.lowFx = false,
     this.gridSize = 50.0,
     this.horizonY = 0.3,
-  }) : _random = math.Random(42);
+  });
 
   /// The rectangle defining the floor's position and size
   final Rect floorRect;
@@ -44,8 +44,29 @@ class ReflectiveFloor extends PositionComponent {
   /// Horizon position as a fraction of height (0.0 = top, 1.0 = bottom)
   final double horizonY;
 
-  final math.Random _random;
+  int _rngState = 0x6d2b79f5;
   double _time = 0;
+  static const int _alphaSteps = 16;
+
+  Shader? _baseGradientShader;
+  double _baseShaderWidth = 0;
+  double _baseShaderFloorTop = 0;
+  double _baseShaderFloorHeight = 0;
+  int _basePulseStep = -1;
+
+  Shader? _fresnelShader;
+  double _fresnelShaderWidth = 0;
+  double _fresnelShaderFloorTop = 0;
+  double _fresnelShaderFloorHeight = 0;
+  int _fresnelPulseStep = -1;
+
+  Shader? _fresnelLeftShader;
+  Shader? _fresnelRightShader;
+  double _fresnelEdgeWidth = 0;
+  double _fresnelEdgeHeight = 0;
+  int _fresnelEdgePulseStep = -1;
+
+  final Map<int, Shader> _travelingHighlightShaders = {};
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CACHED PAINT OBJECTS - Avoid per-frame allocations
@@ -109,6 +130,7 @@ class ReflectiveFloor extends PositionComponent {
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    _rngState = 0x6d2b79f5 ^ primaryColor.value ^ secondaryColor.value;
     _initializeLightStreaks();
     _initializeSpecularHighlights();
     _initializeRippleWaves();
@@ -118,12 +140,12 @@ class ReflectiveFloor extends PositionComponent {
     final streakCount = lowFx ? 2 : (reduceFx ? 4 : 8);
     _lightStreaks = List.generate(streakCount, (i) {
       return _LightStreak(
-        yPosition: 0.3 + _random.nextDouble() * 0.6,
-        speed: 80 + _random.nextDouble() * 120,
-        width: 60 + _random.nextDouble() * 100,
-        phase: _random.nextDouble() * math.pi * 2,
-        direction: _random.nextBool() ? 1.0 : -1.0,
-        color: _random.nextBool() ? primaryColor : secondaryColor,
+        yPosition: 0.3 + _nextUnit() * 0.6,
+        speed: 80 + _nextUnit() * 120,
+        width: 60 + _nextUnit() * 100,
+        phase: _nextUnit() * math.pi * 2,
+        direction: _nextBool() ? 1.0 : -1.0,
+        color: _nextBool() ? primaryColor : secondaryColor,
       );
     });
   }
@@ -132,12 +154,12 @@ class ReflectiveFloor extends PositionComponent {
     final highlightCount = lowFx ? 0 : (reduceFx ? 2 : 5);
     _specularHighlights = List.generate(highlightCount, (i) {
       return _SpecularHighlight(
-        xPosition: 0.1 + _random.nextDouble() * 0.8,
-        yPosition: 0.5 + _random.nextDouble() * 0.4,
-        size: 20 + _random.nextDouble() * 40,
-        intensity: 0.3 + _random.nextDouble() * 0.4,
-        pulseSpeed: 1.5 + _random.nextDouble() * 2,
-        phase: _random.nextDouble() * math.pi * 2,
+        xPosition: 0.1 + _nextUnit() * 0.8,
+        yPosition: 0.5 + _nextUnit() * 0.4,
+        size: 20 + _nextUnit() * 40,
+        intensity: 0.3 + _nextUnit() * 0.4,
+        pulseSpeed: 1.5 + _nextUnit() * 2,
+        phase: _nextUnit() * math.pi * 2,
       );
     });
   }
@@ -146,11 +168,11 @@ class ReflectiveFloor extends PositionComponent {
     final waveCount = lowFx ? 0 : (reduceFx ? 2 : 4);
     _rippleWaves = List.generate(waveCount, (i) {
       return _RippleWave(
-        centerX: 0.2 + _random.nextDouble() * 0.6,
-        centerY: 0.4 + _random.nextDouble() * 0.4,
-        speed: 30 + _random.nextDouble() * 50,
-        maxRadius: 100 + _random.nextDouble() * 150,
-        phase: _random.nextDouble() * 100,
+        centerX: 0.2 + _nextUnit() * 0.6,
+        centerY: 0.4 + _nextUnit() * 0.4,
+        speed: 30 + _nextUnit() * 50,
+        maxRadius: 100 + _nextUnit() * 150,
+        phase: _nextUnit() * 100,
       );
     });
   }
@@ -161,14 +183,25 @@ class ReflectiveFloor extends PositionComponent {
     _time += dt;
   }
 
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+
+  bool _nextBool() => (_lcgNext() & 1) == 0;
+
   @override
   void render(Canvas canvas) {
     super.render(canvas);
 
     final w = floorRect.width;
     final h = floorRect.height;
+    if (w <= 0 || h <= 0) return;
     final floorTop = h * horizonY;
     final floorHeight = h - floorTop;
+    if (floorHeight <= 0) return;
 
     canvas.save();
     canvas.translate(floorRect.left, floorRect.top);
@@ -216,19 +249,31 @@ class ReflectiveFloor extends PositionComponent {
   /// Layer 1: Base reflective surface with gradient (dark at horizon, lighter at bottom)
   void _renderBaseSurface(Canvas canvas, double w, double h, double floorTop, double floorHeight) {
     // Main vertical gradient - dark at top (horizon), slightly lighter at bottom
-    final basePulse = 0.03 + math.sin(_time * 0.8) * 0.01;
-
-    _baseGradientPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFF000510).withOpacity(0.95), // Very dark blue-black at horizon
-        const Color(0xFF000815).withOpacity(0.9),
-        const Color(0xFF001020).withOpacity(0.85),
-        primaryColor.withOpacity(basePulse), // Subtle color tint at bottom
-      ],
-      stops: const [0.0, 0.3, 0.7, 1.0],
-    ).createShader(Rect.fromLTWH(0, floorTop, w, floorHeight));
+    final basePulseRaw = 0.03 + math.sin(_time * 0.8) * 0.01;
+    final basePulseStep = (basePulseRaw * _alphaSteps).round().clamp(0, _alphaSteps) as int;
+    final basePulse = basePulseStep / _alphaSteps;
+    if (_baseGradientShader == null ||
+        _baseShaderWidth != w ||
+        _baseShaderFloorTop != floorTop ||
+        _baseShaderFloorHeight != floorHeight ||
+        _basePulseStep != basePulseStep) {
+      _baseShaderWidth = w;
+      _baseShaderFloorTop = floorTop;
+      _baseShaderFloorHeight = floorHeight;
+      _basePulseStep = basePulseStep;
+      _baseGradientShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF000510).withOpacity(0.95), // Very dark blue-black at horizon
+          const Color(0xFF000815).withOpacity(0.9),
+          const Color(0xFF001020).withOpacity(0.85),
+          primaryColor.withOpacity(basePulse), // Subtle color tint at bottom
+        ],
+        stops: const [0.0, 0.3, 0.7, 1.0],
+      ).createShader(Rect.fromLTWH(0, floorTop, w, floorHeight));
+    }
+    _baseGradientPaint.shader = _baseGradientShader;
 
     canvas.drawRect(Rect.fromLTWH(0, floorTop, w, floorHeight), _baseGradientPaint);
 
@@ -329,32 +374,45 @@ class ReflectiveFloor extends PositionComponent {
       final pulse = 0.6 + math.sin(_time * 3 + streak.phase) * 0.4;
       final alpha = baseAlpha * pulse;
 
-      if (alpha < 0.02) continue;
+      final alphaStep = (alpha * _alphaSteps).round().clamp(0, _alphaSteps) as int;
+      if (alphaStep == 0) continue;
+      final quantAlpha = alphaStep / _alphaSteps;
 
       // Draw streak gradient
-      _streakPaint.shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          Colors.transparent,
-          streak.color.withOpacity(alpha * 0.3),
-          streak.color.withOpacity(alpha * 0.6),
-          Colors.white.withOpacity(alpha * 0.8),
-          streak.color.withOpacity(alpha * 0.6),
-          streak.color.withOpacity(alpha * 0.3),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.15, 0.35, 0.5, 0.65, 0.85, 1.0],
-      ).createShader(Rect.fromLTWH(xBase, y - 4, streak.width, 8));
-
+      if (streak.shader == null ||
+          streak.cachedAlphaStep != alphaStep ||
+          streak.cachedColorValue != streak.color.value ||
+          streak.cachedWidth != streak.width) {
+        streak.cachedAlphaStep = alphaStep;
+        streak.cachedColorValue = streak.color.value;
+        streak.cachedWidth = streak.width;
+        streak.shader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Colors.transparent,
+            streak.color.withOpacity(quantAlpha * 0.3),
+            streak.color.withOpacity(quantAlpha * 0.6),
+            Colors.white.withOpacity(quantAlpha * 0.8),
+            streak.color.withOpacity(quantAlpha * 0.6),
+            streak.color.withOpacity(quantAlpha * 0.3),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.15, 0.35, 0.5, 0.65, 0.85, 1.0],
+        ).createShader(Rect.fromLTWH(0, 0, streak.width, 8));
+      }
+      _streakPaint.shader = streak.shader;
+      canvas.save();
+      canvas.translate(xBase, y - 4);
       canvas.drawRect(
-        Rect.fromLTWH(xBase, y - 4, streak.width, 8),
+        Rect.fromLTWH(0, 0, streak.width, 8),
         _streakPaint,
       );
+      canvas.restore();
 
       // Bright core line
       if (!reduceFx) {
-        _streakCorePaint.color = Colors.white.withOpacity(alpha * 0.6);
+        _streakCorePaint.color = Colors.white.withOpacity(quantAlpha * 0.6);
         canvas.drawLine(
           Offset(xBase + streak.width * 0.3, y),
           Offset(xBase + streak.width * 0.7, y),
@@ -368,47 +426,71 @@ class ReflectiveFloor extends PositionComponent {
   void _renderFresnelEffect(Canvas canvas, double w, double h, double floorTop, double floorHeight) {
     // Fresnel gradient - stronger reflection near horizon (glancing angle)
     // and fading toward bottom (direct view angle)
-    final fresnelPulse = 0.08 + math.sin(_time * 1.2) * 0.02;
-
-    _fresnelPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        primaryColor.withOpacity(fresnelPulse * 1.5), // Stronger at horizon
-        primaryColor.withOpacity(fresnelPulse * 0.8),
-        primaryColor.withOpacity(fresnelPulse * 0.3),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.15, 0.4, 0.7],
-    ).createShader(Rect.fromLTWH(0, floorTop, w, floorHeight));
+    final fresnelPulseRaw = 0.08 + math.sin(_time * 1.2) * 0.02;
+    final fresnelPulseStep = (fresnelPulseRaw * _alphaSteps).round().clamp(0, _alphaSteps) as int;
+    final fresnelPulse = fresnelPulseStep / _alphaSteps;
+    if (_fresnelShader == null ||
+        _fresnelShaderWidth != w ||
+        _fresnelShaderFloorTop != floorTop ||
+        _fresnelShaderFloorHeight != floorHeight ||
+        _fresnelPulseStep != fresnelPulseStep) {
+      _fresnelShaderWidth = w;
+      _fresnelShaderFloorTop = floorTop;
+      _fresnelShaderFloorHeight = floorHeight;
+      _fresnelPulseStep = fresnelPulseStep;
+      _fresnelShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          primaryColor.withOpacity(fresnelPulse * 1.5), // Stronger at horizon
+          primaryColor.withOpacity(fresnelPulse * 0.8),
+          primaryColor.withOpacity(fresnelPulse * 0.3),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.15, 0.4, 0.7],
+      ).createShader(Rect.fromLTWH(0, floorTop, w, floorHeight));
+    }
+    _fresnelPaint.shader = _fresnelShader;
 
     canvas.drawRect(Rect.fromLTWH(0, floorTop, w, floorHeight), _fresnelPaint);
 
     // Add slight color shift near horizon edges (chromatic aberration hint)
     if (!reduceFx) {
       final edgeWidth = w * 0.15;
+      final edgeHeight = floorHeight * 0.3;
 
       // Left edge magenta tint
-      _fresnelPaint.shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          secondaryColor.withOpacity(fresnelPulse * 0.4),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(0, floorTop, edgeWidth, floorHeight * 0.3));
-      canvas.drawRect(Rect.fromLTWH(0, floorTop, edgeWidth, floorHeight * 0.3), _fresnelPaint);
+      if (_fresnelLeftShader == null ||
+          _fresnelRightShader == null ||
+          _fresnelEdgeWidth != edgeWidth ||
+          _fresnelEdgeHeight != edgeHeight ||
+          _fresnelEdgePulseStep != fresnelPulseStep) {
+        _fresnelEdgeWidth = edgeWidth;
+        _fresnelEdgeHeight = edgeHeight;
+        _fresnelEdgePulseStep = fresnelPulseStep;
+        _fresnelLeftShader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            secondaryColor.withOpacity(fresnelPulse * 0.4),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromLTWH(0, floorTop, edgeWidth, edgeHeight));
+        _fresnelRightShader = LinearGradient(
+          begin: Alignment.centerRight,
+          end: Alignment.centerLeft,
+          colors: [
+            primaryColor.withOpacity(fresnelPulse * 0.4),
+            Colors.transparent,
+          ],
+        ).createShader(Rect.fromLTWH(0, floorTop, edgeWidth, edgeHeight));
+      }
+      _fresnelPaint.shader = _fresnelLeftShader;
+      canvas.drawRect(Rect.fromLTWH(0, floorTop, edgeWidth, edgeHeight), _fresnelPaint);
 
       // Right edge cyan tint
-      _fresnelPaint.shader = LinearGradient(
-        begin: Alignment.centerRight,
-        end: Alignment.centerLeft,
-        colors: [
-          primaryColor.withOpacity(fresnelPulse * 0.4),
-          Colors.transparent,
-        ],
-      ).createShader(Rect.fromLTWH(w - edgeWidth, floorTop, edgeWidth, floorHeight * 0.3));
-      canvas.drawRect(Rect.fromLTWH(w - edgeWidth, floorTop, edgeWidth, floorHeight * 0.3), _fresnelPaint);
+      _fresnelPaint.shader = _fresnelRightShader;
+      canvas.drawRect(Rect.fromLTWH(w - edgeWidth, floorTop, edgeWidth, edgeHeight), _fresnelPaint);
     }
   }
 
@@ -528,24 +610,39 @@ class ReflectiveFloor extends PositionComponent {
       if (!reduceFx) {
         final stretchWidth = highlight.size * 3;
         final stretchHeight = highlight.size * 0.5;
+        final intensityStep = (intensity * _alphaSteps).round().clamp(0, _alphaSteps) as int;
+        if (intensityStep > 0) {
+          final quantIntensity = intensityStep / _alphaSteps;
+          if (highlight.stretchShader == null ||
+              highlight.cachedIntensityStep != intensityStep ||
+              highlight.cachedStretchWidth != stretchWidth ||
+              highlight.cachedStretchHeight != stretchHeight) {
+            highlight.cachedIntensityStep = intensityStep;
+            highlight.cachedStretchWidth = stretchWidth;
+            highlight.cachedStretchHeight = stretchHeight;
+            highlight.stretchShader = LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.transparent,
+                primaryColor.withOpacity(quantIntensity * 0.15),
+                Colors.white.withOpacity(quantIntensity * 0.25),
+                primaryColor.withOpacity(quantIntensity * 0.15),
+                Colors.transparent,
+              ],
+            ).createShader(Rect.fromLTWH(0, 0, stretchWidth * 2, stretchHeight));
+          }
 
-        _specularPaint.shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Colors.transparent,
-            primaryColor.withOpacity(intensity * 0.15),
-            Colors.white.withOpacity(intensity * 0.25),
-            primaryColor.withOpacity(intensity * 0.15),
-            Colors.transparent,
-          ],
-        ).createShader(Rect.fromLTWH(x - stretchWidth, y - stretchHeight / 2, stretchWidth * 2, stretchHeight));
-
-        canvas.drawOval(
-          Rect.fromLTWH(x - stretchWidth, y - stretchHeight / 2, stretchWidth * 2, stretchHeight),
-          _specularPaint,
-        );
-        _specularPaint.shader = null;
+          _specularPaint.shader = highlight.stretchShader;
+          canvas.save();
+          canvas.translate(x - stretchWidth, y - stretchHeight / 2);
+          canvas.drawOval(
+            Rect.fromLTWH(0, 0, stretchWidth * 2, stretchHeight),
+            _specularPaint,
+          );
+          canvas.restore();
+          _specularPaint.shader = null;
+        }
       }
 
       // Add secondary color highlight nearby for visual interest
@@ -568,21 +665,35 @@ class ReflectiveFloor extends PositionComponent {
 
         final distanceFromHorizon = (tY - floorTop) / floorHeight;
         final tAlpha = 0.15 * distanceFromHorizon;
+        final alphaStep = (tAlpha * _alphaSteps).round().clamp(0, _alphaSteps) as int;
+        if (alphaStep == 0) continue;
 
         // Draw traveling highlight
-        _specularPaint.shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Colors.transparent,
-            primaryColor.withOpacity(tAlpha * 0.3),
-            Colors.white.withOpacity(tAlpha * 0.5),
-            primaryColor.withOpacity(tAlpha * 0.3),
-            Colors.transparent,
-          ],
-        ).createShader(Rect.fromLTWH(tX - 40, tY - 3, 80, 6));
-
-        canvas.drawRect(Rect.fromLTWH(tX - 40, tY - 3, 80, 6), _specularPaint);
+        final shaderKey = (alphaStep << 24) ^ primaryColor.value;
+        var travelShader = _travelingHighlightShaders[shaderKey];
+        if (travelShader == null) {
+          if (_travelingHighlightShaders.length > 32) {
+            _travelingHighlightShaders.clear();
+          }
+          final quantAlpha = alphaStep / _alphaSteps;
+          travelShader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              Colors.transparent,
+              primaryColor.withOpacity(quantAlpha * 0.3),
+              Colors.white.withOpacity(quantAlpha * 0.5),
+              primaryColor.withOpacity(quantAlpha * 0.3),
+              Colors.transparent,
+            ],
+          ).createShader(Rect.fromLTWH(0, 0, 80, 6));
+          _travelingHighlightShaders[shaderKey] = travelShader;
+        }
+        _specularPaint.shader = travelShader;
+        canvas.save();
+        canvas.translate(tX - 40, tY - 3);
+        canvas.drawRect(Rect.fromLTWH(0, 0, 80, 6), _specularPaint);
+        canvas.restore();
         _specularPaint.shader = null;
       }
     }
@@ -602,8 +713,8 @@ class ReflectiveFloor extends PositionComponent {
       _rippleWaves.add(_RippleWave(
         centerX: normalizedX,
         centerY: normalizedY,
-        speed: 60 + _random.nextDouble() * 40,
-        maxRadius: 80 + _random.nextDouble() * 60,
+        speed: 60 + _nextUnit() * 40,
+        maxRadius: 80 + _nextUnit() * 60,
         phase: _time, // Start from current time
       ));
 
@@ -632,6 +743,11 @@ class _LightStreak {
   final double phase;
   final double direction; // 1.0 or -1.0
   final Color color;
+
+  int cachedAlphaStep = -1;
+  int cachedColorValue = 0;
+  double cachedWidth = 0;
+  Shader? shader;
 }
 
 /// Helper class for specular highlight data
@@ -651,6 +767,11 @@ class _SpecularHighlight {
   final double intensity;
   final double pulseSpeed;
   final double phase;
+
+  int cachedIntensityStep = -1;
+  double cachedStretchWidth = 0;
+  double cachedStretchHeight = 0;
+  Shader? stretchShader;
 }
 
 /// Helper class for ripple wave data

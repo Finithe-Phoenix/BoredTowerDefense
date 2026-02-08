@@ -15,6 +15,27 @@ final Paint _particleSparkCenterPaint = Paint();
 final Paint _particleSparkRayPaint = Paint()
   ..strokeCap = StrokeCap.round;
 final Path _particleReusablePath = Path();
+final List<Offset> _particleStarUnitPoints = List<Offset>.unmodifiable(
+  _buildStarUnitPoints(),
+);
+const List<Offset> _particleSparkDirs = [
+  Offset(1, 0),
+  Offset(0, 1),
+  Offset(-1, 0),
+  Offset(0, -1),
+];
+
+List<Offset> _buildStarUnitPoints() {
+  const points = 5;
+  const innerRatio = 0.4;
+  final result = <Offset>[];
+  for (int i = 0; i < points * 2; i++) {
+    final angle = (i * math.pi / points) - math.pi / 2;
+    final radius = i.isEven ? 1.0 : innerRatio;
+    result.add(Offset(math.cos(angle) * radius, math.sin(angle) * radius));
+  }
+  return result;
+}
 
 // Cached MaskFilter for common blur values
 const MaskFilter _blur2 = MaskFilter.blur(BlurStyle.normal, 2);
@@ -153,6 +174,9 @@ class Particle {
        // Pre-allocate position and velocity vectors
        this.position = position.clone(),
        this.velocity = velocity.clone() {
+    _velocityAngle = shape == ParticleShape.line
+        ? math.atan2(this.velocity.y, this.velocity.x)
+        : 0;
     // Pre-allocate trail vectors if needed
     if (hasTrail && trailLength > 0) {
       final len = trailLength.clamp(1, _maxTrailLength);
@@ -184,6 +208,9 @@ class Particle {
        _rotation = 0,
        this.position = position.clone(),
        this.velocity = velocity.clone() {
+    _velocityAngle = shape == ParticleShape.line
+        ? math.atan2(this.velocity.y, this.velocity.x)
+        : 0;
     if (hasTrail && trailLength > 0) {
       final len = trailLength.clamp(1, _maxTrailLength);
       _trail = List.generate(len, (_) => this.position.clone());
@@ -231,6 +258,9 @@ class Particle {
     this.glowRadius = glowRadius;
     this.shrink = shrink;
     _rotation = 0;
+    _velocityAngle = shape == ParticleShape.line
+        ? math.atan2(this.velocity.y, this.velocity.x)
+        : 0;
 
     // Handle trail - reuse existing trail vectors if possible
     if (hasTrail && trailLength > 0) {
@@ -269,6 +299,7 @@ class Particle {
 
   double _initialSize;
   double _rotation;
+  double _velocityAngle = 0;
   List<Vector2>? _trail;
 
   bool get isDead => remainingLife <= 0;
@@ -305,6 +336,9 @@ class Particle {
     if (spin) {
       _rotation += spinSpeed * dt;
     }
+    if (shape == ParticleShape.line) {
+      _velocityAngle = math.atan2(velocity.y, velocity.x);
+    }
   }
 
   Color get currentColor {
@@ -327,6 +361,7 @@ class Particle {
 
     final particleColor = currentColor;
     final alpha = particleColor.opacity;
+    if (alpha <= 0.01) return;
 
     // Render trail first
     if (_trail != null && hasTrail) {
@@ -392,6 +427,7 @@ class Particle {
 
   void _renderTrail(Canvas canvas, Color baseColor) {
     if (_trail == null) return;
+    if (baseColor.opacity <= 0.01) return;
 
     // Set MaskFilter once for all trail segments
     _particleTrailPaint.maskFilter = _blur2;
@@ -421,15 +457,10 @@ class Particle {
 
   void _drawStar(Canvas canvas, double size) {
     _particleReusablePath.reset();
-    const points = 5;
-    const innerRatio = 0.4;
-
-    for (int i = 0; i < points * 2; i++) {
-      final angle = (i * math.pi / points) - math.pi / 2;
-      final radius = i.isEven ? size : size * innerRatio;
-      final x = math.cos(angle) * radius;
-      final y = math.sin(angle) * radius;
-
+    for (int i = 0; i < _particleStarUnitPoints.length; i++) {
+      final p = _particleStarUnitPoints[i];
+      final x = p.dx * size;
+      final y = p.dy * size;
       if (i == 0) {
         _particleReusablePath.moveTo(x, y);
       } else {
@@ -452,8 +483,7 @@ class Particle {
 
   void _drawLine(Canvas canvas, double size) {
     // Draw line in velocity direction
-    final angle = math.atan2(velocity.y, velocity.x);
-    canvas.rotate(angle);
+    canvas.rotate(_velocityAngle);
     _particleMainPaint.strokeWidth = size * 0.3;
     canvas.drawLine(
       Offset(-size, 0),
@@ -476,12 +506,12 @@ class Particle {
       ..color = color
       ..strokeWidth = size * 0.3;
 
-    for (int i = 0; i < 4; i++) {
-      final angle = i * math.pi / 2;
+    for (int i = 0; i < _particleSparkDirs.length; i++) {
       final length = i.isEven ? size * 1.5 : size;
+      final dir = _particleSparkDirs[i];
       canvas.drawLine(
         Offset.zero,
-        Offset(math.cos(angle) * length, math.sin(angle) * length),
+        Offset(dir.dx * length, dir.dy * length),
         _particleSparkRayPaint,
       );
     }
@@ -654,17 +684,30 @@ class ParticleEmitter extends Component {
     this.config,
     this.autoRemove = false,
   }) : _spiralAngle = 0,
-       _emissionAccumulator = 0;
+       _emissionAccumulator = 0 {
+    _rngState = 0x6d2b79f5 ^ position.hashCode;
+  }
 
   final Vector2 position;
   final int maxParticles;
   final ParticleEmitterConfig? config;
   final bool autoRemove;
   final List<Particle> _particles = [];
-  final math.Random _random = math.Random();
+  final Vector2 _tempVelocity = Vector2.zero();
+  final Vector2 _tempPosition = Vector2.zero();
+  int _rngState = 0x6d2b79f5;
   double _spiralAngle;
   double _emissionAccumulator;
   bool _hasEmittedBurst = false;
+
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
 
   bool get isEmpty => _particles.isEmpty;
 
@@ -681,8 +724,29 @@ class ParticleEmitter extends Component {
   void _emitConfiguredBurst() {
     if (config == null) return;
     final count = _scaledCount(config!.particleCount);
+    if (config!.pattern == EmitterPattern.ring && count > 0) {
+      _emitConfiguredRingBurst(count);
+      return;
+    }
     for (int i = 0; i < count; i++) {
       _emitConfiguredParticle(i, count);
+    }
+  }
+
+  void _emitConfiguredRingBurst(int count) {
+    if (config == null) return;
+    if (_particles.length >= maxParticles) return;
+    final angleStep = (math.pi * 2) / count;
+    final sinStep = math.sin(angleStep);
+    final cosStep = math.cos(angleStep);
+    var dirX = 1.0;
+    var dirY = 0.0;
+    for (int i = 0; i < count && _particles.length < maxParticles; i++) {
+      _emitConfiguredParticleWithDir(dirX, dirY);
+      final nextX = dirX * cosStep - dirY * sinStep;
+      final nextY = dirX * sinStep + dirY * cosStep;
+      dirX = nextX;
+      dirY = nextY;
     }
   }
 
@@ -693,7 +757,7 @@ class ParticleEmitter extends Component {
 
     switch (config!.pattern) {
       case EmitterPattern.burst:
-        angle = _random.nextDouble() * math.pi * 2;
+        angle = _nextUnit() * math.pi * 2;
         break;
 
       case EmitterPattern.ring:
@@ -702,7 +766,7 @@ class ParticleEmitter extends Component {
 
       case EmitterPattern.cone:
         final spread = config!.coneAngle;
-        angle = config!.coneDirection + (_random.nextDouble() - 0.5) * spread;
+        angle = config!.coneDirection + (_nextUnit() - 0.5) * spread;
         break;
 
       case EmitterPattern.spiral:
@@ -711,16 +775,16 @@ class ParticleEmitter extends Component {
         break;
 
       case EmitterPattern.stream:
-        angle = config!.coneDirection + (_random.nextDouble() - 0.5) * config!.coneAngle;
+        angle = config!.coneDirection + (_nextUnit() - 0.5) * config!.coneAngle;
         break;
     }
 
     final speed = config!.minSpeed +
-        _random.nextDouble() * (config!.maxSpeed - config!.minSpeed);
+        _nextUnit() * (config!.maxSpeed - config!.minSpeed);
     final size = config!.minSize +
-        _random.nextDouble() * (config!.maxSize - config!.minSize);
+        _nextUnit() * (config!.maxSize - config!.minSize);
     final lifetime = config!.minLifetime +
-        _random.nextDouble() * (config!.maxLifetime - config!.minLifetime);
+        _nextUnit() * (config!.maxLifetime - config!.minLifetime);
 
     final quality = GameParticles.instance;
     final hasTrail = config!.hasTrail && quality.allowTrails;
@@ -729,7 +793,42 @@ class ParticleEmitter extends Component {
 
     _particles.add(Particle.spawn(
       position: position,
-      velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
+      velocity: _tempVelocity..setValues(math.cos(angle) * speed, math.sin(angle) * speed),
+      color: config!.color,
+      colorEnd: config!.colorEnd,
+      lifetime: lifetime,
+      size: size,
+      shape: config!.shape,
+      gravity: config!.gravity,
+      drag: config!.drag,
+      fadeOut: config!.fadeOut,
+      shrink: config!.shrink,
+      hasTrail: hasTrail,
+      trailLength: trailLength,
+      glow: glow,
+      glowRadius: glow ? config!.glowRadius : 0,
+      spin: config!.spin,
+      spinSpeed: config!.spinSpeed,
+    ));
+  }
+
+  void _emitConfiguredParticleWithDir(double dirX, double dirY) {
+    if (_particles.length >= maxParticles || config == null) return;
+    final speed = config!.minSpeed +
+        _nextUnit() * (config!.maxSpeed - config!.minSpeed);
+    final size = config!.minSize +
+        _nextUnit() * (config!.maxSize - config!.minSize);
+    final lifetime = config!.minLifetime +
+        _nextUnit() * (config!.maxLifetime - config!.minLifetime);
+
+    final quality = GameParticles.instance;
+    final hasTrail = config!.hasTrail && quality.allowTrails;
+    final glow = config!.glow && quality.allowGlow;
+    final trailLength = hasTrail ? config!.trailLength : 0;
+
+    _particles.add(Particle.spawn(
+      position: position,
+      velocity: _tempVelocity..setValues(dirX * speed, dirY * speed),
       color: config!.color,
       colorEnd: config!.colorEnd,
       lifetime: lifetime,
@@ -763,16 +862,16 @@ class ParticleEmitter extends Component {
     final scaledCount = _scaledCount(count);
     final quality = GameParticles.instance;
     for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final spd = speed * (0.5 + _random.nextDouble() * 0.5);
+      final angle = _nextUnit() * math.pi * 2;
+      final spd = speed * (0.5 + _nextUnit() * 0.5);
 
       _particles.add(Particle.spawn(
         position: center,
-        velocity: Vector2(math.cos(angle) * spd, math.sin(angle) * spd),
+        velocity: _tempVelocity..setValues(math.cos(angle) * spd, math.sin(angle) * spd),
         color: color,
         colorEnd: colorEnd,
-        lifetime: lifetime * (0.5 + _random.nextDouble() * 0.5),
-        size: size * (0.5 + _random.nextDouble() * 0.5),
+        lifetime: lifetime * (0.5 + _nextUnit() * 0.5),
+        size: size * (0.5 + _nextUnit() * 0.5),
         shape: shape,
         hasTrail: hasTrail && quality.allowTrails,
         trailLength: hasTrail && quality.allowTrails ? 4 : 0,
@@ -798,15 +897,15 @@ class ParticleEmitter extends Component {
     final scaledCount = _scaledCount(count);
     final quality = GameParticles.instance;
     for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
-      final angle = baseAngle + (_random.nextDouble() - 0.5) * spread;
-      final spd = speed * (0.7 + _random.nextDouble() * 0.3);
+      final angle = baseAngle + (_nextUnit() - 0.5) * spread;
+      final spd = speed * (0.7 + _nextUnit() * 0.3);
 
       _particles.add(Particle.spawn(
         position: start,
-        velocity: Vector2(math.cos(angle) * spd, math.sin(angle) * spd),
+        velocity: _tempVelocity..setValues(math.cos(angle) * spd, math.sin(angle) * spd),
         color: color,
-        lifetime: lifetime * (0.7 + _random.nextDouble() * 0.3),
-        size: 3 + _random.nextDouble() * 2,
+        lifetime: lifetime * (0.7 + _nextUnit() * 0.3),
+        size: 3 + _nextUnit() * 2,
         shape: shape,
         glow: quality.allowGlow,
         glowRadius: quality.allowGlow ? 3 : 0,
@@ -828,10 +927,8 @@ class ParticleEmitter extends Component {
 
     _particles.add(Particle.spawn(
       position: position,
-      velocity: Vector2(
-        (_random.nextDouble() - 0.5) * 20,
-        (_random.nextDouble() - 0.5) * 20,
-      ),
+      velocity: _tempVelocity
+        ..setValues((_nextUnit() - 0.5) * 20, (_nextUnit() - 0.5) * 20),
       color: color,
       lifetime: lifetime,
       size: size,
@@ -851,16 +948,21 @@ class ParticleEmitter extends Component {
   }) {
     final scaledCount = _scaledCount(count);
     final quality = GameParticles.instance;
+    if (scaledCount <= 0) return;
+    final angleStep = (math.pi * 2) / count;
+    final sinStep = math.sin(angleStep);
+    final cosStep = math.cos(angleStep);
+    var dirX = 1.0;
+    var dirY = 0.0;
     for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
-      final angle = (i / count) * math.pi * 2;
-      final pos = Vector2(
-        center.x + math.cos(angle) * radius,
-        center.y + math.sin(angle) * radius,
+      _tempPosition.setValues(
+        center.x + dirX * radius,
+        center.y + dirY * radius,
       );
 
       _particles.add(Particle.spawn(
-        position: pos,
-        velocity: Vector2(math.cos(angle) * speed, math.sin(angle) * speed),
+        position: _tempPosition,
+        velocity: _tempVelocity..setValues(dirX * speed, dirY * speed),
         color: color,
         lifetime: lifetime,
         size: 4,
@@ -868,6 +970,10 @@ class ParticleEmitter extends Component {
         glow: quality.allowGlow,
         glowRadius: quality.allowGlow ? 4 : 0,
       ));
+      final nextX = dirX * cosStep - dirY * sinStep;
+      final nextY = dirX * sinStep + dirY * cosStep;
+      dirX = nextX;
+      dirY = nextY;
     }
   }
 
@@ -882,16 +988,16 @@ class ParticleEmitter extends Component {
     final scaledCount = _scaledCount(count);
     final quality = GameParticles.instance;
     for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final spd = speed * (0.6 + _random.nextDouble() * 0.4);
+      final angle = _nextUnit() * math.pi * 2;
+      final spd = speed * (0.6 + _nextUnit() * 0.4);
 
       _particles.add(Particle.spawn(
         position: center,
-        velocity: Vector2(math.cos(angle) * spd, math.sin(angle) * spd),
+        velocity: _tempVelocity..setValues(math.cos(angle) * spd, math.sin(angle) * spd),
         color: color,
         colorEnd: Colors.white,
-        lifetime: lifetime * (0.5 + _random.nextDouble() * 0.5),
-        size: 3 + _random.nextDouble() * 3,
+        lifetime: lifetime * (0.5 + _nextUnit() * 0.5),
+        size: 3 + _nextUnit() * 3,
         shape: ParticleShape.spark,
         gravity: 80,
         drag: 0.94,
@@ -915,18 +1021,18 @@ class ParticleEmitter extends Component {
     final quality = GameParticles.instance;
     for (int i = 0; i < scaledCount && _particles.length < maxParticles; i++) {
       _spiralAngle += 0.4;
-      final spd = speed * (0.5 + _random.nextDouble() * 0.5);
+      final spd = speed * (0.5 + _nextUnit() * 0.5);
 
       _particles.add(Particle.spawn(
         position: center,
-        velocity: Vector2(math.cos(_spiralAngle) * spd, math.sin(_spiralAngle) * spd),
+        velocity: _tempVelocity..setValues(math.cos(_spiralAngle) * spd, math.sin(_spiralAngle) * spd),
         color: color,
         colorEnd: Colors.white,
-        lifetime: lifetime * (0.6 + _random.nextDouble() * 0.4),
-        size: 4 + _random.nextDouble() * 4,
+        lifetime: lifetime * (0.6 + _nextUnit() * 0.4),
+        size: 4 + _nextUnit() * 4,
         shape: ParticleShape.star,
         spin: true,
-        spinSpeed: 4 + _random.nextDouble() * 3,
+        spinSpeed: 4 + _nextUnit() * 3,
         glow: quality.allowGlow,
         glowRadius: quality.allowGlow ? 8 : 0,
       ));
@@ -984,6 +1090,7 @@ class ParticleEmitter extends Component {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (_particles.isEmpty) return;
 
     for (final particle in _particles) {
       particle.render(canvas);
@@ -1167,3 +1274,4 @@ class ParticleHelper {
     );
   }
 }
+

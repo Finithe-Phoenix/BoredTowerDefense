@@ -126,8 +126,25 @@ class _TronGridPainter extends CustomPainter {
   final LevelService levelService;
   final int? selectedLevelId;
 
+  static final Paint _coreGlowPaint = Paint();
+  static final Paint _corePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.0;
+  static final Paint _orbitPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _linePaint = Paint()..strokeWidth = 1.5;
+  static final Paint _nodeGlowPaint = Paint();
+  static final Paint _nodeBgPaint = Paint()
+    ..color = Colors.black.withOpacity(0.8);
+  static final Paint _nodeBorderPaint = Paint()..style = PaintingStyle.stroke;
+  static final Path _orbitPath = Path();
+  static const int _labelCacheLimit = 24;
+  static final Map<int, TextPainter> _labelPainterCache = {};
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Phase 1: Core and orbit ring animation (0.0 to 0.4)
     final coreProgress = (animation / 0.4).clamp(0.0, 1.0);
     if (coreProgress > 0) {
@@ -149,56 +166,36 @@ class _TronGridPainter extends CustomPainter {
   }
 
   void _drawCore(Canvas canvas, double progress) {
-    final glowPaint = Paint()
+    _coreGlowPaint
       ..color = accent.withOpacity(0.3 * progress)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, 20 * progress);
-    final corePaint = Paint()
-      ..color = accent.withOpacity(0.9 * progress)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
+    _corePaint.color = accent.withOpacity(0.9 * progress);
     
-    canvas.drawCircle(center, orbitRadius * 0.15, glowPaint);
-    canvas.drawCircle(center, orbitRadius * 0.15, corePaint);
+    canvas.drawCircle(center, orbitRadius * 0.15, _coreGlowPaint);
+    canvas.drawCircle(center, orbitRadius * 0.15, _corePaint);
   }
 
   void _drawOrbitRing(Canvas canvas, double progress) {
-    final paint = Paint()
-      ..color = accent.withOpacity(0.4 * progress)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    final path = Path();
-    for (int i = 0; i < 360; i++) {
-      final angle = (i / 360) * math.pi * 2;
-      final length = progress * (math.pi * 2);
-      if (angle > length) continue;
-
-      final point = Offset(
-        center.dx + orbitRadius * math.cos(angle - math.pi / 2),
-        center.dy + orbitRadius * math.sin(angle - math.pi / 2),
-      );
-      if (i == 0) {
-        path.moveTo(point.dx, point.dy);
-      } else {
-        path.lineTo(point.dx, point.dy);
-      }
-    }
-    canvas.drawPath(path, paint);
+    _orbitPaint.color = accent.withOpacity(0.4 * progress);
+    final sweep = progress * math.pi * 2;
+    if (sweep <= 0) return;
+    final rect = Rect.fromCircle(center: center, radius: orbitRadius);
+    // Start at top (-pi/2) to match previous orientation.
+    canvas.drawArc(rect, -math.pi / 2, sweep, false, _orbitPaint);
   }
 
   void _drawConnectionLines(Canvas canvas, double progress) {
-    final paint = Paint()
-      ..color = accent.withOpacity(0.5 * progress)
-      ..strokeWidth = 1.5;
+    _linePaint.color = accent.withOpacity(0.5 * progress);
 
     for (final nodePos in nodePositions) {
       final direction = nodePos - center;
       final endPoint = center + direction * progress;
-      canvas.drawLine(center, endPoint, paint);
+      canvas.drawLine(center, endPoint, _linePaint);
     }
   }
 
   void _drawNodes(Canvas canvas, double progress) {
+    var cacheExceeded = false;
     for (int i = 0; i < levels.length; i++) {
       final level = levels[i];
       final pos = nodePositions[i];
@@ -208,35 +205,49 @@ class _TronGridPainter extends CustomPainter {
 
       final scale = Curves.elasticOut.transform(progress);
 
-      final glowPaint = Paint()
-        ..color = color.withOpacity(0.4 * progress)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 12 * scale);
-      
-      final bgPaint = Paint()
-        ..color = Colors.black.withOpacity(0.8);
-      
-      final borderPaint = Paint()
+      _nodeGlowPaint.color = color.withOpacity(0.4 * progress);
+      if (scale > 0.01) {
+        _nodeGlowPaint.maskFilter = MaskFilter.blur(BlurStyle.normal, 12 * scale);
+      } else {
+        _nodeGlowPaint.maskFilter = null;
+      }
+      _nodeBorderPaint
         ..color = isSelected ? NeonColors.yellow : color
-        ..style = PaintingStyle.stroke
         ..strokeWidth = isSelected ? 3.0 : 2.0;
 
-      canvas.drawCircle(pos, nodeRadius * scale, glowPaint);
-      canvas.drawCircle(pos, nodeRadius * scale, bgPaint);
-      canvas.drawCircle(pos, nodeRadius * scale, borderPaint);
+      canvas.drawCircle(pos, nodeRadius * scale, _nodeGlowPaint);
+      canvas.drawCircle(pos, nodeRadius * scale, _nodeBgPaint);
+      canvas.drawCircle(pos, nodeRadius * scale, _nodeBorderPaint);
 
       final localIndex = ((level.id - 1) % 10) + 1;
-      final textPainter = TextPainter(
-        text: TextSpan(
+      final fontSize = (16 * scale).round();
+      final labelColor = isUnlocked ? (isSelected ? NeonColors.yellow : Colors.white) : Colors.grey;
+      final cacheKey = (fontSize << 24) ^ (labelColor.value & 0x00FFFFFF) ^ localIndex;
+      final painter = _labelPainterCache.putIfAbsent(cacheKey, () {
+        final tp = TextPainter(textDirection: TextDirection.ltr);
+        tp.text = TextSpan(
           text: '$localIndex',
           style: NeonTextStyles.title.copyWith(
-            fontSize: 16 * scale,
-            color: isUnlocked ? (isSelected ? NeonColors.yellow : Colors.white) : Colors.grey,
+            fontSize: fontSize.toDouble(),
+            color: labelColor,
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      textPainter.paint(canvas, pos - Offset(textPainter.width / 2, textPainter.height / 2));
+        );
+        tp.layout();
+        return tp;
+      });
+      painter.paint(
+        canvas,
+        pos - Offset(painter.width / 2, painter.height / 2),
+      );
+      if (_labelPainterCache.length > _labelCacheLimit) {
+        cacheExceeded = true;
+      }
+    }
+    if (cacheExceeded) {
+      for (final tp in _labelPainterCache.values) {
+        tp.dispose();
+      }
+      _labelPainterCache.clear();
     }
   }
 

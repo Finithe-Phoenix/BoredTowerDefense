@@ -56,6 +56,12 @@ class HudButton extends PositionComponent with TapCallbacks {
   bool _isPressed = false;
   bool _isHovered = false;
 
+  TextPainter? _labelPainter;
+  String _labelText = '';
+  int _labelColorValue = 0;
+  double _labelFontSize = 0;
+  FontWeight? _labelWeight;
+
   @override
   void update(double dt) {
     super.update(dt);
@@ -218,12 +224,13 @@ class HudButton extends PositionComponent with TapCallbacks {
         final particleAlpha = math.sin(particlePhase * math.pi) * 0.6;
 
         if (particleAlpha > 0) {
+          _highlightPaint
+            ..color = color.withOpacity(particleAlpha)
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
           canvas.drawCircle(
             Offset(particleX, particleY),
             1.5,
-            Paint()
-              ..color = color.withOpacity(particleAlpha)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+            _highlightPaint,
           );
         }
       }
@@ -236,22 +243,19 @@ class HudButton extends PositionComponent with TapCallbacks {
     // Outer frame
     final borderPulse = reduceFlicker ? 0.0 : math.sin(_time * 3) * 0.05;
     final borderAlpha = 0.4 + _hoverScale * 0.3 + borderPulse;
-    final borderPaint = Paint()
+    _borderPaint
       ..color = color.withOpacity(borderAlpha.clamp(0.0, 1.0))
       ..style = PaintingStyle.stroke
       ..strokeWidth = isSelected ? 2 : 1;
-
-    canvas.drawRRect(rrect, borderPaint);
+    canvas.drawRRect(rrect, _borderPaint);
 
     // Inner subtle frame
     final innerRRect = RRect.fromRectAndRadius(rect.deflate(3), const Radius.circular(3));
-    canvas.drawRRect(
-      innerRRect,
-      Paint()
-        ..color = color.withOpacity(0.1 + _hoverScale * 0.1)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 0.5,
-    );
+    _shadowPaint
+      ..color = color.withOpacity(0.1 + _hoverScale * 0.1)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+    canvas.drawRRect(innerRRect, _shadowPaint);
 
     // Corner accents - more prominent
     _drawCornerAccents(canvas, rect);
@@ -262,7 +266,7 @@ class HudButton extends PositionComponent with TapCallbacks {
 
   void _drawCornerAccents(Canvas canvas, Rect rect) {
     final accentAlpha = 0.7 + _hoverScale * 0.3;
-    final accentPaint = Paint()
+    _linePaint
       ..color = color.withOpacity(accentAlpha)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round;
@@ -271,60 +275,97 @@ class HudButton extends PositionComponent with TapCallbacks {
     const offset = 1.0;
 
     // Top-left
-    canvas.drawLine(Offset(offset, size + offset), Offset(offset, offset), accentPaint);
-    canvas.drawLine(Offset(offset, offset), Offset(size + offset, offset), accentPaint);
+    canvas.drawLine(Offset(offset, size + offset), Offset(offset, offset), _linePaint);
+    canvas.drawLine(Offset(offset, offset), Offset(size + offset, offset), _linePaint);
 
     // Top-right
-    canvas.drawLine(Offset(rect.width - size - offset, offset), Offset(rect.width - offset, offset), accentPaint);
-    canvas.drawLine(Offset(rect.width - offset, offset), Offset(rect.width - offset, size + offset), accentPaint);
+    canvas.drawLine(
+      Offset(rect.width - size - offset, offset),
+      Offset(rect.width - offset, offset),
+      _linePaint,
+    );
+    canvas.drawLine(
+      Offset(rect.width - offset, offset),
+      Offset(rect.width - offset, size + offset),
+      _linePaint,
+    );
 
     // Bottom-left
-    canvas.drawLine(Offset(offset, rect.height - size - offset), Offset(offset, rect.height - offset), accentPaint);
-    canvas.drawLine(Offset(offset, rect.height - offset), Offset(size + offset, rect.height - offset), accentPaint);
+    canvas.drawLine(
+      Offset(offset, rect.height - size - offset),
+      Offset(offset, rect.height - offset),
+      _linePaint,
+    );
+    canvas.drawLine(
+      Offset(offset, rect.height - offset),
+      Offset(size + offset, rect.height - offset),
+      _linePaint,
+    );
 
     // Bottom-right
-    canvas.drawLine(Offset(rect.width - size - offset, rect.height - offset), Offset(rect.width - offset, rect.height - offset), accentPaint);
-    canvas.drawLine(Offset(rect.width - offset, rect.height - size - offset), Offset(rect.width - offset, rect.height - offset), accentPaint);
+    canvas.drawLine(
+      Offset(rect.width - size - offset, rect.height - offset),
+      Offset(rect.width - offset, rect.height - offset),
+      _linePaint,
+    );
+    canvas.drawLine(
+      Offset(rect.width - offset, rect.height - size - offset),
+      Offset(rect.width - offset, rect.height - offset),
+      _linePaint,
+    );
 
     // Glow on corners when selected
     if (isSelected) {
-      final glowPaint = Paint()
+      _hoverGlowPaint
         ..color = color.withOpacity(0.5)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
-      canvas.drawCircle(Offset(offset + 2, offset + 2), 3, glowPaint);
-      canvas.drawCircle(Offset(rect.width - offset - 2, offset + 2), 3, glowPaint);
-      canvas.drawCircle(Offset(offset + 2, rect.height - offset - 2), 3, glowPaint);
-      canvas.drawCircle(Offset(rect.width - offset - 2, rect.height - offset - 2), 3, glowPaint);
+      canvas.drawCircle(Offset(offset + 2, offset + 2), 3, _hoverGlowPaint);
+      canvas.drawCircle(Offset(rect.width - offset - 2, offset + 2), 3, _hoverGlowPaint);
+      canvas.drawCircle(Offset(offset + 2, rect.height - offset - 2), 3, _hoverGlowPaint);
+      canvas.drawCircle(
+        Offset(rect.width - offset - 2, rect.height - offset - 2),
+        3,
+        _hoverGlowPaint,
+      );
     }
   }
 
   void _drawTechDetails(Canvas canvas, Rect rect) {
-    final detailPaint = Paint()
+    _shadowPaint
       ..color = color.withOpacity(0.2 + _hoverScale * 0.15)
-      ..strokeWidth = 1;
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
 
     // Small tick marks on sides
     final midY = rect.height / 2;
 
     // Left side
-    canvas.drawLine(Offset(0, midY - 4), Offset(3, midY - 4), detailPaint);
-    canvas.drawLine(Offset(0, midY + 4), Offset(3, midY + 4), detailPaint);
+    canvas.drawLine(Offset(0, midY - 4), Offset(3, midY - 4), _shadowPaint);
+    canvas.drawLine(Offset(0, midY + 4), Offset(3, midY + 4), _shadowPaint);
 
     // Right side
-    canvas.drawLine(Offset(rect.width - 3, midY - 4), Offset(rect.width, midY - 4), detailPaint);
-    canvas.drawLine(Offset(rect.width - 3, midY + 4), Offset(rect.width, midY + 4), detailPaint);
+    canvas.drawLine(
+      Offset(rect.width - 3, midY - 4),
+      Offset(rect.width, midY - 4),
+      _shadowPaint,
+    );
+    canvas.drawLine(
+      Offset(rect.width - 3, midY + 4),
+      Offset(rect.width, midY + 4),
+      _shadowPaint,
+    );
 
     // Top center notch
     final centerX = rect.width / 2;
-    canvas.drawLine(Offset(centerX - 8, 0), Offset(centerX - 4, 3), detailPaint);
-    canvas.drawLine(Offset(centerX + 4, 3), Offset(centerX + 8, 0), detailPaint);
+    canvas.drawLine(Offset(centerX - 8, 0), Offset(centerX - 4, 3), _shadowPaint);
+    canvas.drawLine(Offset(centerX + 4, 3), Offset(centerX + 8, 0), _shadowPaint);
   }
 
   void _drawSelectionEffects(Canvas canvas, Rect rect) {
     // Pulsing side indicators
     final pulseAlpha = reduceFlicker ? 0.55 : 0.5 + math.sin(_time * 4) * 0.3;
-    final indicatorPaint = Paint()
+    _highlightPaint
       ..color = color.withOpacity(pulseAlpha)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
@@ -334,7 +375,7 @@ class HudButton extends PositionComponent with TapCallbacks {
         Rect.fromLTWH(-4, rect.height / 2 - 8, 3, 16),
         const Radius.circular(1.5),
       ),
-      indicatorPaint,
+      _highlightPaint,
     );
 
     // Right indicator
@@ -343,7 +384,7 @@ class HudButton extends PositionComponent with TapCallbacks {
         Rect.fromLTWH(rect.width + 1, rect.height / 2 - 8, 3, 16),
         const Radius.circular(1.5),
       ),
-      indicatorPaint,
+      _highlightPaint,
     );
 
     // Bottom highlight bar
@@ -358,7 +399,7 @@ class HudButton extends PositionComponent with TapCallbacks {
 
     canvas.drawRect(
       Rect.fromLTWH(rect.width / 2 - barWidth / 2, rect.height - 3, barWidth, 2),
-      Paint()..shader = barGradient,
+      _gradientPaint..shader = barGradient,
     );
   }
 
@@ -368,7 +409,7 @@ class HudButton extends PositionComponent with TapCallbacks {
     // Flash overlay
     canvas.drawRRect(
       rrect,
-      Paint()
+      _pressPaint
         ..color = color.withOpacity(_pressAnimation * 0.4)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
@@ -382,7 +423,7 @@ class HudButton extends PositionComponent with TapCallbacks {
     canvas.drawCircle(
       Offset(buttonSize.x / 2, buttonSize.y / 2),
       ringRadius,
-      Paint()
+      _pressPaint
         ..color = color.withOpacity(ringAlpha)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
@@ -399,27 +440,38 @@ class HudButton extends PositionComponent with TapCallbacks {
 
     final fontSize = buttonSize.x < 90 ? 10.0 : 11.0;
 
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: fontSize,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
-          letterSpacing: 1.2,
-          shadows: isSelected
-              ? [Shadow(color: color, blurRadius: 8)]
-              : null,
+    final weight = isSelected ? FontWeight.bold : FontWeight.w600;
+    if (_labelPainter == null ||
+        _labelText != label ||
+        _labelColorValue != textColor.value ||
+        _labelFontSize != fontSize ||
+        _labelWeight != weight) {
+      _labelText = label;
+      _labelColorValue = textColor.value;
+      _labelFontSize = fontSize;
+      _labelWeight = weight;
+      _labelPainter = TextPainter(
+        text: TextSpan(
+          text: label,
+          style: TextStyle(
+            color: textColor,
+            fontSize: fontSize,
+            fontWeight: weight,
+            letterSpacing: 1.2,
+            shadows: isSelected
+                ? [Shadow(color: color, blurRadius: 8)]
+                : null,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    textPainter.paint(
+    _labelPainter!.paint(
       canvas,
       Offset(
-        (buttonSize.x - textPainter.width) / 2,
-        (buttonSize.y - textPainter.height) / 2,
+        (buttonSize.x - _labelPainter!.width) / 2,
+        (buttonSize.y - _labelPainter!.height) / 2,
       ),
     );
   }

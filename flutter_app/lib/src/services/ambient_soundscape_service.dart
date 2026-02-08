@@ -7,6 +7,23 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Ambient Soundscape Generator
 /// Creates unique, immersive ambient audio for each game world.
 ///
@@ -30,6 +47,7 @@ class AmbientSoundscapeService {
   bool _initialized = false;
   bool _isPlaying = false;
   double _volume = 0.5; // Ambient should be subtle
+  double _intensity = 0.5; // 0.0 = calm, 1.0 = intense
   int _currentWorld = 0;
 
   // Multiple layers for rich ambient sound
@@ -39,10 +57,11 @@ class AmbientSoundscapeService {
   AudioPlayer? _accentPlayer;
 
   Directory? _tempDir;
-  final _random = math.Random(42); // Seeded for consistent generation
+  final _random = _FastRng(42); // Seeded for consistent generation
 
   bool get isPlaying => _isPlaying;
   double get volume => _volume;
+  double get intensity => _intensity;
   int get currentWorld => _currentWorld;
 
   /// Initialize the ambient soundscape service
@@ -84,11 +103,24 @@ class AmbientSoundscapeService {
     await _updateVolumes();
   }
 
+  /// Set ambient intensity (0.0 = calm, 1.0 = intense)
+  void setIntensity(double intensity) {
+    _intensity = intensity.clamp(0.0, 1.0);
+    unawaited(_updateVolumes());
+  }
+
   Future<void> _updateVolumes() async {
-    await _dronePlayer?.setVolume(_volume * 0.7);
-    await _texturePlayer?.setVolume(_volume * 0.5);
-    await _atmospherePlayer?.setVolume(_volume * 0.6);
-    await _accentPlayer?.setVolume(_volume * 0.4);
+    final intensity = _intensity.clamp(0.0, 1.0);
+
+    final droneMultiplier = (0.8 - 0.2 * intensity).clamp(0.0, 1.0);
+    final textureMultiplier = (0.45 + 0.1 * intensity).clamp(0.0, 1.0);
+    final atmosphereMultiplier = (0.5 + 0.2 * intensity).clamp(0.0, 1.0);
+    final accentMultiplier = (0.25 + 0.3 * intensity).clamp(0.0, 1.0);
+
+    await _dronePlayer?.setVolume(_volume * droneMultiplier);
+    await _texturePlayer?.setVolume(_volume * textureMultiplier);
+    await _atmospherePlayer?.setVolume(_volume * atmosphereMultiplier);
+    await _accentPlayer?.setVolume(_volume * accentMultiplier);
   }
 
   /// Play ambient soundscape for a specific world
@@ -112,7 +144,8 @@ class AmbientSoundscapeService {
       if (_tempDir != null) {
         final droneFile = File('${_tempDir!.path}/drone_$worldId.wav');
         final textureFile = File('${_tempDir!.path}/texture_$worldId.wav');
-        final atmosphereFile = File('${_tempDir!.path}/atmosphere_$worldId.wav');
+        final atmosphereFile =
+            File('${_tempDir!.path}/atmosphere_$worldId.wav');
         final accentFile = File('${_tempDir!.path}/accent_$worldId.wav');
 
         await droneFile.writeAsBytes(drone);
@@ -130,7 +163,8 @@ class AmbientSoundscapeService {
         _isPlaying = true;
 
         if (kDebugMode) {
-          debugPrint('Playing ambient soundscape for World $worldId: ${_getWorldName(worldId)}');
+          debugPrint(
+              'Playing ambient soundscape for World $worldId: ${_getWorldName(worldId)}');
         }
       }
     } catch (e) {
@@ -142,13 +176,20 @@ class AmbientSoundscapeService {
 
   String _getWorldName(int worldId) {
     switch (worldId) {
-      case 1: return 'NEON FRONTIER';
-      case 2: return 'RIFT WARS';
-      case 3: return 'SIGNAL WASTES';
-      case 4: return 'ION CROWN';
-      case 5: return 'SHARD VAULT';
-      case 6: return 'FINAL GATE';
-      default: return 'UNKNOWN';
+      case 1:
+        return 'NEON FRONTIER';
+      case 2:
+        return 'RIFT WARS';
+      case 3:
+        return 'SIGNAL WASTES';
+      case 4:
+        return 'ION CROWN';
+      case 5:
+        return 'SHARD VAULT';
+      case 6:
+        return 'FINAL GATE';
+      default:
+        return 'UNKNOWN';
     }
   }
 
@@ -204,7 +245,8 @@ class AmbientSoundscapeService {
   // A pristine digital dawn, pure frequencies, crystalline clarity
   // ============================================================
 
-  Uint8List _generateWorld1Drone(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld1Drone(
+      int samples, Float32List left, Float32List right) {
     // Pure, clean foundation drone - A2 (110 Hz) with gentle harmonics
     const baseFreq = 110.0;
 
@@ -231,7 +273,8 @@ class AmbientSoundscapeService {
 
       // Breathing sub-bass
       final subBreath = math.sin(2 * math.pi * 0.1 * t);
-      final sub = math.sin(2 * math.pi * 55 * t) * 0.25 * (0.7 + subBreath * 0.3);
+      final sub =
+          math.sin(2 * math.pi * 55 * t) * 0.25 * (0.7 + subBreath * 0.3);
 
       final sample = (fundamental + fifth + octave + sparkle + sub) * 0.5;
 
@@ -244,7 +287,8 @@ class AmbientSoundscapeService {
     return Uint8List(0); // Will be processed later
   }
 
-  Uint8List _generateWorld1Texture(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld1Texture(
+      int samples, Float32List left, Float32List right) {
     // Digital wind - filtered noise with resonance
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
@@ -273,7 +317,8 @@ class AmbientSoundscapeService {
   // Time fractures, dimensional ripples, echoing distortions
   // ============================================================
 
-  Uint8List _generateWorld2Drone(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld2Drone(
+      int samples, Float32List left, Float32List right) {
     // Unstable, warping drone - D2 with pitch drift
     const baseFreq = 73.42; // D2
 
@@ -314,20 +359,25 @@ class AmbientSoundscapeService {
     return Uint8List(0);
   }
 
-  Uint8List _generateWorld2Texture(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld2Texture(
+      int samples, Float32List left, Float32List right) {
     // Dimensional ripples - granular-like texture
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
 
       // Multiple ripple frequencies
-      final ripple1 = math.sin(2 * math.pi * 1.3 * t) * math.sin(2 * math.pi * 0.02 * t);
-      final ripple2 = math.sin(2 * math.pi * 2.1 * t + 0.5) * math.sin(2 * math.pi * 0.017 * t);
-      final ripple3 = math.sin(2 * math.pi * 0.7 * t + 1.0) * math.sin(2 * math.pi * 0.025 * t);
+      final ripple1 =
+          math.sin(2 * math.pi * 1.3 * t) * math.sin(2 * math.pi * 0.02 * t);
+      final ripple2 = math.sin(2 * math.pi * 2.1 * t + 0.5) *
+          math.sin(2 * math.pi * 0.017 * t);
+      final ripple3 = math.sin(2 * math.pi * 0.7 * t + 1.0) *
+          math.sin(2 * math.pi * 0.025 * t);
 
       // High-frequency shimmer
       final shimmer = math.sin(2 * math.pi * 3000 * t) * 0.02 * ripple1.abs();
 
-      final sample = (ripple1 * 0.1 + ripple2 * 0.08 + ripple3 * 0.06 + shimmer);
+      final sample =
+          (ripple1 * 0.1 + ripple2 * 0.08 + ripple3 * 0.06 + shimmer);
 
       // Phase-shifted stereo
       left[i] += sample;
@@ -342,7 +392,8 @@ class AmbientSoundscapeService {
   // Abandoned frequencies, static ruins, lost transmissions
   // ============================================================
 
-  Uint8List _generateWorld3Drone(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld3Drone(
+      int samples, Float32List left, Float32List right) {
     // Sparse, lonely drone - F2 with decay
     const baseFreq = 87.31; // F2
 
@@ -363,7 +414,8 @@ class AmbientSoundscapeService {
       final dropout = math.sin(2 * math.pi * 0.03 * t);
       final signalStrength = dropout > 0.7 ? 0.3 : 1.0;
 
-      final sample = ((fundamental + detunedFund) * 0.5 * 0.25 + harm3) * signalStrength;
+      final sample =
+          ((fundamental + detunedFund) * 0.5 * 0.25 + harm3) * signalStrength;
 
       // Desolate stereo - wide and empty
       final pan = math.sin(2 * math.pi * 0.005 * t) * 0.6;
@@ -374,7 +426,8 @@ class AmbientSoundscapeService {
     return Uint8List(0);
   }
 
-  Uint8List _generateWorld3Texture(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld3Texture(
+      int samples, Float32List left, Float32List right) {
     // Static and lost radio signals
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
@@ -410,7 +463,8 @@ class AmbientSoundscapeService {
   // Charged air, thunder resonance, power grid tension
   // ============================================================
 
-  Uint8List _generateWorld4Drone(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld4Drone(
+      int samples, Float32List left, Float32List right) {
     // Powerful, electric drone - G2 with harmonics
     const baseFreq = 98.0; // G2
 
@@ -433,7 +487,8 @@ class AmbientSoundscapeService {
       // Power surge harmonics
       final surge = math.sin(2 * math.pi * baseFreq * 2 * t) * surgeLfo * 0.15;
 
-      final sample = (fundamental * 0.3 + saw * 0.15 * tensionLfo + surge + gridHum) * 0.4;
+      final sample =
+          (fundamental * 0.3 + saw * 0.15 * tensionLfo + surge + gridHum) * 0.4;
 
       // Electric stereo crackle
       final pan = math.sin(2 * math.pi * 0.04 * t) * 0.3;
@@ -444,7 +499,8 @@ class AmbientSoundscapeService {
     return Uint8List(0);
   }
 
-  Uint8List _generateWorld4Texture(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld4Texture(
+      int samples, Float32List left, Float32List right) {
     // Thunder rumbles and electric crackles
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
@@ -459,12 +515,12 @@ class AmbientSoundscapeService {
 
       // Electric crackles
       final crackleChance = _random.nextDouble();
-      final crackle = crackleChance > 0.998
-          ? (_random.nextDouble() * 2 - 1) * 0.3
-          : 0.0;
+      final crackle =
+          crackleChance > 0.998 ? (_random.nextDouble() * 2 - 1) * 0.3 : 0.0;
 
       // Charged air hiss
-      final chargedAir = _pinkNoise() * 0.02 * (0.5 + math.sin(2 * math.pi * 0.015 * t) * 0.3);
+      final chargedAir =
+          _pinkNoise() * 0.02 * (0.5 + math.sin(2 * math.pi * 0.015 * t) * 0.3);
 
       final sample = thunder + thunderRes + crackle + chargedAir;
 
@@ -482,7 +538,8 @@ class AmbientSoundscapeService {
   // Ghostly echoes, melancholic drones, crystalline memories
   // ============================================================
 
-  Uint8List _generateWorld5Drone(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld5Drone(
+      int samples, Float32List left, Float32List right) {
     // Melancholic, haunting drone - A1 minor with tears
     const baseFreq = 55.0; // A1
 
@@ -497,13 +554,17 @@ class AmbientSoundscapeService {
       final fundamental = math.sin(2 * math.pi * baseFreq * t) * 0.35;
 
       // Minor third - the color of sadness (C)
-      final minorThird = math.sin(2 * math.pi * baseFreq * 1.2 * t) * 0.12 * breathLfo;
+      final minorThird =
+          math.sin(2 * math.pi * baseFreq * 1.2 * t) * 0.12 * breathLfo;
 
       // Fifth for hollow resonance
-      final fifth = math.sin(2 * math.pi * baseFreq * 1.5 * t) * 0.1 * tearLfo.abs();
+      final fifth =
+          math.sin(2 * math.pi * baseFreq * 1.5 * t) * 0.1 * tearLfo.abs();
 
       // High harmonic tears - crystalline memory shards
-      final tears = math.sin(2 * math.pi * baseFreq * 6 * t) * 0.02 * (tearLfo > 0.5 ? 1.0 : 0.0);
+      final tears = math.sin(2 * math.pi * baseFreq * 6 * t) *
+          0.02 *
+          (tearLfo > 0.5 ? 1.0 : 0.0);
 
       // Heartbeat-like pulse
       final heartbeatPhase = (t * 0.8) % 1.0;
@@ -511,7 +572,8 @@ class AmbientSoundscapeService {
           ? math.sin(2 * math.pi * 30 * t) * (0.1 - heartbeatPhase) * 2
           : 0.0;
 
-      final sample = (fundamental + minorThird + fifth + tears + heartbeat) * 0.5;
+      final sample =
+          (fundamental + minorThird + fifth + tears + heartbeat) * 0.5;
 
       // Ghostly stereo width
       final ghostPan = math.sin(2 * math.pi * 0.02 * t) * 0.4;
@@ -522,7 +584,8 @@ class AmbientSoundscapeService {
     return Uint8List(0);
   }
 
-  Uint8List _generateWorld5Texture(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld5Texture(
+      int samples, Float32List left, Float32List right) {
     // Whispers and memory fragments
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
@@ -534,7 +597,9 @@ class AmbientSoundscapeService {
       // Memory fragment tones (occasional high bells)
       final fragmentLfo = math.sin(2 * math.pi * 0.01 * t);
       final fragment = fragmentLfo > 0.9
-          ? math.sin(2 * math.pi * 2000 * t) * 0.02 * math.exp(-((fragmentLfo - 0.9) * 20))
+          ? math.sin(2 * math.pi * 2000 * t) *
+              0.02 *
+              math.exp(-((fragmentLfo - 0.9) * 20))
           : 0.0;
 
       // Distant, ethereal choir-like pad
@@ -561,7 +626,8 @@ class AmbientSoundscapeService {
   // Cosmic harmonics, infinite space, pure transcendence
   // ============================================================
 
-  Uint8List _generateWorld6Drone(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld6Drone(
+      int samples, Float32List left, Float32List right) {
     // Transcendent, cosmic drone - perfect intervals, pure tones
     const baseFreq = 65.41; // C2 - the universal root
 
@@ -576,20 +642,31 @@ class AmbientSoundscapeService {
       final fundamental = math.sin(2 * math.pi * baseFreq * t) * 0.25;
 
       // Perfect octave - unity
-      final octave = math.sin(2 * math.pi * baseFreq * 2 * t) * 0.15 * cosmicBreath;
+      final octave =
+          math.sin(2 * math.pi * baseFreq * 2 * t) * 0.15 * cosmicBreath;
 
       // Perfect fifth - cosmic harmony
       final fifth = math.sin(2 * math.pi * baseFreq * 1.5 * t) * 0.12;
 
       // High celestial harmonics - approaching infinity
-      final celestial1 = math.sin(2 * math.pi * baseFreq * 4 * t) * 0.05 * (infinityLfo * 0.5 + 0.5);
+      final celestial1 = math.sin(2 * math.pi * baseFreq * 4 * t) *
+          0.05 *
+          (infinityLfo * 0.5 + 0.5);
       final celestial2 = math.sin(2 * math.pi * baseFreq * 6 * t) * 0.03;
-      final celestial3 = math.sin(2 * math.pi * baseFreq * 8 * t) * 0.02 * cosmicBreath;
+      final celestial3 =
+          math.sin(2 * math.pi * baseFreq * 8 * t) * 0.02 * cosmicBreath;
 
       // Sub-bass - the void beneath
       final voidBass = math.sin(2 * math.pi * 32.7 * t) * 0.2;
 
-      final sample = (fundamental + octave + fifth + celestial1 + celestial2 + celestial3 + voidBass) * 0.5;
+      final sample = (fundamental +
+              octave +
+              fifth +
+              celestial1 +
+              celestial2 +
+              celestial3 +
+              voidBass) *
+          0.5;
 
       // Infinite stereo space
       final cosmicPan = math.sin(2 * math.pi * 0.01 * t) * 0.25;
@@ -600,7 +677,8 @@ class AmbientSoundscapeService {
     return Uint8List(0);
   }
 
-  Uint8List _generateWorld6Texture(int samples, Float32List left, Float32List right) {
+  Uint8List _generateWorld6Texture(
+      int samples, Float32List left, Float32List right) {
     // Cosmic wind and celestial choir
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
@@ -622,7 +700,8 @@ class AmbientSoundscapeService {
       // Stellar sparkles
       final sparkleChance = _random.nextDouble();
       final sparkle = sparkleChance > 0.9995
-          ? math.sin(2 * math.pi * (2000 + _random.nextDouble() * 2000) * t) * 0.03
+          ? math.sin(2 * math.pi * (2000 + _random.nextDouble() * 2000) * t) *
+              0.03
           : 0.0;
 
       final sample = cosmicWind + choir + sparkle;
@@ -718,7 +797,8 @@ class AmbientSoundscapeService {
     return _mixToStereoWav(leftChannel, rightChannel);
   }
 
-  void _generateWorldAtmosphere(int worldId, int samples, Float32List left, Float32List right) {
+  void _generateWorldAtmosphere(
+      int worldId, int samples, Float32List left, Float32List right) {
     for (int i = 0; i < samples; i++) {
       final t = i / _sampleRate;
       double sample = 0;
@@ -732,27 +812,35 @@ class AmbientSoundscapeService {
           break;
 
         case 2: // Time echoes
-          final echo = math.sin(2 * math.pi * 0.3 * t) * math.sin(2 * math.pi * 0.07 * t);
+          final echo = math.sin(2 * math.pi * 0.3 * t) *
+              math.sin(2 * math.pi * 0.07 * t);
           sample = echo * math.sin(2 * math.pi * 400 * t) * 0.03;
           pan = math.sin(2 * math.pi * 0.05 * t) * 0.5;
           break;
 
         case 3: // Distant signals
           final signal = math.sin(2 * math.pi * 0.02 * t);
-          sample = signal > 0.8 ? math.sin(2 * math.pi * 1500 * t) * 0.01 * (signal - 0.8) * 5 : 0;
+          sample = signal > 0.8
+              ? math.sin(2 * math.pi * 1500 * t) * 0.01 * (signal - 0.8) * 5
+              : 0;
           sample += _pinkNoise() * 0.01;
           pan = math.sin(2 * math.pi * 0.01 * t) * 0.6;
           break;
 
         case 4: // Electric crackle
-          final crackle = _random.nextDouble() > 0.997 ? _random.nextDouble() * 0.1 : 0;
+          final crackle =
+              _random.nextDouble() > 0.997 ? _random.nextDouble() * 0.1 : 0;
           sample = crackle + math.sin(2 * math.pi * 120 * t) * 0.02;
           pan = (_random.nextDouble() - 0.5) * 0.8;
           break;
 
         case 5: // Memory glimmers
           final glimmer = math.sin(2 * math.pi * 0.008 * t);
-          sample = glimmer > 0.7 ? math.sin(2 * math.pi * 3000 * t) * 0.01 * math.exp(-(glimmer - 0.7) * 10) : 0;
+          sample = glimmer > 0.7
+              ? math.sin(2 * math.pi * 3000 * t) *
+                  0.01 *
+                  math.exp(-(glimmer - 0.7) * 10)
+              : 0;
           pan = math.sin(2 * math.pi * 0.03 * t) * 0.4;
           break;
 
@@ -760,7 +848,9 @@ class AmbientSoundscapeService {
           final bell = math.sin(2 * math.pi * 0.01 * t);
           if (bell > 0.95) {
             final bellFreq = 500 + (bell - 0.95) * 10000;
-            sample = math.sin(2 * math.pi * bellFreq * t) * 0.02 * math.exp(-(bell - 0.95) * 20);
+            sample = math.sin(2 * math.pi * bellFreq * t) *
+                0.02 *
+                math.exp(-(bell - 0.95) * 20);
           }
           pan = math.sin(2 * math.pi * 0.007 * t) * 0.25;
           break;
@@ -784,7 +874,8 @@ class AmbientSoundscapeService {
     return _mixToStereoWav(leftChannel, rightChannel);
   }
 
-  void _generateWorldAccents(int worldId, int samples, Float32List left, Float32List right) {
+  void _generateWorldAccents(
+      int worldId, int samples, Float32List left, Float32List right) {
     // Very sparse, evocative accents
     final accentCount = 10 + _random.nextInt(10);
 
@@ -803,14 +894,18 @@ class AmbientSoundscapeService {
 
         switch (worldId) {
           case 1: // Crystal chime
-            sample = math.sin(2 * math.pi * (1000 + a * 100) * t) * 0.02 * envelope;
+            sample =
+                math.sin(2 * math.pi * (1000 + a * 100) * t) * 0.02 * envelope;
             break;
           case 2: // Temporal whoosh
             final sweep = 200 + progress * 800;
             sample = math.sin(2 * math.pi * sweep * t) * 0.015 * envelope;
             break;
           case 3: // Radio blip
-            sample = math.sin(2 * math.pi * 1800 * t) * 0.01 * envelope * (1 - progress);
+            sample = math.sin(2 * math.pi * 1800 * t) *
+                0.01 *
+                envelope *
+                (1 - progress);
             break;
           case 4: // Thunder boom
             sample = _pinkNoise() * 0.03 * envelope * (1 - progress * 0.5);
@@ -821,8 +916,10 @@ class AmbientSoundscapeService {
             sample += math.sin(2 * math.pi * 400 * t) * 0.008 * envelope;
             break;
           case 6: // Cosmic tone
-            sample = math.sin(2 * math.pi * (300 + a * 50) * t) * 0.015 * envelope;
-            sample += math.sin(2 * math.pi * (600 + a * 100) * t) * 0.008 * envelope;
+            sample =
+                math.sin(2 * math.pi * (300 + a * 50) * t) * 0.015 * envelope;
+            sample +=
+                math.sin(2 * math.pi * (600 + a * 100) * t) * 0.008 * envelope;
             break;
         }
 
@@ -839,8 +936,8 @@ class AmbientSoundscapeService {
   double _pinkNoise() {
     // Simple pink noise approximation
     return (_random.nextDouble() * 2 - 1) * 0.7 +
-           (_random.nextDouble() * 2 - 1) * 0.2 +
-           (_random.nextDouble() * 2 - 1) * 0.1;
+        (_random.nextDouble() * 2 - 1) * 0.2 +
+        (_random.nextDouble() * 2 - 1) * 0.1;
   }
 
   double _smoothEnvelope(double progress, double attack, double release) {
@@ -865,8 +962,10 @@ class AmbientSoundscapeService {
     // Interleave stereo
     final pcm16 = Int16List(left.length * 2);
     for (int i = 0; i < left.length; i++) {
-      pcm16[i * 2] = ((left[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
-      pcm16[i * 2 + 1] = ((right[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
+      pcm16[i * 2] =
+          ((left[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
+      pcm16[i * 2 + 1] =
+          ((right[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
     }
 
     return _addWavHeader(pcm16.buffer.asUint8List());
@@ -920,6 +1019,7 @@ class AmbientSoundscapeService {
     await stop();
     _currentWorld = 0;
     _volume = 0.5;
+    _intensity = 0.5;
 
     if (kDebugMode) {
       debugPrint('AmbientSoundscapeService reset');

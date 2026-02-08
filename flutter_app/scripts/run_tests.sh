@@ -8,16 +8,29 @@ echo ""
 echo "Running tests (this may take a while)..."
 echo ""
 
-# Run tests and capture output to file (suppress normal output)
-flutter test --coverage > /tmp/test_output.txt 2>&1
+# Optional: run a subset of tests to avoid OOM.
+# Usage: set env var TEST_TARGETS, e.g. "test/aurora_effect_simulation_test.dart".
+TEST_TARGETS="${TEST_TARGETS:-$*}"
+
+# Run tests and capture output to file
+# Notes:
+# - `-r expanded` helps us see which test(s) failed.
+# - `-j 1` reduces flakiness / resource spikes in CI-like containers.
+# - If TEST_TARGETS is non-empty, we only run those tests (batch mode).
+if [ -n "$TEST_TARGETS" ]; then
+  echo "Running targeted tests: $TEST_TARGETS"
+  flutter test -r expanded -j 1 --coverage $TEST_TARGETS > /tmp/test_output.txt 2>&1
+else
+  flutter test -r expanded -j 1 --coverage > /tmp/test_output.txt 2>&1
+fi
 EXIT_CODE=$?
 
-# Get the last line that contains test results
-RESULT_LINE=$(tail -5 /tmp/test_output.txt | grep -E '[0-9]+:[0-9]+ \+[0-9]+' | tail -1)
+# Try to find a summary line (formats vary).
+RESULT_LINE=$(grep -E '^[0-9]+:[0-9]+ \+[0-9]+.*$' /tmp/test_output.txt | tail -1)
 
-# Extract numbers using sed
-PASSED=$(echo "$RESULT_LINE" | sed -n 's/.*+\([0-9]*\).*/\1/p')
-FAILED=$(echo "$RESULT_LINE" | sed -n 's/.*-\([0-9]*\).*/\1/p')
+# Extract numbers using sed (best-effort)
+PASSED=$(echo "$RESULT_LINE" | sed -n 's/.*+\([0-9][0-9]*\).*/\1/p')
+FAILED=$(echo "$RESULT_LINE" | sed -n 's/.*-\([0-9][0-9]*\).*/\1/p')
 
 # Default values
 if [ -z "$PASSED" ]; then PASSED=0; fi
@@ -33,20 +46,26 @@ echo "  ✓ Passed:      $PASSED"
 echo "  ✗ Failed:      $FAILED"
 echo ""
 
-if [ "$FAILED" = "0" ] || [ -z "$FAILED" ]; then
+if [ "$EXIT_CODE" -eq 0 ]; then
     echo "  ✅ ALL TESTS PASSED!"
 else
-    echo "  ❌ SOME TESTS FAILED ($FAILED failures)"
+    # Even if we couldn't parse FAILED count, a non-zero exit means something went wrong.
+    echo "  ❌ TEST COMMAND EXITED WITH CODE $EXIT_CODE"
+    if [ -n "$FAILED" ] && [ "$FAILED" != "0" ]; then
+      echo "  (Detected $FAILED failures in summary parsing)"
+    fi
     echo ""
     echo "════════════════════════════════════════════════════════════════"
     echo "                     FAILED TESTS                               "
     echo "════════════════════════════════════════════════════════════════"
     echo ""
-    # Show compilation errors
-    grep -E "Error:.*isn't defined|Compilation failed" /tmp/test_output.txt | head -20
+    echo "Most relevant failure lines (first 160):"
+    # Flutter test output is noisy; pull the high-signal lines.
+    grep -nE "^(FAIL|ERROR|EXCEPTION|Expected:|Actual:|Which:|Stack trace:|package:|test/|lib/|Some tests failed|Compilation failed|Error:|Fatal:)" /tmp/test_output.txt | head -160
+
     echo ""
-    # Show failed test files (unique)
-    grep -E "Some tests failed|FAILED" /tmp/test_output.txt | head -10
+    echo "Last ~200 lines of raw output:"
+    tail -200 /tmp/test_output.txt
 fi
 
 echo ""

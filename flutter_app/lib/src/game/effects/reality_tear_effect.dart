@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 /// Reality tear/dimensional portal effect for enemy spawn portals or special abilities.
 /// Features 7 layers of visual effects:
 /// - Layer 1: Central void (pure black with chromatic edge)
@@ -19,7 +21,7 @@ class RealityTearEffect extends PositionComponent {
     required double duration,
     required bool reduceFx,
     required bool lowFx,
-  }) : _random = math.Random() {
+  }) {
     _reset(
       position: position,
       tearSize: tearSize,
@@ -111,9 +113,19 @@ class RealityTearEffect extends PositionComponent {
   final List<_DimensionalParticle> _particles = [];
   final List<_DistortionWave> _waves = [];
   double _time = 0;
-  final math.Random _random;
+  int _rngState = 0x9e3779b9;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Tear opening/closing animation
   double _openProgress = 0;
@@ -209,6 +221,8 @@ class RealityTearEffect extends PositionComponent {
     this.duration = duration;
     this.reduceFx = reduceFx;
     this.lowFx = lowFx;
+    _rngState = (position.hashCode ^ (tearSize * 1000).round() ^ 0x9e3779b9) &
+        0x7fffffff;
     _time = 0;
     _openProgress = 0;
     _flickerIntensity = 0;
@@ -225,17 +239,17 @@ class RealityTearEffect extends PositionComponent {
   void _initializeFragments() {
     final fragmentCount = lowFx ? 0 : (reduceFx ? 6 : 12);
     for (int i = 0; i < fragmentCount; i++) {
-      final angle = (i / fragmentCount) * math.pi * 2 + _random.nextDouble() * 0.5;
-      final distance = tearSize * (0.8 + _random.nextDouble() * 0.6);
+      final angle = (i / fragmentCount) * math.pi * 2 + _nextUnit() * 0.5;
+      final distance = tearSize * (0.8 + _nextUnit() * 0.6);
       _fragments.add(_RealityFragment(
         angle: angle,
         baseDistance: distance,
-        size: 4 + _random.nextDouble() * 8,
-        rotation: _random.nextDouble() * math.pi * 2,
-        rotationSpeed: (_random.nextDouble() - 0.5) * 4,
-        orbitSpeed: (_random.nextDouble() - 0.5) * 0.8,
-        shapeType: _random.nextInt(4),
-        phaseOffset: _random.nextDouble() * math.pi * 2,
+        size: 4 + _nextUnit() * 8,
+        rotation: _nextUnit() * math.pi * 2,
+        rotationSpeed: (_nextUnit() - 0.5) * 4,
+        orbitSpeed: (_nextUnit() - 0.5) * 0.8,
+        shapeType: _nextInt(4),
+        phaseOffset: _nextUnit() * math.pi * 2,
       ));
     }
   }
@@ -243,31 +257,37 @@ class RealityTearEffect extends PositionComponent {
   void _initializeElectricArcs() {
     final arcCount = lowFx ? 0 : (reduceFx ? 4 : 8);
     for (int i = 0; i < arcCount; i++) {
-      final angle = (i / arcCount) * math.pi * 2 + _random.nextDouble() * 0.3;
+      final angle = (i / arcCount) * math.pi * 2 + _nextUnit() * 0.3;
       _electricArcs.add(_ElectricArc(
         angle: angle,
-        length: tearSize * (0.4 + _random.nextDouble() * 0.4),
-        width: 1.5 + _random.nextDouble() * 1.5,
-        lifetime: 0.1 + _random.nextDouble() * 0.15,
-        segments: 3 + _random.nextInt(3),
-        respawnDelay: _random.nextDouble() * 0.3,
+        length: tearSize * (0.4 + _nextUnit() * 0.4),
+        width: 1.5 + _nextUnit() * 1.5,
+        lifetime: 0.1 + _nextUnit() * 0.15,
+        segments: 3 + _nextInt(3),
+        respawnDelay: _nextUnit() * 0.3,
       ));
     }
   }
 
   void _initializeParticles() {
     final particleCount = lowFx ? 0 : (reduceFx ? 12 : 24);
+    if (particleCount == 0) return;
+
+    final angularJitter = math.pi / particleCount;
     for (int i = 0; i < particleCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final startDistance = tearSize * (1.5 + _random.nextDouble() * 1.5);
+      // Even angular distribution with subtle jitter keeps the ring coverage
+      // visually uniform while still feeling organic.
+      final baseAngle = (i / particleCount) * math.pi * 2;
+      final angle = baseAngle + (_nextUnit() - 0.5) * angularJitter;
+      final startDistance = tearSize * (1.5 + _nextUnit() * 1.5);
       _particles.add(_DimensionalParticle(
         angle: angle,
         distance: startDistance,
         maxDistance: startDistance,
-        speed: 30 + _random.nextDouble() * 40,
-        size: 1.5 + _random.nextDouble() * 2.5,
-        lifetime: 0.8 + _random.nextDouble() * 0.6,
-        phaseOffset: _random.nextDouble() * math.pi * 2,
+        speed: 30 + _nextUnit() * 40,
+        size: 1.5 + _nextUnit() * 2.5,
+        lifetime: 0.8 + _nextUnit() * 0.6,
+        phaseOffset: _nextUnit() * math.pi * 2,
       ));
     }
   }
@@ -277,7 +297,7 @@ class RealityTearEffect extends PositionComponent {
     for (int i = 0; i < waveCount; i++) {
       _waves.add(_DistortionWave(
         delay: i * 0.4,
-        speed: 60 + _random.nextDouble() * 30,
+        speed: 60 + _nextUnit() * 30,
         maxRadius: tearSize * 2.5,
       ));
     }
@@ -294,6 +314,17 @@ class RealityTearEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _time += dt;
     final progress = _time / duration;
@@ -314,8 +345,8 @@ class RealityTearEffect extends PositionComponent {
 
     // Flicker intensity based on progress
     _flickerIntensity = math.sin(_time * 20) * 0.2 + 0.8;
-    if (_random.nextDouble() < 0.05) {
-      _flickerIntensity = 0.3 + _random.nextDouble() * 0.4;
+    if (_nextUnit() < 0.05) {
+      _flickerIntensity = 0.3 + _nextUnit() * 0.4;
     }
 
     // Update fragments
@@ -325,7 +356,7 @@ class RealityTearEffect extends PositionComponent {
 
     // Update electric arcs
     for (final arc in _electricArcs) {
-      arc.update(dt, _random);
+      arc.update(dt, _nextUnit);
     }
 
     // Update particles (moving toward center)
@@ -341,11 +372,20 @@ class RealityTearEffect extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     if (_openProgress <= 0) return;
 
     final effectiveSize = tearSize * _openProgress;
+    if (effectiveSize <= 1) return;
+    if (_fragments.isEmpty &&
+        _electricArcs.isEmpty &&
+        _particles.isEmpty &&
+        _waves.isEmpty &&
+        reduceFx) {
+      return;
+    }
 
     // Layer 7: Flickering reality overlay (background)
     _drawGlitchBackground(canvas, effectiveSize);
@@ -380,6 +420,17 @@ class RealityTearEffect extends PositionComponent {
     }
   }
 
+  bool _isOffscreen({double padding = 120}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // LAYER 1: CENTRAL VOID
   // ═══════════════════════════════════════════════════════════════════════════
@@ -387,7 +438,8 @@ class RealityTearEffect extends PositionComponent {
     final voidRadius = effectiveSize * 0.4;
 
     // Chromatic aberration edge - purple offset
-    _chromaticEdgePaintPurple.color = primaryColor.withOpacity(0.6 * _flickerIntensity);
+    _chromaticEdgePaintPurple.color =
+        primaryColor.withOpacity(0.6 * _flickerIntensity);
     canvas.drawCircle(
       const Offset(-3, -1),
       voidRadius * 1.15,
@@ -395,7 +447,8 @@ class RealityTearEffect extends PositionComponent {
     );
 
     // Chromatic aberration edge - cyan offset
-    _chromaticEdgePaintCyan.color = secondaryColor.withOpacity(0.6 * _flickerIntensity);
+    _chromaticEdgePaintCyan.color =
+        secondaryColor.withOpacity(0.6 * _flickerIntensity);
     canvas.drawCircle(
       const Offset(3, 1),
       voidRadius * 1.15,
@@ -427,9 +480,9 @@ class RealityTearEffect extends PositionComponent {
     _tearPath.reset();
     for (int i = 0; i <= jaggedPoints; i++) {
       final angle = (i / jaggedPoints) * math.pi * 2;
-      final jitter = math.sin(_time * 15 + i * 3) * 4 +
-          math.sin(_time * 8 + i * 7) * 2;
-      final glitchOffset = _random.nextDouble() < 0.1 ? _random.nextDouble() * 6 : 0;
+      final jitter =
+          math.sin(_time * 15 + i * 3) * 4 + math.sin(_time * 8 + i * 7) * 2;
+      final glitchOffset = _nextUnit() < 0.1 ? _nextUnit() * 6 : 0;
       final radius = baseRadius + jitter + glitchOffset;
 
       final x = math.cos(angle) * radius;
@@ -444,7 +497,8 @@ class RealityTearEffect extends PositionComponent {
     _tearPath.close();
 
     // Outer glow
-    _tearEdgeGlowPaint.color = primaryColor.withOpacity(0.4 * _flickerIntensity);
+    _tearEdgeGlowPaint.color =
+        primaryColor.withOpacity(0.4 * _flickerIntensity);
     canvas.drawPath(_tearPath, _tearEdgeGlowPaint);
 
     // Main edge - alternating colors
@@ -452,26 +506,29 @@ class RealityTearEffect extends PositionComponent {
       primaryColor,
       secondaryColor,
       (math.sin(_time * 5) + 1) / 2,
-    )!.withOpacity(0.8 * _flickerIntensity);
+    )!
+        .withOpacity(0.8 * _flickerIntensity);
     canvas.drawPath(_tearPath, _tearEdgePaint);
 
     // Glitch lines extending from tear
     if (!reduceFx) {
       final glitchLineCount = 6;
       for (int i = 0; i < glitchLineCount; i++) {
-        if (_random.nextDouble() > 0.7) continue;
+        if (_nextUnit() > 0.7) continue;
 
         final angle = (i / glitchLineCount) * math.pi * 2 + _time * 2;
         final startRadius = baseRadius + 5;
-        final endRadius = baseRadius + 10 + _random.nextDouble() * 15;
+        final endRadius = baseRadius + 10 + _nextUnit() * 15;
 
         final startX = math.cos(angle) * startRadius;
         final startY = math.sin(angle) * startRadius;
         final endX = math.cos(angle) * endRadius;
         final endY = math.sin(angle) * endRadius;
 
-        _glitchLinePaint.color = secondaryColor.withOpacity(0.6 * _flickerIntensity);
-        canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _glitchLinePaint);
+        _glitchLinePaint.color =
+            secondaryColor.withOpacity(0.6 * _flickerIntensity);
+        canvas.drawLine(
+            Offset(startX, startY), Offset(endX, endY), _glitchLinePaint);
       }
     }
   }
@@ -480,6 +537,7 @@ class RealityTearEffect extends PositionComponent {
   // LAYER 3: REALITY DISTORTION WAVES
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawDistortionWaves(Canvas canvas, double effectiveSize) {
+    if (_waves.isEmpty) return;
     for (final wave in _waves) {
       if (!wave.isActive) continue;
 
@@ -504,8 +562,9 @@ class RealityTearEffect extends PositionComponent {
   // LAYER 4: REALITY FRAGMENTS
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawRealityFragments(Canvas canvas, double effectiveSize) {
+    final fragmentAlpha = _flickerIntensity * 0.8;
+    if (fragmentAlpha <= 0.05) return;
     for (final fragment in _fragments) {
-      final fragmentAlpha = _flickerIntensity * 0.8;
       final x = math.cos(fragment.currentAngle) * fragment.currentDistance;
       final y = math.sin(fragment.currentAngle) * fragment.currentDistance;
 
@@ -564,11 +623,13 @@ class RealityTearEffect extends PositionComponent {
         voidColor,
         fragmentColor,
         0.3,
-      )!.withOpacity(fragmentAlpha * 0.8);
+      )!
+          .withOpacity(fragmentAlpha * 0.8);
       canvas.drawPath(_fragmentPath, _fragmentPaint);
 
       // Fragment outline
-      _fragmentOutlinePaint.color = fragmentColor.withOpacity(fragmentAlpha * 0.7);
+      _fragmentOutlinePaint.color =
+          fragmentColor.withOpacity(fragmentAlpha * 0.7);
       canvas.drawPath(_fragmentPath, _fragmentOutlinePaint);
 
       canvas.restore();
@@ -580,6 +641,8 @@ class RealityTearEffect extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawElectricEnergy(Canvas canvas, double effectiveSize) {
     final baseRadius = effectiveSize * 0.45;
+    if (_electricArcs.isEmpty) return;
+    if (_flickerIntensity <= 0.05) return;
 
     for (final arc in _electricArcs) {
       if (!arc.isActive) continue;
@@ -601,7 +664,7 @@ class RealityTearEffect extends PositionComponent {
 
       for (int seg = 0; seg < arc.segments; seg++) {
         final segLength = arc.length / arc.segments;
-        final perpOffset = (_random.nextDouble() - 0.5) * 12;
+        final perpOffset = (_nextUnit() - 0.5) * 12;
 
         currentX += math.cos(direction) * segLength +
             math.cos(direction + math.pi / 2) * perpOffset;
@@ -619,7 +682,8 @@ class RealityTearEffect extends PositionComponent {
 
       // Electric core (white/cyan)
       _electricPaint
-        ..color = Color.lerp(Colors.white, secondaryColor, 0.3)!.withOpacity(arcAlpha)
+        ..color =
+            Color.lerp(Colors.white, secondaryColor, 0.3)!.withOpacity(arcAlpha)
         ..strokeWidth = arc.width;
       canvas.drawPath(_electricPath, _electricPaint);
     }
@@ -629,6 +693,8 @@ class RealityTearEffect extends PositionComponent {
   // LAYER 6: DIMENSIONAL PARTICLES BEING SUCKED IN
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawDimensionalParticles(Canvas canvas, double effectiveSize) {
+    if (_particles.isEmpty) return;
+    if (_flickerIntensity <= 0.05) return;
     for (final particle in _particles) {
       if (!particle.isAlive) continue;
 
@@ -640,8 +706,10 @@ class RealityTearEffect extends PositionComponent {
 
       // Trail toward center
       final trailLength = particle.size * 3;
-      final trailEndX = math.cos(particle.angle) * (particle.distance + trailLength);
-      final trailEndY = math.sin(particle.angle) * (particle.distance + trailLength);
+      final trailEndX =
+          math.cos(particle.angle) * (particle.distance + trailLength);
+      final trailEndY =
+          math.sin(particle.angle) * (particle.distance + trailLength);
 
       final particleColor = Color.lerp(
         primaryColor,
@@ -652,7 +720,8 @@ class RealityTearEffect extends PositionComponent {
       _particleTrailPaint
         ..color = particleColor.withOpacity(particleAlpha * 0.4)
         ..strokeWidth = particle.size * 0.8;
-      canvas.drawLine(Offset(x, y), Offset(trailEndX, trailEndY), _particleTrailPaint);
+      canvas.drawLine(
+          Offset(x, y), Offset(trailEndX, trailEndY), _particleTrailPaint);
 
       // Particle core
       _particlePaint.color = particleColor.withOpacity(particleAlpha);
@@ -679,11 +748,11 @@ class RealityTearEffect extends PositionComponent {
     // Scanlines
     final scanlineCount = 8;
     for (int i = 0; i < scanlineCount; i++) {
-      if (_random.nextDouble() > 0.6) continue;
+      if (_nextUnit() > 0.6) continue;
 
       final yOffset = (math.sin(_time * 25 + i * 2) * effectiveSize * 0.8);
-      final scanlineWidth = effectiveSize * (0.3 + _random.nextDouble() * 0.5);
-      final scanlineAlpha = _flickerIntensity * 0.2 * _random.nextDouble();
+      final scanlineWidth = effectiveSize * (0.3 + _nextUnit() * 0.5);
+      final scanlineAlpha = _flickerIntensity * 0.2 * _nextUnit();
 
       // Purple scanline
       _scanlinePaint.color = primaryColor.withOpacity(scanlineAlpha);
@@ -709,16 +778,17 @@ class RealityTearEffect extends PositionComponent {
     }
 
     // Random glitch blocks
-    if (_random.nextDouble() < 0.15) {
-      final blockCount = 3 + _random.nextInt(3);
+    if (_nextUnit() < 0.15) {
+      final blockCount = 3 + _nextInt(3);
       for (int i = 0; i < blockCount; i++) {
-        final bx = (_random.nextDouble() - 0.5) * effectiveSize * 2;
-        final by = (_random.nextDouble() - 0.5) * effectiveSize * 2;
-        final bw = 4 + _random.nextDouble() * 12;
-        final bh = 2 + _random.nextDouble() * 6;
+        final bx = (_nextUnit() - 0.5) * effectiveSize * 2;
+        final by = (_nextUnit() - 0.5) * effectiveSize * 2;
+        final bw = 4 + _nextUnit() * 12;
+        final bh = 2 + _nextUnit() * 6;
 
-        final blockColor = _random.nextBool() ? primaryColor : secondaryColor;
-        _glitchBlockPaint.color = blockColor.withOpacity(0.4 * _flickerIntensity);
+        final blockColor = _nextBool() ? primaryColor : secondaryColor;
+        _glitchBlockPaint.color =
+            blockColor.withOpacity(0.4 * _flickerIntensity);
         canvas.drawRect(
           Rect.fromCenter(center: Offset(bx, by), width: bw, height: bh),
           _glitchBlockPaint,
@@ -727,10 +797,11 @@ class RealityTearEffect extends PositionComponent {
     }
 
     // Chromatic aberration overlay circles
-    if (_random.nextDouble() < 0.1) {
-      final chromeRadius = effectiveSize * (0.3 + _random.nextDouble() * 0.3);
+    if (_nextUnit() < 0.1) {
+      final chromeRadius = effectiveSize * (0.3 + _nextUnit() * 0.3);
       _glitchOverlayPaint.color = primaryColor.withOpacity(0.15);
-      canvas.drawCircle(const Offset(-4, -2), chromeRadius, _glitchOverlayPaint);
+      canvas.drawCircle(
+          const Offset(-4, -2), chromeRadius, _glitchOverlayPaint);
       _glitchOverlayPaint.color = secondaryColor.withOpacity(0.12);
       canvas.drawCircle(const Offset(4, 2), chromeRadius, _glitchOverlayPaint);
     }
@@ -779,9 +850,9 @@ class _RealityFragment {
     required this.orbitSpeed,
     required this.shapeType,
     required this.phaseOffset,
-  }) : currentAngle = angle,
-       currentDistance = baseDistance,
-       currentRotation = rotation;
+  })  : currentAngle = angle,
+        currentDistance = baseDistance,
+        currentRotation = rotation;
 
   final double angle;
   final double baseDistance;
@@ -811,8 +882,8 @@ class _ElectricArc {
     required this.lifetime,
     required this.segments,
     required this.respawnDelay,
-  }) : _time = 0,
-       _currentLifetime = lifetime;
+  })  : _time = 0,
+        _currentLifetime = lifetime;
 
   final double angle;
   final double length;
@@ -827,13 +898,13 @@ class _ElectricArc {
   bool get isActive => _time < _currentLifetime && _time > 0;
   double get alpha => isActive ? (1 - _time / _currentLifetime) : 0;
 
-  void update(double dt, math.Random random) {
+  void update(double dt, double Function() nextUnit) {
     _time += dt;
 
     // Respawn arc after delay
     if (_time > _currentLifetime + respawnDelay) {
       _time = 0;
-      _currentLifetime = lifetime * (0.5 + random.nextDouble() * 0.5);
+      _currentLifetime = lifetime * (0.5 + nextUnit() * 0.5);
     }
   }
 }
@@ -881,8 +952,8 @@ class _DistortionWave {
     required this.delay,
     required this.speed,
     required this.maxRadius,
-  }) : _time = -delay,
-       currentRadius = 0;
+  })  : _time = -delay,
+        currentRadius = 0;
 
   final double delay;
   final double speed;

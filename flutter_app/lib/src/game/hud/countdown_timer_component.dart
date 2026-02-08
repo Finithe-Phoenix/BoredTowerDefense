@@ -5,6 +5,23 @@ import 'package:flutter/material.dart';
 
 import '../bored_games_game.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Holographic countdown timer with cyberpunk aesthetic and visual urgency effects.
 /// Displays time remaining with multiple layers of visual feedback:
 /// - Layer 1: Outer ring progress arc
@@ -43,7 +60,7 @@ class CountdownTimerComponent extends PositionComponent
   double _flashAlpha = 0;
 
   // Cached random for glitch effects
-  final math.Random _random = math.Random();
+  final _FastRng _random = _FastRng();
 
   // Layout constants
   static const double baseSize = 120.0;
@@ -708,7 +725,7 @@ class CountdownTimerComponent extends PositionComponent
 
   void _renderGlitchOverlay(
       Canvas canvas, Offset center, double radius, Color color) {
-    final random = math.Random(_glitchFrame);
+    final random = _FastRng(_glitchFrame);
 
     // Horizontal glitch bars
     final barCount = (5 * _glitchIntensity).floor();
@@ -902,3 +919,4 @@ class CountdownTimerComponent extends PositionComponent
     return segmentMap[digit] ?? [false, false, false, false, false, false, false];
   }
 }
+

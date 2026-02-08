@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 /// Energy overload explosion effect for tower destruction.
 /// Creates a dramatic multi-layered explosion with:
 /// - Layer 1: Central energy core collapse (bright flash imploding)
@@ -18,7 +20,7 @@ class TowerDestructionEffect extends PositionComponent {
     required Color color,
     required double explosionSize,
     required double duration,
-  }) : _random = math.Random() {
+  }) {
     _reset(
       position: position,
       color: color,
@@ -93,9 +95,19 @@ class TowerDestructionEffect extends PositionComponent {
   final List<_ShockwaveRing> _shockwaveRings = [];
 
   double _time = 0;
-  final math.Random _random;
+  int _rngState = 0x7f4a7c15;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Layer 1: Core collapse properties
   double _coreRadius = 0;
@@ -163,6 +175,17 @@ class TowerDestructionEffect extends PositionComponent {
   final Paint _debrisSparkPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1);
   final Path _debrisPath = Path();
+  static final List<Offset> _unitHex =
+      List<Offset>.unmodifiable(_buildUnitHex());
+
+  static List<Offset> _buildUnitHex() {
+    final points = <Offset>[];
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+    }
+    return points;
+  }
 
   // Layer 5: Energy tendril paints
   final Paint _tendrilGlowPaint = Paint()
@@ -176,8 +199,7 @@ class TowerDestructionEffect extends PositionComponent {
 
   // Layer 6: Holographic glitch paints
   final Paint _glitchRectPaint = Paint();
-  final Paint _glitchLinePaint = Paint()
-    ..strokeWidth = 1;
+  final Paint _glitchLinePaint = Paint()..strokeWidth = 1;
   final Paint _glitchScanlinePaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1);
   final Paint _glitchNoisePaint = Paint();
@@ -221,6 +243,11 @@ class TowerDestructionEffect extends PositionComponent {
     this.color = color;
     this.explosionSize = explosionSize;
     this.duration = duration;
+    _rngState = (position.hashCode ^
+            color.value ^
+            (explosionSize * 1000).round() ^
+            0x7f4a7c15) &
+        0x7fffffff;
     _time = 0;
     _coreRadius = explosionSize * 0.4;
     _coreIntensity = 1.0;
@@ -245,18 +272,18 @@ class TowerDestructionEffect extends PositionComponent {
     if (arcCount == 0) return;
 
     for (int i = 0; i < arcCount; i++) {
-      final angle = (i / arcCount) * math.pi * 2 + _random.nextDouble() * 0.4;
-      final length = explosionSize * (0.6 + _random.nextDouble() * 0.8);
+      final angle = (i / arcCount) * math.pi * 2 + _nextUnit() * 0.4;
+      final length = explosionSize * (0.6 + _nextUnit() * 0.8);
 
       _electricArcs.add(_ElectricArc(
         angle: angle,
         length: length,
-        width: 1.5 + _random.nextDouble() * 2.5,
-        lifetime: 0.2 + _random.nextDouble() * 0.3,
-        delay: _random.nextDouble() * 0.15,
-        segments: 5 + _random.nextInt(4),
-        branchCount: _random.nextInt(3),
-        flickerSpeed: 15 + _random.nextDouble() * 20,
+        width: 1.5 + _nextUnit() * 2.5,
+        lifetime: 0.2 + _nextUnit() * 0.3,
+        delay: _nextUnit() * 0.15,
+        segments: 5 + _nextInt(4),
+        branchCount: _nextInt(3),
+        flickerSpeed: 15 + _nextUnit() * 20,
       ));
     }
   }
@@ -266,22 +293,23 @@ class TowerDestructionEffect extends PositionComponent {
     if (debrisCount == 0) return;
 
     for (int i = 0; i < debrisCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final speed = 60 + _random.nextDouble() * 120;
-      final shapeType = _random.nextInt(5); // 0=square, 1=triangle, 2=hexShard, 3=circuitChunk, 4=energyFragment
+      final angle = _nextUnit() * math.pi * 2;
+      final speed = 60 + _nextUnit() * 120;
+      final shapeType = _nextInt(
+          5); // 0=square, 1=triangle, 2=hexShard, 3=circuitChunk, 4=energyFragment
 
       _debrisChunks.add(_DebrisChunk(
         angle: angle,
         speed: speed,
-        size: 3 + _random.nextDouble() * 5,
-        rotation: _random.nextDouble() * math.pi * 2,
-        rotationSpeed: (_random.nextDouble() - 0.5) * 25,
-        lifetime: 0.6 + _random.nextDouble() * 0.6,
-        delay: _random.nextDouble() * 0.1,
+        size: 3 + _nextUnit() * 5,
+        rotation: _nextUnit() * math.pi * 2,
+        rotationSpeed: (_nextUnit() - 0.5) * 25,
+        lifetime: 0.6 + _nextUnit() * 0.6,
+        delay: _nextUnit() * 0.1,
         shape: shapeType,
-        gravity: 40 + _random.nextDouble() * 30,
+        gravity: 40 + _nextUnit() * 30,
         hasTrail: shapeType >= 2,
-        glowIntensity: 0.4 + _random.nextDouble() * 0.5,
+        glowIntensity: 0.4 + _nextUnit() * 0.5,
         isEnergized: shapeType == 4,
       ));
     }
@@ -289,17 +317,17 @@ class TowerDestructionEffect extends PositionComponent {
     // Add larger dramatic chunks
     final largeCount = _scaledCount(6, allowZero: true);
     for (int i = 0; i < largeCount; i++) {
-      final angle = (i / largeCount) * math.pi * 2 + _random.nextDouble() * 0.5;
+      final angle = (i / largeCount) * math.pi * 2 + _nextUnit() * 0.5;
       _debrisChunks.add(_DebrisChunk(
         angle: angle,
-        speed: 40 + _random.nextDouble() * 60,
-        size: 6 + _random.nextDouble() * 4,
-        rotation: _random.nextDouble() * math.pi * 2,
-        rotationSpeed: (_random.nextDouble() - 0.5) * 15,
-        lifetime: 0.8 + _random.nextDouble() * 0.4,
+        speed: 40 + _nextUnit() * 60,
+        size: 6 + _nextUnit() * 4,
+        rotation: _nextUnit() * math.pi * 2,
+        rotationSpeed: (_nextUnit() - 0.5) * 15,
+        lifetime: 0.8 + _nextUnit() * 0.4,
         delay: 0.05,
         shape: 3, // Circuit chunk
-        gravity: 30 + _random.nextDouble() * 20,
+        gravity: 30 + _nextUnit() * 20,
         hasTrail: true,
         glowIntensity: 0.7,
         isEnergized: true,
@@ -312,18 +340,18 @@ class TowerDestructionEffect extends PositionComponent {
     if (tendrilCount == 0) return;
 
     for (int i = 0; i < tendrilCount; i++) {
-      final angle = (i / tendrilCount) * math.pi * 2 + _random.nextDouble() * 0.3;
+      final angle = (i / tendrilCount) * math.pi * 2 + _nextUnit() * 0.3;
 
       _energyTendrils.add(_EnergyTendril(
         startAngle: angle,
-        length: explosionSize * (0.5 + _random.nextDouble() * 0.6),
-        width: 2 + _random.nextDouble() * 3,
-        lifetime: 0.4 + _random.nextDouble() * 0.4,
-        delay: 0.1 + _random.nextDouble() * 0.1,
-        waveFrequency: 3 + _random.nextDouble() * 4,
-        waveAmplitude: 8 + _random.nextDouble() * 12,
-        whipSpeed: 8 + _random.nextDouble() * 6,
-        segments: 8 + _random.nextInt(4),
+        length: explosionSize * (0.5 + _nextUnit() * 0.6),
+        width: 2 + _nextUnit() * 3,
+        lifetime: 0.4 + _nextUnit() * 0.4,
+        delay: 0.1 + _nextUnit() * 0.1,
+        waveFrequency: 3 + _nextUnit() * 4,
+        waveAmplitude: 8 + _nextUnit() * 12,
+        whipSpeed: 8 + _nextUnit() * 6,
+        segments: 8 + _nextInt(4),
       ));
     }
   }
@@ -334,15 +362,15 @@ class TowerDestructionEffect extends PositionComponent {
 
     for (int i = 0; i < glitchCount; i++) {
       _glitchFragments.add(_GlitchFragment(
-        x: (_random.nextDouble() - 0.5) * explosionSize * 2,
-        y: (_random.nextDouble() - 0.5) * explosionSize * 2,
-        width: 5 + _random.nextDouble() * 20,
-        height: 2 + _random.nextDouble() * 8,
-        lifetime: 0.1 + _random.nextDouble() * 0.2,
-        delay: _random.nextDouble() * 0.5,
-        flickerSpeed: 20 + _random.nextDouble() * 30,
-        rgbOffset: 2 + _random.nextDouble() * 4,
-        isHorizontal: _random.nextBool(),
+        x: (_nextUnit() - 0.5) * explosionSize * 2,
+        y: (_nextUnit() - 0.5) * explosionSize * 2,
+        width: 5 + _nextUnit() * 20,
+        height: 2 + _nextUnit() * 8,
+        lifetime: 0.1 + _nextUnit() * 0.2,
+        delay: _nextUnit() * 0.5,
+        flickerSpeed: 20 + _nextUnit() * 30,
+        rgbOffset: 2 + _nextUnit() * 4,
+        isHorizontal: _nextBool(),
       ));
     }
   }
@@ -377,6 +405,12 @@ class TowerDestructionEffect extends PositionComponent {
     return scaled;
   }
 
+  double _alpha(double value) {
+    if (value <= 0) return 0;
+    if (value >= 1) return 1;
+    return value;
+  }
+
   /// Get HSL-shifted color for visual variety
   Color _getSecondaryColor(double hueShift) {
     final hsl = HSLColor.fromColor(color);
@@ -394,6 +428,17 @@ class TowerDestructionEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _time += dt;
     final progress = _time / duration;
@@ -413,20 +458,30 @@ class TowerDestructionEffect extends PositionComponent {
     _updateEmpPulse(progress);
 
     // Update particles
-    for (final arc in _electricArcs) {
-      arc.update(dt);
+    if (_electricArcs.isNotEmpty) {
+      for (final arc in _electricArcs) {
+        arc.update(dt);
+      }
     }
-    for (final chunk in _debrisChunks) {
-      chunk.update(dt);
+    if (_debrisChunks.isNotEmpty) {
+      for (final chunk in _debrisChunks) {
+        chunk.update(dt);
+      }
     }
-    for (final tendril in _energyTendrils) {
-      tendril.update(dt);
+    if (_energyTendrils.isNotEmpty) {
+      for (final tendril in _energyTendrils) {
+        tendril.update(dt);
+      }
     }
-    for (final glitch in _glitchFragments) {
-      glitch.update(dt);
+    if (_glitchFragments.isNotEmpty) {
+      for (final glitch in _glitchFragments) {
+        glitch.update(dt);
+      }
     }
-    for (final wave in _shockwaveRings) {
-      wave.update(dt);
+    if (_shockwaveRings.isNotEmpty) {
+      for (final wave in _shockwaveRings) {
+        wave.update(dt);
+      }
     }
   }
 
@@ -464,6 +519,7 @@ class TowerDestructionEffect extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     if (lowFx) {
@@ -472,6 +528,16 @@ class TowerDestructionEffect extends PositionComponent {
     }
 
     final progress = _time / duration;
+    if (progress >= 1.0) return;
+    if (_coreIntensity <= 0.01 &&
+        _empIntensity <= 0.01 &&
+        _electricArcs.isEmpty &&
+        _debrisChunks.isEmpty &&
+        _energyTendrils.isEmpty &&
+        _glitchFragments.isEmpty &&
+        _shockwaveRings.isEmpty) {
+      return;
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // Layer 6: Holographic glitch distortion (behind everything)
@@ -513,6 +579,17 @@ class TowerDestructionEffect extends PositionComponent {
     }
   }
 
+  bool _isOffscreen({double padding = 110}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
+  }
+
   void _renderLowFx(Canvas canvas) {
     // Simplified rendering for low-end devices
     final progress = _time / duration;
@@ -520,12 +597,15 @@ class TowerDestructionEffect extends PositionComponent {
 
     // Simple expanding circle
     _coreOuterGlowPaint.color = color.withOpacity(fadeOut * 0.4);
-    canvas.drawCircle(Offset.zero, explosionSize * (0.5 + progress * 0.5), _coreOuterGlowPaint);
+    canvas.drawCircle(Offset.zero, explosionSize * (0.5 + progress * 0.5),
+        _coreOuterGlowPaint);
 
     // Core flash
     if (progress < 0.3) {
-      _coreWhitePaint.color = Colors.white.withOpacity((1 - progress / 0.3) * 0.8);
-      canvas.drawCircle(Offset.zero, explosionSize * 0.3 * (1 - progress), _coreWhitePaint);
+      _coreWhitePaint.color =
+          Colors.white.withOpacity((1 - progress / 0.3) * 0.8);
+      canvas.drawCircle(
+          Offset.zero, explosionSize * 0.3 * (1 - progress), _coreWhitePaint);
     }
 
     // Simple shockwave ring
@@ -534,7 +614,8 @@ class TowerDestructionEffect extends PositionComponent {
       _shockwaveMidPaint
         ..color = color.withOpacity((1 - ringProgress) * 0.6)
         ..strokeWidth = 3;
-      canvas.drawCircle(Offset.zero, explosionSize * 2 * ringProgress, _shockwaveMidPaint);
+      canvas.drawCircle(
+          Offset.zero, explosionSize * 2 * ringProgress, _shockwaveMidPaint);
     }
   }
 
@@ -548,19 +629,25 @@ class TowerDestructionEffect extends PositionComponent {
     final tertiaryColor = _getTertiaryColor(1.2, 1.3);
 
     // Outer energy glow
-    _coreOuterGlowPaint.color = color.withOpacity(_coreIntensity * 0.3);
+    _coreOuterGlowPaint.color = color.withOpacity(_alpha(_coreIntensity * 0.3));
     canvas.drawCircle(Offset.zero, _coreRadius * 1.5, _coreOuterGlowPaint);
 
     // Mid glow with secondary color
-    _coreMidGlowPaint.color = secondaryColor.withOpacity(_coreIntensity * 0.5);
+    _coreMidGlowPaint.color = secondaryColor.withOpacity(
+      _alpha(_coreIntensity * 0.5),
+    );
     canvas.drawCircle(Offset.zero, _coreRadius, _coreMidGlowPaint);
 
     // Inner bright core
-    _coreInnerPaint.color = tertiaryColor.withOpacity(_coreIntensity * 0.7);
+    _coreInnerPaint.color = tertiaryColor.withOpacity(
+      _alpha(_coreIntensity * 0.7),
+    );
     canvas.drawCircle(Offset.zero, _coreRadius * 0.6, _coreInnerPaint);
 
     // White hot center
-    _coreWhitePaint.color = Colors.white.withOpacity(_coreIntensity * 0.9);
+    _coreWhitePaint.color = Colors.white.withOpacity(
+      _alpha(_coreIntensity * 0.9),
+    );
     canvas.drawCircle(Offset.zero, _coreRadius * 0.25, _coreWhitePaint);
 
     // Pulsing rings during implosion
@@ -571,7 +658,7 @@ class TowerDestructionEffect extends PositionComponent {
         final ringRadius = _coreRadius * (0.5 + ringOffset * 1.5);
         final ringAlpha = (1 - ringOffset) * _coreIntensity * 0.4;
 
-        _coreRingPaint.color = color.withOpacity(ringAlpha);
+        _coreRingPaint.color = color.withOpacity(_alpha(ringAlpha));
         canvas.drawCircle(Offset.zero, ringRadius, _coreRingPaint);
       }
     }
@@ -589,8 +676,9 @@ class TowerDestructionEffect extends PositionComponent {
         final endX = math.cos(angle) * endDist;
         final endY = math.sin(angle) * endDist;
 
-        _coreRingPaint.color = color.withOpacity(_coreIntensity * 0.3);
-        canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _coreRingPaint);
+        _coreRingPaint.color = color.withOpacity(_alpha(_coreIntensity * 0.3));
+        canvas.drawLine(
+            Offset(startX, startY), Offset(endX, endY), _coreRingPaint);
       }
     }
   }
@@ -599,6 +687,7 @@ class TowerDestructionEffect extends PositionComponent {
   // Layer 2: Shockwave rings
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawShockwaves(Canvas canvas, double progress) {
+    if (_shockwaveRings.isEmpty) return;
     final secondaryColor = _getSecondaryColor(-20);
 
     for (final wave in _shockwaveRings) {
@@ -610,7 +699,8 @@ class TowerDestructionEffect extends PositionComponent {
       final radius = wave.currentRadius;
 
       // Outer distortion glow
-      _shockwaveDistortPaint.color = color.withOpacity(waveAlpha * 0.2 * wave.thickness);
+      _shockwaveDistortPaint.color =
+          color.withOpacity(waveAlpha * 0.2 * wave.thickness);
       canvas.drawCircle(Offset.zero, radius, _shockwaveDistortPaint);
 
       // Main colored ring
@@ -637,6 +727,7 @@ class TowerDestructionEffect extends PositionComponent {
   // Layer 3: Electric arcs
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawElectricArcs(Canvas canvas, double progress) {
+    if (_electricArcs.isEmpty) return;
     final secondaryColor = _getSecondaryColor(40);
 
     for (final arc in _electricArcs) {
@@ -652,8 +743,8 @@ class TowerDestructionEffect extends PositionComponent {
       _reusablePath.reset();
       _reusablePath.moveTo(0, 0);
 
-      final endX = math.cos(arc.angle) * arc.length * arc.extensionProgress;
-      final endY = math.sin(arc.angle) * arc.length * arc.extensionProgress;
+      final endX = arc.dirX * arc.length * arc.extensionProgress;
+      final endY = arc.dirY * arc.length * arc.extensionProgress;
 
       // Add zigzag segments
       var prevX = 0.0;
@@ -664,11 +755,10 @@ class TowerDestructionEffect extends PositionComponent {
         final baseY = endY * t;
 
         // Random perpendicular offset
-        final offsetMag = (i == arc.segments)
-            ? 0.0
-            : (_random.nextDouble() - 0.5) * 15 * flicker;
-        final perpX = -math.sin(arc.angle) * offsetMag;
-        final perpY = math.cos(arc.angle) * offsetMag;
+        final offsetMag =
+            (i == arc.segments) ? 0.0 : (_nextUnit() - 0.5) * 15 * flicker;
+        final perpX = arc.perpX * offsetMag;
+        final perpY = arc.perpY * offsetMag;
 
         final segX = baseX + perpX;
         final segY = baseY + perpY;
@@ -726,6 +816,7 @@ class TowerDestructionEffect extends PositionComponent {
   // Layer 4: Debris chunks
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawDebris(Canvas canvas, double progress) {
+    if (_debrisChunks.isEmpty) return;
     final secondaryColor = _getSecondaryColor(20);
 
     for (final chunk in _debrisChunks) {
@@ -739,13 +830,16 @@ class TowerDestructionEffect extends PositionComponent {
 
       // Draw trail
       if (chunk.hasTrail && chunk.distance > 5) {
-        final trailStartX = math.cos(chunk.angle) * (chunk.distance - chunk.speed * 0.05);
-        final trailStartY = math.sin(chunk.angle) * (chunk.distance - chunk.speed * 0.05) + chunk.fallOffset * 0.9;
+        final trailStartX = chunk.dirX * (chunk.distance - chunk.speed * 0.05);
+        final trailStartY = chunk.dirY * (chunk.distance - chunk.speed * 0.05) +
+            chunk.fallOffset * 0.9;
 
         _debrisTrailPaint
-          ..color = (chunk.isEnergized ? color : secondaryColor).withOpacity(alpha * 0.4)
+          ..color = (chunk.isEnergized ? color : secondaryColor)
+              .withOpacity(alpha * 0.4)
           ..strokeWidth = chunk.size * 0.5;
-        canvas.drawLine(Offset(trailStartX, trailStartY), Offset(x, y), _debrisTrailPaint);
+        canvas.drawLine(
+            Offset(trailStartX, trailStartY), Offset(x, y), _debrisTrailPaint);
       }
 
       canvas.save();
@@ -758,12 +852,14 @@ class TowerDestructionEffect extends PositionComponent {
         canvas.drawCircle(Offset.zero, chunk.size * 1.5, _debrisGlowPaint);
       }
 
-      _debrisFillPaint.color = (chunk.isEnergized ? color : secondaryColor).withOpacity(alpha * 0.8);
+      _debrisFillPaint.color =
+          (chunk.isEnergized ? color : secondaryColor).withOpacity(alpha * 0.8);
 
       switch (chunk.shape) {
         case 0: // Square
           canvas.drawRect(
-            Rect.fromCenter(center: Offset.zero, width: chunk.size, height: chunk.size),
+            Rect.fromCenter(
+                center: Offset.zero, width: chunk.size, height: chunk.size),
             _debrisFillPaint,
           );
           break;
@@ -779,10 +875,9 @@ class TowerDestructionEffect extends PositionComponent {
 
         case 2: // Hex shard
           _debrisPath.reset();
-          for (int i = 0; i < 6; i++) {
-            final a = i * math.pi / 3;
-            final px = math.cos(a) * chunk.size * 0.5;
-            final py = math.sin(a) * chunk.size * 0.5;
+          for (int i = 0; i < _unitHex.length; i++) {
+            final px = _unitHex[i].dx * chunk.size * 0.5;
+            final py = _unitHex[i].dy * chunk.size * 0.5;
             if (i == 0) {
               _debrisPath.moveTo(px, py);
             } else {
@@ -812,7 +907,8 @@ class TowerDestructionEffect extends PositionComponent {
           canvas.drawPath(_debrisPath, _debrisFillPaint);
           // Circuit lines
           _glitchLinePaint.color = Colors.white.withOpacity(alpha * 0.3);
-          canvas.drawLine(Offset(-w / 3, 0), Offset(w / 3, 0), _glitchLinePaint);
+          canvas.drawLine(
+              Offset(-w / 3, 0), Offset(w / 3, 0), _glitchLinePaint);
           break;
 
         case 4: // Energy fragment (diamond with glow)
@@ -845,6 +941,7 @@ class TowerDestructionEffect extends PositionComponent {
   // Layer 5: Energy tendrils
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawEnergyTendrils(Canvas canvas, double progress) {
+    if (_energyTendrils.isEmpty) return;
     final secondaryColor = _getSecondaryColor(-30);
 
     for (final tendril in _energyTendrils) {
@@ -854,6 +951,11 @@ class TowerDestructionEffect extends PositionComponent {
       if (alpha <= 0) continue;
 
       final currentLength = tendril.length * tendril.extensionProgress;
+      final baseAngle = tendril.currentAngle;
+      final baseDirX = math.cos(baseAngle);
+      final baseDirY = math.sin(baseAngle);
+      final basePerpX = -baseDirY;
+      final basePerpY = baseDirX;
 
       _reusablePath.reset();
       _reusablePath.moveTo(0, 0);
@@ -866,23 +968,25 @@ class TowerDestructionEffect extends PositionComponent {
         final segLength = currentLength * t;
 
         // Base position along tendril
-        final baseAngle = tendril.currentAngle;
-        final baseX = math.cos(baseAngle) * segLength;
-        final baseY = math.sin(baseAngle) * segLength;
+        final baseX = baseDirX * segLength;
+        final baseY = baseDirY * segLength;
 
         // Wave offset perpendicular to tendril
-        final wavePhase = t * tendril.waveFrequency * math.pi + _time * tendril.whipSpeed;
+        final wavePhase =
+            t * tendril.waveFrequency * math.pi + _time * tendril.whipSpeed;
         final waveOffset = math.sin(wavePhase) * tendril.waveAmplitude * t;
-        final perpX = -math.sin(baseAngle) * waveOffset;
-        final perpY = math.cos(baseAngle) * waveOffset;
+        final perpX = basePerpX * waveOffset;
+        final perpY = basePerpY * waveOffset;
 
         final segX = baseX + perpX;
         final segY = baseY + perpY;
 
         if (i == 1) {
           _reusablePath.quadraticBezierTo(
-            (prevX + segX) / 2, (prevY + segY) / 2,
-            segX, segY,
+            (prevX + segX) / 2,
+            (prevY + segY) / 2,
+            segX,
+            segY,
           );
         } else {
           _reusablePath.lineTo(segX, segY);
@@ -913,10 +1017,12 @@ class TowerDestructionEffect extends PositionComponent {
       // Glowing tip
       if (tendril.extensionProgress > 0.3) {
         _tendrilTipPaint.color = Colors.white.withOpacity(alpha * 0.8);
-        canvas.drawCircle(Offset(prevX, prevY), tendril.width, _tendrilTipPaint);
+        canvas.drawCircle(
+            Offset(prevX, prevY), tendril.width, _tendrilTipPaint);
 
         _tendrilTipPaint.color = color.withOpacity(alpha * 0.5);
-        canvas.drawCircle(Offset(prevX, prevY), tendril.width * 2, _tendrilTipPaint);
+        canvas.drawCircle(
+            Offset(prevX, prevY), tendril.width * 2, _tendrilTipPaint);
       }
     }
   }
@@ -925,6 +1031,7 @@ class TowerDestructionEffect extends PositionComponent {
   // Layer 6: Holographic glitch distortion
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawHolographicGlitch(Canvas canvas, double progress) {
+    if (_glitchFragments.isEmpty) return;
     if (progress > 0.7) return; // Glitch fades out
 
     final glitchIntensity = (1 - progress / 0.7);
@@ -943,7 +1050,8 @@ class TowerDestructionEffect extends PositionComponent {
       final offset = glitch.rgbOffset;
 
       // Red channel
-      _glitchRectPaint.color = const Color(0xFFFF0000).withOpacity(alpha * 0.4 * flicker);
+      _glitchRectPaint.color =
+          const Color(0xFFFF0000).withOpacity(alpha * 0.4 * flicker);
       canvas.drawRect(
         Rect.fromCenter(
           center: Offset(glitch.x - offset, glitch.y),
@@ -954,7 +1062,8 @@ class TowerDestructionEffect extends PositionComponent {
       );
 
       // Green channel (center)
-      _glitchRectPaint.color = const Color(0xFF00FF00).withOpacity(alpha * 0.35 * flicker);
+      _glitchRectPaint.color =
+          const Color(0xFF00FF00).withOpacity(alpha * 0.35 * flicker);
       canvas.drawRect(
         Rect.fromCenter(
           center: Offset(glitch.x, glitch.y),
@@ -965,7 +1074,8 @@ class TowerDestructionEffect extends PositionComponent {
       );
 
       // Blue channel
-      _glitchRectPaint.color = const Color(0xFF0000FF).withOpacity(alpha * 0.4 * flicker);
+      _glitchRectPaint.color =
+          const Color(0xFF0000FF).withOpacity(alpha * 0.4 * flicker);
       canvas.drawRect(
         Rect.fromCenter(
           center: Offset(glitch.x + offset, glitch.y),
@@ -981,13 +1091,14 @@ class TowerDestructionEffect extends PositionComponent {
       final scanlineCount = (8 * glitchIntensity).ceil();
       for (int i = 0; i < scanlineCount; i++) {
         final scanY = math.sin(_time * 25 + i * 4) * explosionSize;
-        final scanAlpha = glitchIntensity * 0.2 * math.sin(_time * 30 + i * 2).abs();
+        final scanAlpha =
+            glitchIntensity * 0.2 * math.sin(_time * 30 + i * 2).abs();
 
         _glitchScanlinePaint.color = color.withOpacity(scanAlpha);
         canvas.drawLine(
           Offset(-explosionSize * 1.5, scanY),
           Offset(explosionSize * 1.5, scanY),
-          _glitchScanlinePaint..strokeWidth = 1 + _random.nextDouble(),
+          _glitchScanlinePaint..strokeWidth = 1 + _nextUnit(),
         );
       }
     }
@@ -998,17 +1109,18 @@ class TowerDestructionEffect extends PositionComponent {
       for (int i = 0; i < noiseCount; i++) {
         final nx = (math.sin(_time * 35 + i * 9) * 0.5) * explosionSize * 1.5;
         final ny = (math.cos(_time * 30 + i * 7) * 0.5) * explosionSize * 1.5;
-        final noiseSize = 1 + _random.nextDouble() * 3;
+        final noiseSize = 1 + _nextUnit() * 3;
 
-        final noiseColor = _random.nextInt(3) == 0
+        final noiseColor = _nextInt(3) == 0
             ? const Color(0xFFFF0000)
-            : _random.nextInt(2) == 0
+            : _nextInt(2) == 0
                 ? const Color(0xFF00FF00)
                 : const Color(0xFF0000FF);
 
         _glitchNoisePaint.color = noiseColor.withOpacity(glitchIntensity * 0.3);
         canvas.drawRect(
-          Rect.fromCenter(center: Offset(nx, ny), width: noiseSize, height: noiseSize),
+          Rect.fromCenter(
+              center: Offset(nx, ny), width: noiseSize, height: noiseSize),
           _glitchNoisePaint,
         );
       }
@@ -1026,10 +1138,12 @@ class TowerDestructionEffect extends PositionComponent {
     // Bright flash at center when triggered
     if (progress < 0.75) {
       final flashIntensity = (0.75 - progress) / 0.05;
-      _empFlashPaint.color = Colors.white.withOpacity(flashIntensity.clamp(0.0, 1.0) * 0.8);
+      _empFlashPaint.color =
+          Colors.white.withOpacity(flashIntensity.clamp(0.0, 1.0) * 0.8);
       canvas.drawCircle(Offset.zero, explosionSize * 0.5, _empFlashPaint);
 
-      _empFlashPaint.color = color.withOpacity(flashIntensity.clamp(0.0, 1.0) * 0.5);
+      _empFlashPaint.color =
+          color.withOpacity(flashIntensity.clamp(0.0, 1.0) * 0.5);
       canvas.drawCircle(Offset.zero, explosionSize * 0.8, _empFlashPaint);
     }
 
@@ -1132,7 +1246,11 @@ class _ElectricArc {
     required this.segments,
     required this.branchCount,
     required this.flickerSpeed,
-  }) : _time = 0;
+  })  : dirX = math.cos(angle),
+        dirY = math.sin(angle),
+        perpX = -math.sin(angle),
+        perpY = math.cos(angle),
+        _time = 0;
 
   final double angle;
   final double length;
@@ -1142,6 +1260,10 @@ class _ElectricArc {
   final int segments;
   final int branchCount;
   final double flickerSpeed;
+  final double dirX;
+  final double dirY;
+  final double perpX;
+  final double perpY;
 
   double _time;
 
@@ -1183,13 +1305,17 @@ class _DebrisChunk {
     required this.hasTrail,
     required this.glowIntensity,
     required this.isEnergized,
-  }) : _time = 0,
-       distance = 0,
-       currentRotation = rotation,
-       fallOffset = 0,
-       _velocityY = 0;
+  })  : dirX = math.cos(angle),
+        dirY = math.sin(angle),
+        _time = 0,
+        distance = 0,
+        currentRotation = rotation,
+        fallOffset = 0,
+        _velocityY = 0;
 
   final double angle;
+  final double dirX;
+  final double dirY;
   final double speed;
   final double size;
   final double rotation;
@@ -1216,8 +1342,8 @@ class _DebrisChunk {
     return (1 - activeTime / lifetime).clamp(0.0, 1.0);
   }
 
-  double get currentX => math.cos(angle) * distance;
-  double get currentY => math.sin(angle) * distance + fallOffset;
+  double get currentX => dirX * distance;
+  double get currentY => dirY * distance + fallOffset;
 
   void update(double dt) {
     _time += dt;

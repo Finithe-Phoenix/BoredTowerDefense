@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,32 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
   Rect? _pulseRect;
   Rect? _mineRect;
   Rect? _overdriveRect;
+
+  // Cached static panel background
+  Picture? _panelBackground;
+  bool _panelBackgroundDirty = true;
+  double _panelBackgroundWidth = 0;
+  double _panelBackgroundHeight = 0;
+  TextPainter? _panelLabelPainter;
+  TextPainter? _pulseHotkeyPainter;
+  TextPainter? _mineHotkeyPainter;
+  TextPainter? _overdriveHotkeyPainter;
+  TextPainter? _pulsePercentPainter;
+  int _pulsePercentValue = -1;
+  TextPainter? _minePercentPainter;
+  int _minePercentValue = -1;
+  TextPainter? _pulseCostPainter;
+  int _pulseCostValue = -1;
+  bool _pulseCanAfford = false;
+  TextPainter? _mineCostPainter;
+  int _mineCostValue = -1;
+  bool _mineCanAfford = false;
+  TextPainter? _mineCountPainter;
+  String? _mineCountValue;
+
+  // Cached icon geometry
+  final Path _mineIconPath = Path();
+  bool _mineIconPathReady = false;
 
   static const double abilitySize = 56.0;
   static const double spacing = 10.0;
@@ -47,12 +74,43 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _overdriveFillPaint = Paint();
   static final Paint _overdriveBorderPaint = Paint()
     ..style = PaintingStyle.stroke;
+  static final Paint _panelBgPaint = Paint()
+    ..color = const Color(0xFF000000).withOpacity(0.6);
+  static final Paint _panelBorderPaint = Paint()
+    ..color = const Color(0xFF00FFFF).withOpacity(0.2)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
 
   @override
   void update(double dt) {
     super.update(dt);
     _time += dt;
     _pulsePhase += dt * 4;
+  }
+
+  @override
+  void onRemove() {
+    _panelBackground?.dispose();
+    _panelBackground = null;
+    _panelLabelPainter?.dispose();
+    _panelLabelPainter = null;
+    _pulseHotkeyPainter?.dispose();
+    _pulseHotkeyPainter = null;
+    _mineHotkeyPainter?.dispose();
+    _mineHotkeyPainter = null;
+    _overdriveHotkeyPainter?.dispose();
+    _overdriveHotkeyPainter = null;
+    _pulsePercentPainter?.dispose();
+    _pulsePercentPainter = null;
+    _minePercentPainter?.dispose();
+    _minePercentPainter = null;
+    _pulseCostPainter?.dispose();
+    _pulseCostPainter = null;
+    _mineCostPainter?.dispose();
+    _mineCostPainter = null;
+    _mineCountPainter?.dispose();
+    _mineCountPainter = null;
+    super.onRemove();
   }
 
   @override
@@ -125,26 +183,35 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
     final panelWidth = abilitySize * 3 + spacing * 2 + 20;
     final panelHeight = abilitySize + 20;
 
+    _ensurePanelBackground(panelWidth, panelHeight);
+    if (_panelBackground != null) {
+      canvas.drawPicture(_panelBackground!);
+    }
+  }
+
+  void _ensurePanelBackground(double panelWidth, double panelHeight) {
+    if (!_panelBackgroundDirty &&
+        _panelBackgroundWidth == panelWidth &&
+        _panelBackgroundHeight == panelHeight) {
+      return;
+    }
+
+    _panelBackgroundWidth = panelWidth;
+    _panelBackgroundHeight = panelHeight;
+    final recorder = PictureRecorder();
+    final staticCanvas = Canvas(recorder);
+
     final rect = Rect.fromLTWH(0, 0, panelWidth, panelHeight);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(12));
 
     // Background
-    canvas.drawRRect(
-      rrect,
-      Paint()..color = const Color(0xFF000000).withOpacity(0.6),
-    );
+    staticCanvas.drawRRect(rrect, _panelBgPaint);
 
     // Border
-    canvas.drawRRect(
-      rrect,
-      Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    staticCanvas.drawRRect(rrect, _panelBorderPaint);
 
     // Label
-    final labelPainter = TextPainter(
+    _panelLabelPainter ??= (TextPainter(
       text: TextSpan(
         text: 'ABILITIES',
         style: TextStyle(
@@ -155,9 +222,16 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout();
+    )..layout());
 
-    labelPainter.paint(canvas, Offset((panelWidth - labelPainter.width) / 2, panelHeight + 4));
+    _panelLabelPainter!.paint(
+      staticCanvas,
+      Offset((panelWidth - _panelLabelPainter!.width) / 2, panelHeight + 4),
+    );
+
+    _panelBackground?.dispose();
+    _panelBackground = recorder.endRecording();
+    _panelBackgroundDirty = false;
   }
 
   void _renderAbility(
@@ -180,11 +254,10 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Glow when ready or active
     if (ready || isActive) {
+      _glowPaint.color = color.withOpacity(isActive ? 0.6 : 0.3);
       canvas.drawRRect(
         rrect.inflate(3),
-        Paint()
-          ..color = color.withOpacity(isActive ? 0.6 : 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        _glowPaint,
       );
     }
 
@@ -192,7 +265,8 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
     final bgColor = ready
         ? color.withOpacity(0.2)
         : const Color(0xFF0a0a18).withOpacity(0.8);
-    canvas.drawRRect(rrect, Paint()..color = bgColor);
+    _bgPaint.color = bgColor;
+    canvas.drawRRect(rrect, _bgPaint);
 
     // Progress arc (cooldown indicator)
     if (!ready && progress < 1.0) {
@@ -200,34 +274,24 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
       final arcRect = Rect.fromCircle(center: center, radius: abilitySize / 2 - 4);
 
       // Dark overlay
+      _bgPaint.color = Colors.black.withOpacity(0.5);
       canvas.drawRRect(
         rrect,
-        Paint()..color = Colors.black.withOpacity(0.5),
+        _bgPaint,
       );
 
       // Progress arc
+      _arcPaint.color = color.withOpacity(0.3);
       canvas.drawArc(
         arcRect,
         -math.pi / 2,
         sweepAngle,
         true,
-        Paint()..color = color.withOpacity(0.3),
+        _arcPaint,
       );
 
       // Cooldown percentage
-      final percentText = '${(progress * 100).toInt()}%';
-      final percentPainter = TextPainter(
-        text: TextSpan(
-          text: percentText,
-          style: TextStyle(
-            color: color.withOpacity(0.8),
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      final percentPainter = _getPercentPainter(index, (progress * 100).toInt(), color);
       percentPainter.paint(
         canvas,
         Offset(center.dx - percentPainter.width / 2, center.dy - percentPainter.height / 2),
@@ -238,52 +302,26 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // Border
+    _borderPaint
+      ..color = (isActive ? color : (ready ? color.withOpacity(0.6) : color.withOpacity(0.2)))
+      ..strokeWidth = isActive ? 2.5 : 1.5;
     canvas.drawRRect(
       rrect,
-      Paint()
-        ..color = (isActive ? color : (ready ? color.withOpacity(0.6) : color.withOpacity(0.2)))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = isActive ? 2.5 : 1.5,
+      _borderPaint,
     );
 
     // Pulsing border when active
     if (isActive) {
       final pulse = 0.5 + math.sin(_pulsePhase) * 0.5;
+      _pulsingBorderPaint.color = color.withOpacity(0.4 * pulse);
       canvas.drawRRect(
         rrect.inflate(2),
-        Paint()
-          ..color = color.withOpacity(0.4 * pulse)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
+        _pulsingBorderPaint,
       );
     }
 
-    // Label below
-    final labelPainter = TextPainter(
-      text: TextSpan(
-        text: label,
-        style: TextStyle(
-          color: ready ? color : Colors.white.withOpacity(0.5),
-          fontSize: 8,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
     // Hotkey badge
-    final hotkeyPainter = TextPainter(
-      text: TextSpan(
-        text: '[$hotkey]',
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.3),
-          fontSize: 7,
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final hotkeyPainter = _getHotkeyPainter(hotkey);
 
     hotkeyPainter.paint(
       canvas,
@@ -292,19 +330,7 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Cost indicator
     final canAfford = gameRef.gold >= cost;
-    final costText = '${cost}g';
-    final costPainter = TextPainter(
-      text: TextSpan(
-        text: costText,
-        style: TextStyle(
-          color: canAfford ? const Color(0xFFFFD700) : const Color(0xFFFF4444),
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final costPainter = _getCostPainter(index, cost, canAfford);
 
     costPainter.paint(
       canvas,
@@ -313,25 +339,16 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Count badge (for mines)
     if (count != null && ready) {
-      final countPainter = TextPainter(
-        text: TextSpan(
-          text: count,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'monospace',
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
+      final countPainter = _getMineCountPainter(count);
 
       canvas.drawRRect(
         RRect.fromRectAndRadius(
           Rect.fromLTWH(x + abilitySize - countPainter.width - 8, y + 2, countPainter.width + 6, 14),
           const Radius.circular(4),
         ),
-        Paint()..color = color.withOpacity(0.8),
+        _countBadgePaint
+          ..color = color.withOpacity(0.8)
+          ..maskFilter = null,
       );
 
       countPainter.paint(canvas, Offset(x + abilitySize - countPainter.width - 5, y + 3));
@@ -339,27 +356,27 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   void _renderAbilityIcon(Canvas canvas, Offset center, String label, Color color) {
-    final iconPaint = Paint()
+    _iconPaint
       ..color = color
-      ..strokeWidth = 2.5
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final fillPaint = Paint()..color = color.withOpacity(0.3);
+      ..strokeWidth = 2.5;
+    _iconFillPaint.color = color.withOpacity(0.3);
 
     if (label == 'PULSE') {
       // Expanding circles icon
       for (int i = 0; i < 3; i++) {
         final radius = 6.0 + i * 5;
         final alpha = 1.0 - i * 0.3;
-        canvas.drawCircle(center, radius, iconPaint..color = color.withOpacity(alpha));
+        _iconPaint.color = color.withOpacity(alpha);
+        canvas.drawCircle(center, radius, _iconPaint);
       }
     } else if (label == 'MINE') {
       // Mine/bomb icon
-      final path = Path()
-        ..addOval(Rect.fromCircle(center: center, radius: 10));
-      canvas.drawPath(path, fillPaint);
-      canvas.drawPath(path, iconPaint);
+      _ensureMineIconPath();
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
+      canvas.drawPath(_mineIconPath, _iconFillPaint);
+      canvas.drawPath(_mineIconPath, _iconPaint);
+      canvas.restore();
 
       // Spikes
       for (int i = 0; i < 8; i++) {
@@ -368,7 +385,7 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
         final y1 = center.dy + math.sin(angle) * 10;
         final x2 = center.dx + math.cos(angle) * 14;
         final y2 = center.dy + math.sin(angle) * 14;
-        canvas.drawLine(Offset(x1, y1), Offset(x2, y2), iconPaint);
+        canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _iconPaint);
       }
     }
   }
@@ -386,45 +403,48 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Glow when ready
     if (ready) {
+      _overdriveGlowPaint.color = color.withOpacity(0.3);
       canvas.drawRRect(
         rrect.inflate(3),
-        Paint()
-          ..color = color.withOpacity(0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        _overdriveGlowPaint,
       );
     }
 
     // Background
+    _overdriveBgPaint.color = (ready ? color.withOpacity(0.2) : const Color(0xFF0a0a18).withOpacity(0.8));
     canvas.drawRRect(
       rrect,
-      Paint()..color = (ready ? color.withOpacity(0.2) : const Color(0xFF0a0a18).withOpacity(0.8)),
+      _overdriveBgPaint,
     );
 
     // Border
+    _overdriveBorderPaint
+      ..color = color.withOpacity(ready ? 0.6 : 0.2)
+      ..strokeWidth = 1.5;
     canvas.drawRRect(
       rrect,
-      Paint()
-        ..color = color.withOpacity(ready ? 0.6 : 0.2)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+      _overdriveBorderPaint,
     );
 
     // Eye icon for overdrive
     if (ready) {
-      final iconPaint = Paint()
+      _iconPaint
         ..color = color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke;
+        ..strokeWidth = 2;
 
       // Eye shape
+      canvas.save();
+      canvas.translate(center.dx, center.dy);
       final eyePath = Path()
-        ..moveTo(center.dx - 12, center.dy)
-        ..quadraticBezierTo(center.dx, center.dy - 8, center.dx + 12, center.dy)
-        ..quadraticBezierTo(center.dx, center.dy + 8, center.dx - 12, center.dy);
-      canvas.drawPath(eyePath, iconPaint);
+        ..moveTo(-12, 0)
+        ..quadraticBezierTo(0, -8, 12, 0)
+        ..quadraticBezierTo(0, 8, -12, 0);
+      canvas.drawPath(eyePath, _iconPaint);
+      canvas.restore();
 
       // Pupil
-      canvas.drawCircle(center, 4, Paint()..color = color);
+      _iconFillPaint.color = color;
+      canvas.drawCircle(center, 4, _iconFillPaint);
     }
 
     // Uses indicator (dots)
@@ -433,17 +453,172 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
       final dotX = x + 10 + i * 12;
       final dotY = y + abilitySize - 10;
 
+      _countBadgePaint
+        ..color = isUsed ? Colors.white.withOpacity(0.2) : color
+        ..maskFilter = isUsed ? null : const MaskFilter.blur(BlurStyle.normal, 2);
       canvas.drawCircle(
         Offset(dotX, dotY),
         isUsed ? 3 : 4,
-        Paint()
-          ..color = isUsed ? Colors.white.withOpacity(0.2) : color
-          ..maskFilter = isUsed ? null : const MaskFilter.blur(BlurStyle.normal, 2),
+        _countBadgePaint,
       );
     }
 
     // Hotkey
-    final hotkeyPainter = TextPainter(
+    final hotkeyPainter = _getOverdriveHotkeyPainter();
+
+    hotkeyPainter.paint(
+      canvas,
+      Offset(x + (abilitySize - hotkeyPainter.width) / 2, y - 10),
+    );
+  }
+
+  TextPainter _getHotkeyPainter(String hotkey) {
+    if (hotkey == 'SPACE') {
+      _pulseHotkeyPainter ??= (TextPainter(
+        text: TextSpan(
+          text: '[SPACE]',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.3),
+            fontSize: 7,
+            fontFamily: 'monospace',
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout());
+      return _pulseHotkeyPainter!;
+    }
+    if (hotkey == 'M') {
+      _mineHotkeyPainter ??= (TextPainter(
+        text: TextSpan(
+          text: '[M]',
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.3),
+            fontSize: 7,
+            fontFamily: 'monospace',
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout());
+      return _mineHotkeyPainter!;
+    }
+
+    final painter = TextPainter(
+      text: TextSpan(
+        text: '[$hotkey]',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.3),
+          fontSize: 7,
+          fontFamily: 'monospace',
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    return painter;
+  }
+
+  TextPainter _getPercentPainter(int index, int percent, Color color) {
+    if (index == 0) {
+      if (_pulsePercentPainter == null || _pulsePercentValue != percent) {
+        _pulsePercentValue = percent;
+        _pulsePercentPainter = TextPainter(
+          text: TextSpan(
+            text: '$percent%',
+            style: TextStyle(
+              color: color.withOpacity(0.8),
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+      }
+      return _pulsePercentPainter!;
+    }
+
+    if (_minePercentPainter == null || _minePercentValue != percent) {
+      _minePercentValue = percent;
+      _minePercentPainter = TextPainter(
+        text: TextSpan(
+          text: '$percent%',
+          style: TextStyle(
+            color: color.withOpacity(0.8),
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+    return _minePercentPainter!;
+  }
+
+  TextPainter _getCostPainter(int index, int cost, bool canAfford) {
+    if (index == 0) {
+      if (_pulseCostPainter == null ||
+          _pulseCostValue != cost ||
+          _pulseCanAfford != canAfford) {
+        _pulseCostValue = cost;
+        _pulseCanAfford = canAfford;
+        _pulseCostPainter = TextPainter(
+          text: TextSpan(
+            text: '${cost}g',
+            style: TextStyle(
+              color: canAfford ? const Color(0xFFFFD700) : const Color(0xFFFF4444),
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        )..layout();
+      }
+      return _pulseCostPainter!;
+    }
+
+    if (_mineCostPainter == null ||
+        _mineCostValue != cost ||
+        _mineCanAfford != canAfford) {
+      _mineCostValue = cost;
+      _mineCanAfford = canAfford;
+      _mineCostPainter = TextPainter(
+        text: TextSpan(
+          text: '${cost}g',
+          style: TextStyle(
+            color: canAfford ? const Color(0xFFFFD700) : const Color(0xFFFF4444),
+            fontSize: 9,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+    return _mineCostPainter!;
+  }
+
+  TextPainter _getMineCountPainter(String count) {
+    if (_mineCountPainter == null || _mineCountValue != count) {
+      _mineCountValue = count;
+      _mineCountPainter = TextPainter(
+        text: TextSpan(
+          text: count,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+    return _mineCountPainter!;
+  }
+
+  TextPainter _getOverdriveHotkeyPainter() {
+    _overdriveHotkeyPainter ??= (TextPainter(
       text: TextSpan(
         text: '[5x TAP]',
         style: TextStyle(
@@ -453,12 +628,14 @@ class AbilityPanel extends PositionComponent with HasGameRef<BoredGamesGame> {
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout();
+    )..layout());
+    return _overdriveHotkeyPainter!;
+  }
 
-    hotkeyPainter.paint(
-      canvas,
-      Offset(x + (abilitySize - hotkeyPainter.width) / 2, y - 10),
-    );
+  void _ensureMineIconPath() {
+    if (_mineIconPathReady) return;
+    _mineIconPathReady = true;
+    _mineIconPath.addOval(Rect.fromCircle(center: Offset.zero, radius: 10));
   }
 
   /// Check if a tap position hits any ability button

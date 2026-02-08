@@ -38,7 +38,12 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   late final Color _glowO80 = glowColor.withOpacity(0.8);
 
   double _time = 0;
-  final math.Random _random = math.Random(42);
+  int _rngState = 42;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
@@ -97,6 +102,27 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   static final Paint _flickerPaint = Paint();
   static final Path _hexPath = Path();
 
+  // Cached perspective grid geometry (recomputed on resize).
+  static const int _perspectiveLineCount = 20;
+  static const int _perspectiveVLineCount = 15;
+  double _horizonY = 0;
+  List<double> _hLineYs = [];
+  List<double> _hLineTs = [];
+  List<double> _vLineTopX = [];
+  List<double> _vLineBottomX = [];
+  List<double> _vLineTs = [];
+
+  // Cached static layer (background + static grid + hex + vignette).
+  Picture? _staticLayer;
+  bool _staticLayerDirty = true;
+  double _staticLayerWidth = 0;
+  double _staticLayerHeight = 0;
+
+  // Cached data rain columns (avoid per-frame Random allocations).
+  List<_DataRainColumn> _dataRainColumns = [];
+  double _dataRainCacheWidth = 0;
+  double _dataRainCacheHeight = 0;
+
   // Static pre-computed colors for non-glowColor constants used per-frame
   static const Color _magentaO02 = Color(0x05FF0066);
   static const Color _matrixBrightGreenO60 = Color(0x9988FF88);
@@ -115,6 +141,14 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       const Color(0xFF003311),
       i / 29.0,
     )!,
+  );
+  // Pre-computed trail gradient with quantized alpha (30 x 21 colors)
+  static final List<List<Color>> _matrixTrailGradientAlpha = List.generate(
+    30,
+    (g) => List<Color>.generate(
+      21,
+      (a) => _matrixTrailGradient[g].withOpacity(a * 0.035),
+    ),
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -213,12 +247,12 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     _energyLines = reducedFx
         ? []
         : List.generate(6, (i) => _EnergyLine(
-              startX: _random.nextDouble(),
-              startY: _random.nextDouble(),
-              endX: _random.nextDouble(),
-              endY: _random.nextDouble(),
-              speed: 0.3 + _random.nextDouble() * 0.4,
-              phase: _random.nextDouble() * math.pi * 2,
+              startX: _nextUnit(),
+              startY: _nextUnit(),
+              endX: _nextUnit(),
+              endY: _nextUnit(),
+              speed: 0.3 + _nextUnit() * 0.4,
+              phase: _nextUnit() * math.pi * 2,
             ));
 
     // Initialize grid nodes at major intersections
@@ -237,13 +271,13 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
     for (int y = 0; y < rows; y++) {
       for (int x = 0; x < cols; x++) {
-        if (_random.nextDouble() > 0.7) { // Only some intersections have nodes
+        if (_nextUnit() > 0.7) { // Only some intersections have nodes
           _gridNodes.add(_GridNode(
             x: x * nodeSpacing + nodeSpacing / 2,
             y: y * nodeSpacing + nodeSpacing / 2,
-            phase: _random.nextDouble() * math.pi * 2,
-            pulseSpeed: 1.5 + _random.nextDouble() * 2,
-            size: 2 + _random.nextDouble() * 3,
+            phase: _nextUnit() * math.pi * 2,
+            pulseSpeed: 1.5 + _nextUnit() * 2,
+            size: 2 + _nextUnit() * 3,
           ));
         }
       }
@@ -256,6 +290,40 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     size = gameSize;
     _invalidateShaderCache(); // Invalidate cached shaders on resize
     _initializeGridNodes();
+    _rebuildPerspectiveCache();
+    _dataRainColumns = [];
+    _dataRainCacheWidth = 0;
+    _dataRainCacheHeight = 0;
+    _staticLayerDirty = true;
+    _staticLayer?.dispose();
+    _staticLayer = null;
+  }
+
+  void _rebuildPerspectiveCache() {
+    if (size.isZero()) return;
+    _horizonY = size.y * 0.3;
+
+    _hLineYs = List<double>.filled(_perspectiveLineCount + 1, 0);
+    _hLineTs = List<double>.filled(_perspectiveLineCount + 1, 0);
+    for (int i = 0; i <= _perspectiveLineCount; i++) {
+      final t = i / _perspectiveLineCount;
+      final perspectiveT = math.pow(t, 1.5);
+      _hLineTs[i] = t;
+      _hLineYs[i] = _horizonY + (size.y - _horizonY) * perspectiveT;
+    }
+
+    final vanishingX = size.x / 2;
+    const convergeFactor = 0.4;
+    _vLineTopX = List<double>.filled(_perspectiveVLineCount + 1, 0);
+    _vLineBottomX = List<double>.filled(_perspectiveVLineCount + 1, 0);
+    _vLineTs = List<double>.filled(_perspectiveVLineCount + 1, 0);
+    for (int i = 0; i <= _perspectiveVLineCount; i++) {
+      final t = i / _perspectiveVLineCount;
+      final bottomX = size.x * t;
+      _vLineTs[i] = t;
+      _vLineBottomX[i] = bottomX;
+      _vLineTopX[i] = vanishingX + (bottomX - vanishingX) * convergeFactor;
+    }
   }
 
   @override
@@ -298,11 +366,13 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
     if (size.isZero()) return;
 
-    // Dark background base
-    _drawBackground(canvas);
+    _ensureStaticLayer();
+    if (_staticLayer != null) {
+      canvas.drawPicture(_staticLayer!);
+    }
 
-    // Perspective grid effect
-    _drawPerspectiveGrid(canvas);
+    // Perspective grid effect (animated vertical lines)
+    _drawPerspectiveGridDynamic(canvas);
 
     if (!reducedFx) {
       // Grid nodes (pulsing points at intersections)
@@ -322,9 +392,6 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       // Data rain effect (subtle)
       _drawDataRain(canvas);
 
-      // Hex pattern overlay
-      _drawHexPattern(canvas);
-
       // Corner HUD frames
       _drawCornerFrames(canvas);
 
@@ -332,52 +399,53 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       _drawEdgeGlows(canvas);
 
       // Vignette effect
-      _drawVignette(canvas);
-
       // Ambient flicker
       _drawAmbientFlicker(canvas);
     }
+  }
+
+  void _ensureStaticLayer() {
+    if (!_staticLayerDirty &&
+        _staticLayerWidth == size.x &&
+        _staticLayerHeight == size.y) {
+      return;
+    }
+    _staticLayerWidth = size.x;
+    _staticLayerHeight = size.y;
+    final recorder = PictureRecorder();
+    final staticCanvas = Canvas(recorder);
+    _drawBackground(staticCanvas);
+    _drawPerspectiveGridStatic(staticCanvas);
+    if (!reducedFx) {
+      _drawHexPattern(staticCanvas);
+      _drawVignette(staticCanvas);
+    }
+    _staticLayer?.dispose();
+    _staticLayer = recorder.endRecording();
+    _staticLayerDirty = false;
   }
 
   void _drawBackground(Canvas canvas) {
     canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _bgPaint);
   }
 
-  void _drawPerspectiveGrid(Canvas canvas) {
+  void _drawPerspectiveGridStatic(Canvas canvas) {
     // Simulated perspective grid lines converging at horizon
-    final horizonY = size.y * 0.3;
-    final vanishingX = size.x / 2;
+    if (_hLineYs.isEmpty || _vLineTopX.isEmpty) {
+      _rebuildPerspectiveCache();
+    }
+    final horizonY = _horizonY;
 
     // Horizontal lines with perspective (get closer together toward horizon)
-    const lineCount = 20;
-    for (int i = 0; i <= lineCount; i++) {
-      final t = i / lineCount;
-      final perspectiveT = math.pow(t, 1.5); // Non-linear for perspective effect
-      final y = horizonY + (size.y - horizonY) * perspectiveT;
+    for (int i = 0; i <= _perspectiveLineCount; i++) {
+      final t = _hLineTs[i];
+      final y = _hLineYs[i];
 
       // Lines fade as they approach horizon
       final alpha = 0.03 * t;
       _gridPaint.color = glowColor.withOpacity(alpha);
 
       canvas.drawLine(Offset(0, y), Offset(size.x, y), _gridPaint);
-    }
-
-    // Vertical converging lines
-    const vLineCount = 15;
-    for (int i = 0; i <= vLineCount; i++) {
-      final t = i / vLineCount;
-      final bottomX = size.x * t;
-
-      // Converge toward vanishing point
-      const convergeFactor = 0.4;
-      final topX = vanishingX + (bottomX - vanishingX) * convergeFactor;
-
-      final alpha = 0.02 + 0.01 * math.sin(_time * 2 + i);
-      _gridPaint.color = glowColor.withOpacity(alpha);
-      _glowPaint.color = glowColor.withOpacity(alpha * 0.5);
-
-      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), _glowPaint);
-      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), _gridPaint);
     }
 
     // Horizon line
@@ -387,6 +455,26 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
     // Horizon glow (using cached shader)
     _edgeGlowPaint.shader = _getHorizonGlowShader();
     canvas.drawRect(Rect.fromLTWH(0, horizonY - 20, size.x, 40), _edgeGlowPaint);
+  }
+
+  void _drawPerspectiveGridDynamic(Canvas canvas) {
+    if (_hLineYs.isEmpty || _vLineTopX.isEmpty) {
+      _rebuildPerspectiveCache();
+    }
+    final horizonY = _horizonY;
+
+    // Vertical converging lines (animated)
+    for (int i = 0; i <= _perspectiveVLineCount; i++) {
+      final bottomX = _vLineBottomX[i];
+      final topX = _vLineTopX[i];
+
+      final alpha = 0.02 + 0.01 * math.sin(_time * 2 + i);
+      _gridPaint.color = glowColor.withOpacity(alpha);
+      _glowPaint.color = glowColor.withOpacity(alpha * 0.5);
+
+      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), _glowPaint);
+      canvas.drawLine(Offset(topX, horizonY), Offset(bottomX, size.y), _gridPaint);
+    }
   }
 
   void _drawGridNodes(Canvas canvas) {
@@ -471,25 +559,18 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
   // MATRIX-STYLE FALLING CODE RAIN
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawDataRain(Canvas canvas) {
-    // Matrix green color palette
-    const matrixGreen = Color(0xFF00FF41);
-    const matrixBrightGreen = Color(0xFF88FF88);
-    const matrixDarkGreen = Color(0xFF003311);
+    _ensureDataRainCache();
 
-    const columnSpacing = 18.0;
-    final columnCount = (size.x / columnSpacing).ceil();
     const charHeight = 14.0;
 
     // Matrix characters (Katakana-like symbols represented as shapes)
-    for (int col = 0; col < columnCount; col++) {
-      final x = col * columnSpacing + columnSpacing / 2;
-
-      // Each column has unique speed and phase
-      final seed = col * 137 + 42;
-      final colRandom = math.Random(seed);
-      final speed = 40 + colRandom.nextDouble() * 80;
-      final streamLength = 8 + colRandom.nextInt(20);
-      final phase = colRandom.nextDouble() * 500;
+    for (int col = 0; col < _dataRainColumns.length; col++) {
+      final column = _dataRainColumns[col];
+      final x = column.x;
+      final seed = column.seed;
+      final speed = column.speed;
+      final streamLength = column.streamLength;
+      final phase = column.phase;
 
       // Calculate head position (leading character)
       final totalCycleHeight = size.y + streamLength * charHeight;
@@ -531,23 +612,25 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
         // Pre-computed gradient lookup (avoids per-char Color.lerp + withOpacity)
         final gradIdx = ((i / streamLength) * 29).round().clamp(0, 29);
-        _charPaint.color = _matrixTrailGradient[gradIdx].withOpacity(alpha);
+        final alphaIdx = (alpha / 0.035).round().clamp(0, 20);
+        _charPaint.color = _matrixTrailGradientAlpha[gradIdx][alphaIdx];
 
         // Occasional character change (flickering effect)
-        final charSeed = seed + i * 17 + (colRandom.nextDouble() < 0.02 ? (_time * 100).toInt() : 0);
+        final charSeed = seed + i * 17 + (column.charFlickers[i] ? (_time * 100).toInt() : 0);
         _drawMatrixChar(canvas, x, charY, charHeight, _charPaint, charSeed);
       }
 
       // ═══════════════════════════════════════════════════════════════════
       // LAYER 3: RANDOM FLICKERING CHARACTERS (sparse, adds depth)
       // ═══════════════════════════════════════════════════════════════════
-      if (colRandom.nextDouble() < 0.15) {
-        final flickerY = (colRandom.nextDouble() * size.y).floorToDouble();
-        final flickerAlpha = 0.1 + colRandom.nextDouble() * 0.2;
+      if (column.flickerEnabled) {
+        final flickerY = column.flickerY;
+        final flickerAlpha = column.flickerAlpha;
         final flickerPhase = math.sin(_time * 20 + col);
 
         if (flickerPhase > 0.7) {
-          _charPaint.color = matrixGreen.withOpacity(flickerAlpha * flickerPhase);
+          final flickerLevel = ((flickerAlpha * flickerPhase) / 0.035).round().clamp(0, 20);
+          _charPaint.color = _matrixGreenAlpha[flickerLevel];
           _drawMatrixChar(canvas, x, flickerY, charHeight, _charPaint, seed + (_time * 50).toInt());
         }
       }
@@ -562,8 +645,7 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
 
   /// Draws a matrix-style character (katakana-like symbols using geometric shapes)
   void _drawMatrixChar(Canvas canvas, double x, double y, double height, Paint paint, int seed) {
-    final charRandom = math.Random(seed % 50); // Limited variety for consistency
-    final charType = charRandom.nextInt(12);
+    final charType = _charTypeFromSeed(seed);
     final halfH = height / 2;
     final quarterH = height / 4;
     final width = height * 0.6;
@@ -631,6 +713,15 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
         canvas.drawCircle(Offset(x, y + halfH), 2, paint);
         break;
     }
+  }
+
+  int _charTypeFromSeed(int seed) {
+    var x = seed;
+    x ^= (x << 13);
+    x ^= (x >> 17);
+    x ^= (x << 5);
+    if (x < 0) x = -x;
+    return x % 12;
   }
 
   void _drawHexPattern(Canvas canvas) {
@@ -829,6 +920,55 @@ class NeonGridComponent extends PositionComponent with HasGameRef<FlameGame> {
       canvas.drawRect(Rect.fromLTWH(0, 0, size.x, size.y), _flickerPaint);
     }
   }
+
+  void _ensureDataRainCache() {
+    if (size.isZero()) return;
+    if (_dataRainColumns.isNotEmpty &&
+        _dataRainCacheWidth == size.x &&
+        _dataRainCacheHeight == size.y) {
+      return;
+    }
+
+    const columnSpacing = 18.0;
+    final columnCount = (size.x / columnSpacing).ceil();
+    _dataRainColumns = List.generate(columnCount, (col) {
+      final seed = col * 137 + 42;
+      int rngState = seed & 0x7fffffff;
+      int next() {
+        rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+        return rngState;
+      }
+
+      double nextUnit() => next() / 0x7fffffff;
+      int nextInt(int max) => max <= 0 ? 0 : next() % max;
+
+      final speed = 40 + nextUnit() * 80;
+      final streamLength = 8 + nextInt(20);
+      final phase = nextUnit() * 500;
+      final charFlickers = List<bool>.generate(
+        streamLength,
+        (i) => i == 0 ? false : nextUnit() < 0.02,
+      );
+      final flickerEnabled = nextUnit() < 0.15;
+      final flickerY = (nextUnit() * size.y).floorToDouble();
+      final flickerAlpha = 0.1 + nextUnit() * 0.2;
+
+      return _DataRainColumn(
+        x: col * columnSpacing + columnSpacing / 2,
+        seed: seed,
+        speed: speed,
+        streamLength: streamLength,
+        phase: phase,
+        flickerEnabled: flickerEnabled,
+        flickerY: flickerY,
+        flickerAlpha: flickerAlpha,
+        charFlickers: charFlickers,
+      );
+    });
+
+    _dataRainCacheWidth = size.x;
+    _dataRainCacheHeight = size.y;
+  }
 }
 
 class _PulseWave {
@@ -884,3 +1024,28 @@ class _GridNode {
     required this.size,
   });
 }
+
+class _DataRainColumn {
+  final double x;
+  final int seed;
+  final double speed;
+  final int streamLength;
+  final double phase;
+  final bool flickerEnabled;
+  final double flickerY;
+  final double flickerAlpha;
+  final List<bool> charFlickers;
+
+  _DataRainColumn({
+    required this.x,
+    required this.seed,
+    required this.speed,
+    required this.streamLength,
+    required this.phase,
+    required this.flickerEnabled,
+    required this.flickerY,
+    required this.flickerAlpha,
+    required this.charFlickers,
+  });
+}
+

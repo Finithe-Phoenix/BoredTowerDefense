@@ -14,7 +14,7 @@ class EnergyBarrierEffect extends PositionComponent {
     this.reduceFx = false,
     this.lowFx = false,
     this.warningText = 'RESTRICTED ZONE',
-  }) : _random = math.Random(42);
+  }) : _rngState = 42;
 
   /// The rectangle defining the barrier's position and size
   final Rect barrierRect;
@@ -31,8 +31,40 @@ class EnergyBarrierEffect extends PositionComponent {
   /// Warning text to display on the barrier
   final String warningText;
 
-  final math.Random _random;
+  int _rngState;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
   double _time = 0;
+  static const double _warningCharWidth = 8.0;
+  static const double _warningCharHeight = 12.0;
+  static const double _warningCharSpacing = 2.0;
+
+  Size _lastBarrierSize = Size.zero;
+  List<Offset> _symbolPositions = const [];
+  double _warningTextWidth = 0;
+
+  // Cached shaders to avoid per-frame createShader allocations.
+  Shader? _cachedBarrierGradient;
+  int _cachedBarrierPulseKey = -1;
+  int _cachedBarrierW = -1;
+  int _cachedBarrierH = -1;
+
+  Shader? _cachedEdgeLeftShader;
+  Shader? _cachedEdgeRightShader;
+  Shader? _cachedEdgeTopShader;
+  Shader? _cachedEdgeBottomShader;
+  int _cachedEdgePulseKey = -1;
+  int _cachedEdgeW = -1;
+  int _cachedEdgeH = -1;
+
+  // Short-lived shader caches for moving bands (quantized positions).
+  static const int _scanlineShaderCacheMax = 12;
+  static const int _pulseShaderCacheMax = 12;
+  final Map<int, Shader> _scanlineShaderCache = {};
+  final Map<int, Shader> _pulseShaderCache = {};
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CACHED PAINT OBJECTS - Avoid per-frame allocations
@@ -133,20 +165,43 @@ class EnergyBarrierEffect extends PositionComponent {
 
     // Initialize energy flow lines
     _initializeFlowLines();
+
+    _initWarningTextLayout();
+  }
+
+  void _initWarningTextLayout() {
+    if (warningText.isEmpty) {
+      _warningTextWidth = 0;
+      return;
+    }
+    _warningTextWidth = warningText.length * (_warningCharWidth + _warningCharSpacing);
+  }
+
+  void _ensureLayout(double w, double h) {
+    if (_lastBarrierSize.width == w && _lastBarrierSize.height == h) return;
+    _lastBarrierSize = Size(w, h);
+    _symbolPositions = [
+      Offset(w * 0.1, h * 0.2),
+      Offset(w * 0.9, h * 0.2),
+      Offset(w * 0.1, h * 0.8),
+      Offset(w * 0.9, h * 0.8),
+      Offset(w * 0.5, h * 0.15),
+      Offset(w * 0.5, h * 0.85),
+    ];
   }
 
   void _initializeSparks() {
     final sparkCount = lowFx ? 0 : (reduceFx ? 8 : 20);
     _sparks = List.generate(sparkCount, (i) {
       return _BarrierSpark(
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        vx: (_random.nextDouble() - 0.5) * 0.1,
-        vy: -0.05 - _random.nextDouble() * 0.1, // Moving upward
-        life: _random.nextDouble(),
-        maxLife: 0.5 + _random.nextDouble() * 1.5,
-        size: 2 + _random.nextDouble() * 3,
-        phase: _random.nextDouble() * math.pi * 2,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        vx: (_nextUnit() - 0.5) * 0.1,
+        vy: -0.05 - _nextUnit() * 0.1, // Moving upward
+        life: _nextUnit(),
+        maxLife: 0.5 + _nextUnit() * 1.5,
+        size: 2 + _nextUnit() * 3,
+        phase: _nextUnit() * math.pi * 2,
       );
     });
   }
@@ -155,11 +210,11 @@ class EnergyBarrierEffect extends PositionComponent {
     final lineCount = lowFx ? 3 : (reduceFx ? 6 : 12);
     _flowLines = List.generate(lineCount, (i) {
       return _EnergyFlowLine(
-        xOffset: _random.nextDouble(),
-        speed: 0.3 + _random.nextDouble() * 0.4,
-        phase: _random.nextDouble() * math.pi * 2,
-        amplitude: 0.02 + _random.nextDouble() * 0.03,
-        frequency: 2 + _random.nextDouble() * 3,
+        xOffset: _nextUnit(),
+        speed: 0.3 + _nextUnit() * 0.4,
+        phase: _nextUnit() * math.pi * 2,
+        amplitude: 0.02 + _nextUnit() * 0.03,
+        frequency: 2 + _nextUnit() * 3,
       );
     });
   }
@@ -178,11 +233,11 @@ class EnergyBarrierEffect extends PositionComponent {
 
         // Reset spark when it goes off barrier or dies
         if (spark.life >= 1.0 || spark.y < 0) {
-          spark.x = _random.nextDouble();
-          spark.y = 0.8 + _random.nextDouble() * 0.2;
+          spark.x = _nextUnit();
+          spark.y = 0.8 + _nextUnit() * 0.2;
           spark.life = 0;
-          spark.vx = (_random.nextDouble() - 0.5) * 0.1;
-          spark.vy = -0.05 - _random.nextDouble() * 0.1;
+          spark.vx = (_nextUnit() - 0.5) * 0.1;
+          spark.vy = -0.05 - _nextUnit() * 0.1;
         }
       }
     }
@@ -194,6 +249,8 @@ class EnergyBarrierEffect extends PositionComponent {
 
     final w = barrierRect.width;
     final h = barrierRect.height;
+    if (w <= 0 || h <= 0) return;
+    _ensureLayout(w, h);
 
     canvas.save();
     canvas.translate(barrierRect.left, barrierRect.top);
@@ -249,18 +306,31 @@ class EnergyBarrierEffect extends PositionComponent {
   void _renderMainBarrier(Canvas canvas, double w, double h) {
     // Animated base opacity
     final basePulse = 0.15 + math.sin(_time * 2) * 0.05;
+    final pulseKey = (basePulse * 1000).round();
+    final wKey = w.round();
+    final hKey = h.round();
 
     // Vertical gradient from bottom (brighter) to top (dimmer)
-    _barrierGradientPaint.shader = LinearGradient(
-      begin: Alignment.bottomCenter,
-      end: Alignment.topCenter,
-      colors: [
-        barrierColor.withOpacity(basePulse + 0.1),
-        barrierColor.withOpacity(basePulse),
-        barrierColor.withOpacity(basePulse * 0.5),
-      ],
-      stops: const [0.0, 0.5, 1.0],
-    ).createShader(Rect.fromLTWH(0, 0, w, h));
+    if (_cachedBarrierGradient == null ||
+        _cachedBarrierPulseKey != pulseKey ||
+        _cachedBarrierW != wKey ||
+        _cachedBarrierH != hKey) {
+      _cachedBarrierGradient = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          barrierColor.withOpacity(basePulse + 0.1),
+          barrierColor.withOpacity(basePulse),
+          barrierColor.withOpacity(basePulse * 0.5),
+        ],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+      _cachedBarrierPulseKey = pulseKey;
+      _cachedBarrierW = wKey;
+      _cachedBarrierH = hKey;
+    }
+
+    _barrierGradientPaint.shader = _cachedBarrierGradient;
 
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), _barrierGradientPaint);
 
@@ -346,6 +416,12 @@ class EnergyBarrierEffect extends PositionComponent {
       final waveX = math.sin(_time * line.frequency + line.phase) * w * line.amplitude;
       final lineX = w * line.xOffset + waveX;
 
+      // Fade based on position
+      final fadeAlpha = yProgress < 0.2
+          ? yProgress / 0.2
+          : (yProgress > 0.8 ? (1 - yProgress) / 0.2 : 1.0);
+      if (fadeAlpha <= 0.02) continue;
+
       // Draw the energy flow line
       _flowPath.reset();
       final segmentHeight = h * 0.15;
@@ -362,11 +438,6 @@ class EnergyBarrierEffect extends PositionComponent {
         }
       }
 
-      // Fade based on position
-      final fadeAlpha = yProgress < 0.2
-          ? yProgress / 0.2
-          : (yProgress > 0.8 ? (1 - yProgress) / 0.2 : 1.0);
-
       // Draw glow
       _flowGlowPaint.color = barrierColor.withOpacity(0.3 * fadeAlpha);
       canvas.drawPath(_flowPath, _flowGlowPaint);
@@ -378,6 +449,8 @@ class EnergyBarrierEffect extends PositionComponent {
       // Draw energy node at front of line
       final nodeY = baseY;
       final nodePulse = 0.5 + math.sin(_time * 8 + line.phase) * 0.5;
+      final nodeAlpha = fadeAlpha * nodePulse;
+      if (nodeAlpha <= 0.03) continue;
       _flowDotPaint.color = Colors.white.withOpacity(0.8 * fadeAlpha * nodePulse);
       canvas.drawCircle(Offset(lineX, nodeY), 4, _flowDotPaint);
 
@@ -390,52 +463,76 @@ class EnergyBarrierEffect extends PositionComponent {
   /// Layer 4: Glow effect at barrier edges
   void _renderEdgeGlow(Canvas canvas, double w, double h) {
     final edgePulse = 0.6 + math.sin(_time * 1.5) * 0.2;
+    final edgePulseKey = (edgePulse * 1000).round();
+    final wKey = w.round();
+    final hKey = h.round();
+    final needsEdgeShader = _cachedEdgePulseKey != edgePulseKey ||
+        _cachedEdgeW != wKey ||
+        _cachedEdgeH != hKey;
 
     // Left edge glow
-    _edgeGlowOuterPaint.shader = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        barrierColor.withOpacity(0.4 * edgePulse),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(0, 0, 30, h));
+    if (needsEdgeShader || _cachedEdgeLeftShader == null) {
+      _cachedEdgeLeftShader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          barrierColor.withOpacity(0.4 * edgePulse),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, 30, h));
+    }
+    _edgeGlowOuterPaint.shader = _cachedEdgeLeftShader;
     canvas.drawRect(Rect.fromLTWH(0, 0, 30, h), _edgeGlowOuterPaint);
 
     // Right edge glow
-    _edgeGlowOuterPaint.shader = LinearGradient(
-      begin: Alignment.centerRight,
-      end: Alignment.centerLeft,
-      colors: [
-        barrierColor.withOpacity(0.4 * edgePulse),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(w - 30, 0, 30, h));
+    if (needsEdgeShader || _cachedEdgeRightShader == null) {
+      _cachedEdgeRightShader = LinearGradient(
+        begin: Alignment.centerRight,
+        end: Alignment.centerLeft,
+        colors: [
+          barrierColor.withOpacity(0.4 * edgePulse),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(w - 30, 0, 30, h));
+    }
+    _edgeGlowOuterPaint.shader = _cachedEdgeRightShader;
     canvas.drawRect(Rect.fromLTWH(w - 30, 0, 30, h), _edgeGlowOuterPaint);
 
     // Top edge glow
-    _edgeGlowOuterPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        barrierColor.withOpacity(0.3 * edgePulse),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(0, 0, w, 20));
+    if (needsEdgeShader || _cachedEdgeTopShader == null) {
+      _cachedEdgeTopShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          barrierColor.withOpacity(0.3 * edgePulse),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, w, 20));
+    }
+    _edgeGlowOuterPaint.shader = _cachedEdgeTopShader;
     canvas.drawRect(Rect.fromLTWH(0, 0, w, 20), _edgeGlowOuterPaint);
 
     // Bottom edge glow (brighter - energy source)
-    _edgeGlowOuterPaint.shader = LinearGradient(
-      begin: Alignment.bottomCenter,
-      end: Alignment.topCenter,
-      colors: [
-        barrierColor.withOpacity(0.6 * edgePulse),
-        _secondaryColor.withOpacity(0.3 * edgePulse),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.3, 1.0],
-    ).createShader(Rect.fromLTWH(0, h - 40, w, 40));
+    if (needsEdgeShader || _cachedEdgeBottomShader == null) {
+      _cachedEdgeBottomShader = LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          barrierColor.withOpacity(0.6 * edgePulse),
+          _secondaryColor.withOpacity(0.3 * edgePulse),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.3, 1.0],
+      ).createShader(Rect.fromLTWH(0, h - 40, w, 40));
+    }
+    _edgeGlowOuterPaint.shader = _cachedEdgeBottomShader;
     canvas.drawRect(Rect.fromLTWH(0, h - 40, w, 40), _edgeGlowOuterPaint);
+
+    if (needsEdgeShader) {
+      _cachedEdgePulseKey = edgePulseKey;
+      _cachedEdgeW = wKey;
+      _cachedEdgeH = hKey;
+    }
 
     // Core edge lines (thin bright lines at edges)
     _edgeCorePaint.color = Colors.white.withOpacity(0.5 * edgePulse);
@@ -462,6 +559,7 @@ class EnergyBarrierEffect extends PositionComponent {
       final lifeAlpha = 1 - spark.life;
       final flickerAlpha = 0.5 + math.sin(_time * 15 + spark.phase) * 0.5;
       final alpha = lifeAlpha * flickerAlpha;
+      if (alpha <= 0.03) continue;
 
       // Spark glow
       _sparkGlowPaint.color = barrierColor.withOpacity(0.6 * alpha);
@@ -486,22 +584,36 @@ class EnergyBarrierEffect extends PositionComponent {
 
       // Wave intensity based on position
       final waveAlpha = 0.4 + math.sin(_time * 4 + i) * 0.2;
+      if (waveAlpha <= 0.01) continue;
 
       // Draw vertical wave stripe
-      _pulseWavePaint.shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          Colors.transparent,
-          barrierColor.withOpacity(waveAlpha * 0.3),
-          _accentColor.withOpacity(waveAlpha * 0.6),
-          Colors.white.withOpacity(waveAlpha * 0.8),
-          _accentColor.withOpacity(waveAlpha * 0.6),
-          barrierColor.withOpacity(waveAlpha * 0.3),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0],
-      ).createShader(Rect.fromLTWH(waveX - waveWidth / 2, 0, waveWidth, h));
+      final quantizedWaveX = (waveX / 2).round() * 2;
+      final waveKey = (quantizedWaveX.toInt() & 0x3fff) |
+          ((i & 0x3) << 14) |
+          (((waveAlpha * 100).round() & 0xff) << 16) |
+          (((waveWidth.round()) & 0xff) << 24);
+      var waveShader = _pulseShaderCache[waveKey];
+      if (waveShader == null) {
+        waveShader = LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Colors.transparent,
+            barrierColor.withOpacity(waveAlpha * 0.3),
+            _accentColor.withOpacity(waveAlpha * 0.6),
+            Colors.white.withOpacity(waveAlpha * 0.8),
+            _accentColor.withOpacity(waveAlpha * 0.6),
+            barrierColor.withOpacity(waveAlpha * 0.3),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.2, 0.35, 0.5, 0.65, 0.8, 1.0],
+        ).createShader(Rect.fromLTWH(quantizedWaveX - waveWidth / 2, 0, waveWidth, h));
+        if (_pulseShaderCache.length >= _pulseShaderCacheMax) {
+          _pulseShaderCache.remove(_pulseShaderCache.keys.first);
+        }
+        _pulseShaderCache[waveKey] = waveShader;
+      }
+      _pulseWavePaint.shader = waveShader;
 
       canvas.drawRect(
         Rect.fromLTWH(waveX - waveWidth / 2, 0, waveWidth, h),
@@ -518,7 +630,7 @@ class EnergyBarrierEffect extends PositionComponent {
   void _renderHolographicElements(Canvas canvas, double w, double h) {
     // Holographic flicker effect
     final holoFlicker = 0.6 + math.sin(_time * 12) * 0.2 + math.sin(_time * 17) * 0.1;
-    final glitchOffset = math.sin(_time * 25) > 0.9 ? (_random.nextDouble() - 0.5) * 4 : 0.0;
+    final glitchOffset = math.sin(_time * 25) > 0.9 ? (_nextUnit() - 0.5) * 4 : 0.0;
 
     // Warning text
     _renderWarningText(canvas, w, h, holoFlicker, glitchOffset);
@@ -543,48 +655,35 @@ class EnergyBarrierEffect extends PositionComponent {
       if (textAlpha < 0.2) continue;
 
       // Simulate text with rectangles (since we can't use TextPainter here easily)
-      final charWidth = 8.0;
-      final charHeight = 12.0;
-      final charSpacing = 2.0;
       final text = warningText;
 
-      final totalWidth = text.length * (charWidth + charSpacing);
-      var charX = textX - totalWidth / 2 + glitchOffset;
+      var charX = textX - _warningTextWidth / 2 + glitchOffset;
 
       for (int c = 0; c < text.length; c++) {
         if (text[c] != ' ') {
           // Character glow
           _textGlowPaint.color = barrierColor.withOpacity(textAlpha * 0.5);
           canvas.drawRect(
-            Rect.fromLTWH(charX - 2, textY - 2, charWidth + 4, charHeight + 4),
+            Rect.fromLTWH(charX - 2, textY - 2, _warningCharWidth + 4, _warningCharHeight + 4),
             _textGlowPaint,
           );
 
           // Character body (simplified rectangle representation)
           _textPaint.color = _accentColor.withOpacity(textAlpha);
           canvas.drawRect(
-            Rect.fromLTWH(charX, textY, charWidth, charHeight),
+            Rect.fromLTWH(charX, textY, _warningCharWidth, _warningCharHeight),
             _textPaint,
           );
         }
-        charX += charWidth + charSpacing;
+        charX += _warningCharWidth + _warningCharSpacing;
       }
     }
   }
 
   void _renderWarningSymbols(Canvas canvas, double w, double h, double alpha) {
     // Draw warning triangles at corners and edges
-    final symbolPositions = [
-      Offset(w * 0.1, h * 0.2),
-      Offset(w * 0.9, h * 0.2),
-      Offset(w * 0.1, h * 0.8),
-      Offset(w * 0.9, h * 0.8),
-      Offset(w * 0.5, h * 0.15),
-      Offset(w * 0.5, h * 0.85),
-    ];
-
-    for (int i = 0; i < symbolPositions.length; i++) {
-      final pos = symbolPositions[i];
+    for (int i = 0; i < _symbolPositions.length; i++) {
+      final pos = _symbolPositions[i];
       final symbolPhase = _time * 3 + i * 0.7;
       final symbolAlpha = alpha * (0.4 + math.sin(symbolPhase) * 0.3);
 
@@ -630,19 +729,32 @@ class EnergyBarrierEffect extends PositionComponent {
     final scanX = ((_time * scanSpeed) % (w + 20)) - 10;
 
     final scanAlpha = 0.3 + math.sin(_time * 5) * 0.1;
+    if (scanAlpha <= 0.01) return;
 
     // Scan line glow
-    _textGlowPaint.shader = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        Colors.transparent,
-        barrierColor.withOpacity(scanAlpha * 0.3),
-        Colors.white.withOpacity(scanAlpha * 0.5),
-        barrierColor.withOpacity(scanAlpha * 0.3),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(scanX - 15, 0, 30, h));
+    final quantizedScanX = (scanX / 2).round() * 2;
+    final scanKey = (quantizedScanX.toInt() & 0x3fff) |
+        (((scanAlpha * 100).round() & 0xff) << 16) |
+        ((h.round() & 0xff) << 24);
+    var scanShader = _scanlineShaderCache[scanKey];
+    if (scanShader == null) {
+      scanShader = LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.transparent,
+          barrierColor.withOpacity(scanAlpha * 0.3),
+          Colors.white.withOpacity(scanAlpha * 0.5),
+          barrierColor.withOpacity(scanAlpha * 0.3),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(quantizedScanX - 15, 0, 30, h));
+      if (_scanlineShaderCache.length >= _scanlineShaderCacheMax) {
+        _scanlineShaderCache.remove(_scanlineShaderCache.keys.first);
+      }
+      _scanlineShaderCache[scanKey] = scanShader;
+    }
+    _textGlowPaint.shader = scanShader;
 
     canvas.drawRect(Rect.fromLTWH(scanX - 15, 0, 30, h), _textGlowPaint);
 

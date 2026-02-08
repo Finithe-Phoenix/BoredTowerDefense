@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 
 import '../../bored_games_game.dart';
+import '../../entities/enemy.dart';
 import '../../../models/quality_level.dart';
 
 /// Collects tower / enemy positions and exposes them as Float32Lists for shaders.
@@ -70,27 +71,35 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
   }
 
   int _fillBufferFromTowers(int limit, double scale) {
-    towerPositionBuffer.fillRange(0, towerPositionBuffer.length, 0);
     if (limit == 0) return 0;
     final towers = gameRef.towerManager.towers;
     final count = towers.length < limit ? towers.length : limit;
+    final offX = Enemy.screenOffset.x * scale;
+    final offY = Enemy.screenOffset.y * scale;
+    final worldScale = Enemy.screenScale * scale;
     for (var i = 0; i < count; i++) {
-      final pos = gameRef.worldToScreen(towers[i].centerPosition) * scale;
-      towerPositionBuffer[i * 2] = pos.x;
-      towerPositionBuffer[i * 2 + 1] = pos.y;
+      final tower = towers[i];
+      final pos = tower.position;
+      final size = tower.size;
+      final worldX = pos.x + size.x * 0.5;
+      final worldY = pos.y + size.y * 0.5;
+      towerPositionBuffer[i * 2] = offX + worldX * worldScale;
+      towerPositionBuffer[i * 2 + 1] = offY + worldY * worldScale;
     }
     return count;
   }
 
   int _fillBufferFromEnemies(int limit, double scale) {
-    enemyPositionBuffer.fillRange(0, enemyPositionBuffer.length, 0);
     if (limit == 0) return 0;
     final enemies = gameRef.enemyManager.activeEnemies;
     final count = enemies.length < limit ? enemies.length : limit;
+    final offX = Enemy.screenOffset.x * scale;
+    final offY = Enemy.screenOffset.y * scale;
+    final worldScale = Enemy.screenScale * scale;
     for (var i = 0; i < count; i++) {
-      final pos = gameRef.worldToScreen(enemies[i].position) * scale;
-      enemyPositionBuffer[i * 2] = pos.x;
-      enemyPositionBuffer[i * 2 + 1] = pos.y;
+      final pos = enemies[i].position;
+      enemyPositionBuffer[i * 2] = offX + pos.x * worldScale;
+      enemyPositionBuffer[i * 2 + 1] = offY + pos.y * worldScale;
     }
     return count;
   }
@@ -116,9 +125,8 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
       scale: scale,
     );
 
-    final bytes = Uint8List.fromList(_pixelBuffer);
     ui.decodeImageFromPixels(
-      bytes,
+      _pixelBuffer,
       _textureWidth,
       _textureHeight,
       ui.PixelFormat.rgba8888,
@@ -137,8 +145,8 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
     required double scale,
   }) {
     final width = _textureWidth;
-    final height = _textureHeight;
-    final size = gameRef.size * scale;
+    final scaledWidth = gameRef.size.x * scale;
+    final scaledHeight = gameRef.size.y * scale;
     for (var i = 0; i < width; i++) {
       final base = (row * width + i) * 4;
       if (i >= count) {
@@ -147,8 +155,8 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
       }
       final x = positions[i * 2];
       final y = positions[i * 2 + 1];
-      final nx = (x / size.x).clamp(0.0, 1.0);
-      final ny = (y / size.y).clamp(0.0, 1.0);
+      final nx = (x / scaledWidth).clamp(0.0, 1.0);
+      final ny = (y / scaledHeight).clamp(0.0, 1.0);
       _pixelBuffer[base] = (nx * 255).round();
       _pixelBuffer[base + 1] = (ny * 255).round();
       _pixelBuffer[base + 2] = 0;

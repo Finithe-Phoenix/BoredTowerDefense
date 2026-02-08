@@ -31,7 +31,14 @@ class _GameOverOverlayState extends State<GameOverOverlay>
   late AnimationController _shakeController;
   late Animation<double> _fadeAnimation;
 
-  final _random = math.Random();
+  int _rngState = 0x1234abcd;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+
   double _glitchOffset = 0;
   double _verticalGlitch = 0;
   bool _showGlitch = false;
@@ -73,13 +80,13 @@ class _GameOverOverlayState extends State<GameOverOverlay>
   }
 
   void _updateGlitch() {
-    if (_random.nextDouble() < 0.5) {
+    if (_nextUnit() < 0.5) {
       setState(() {
         _showGlitch = true;
-        _glitchOffset = (_random.nextDouble() - 0.5) * 15;
-        _verticalGlitch = (_random.nextDouble() - 0.5) * 5;
-        _glitchFrame = _random.nextInt(100);
-        _showHeavyGlitch = _random.nextDouble() < 0.3;
+        _glitchOffset = (_nextUnit() - 0.5) * 15;
+        _verticalGlitch = (_nextUnit() - 0.5) * 5;
+        _glitchFrame = _nextInt(100);
+        _showHeavyGlitch = _nextUnit() < 0.3;
       });
     } else {
       setState(() {
@@ -95,7 +102,7 @@ class _GameOverOverlayState extends State<GameOverOverlay>
       if (mounted) {
         _glitchTimer?.cancel();
         _glitchTimer = Timer(
-          Duration(milliseconds: 800 + _random.nextInt(1500)),
+          Duration(milliseconds: 800 + _nextInt(1500)),
           _triggerGlitchCycle,
         );
       }
@@ -331,9 +338,17 @@ class _DangerGridPainter extends CustomPainter {
 
   _DangerGridPainter({required this.animation, required this.glitchOffset});
 
+  static final Paint _linePaint = Paint()..strokeWidth = 1;
+  static final Paint _centerGlowPaint = Paint();
+  static final Map<int, Shader> _centerGlowShaders = {};
+
+  int _centerGlowKey(Size size, int opacityStep) {
+    return (size.width.round() << 32) ^ (size.height.round() << 16) ^ opacityStep;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..strokeWidth = 1;
+    if (size.width <= 0 || size.height <= 0) return;
     const spacing = 50.0;
 
     // Vertical lines with danger pulse
@@ -342,26 +357,32 @@ class _DangerGridPainter extends CustomPainter {
       final pulse = 0.02 + math.sin(animation * math.pi * 2 + x * 0.01) * 0.02;
       final opacity = (pulse * (1 - distFromCenter * 0.5)).clamp(0.01, 0.08);
 
-      paint.color = NeonColors.red.withOpacity(opacity);
+      _linePaint.color = NeonColors.red.withOpacity(opacity);
       canvas.drawLine(
         Offset(x + glitchOffset * 0.1, 0),
         Offset(x + glitchOffset * 0.1, size.height),
-        paint,
+        _linePaint,
       );
     }
 
     // Horizontal lines
     for (double y = 0; y < size.height; y += spacing) {
       final pulse = 0.02 + math.sin(animation * math.pi * 2 + y * 0.01) * 0.02;
-      paint.color = NeonColors.red.withOpacity(pulse.clamp(0.01, 0.06));
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      _linePaint.color = NeonColors.red.withOpacity(pulse.clamp(0.01, 0.06));
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _linePaint);
     }
 
     // Center danger glow
-    final centerGlow = Paint()
-      ..shader = RadialGradient(
+    final opacityStep = ((0.15 + animation * 0.1) * 60).round();
+    final key = _centerGlowKey(size, opacityStep);
+    final shader = _centerGlowShaders.putIfAbsent(key, () {
+      if (_centerGlowShaders.length > 32) {
+        _centerGlowShaders.clear();
+      }
+      final opacity = opacityStep / 60.0;
+      return RadialGradient(
         colors: [
-          NeonColors.red.withOpacity(0.15 + animation * 0.1),
+          NeonColors.red.withOpacity(opacity),
           NeonColors.red.withOpacity(0),
         ],
       ).createShader(Rect.fromCenter(
@@ -369,7 +390,9 @@ class _DangerGridPainter extends CustomPainter {
         width: size.width * 0.6,
         height: size.height * 0.6,
       ));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), centerGlow);
+    });
+    _centerGlowPaint.shader = shader;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _centerGlowPaint);
   }
 
   @override
@@ -383,27 +406,47 @@ class _DangerScanlinesPainter extends CustomPainter {
 
   _DangerScanlinesPainter({required this.animation, required this.intensity});
 
+  static final Paint _staticLinePaint = Paint();
+  static final Paint _scanPaint = Paint();
+  static final Map<int, Shader> _scanShaders = {};
+
+  int _scanKey(Size size, int intensityStep) {
+    return (size.width.round() << 16) ^ intensityStep;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Static scanlines
-    final paint = Paint()..color = Colors.black.withOpacity(0.05 * intensity);
+    _staticLinePaint.color = Colors.black.withOpacity(0.05 * intensity);
     for (double y = 0; y < size.height; y += 2) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _staticLinePaint);
     }
 
     // Moving danger scanline
     final scanY = (animation * size.height * 1.5) % size.height;
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
+    final intensityStep = (intensity * 20).round();
+    final key = _scanKey(size, intensityStep);
+    final shader = _scanShaders.putIfAbsent(key, () {
+      if (_scanShaders.length > 32) {
+        _scanShaders.clear();
+      }
+      final opacity = 0.1 * (intensityStep / 20.0);
+      return LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
           NeonColors.red.withOpacity(0),
-          NeonColors.red.withOpacity(0.1 * intensity),
+          NeonColors.red.withOpacity(opacity),
           NeonColors.red.withOpacity(0),
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 30, size.width, 60));
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 30, size.width, 60), scanPaint);
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 60));
+    });
+    _scanPaint.shader = shader;
+    canvas.save();
+    canvas.translate(0, scanY - 30);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 60), _scanPaint);
+    canvas.restore();
   }
 
   @override
@@ -416,31 +459,40 @@ class _CorruptionPainter extends CustomPainter {
 
   _CorruptionPainter({required this.frame});
 
+  static final Paint _rectPaint = Paint();
+  static final Paint _noisePaint = Paint();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final random = math.Random(frame);
+    if (size.width <= 0 || size.height <= 0) return;
+    int rngState = frame ^ 0x6c8e9cf5;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
 
     // Corruption blocks
     for (int i = 0; i < 8; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = random.nextDouble() * size.height;
-      final w = 20 + random.nextDouble() * 100;
-      final h = 2 + random.nextDouble() * 6;
+      final x = nextUnit() * size.width;
+      final y = nextUnit() * size.height;
+      final w = 20 + nextUnit() * 100;
+      final h = 2 + nextUnit() * 6;
 
       canvas.drawRect(
         Rect.fromLTWH(x, y, w, h),
-        Paint()..color = NeonColors.red.withOpacity(0.1 + random.nextDouble() * 0.1),
+        _rectPaint..color = NeonColors.red.withOpacity(0.1 + nextUnit() * 0.1),
       );
     }
 
     // Noise pixels
     for (int i = 0; i < 30; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = random.nextDouble() * size.height;
+      final x = nextUnit() * size.width;
+      final y = nextUnit() * size.height;
 
       canvas.drawRect(
         Rect.fromLTWH(x, y, 2, 2),
-        Paint()..color = Colors.white.withOpacity(0.1 + random.nextDouble() * 0.2),
+        _noisePaint..color = Colors.white.withOpacity(0.1 + nextUnit() * 0.2),
       );
     }
   }
@@ -456,19 +508,28 @@ class _GlitchBarsPainter extends CustomPainter {
 
   _GlitchBarsPainter({required this.offset, required this.frame});
 
+  static final Paint _barPaint = Paint();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final random = math.Random(frame);
+    if (size.width <= 0 || size.height <= 0) return;
+    int rngState = frame ^ 0x9e3779b9;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
+    bool nextBool() => (lcgNext() & 1) == 0;
 
     for (int i = 0; i < 6; i++) {
-      final y = random.nextDouble() * size.height;
-      final height = 1.0 + random.nextDouble() * 4;
-      final xShift = (random.nextDouble() - 0.5) * 30;
-      final color = random.nextBool() ? NeonColors.cyan : NeonColors.red;
+      final y = nextUnit() * size.height;
+      final height = 1.0 + nextUnit() * 4;
+      final xShift = (nextUnit() - 0.5) * 30;
+      final color = nextBool() ? NeonColors.cyan : NeonColors.red;
 
       canvas.drawRect(
         Rect.fromLTWH(xShift, y, size.width, height),
-        Paint()..color = color.withOpacity(0.15),
+        _barPaint..color = color.withOpacity(0.15),
       );
     }
   }
@@ -610,12 +671,18 @@ class _GlitchTitle extends StatelessWidget {
 
   String _corruptText(String input) {
     final glitchChars = ['#', '@', '!', '%', '&', '*', '?'];
-    final random = math.Random();
+    int rngState = (input.hashCode ^ 0x9e3779b9) & 0x7fffffff;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
+    int nextInt(int max) => max <= 0 ? 0 : lcgNext() % max;
     final chars = input.split('');
 
     for (int i = 0; i < chars.length; i++) {
-      if (random.nextDouble() < 0.2) {
-        chars[i] = glitchChars[random.nextInt(glitchChars.length)];
+      if (nextUnit() < 0.2) {
+        chars[i] = glitchChars[nextInt(glitchChars.length)];
       }
     }
     return chars.join();
@@ -939,45 +1006,49 @@ class _WarningCornerPainter extends CustomPainter {
 
   _WarningCornerPainter({required this.opacity});
 
+  static final Paint _strokePaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _trianglePaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _cornerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _cornerCorePaint = Paint();
+  static final Path _cornerPath = Path();
+  static final Path _trianglePath = Path();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    if (size.width <= 0 || size.height <= 0) return;
+    _strokePaint
       ..color = NeonColors.red.withOpacity(opacity)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 3;
 
-    final path = Path()
+    _cornerPath
+      ..reset()
       ..moveTo(0, size.height * 0.7)
       ..lineTo(0, 0)
       ..lineTo(size.width * 0.7, 0);
 
-    canvas.drawPath(path, paint);
+    canvas.drawPath(_cornerPath, _strokePaint);
 
     // Warning triangle
-    final trianglePaint = Paint()
-      ..color = NeonColors.red.withOpacity(opacity * 0.8)
-      ..style = PaintingStyle.fill;
-
-    final triangle = Path()
+    _trianglePaint.color = NeonColors.red.withOpacity(opacity * 0.8);
+    _trianglePath
+      ..reset()
       ..moveTo(8, 20)
       ..lineTo(20, 8)
       ..lineTo(20, 20)
       ..close();
-
-    canvas.drawPath(triangle, trianglePaint);
+    canvas.drawPath(_trianglePath, _trianglePaint);
 
     // Corner dot
     canvas.drawCircle(
       const Offset(0, 0),
       4,
-      Paint()
-        ..color = NeonColors.red
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      _cornerGlowPaint..color = NeonColors.red,
     );
     canvas.drawCircle(
       const Offset(0, 0),
       2,
-      Paint()..color = Colors.white,
+      _cornerCorePaint..color = Colors.white,
     );
   }
 

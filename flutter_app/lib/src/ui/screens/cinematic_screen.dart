@@ -733,19 +733,27 @@ class _StarfieldPainter extends CustomPainter {
 
   _StarfieldPainter({required this.time, required this.color});
 
+  static final Paint _starPaint = Paint();
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final random = math.Random(42);
-    final paint = Paint()..color = color;
+    var state = 42;
 
     for (int i = 0; i < 100; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = (random.nextDouble() * size.height + time * 50 * (i % 3 + 1)) % size.height;
-      final radius = random.nextDouble() * 1.5 + 0.5;
-      final alpha = random.nextDouble() * 0.5 + 0.2;
+      state = _lcgNext(state);
+      final x = _lcgUnit(state) * size.width;
+      state = _lcgNext(state);
+      final y =
+          (_lcgUnit(state) * size.height + time * 50 * (i % 3 + 1)) % size.height;
+      state = _lcgNext(state);
+      final radius = _lcgUnit(state) * 1.5 + 0.5;
+      state = _lcgNext(state);
+      final alpha = _lcgUnit(state) * 0.5 + 0.2;
 
-      paint.color = color.withOpacity(alpha);
-      canvas.drawCircle(Offset(x, y), radius, paint);
+      _starPaint.color = color.withOpacity(alpha);
+      canvas.drawCircle(Offset(x, y), radius, _starPaint);
     }
   }
 
@@ -756,14 +764,14 @@ class _StarfieldPainter extends CustomPainter {
 }
 
 class _ScanLinesPainter extends CustomPainter {
+  static final Paint _scanPaint = Paint()
+    ..color = Colors.black
+    ..strokeWidth = 1;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black
-      ..strokeWidth = 1;
-
     for (double y = 0; y < size.height; y += 3) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _scanPaint);
     }
   }
 
@@ -777,19 +785,20 @@ class _GridWorldPainter extends CustomPainter {
 
   _GridWorldPainter({required this.offset, required this.color});
 
+  static final Paint _gridPaint = Paint()
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(0.3)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
+    _gridPaint.color = color.withOpacity(0.3);
 
     // Horizon line
     final horizonY = size.height * 0.4;
     canvas.drawLine(
       Offset(0, horizonY),
       Offset(size.width, horizonY),
-      paint..color = color,
+      _gridPaint..color = color,
     );
 
     // Grid lines
@@ -798,18 +807,18 @@ class _GridWorldPainter extends CustomPainter {
       final y = horizonY + (size.height - horizonY) * progress;
       final alpha = progress * 0.5;
 
-      paint.color = color.withOpacity(alpha);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      _gridPaint.color = color.withOpacity(alpha);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _gridPaint);
     }
 
     // Vertical lines (perspective)
     for (int i = -5; i <= 5; i++) {
       final x = size.width / 2 + i * 40;
-      paint.color = color.withOpacity(0.2);
+      _gridPaint.color = color.withOpacity(0.2);
       canvas.drawLine(
         Offset(size.width / 2, horizonY),
         Offset(x + (i * 100), size.height),
-        paint,
+        _gridPaint,
       );
     }
   }
@@ -826,35 +835,59 @@ class _DataStreamPainter extends CustomPainter {
 
   _DataStreamPainter({required this.time, required this.color});
 
+  static final TextPainter _textPainter = TextPainter(textDirection: TextDirection.ltr);
+  static const int _charPainterCacheLimit = 64;
+  static final Map<int, TextPainter> _charPainterCache = {};
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final random = math.Random(123);
-    final paint = Paint()..color = color;
+    var state = 123;
+    var cacheExceeded = false;
 
     for (int col = 0; col < 40; col++) {
       final x = col * (size.width / 40);
-      final speed = random.nextDouble() * 0.5 + 0.5;
+      state = _lcgNext(state);
+      final speed = _lcgUnit(state) * 0.5 + 0.5;
       final offset = (time * speed * 100) % size.height;
 
       for (int row = 0; row < 8; row++) {
         final y = (row * 15 + offset) % size.height;
-        final char = random.nextInt(2) == 0 ? '1' : '0';
+        state = _lcgNext(state);
+        final char = (state & 0x1) == 0 ? '1' : '0';
         final alpha = (1 - y / size.height) * 0.8;
 
-        final textPainter = TextPainter(
-          text: TextSpan(
-            text: char,
-            style: TextStyle(
-              color: color.withOpacity(alpha),
-              fontSize: 10,
-              fontFamily: 'monospace',
-            ),
-          ),
-          textDirection: TextDirection.ltr,
-        )..layout();
-
-        textPainter.paint(canvas, Offset(x, y));
+        if (alpha > 0.05) {
+          final alphaKey = (alpha * 32).round().clamp(0, 32);
+          final rgb = color.value & 0x00FFFFFF;
+          final charCode = char.codeUnitAt(0) & 0xFF;
+          final cacheKey = (alphaKey << 32) | (charCode << 24) | rgb;
+          final painter = _charPainterCache.putIfAbsent(cacheKey, () {
+            final tp = TextPainter(textDirection: TextDirection.ltr);
+            tp.text = TextSpan(
+              text: char,
+              style: TextStyle(
+                color: color.withOpacity(alphaKey / 32),
+                fontSize: 10,
+                fontFamily: 'monospace',
+              ),
+            );
+            tp.layout();
+            return tp;
+          });
+          painter.paint(canvas, Offset(x, y));
+          if (_charPainterCache.length > _charPainterCacheLimit) {
+            cacheExceeded = true;
+          }
+        }
       }
+    }
+    if (cacheExceeded) {
+      for (final tp in _charPainterCache.values) {
+        tp.dispose();
+      }
+      _charPainterCache.clear();
     }
   }
 
@@ -870,40 +903,49 @@ class _CorruptionPainter extends CustomPainter {
 
   _CorruptionPainter({required this.time, required this.glitchIntensity});
 
+  static final Paint _tendrilPaint = Paint()
+    ..color = NeonColors.magenta.withOpacity(0.6)
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke;
+  static final Paint _coreGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _corePaint = Paint();
+  final Path _tendrilPath = Path();
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final random = math.Random((time * 1000).toInt());
+    var state = (time * 1000).toInt();
 
     // Corruption tendrils
     for (int i = 0; i < 12; i++) {
       final angle = (i / 12) * math.pi * 2 + time * math.pi;
-      final length = 30 + random.nextDouble() * 50 + glitchIntensity * 20;
+      state = _lcgNext(state);
+      final length = 30 + _lcgUnit(state) * 50 + glitchIntensity * 20;
 
-      final path = Path()..moveTo(center.dx, center.dy);
+      _tendrilPath
+        ..reset()
+        ..moveTo(center.dx, center.dy);
 
       for (int j = 0; j < 5; j++) {
         final dist = (j / 5) * length;
-        final wobble = random.nextDouble() * 10 - 5;
+        state = _lcgNext(state);
+        final wobble = _lcgUnit(state) * 10 - 5;
         final x = center.dx + math.cos(angle + wobble * 0.1) * dist;
         final y = center.dy + math.sin(angle + wobble * 0.1) * dist;
-        path.lineTo(x, y);
+        _tendrilPath.lineTo(x, y);
       }
 
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = NeonColors.magenta.withOpacity(0.6)
-          ..strokeWidth = 2
-          ..style = PaintingStyle.stroke,
-      );
+      canvas.drawPath(_tendrilPath, _tendrilPaint);
     }
 
     // Central void
     canvas.drawCircle(
       center,
       20 + glitchIntensity * 10,
-      Paint()
+      _coreGlowPaint
         ..color = NeonColors.magenta.withOpacity(0.8)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
     );
@@ -911,7 +953,7 @@ class _CorruptionPainter extends CustomPainter {
     canvas.drawCircle(
       center,
       15,
-      Paint()..color = Colors.black,
+      _corePaint..color = Colors.black,
     );
   }
 

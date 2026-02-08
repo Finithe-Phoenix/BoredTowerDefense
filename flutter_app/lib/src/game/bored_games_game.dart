@@ -43,6 +43,7 @@ import 'world/game_world.dart';
 import '../models/level_config.dart';
 import '../models/quality_level.dart';
 import '../models/upgrade_data.dart';
+import '../services/ambient_soundscape_service.dart';
 import '../services/audio_service.dart';
 import '../services/procedural_music_service.dart';
 import '../services/storage_service.dart';
@@ -50,15 +51,27 @@ import '../services/upgrade_service.dart';
 import 'balance/difficulty_curve.dart';
 import '../ui/theme/neon_theme.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 enum PendingAbility { none, pulse, mine }
 
 class BoredGamesGame extends FlameGame
-    with
-        HasCollisionDetection,
-        TapCallbacks,
-
-        DragCallbacks,
-        KeyboardEvents {
+    with TapCallbacks, DragCallbacks, KeyboardEvents {
   BoredGamesGame({
     this.tileSize = 32,
     this.levelConfig,
@@ -74,6 +87,7 @@ class BoredGamesGame extends FlameGame
   int _totalWaves = 10; // Default, can be set from levelConfig
   int _progressIndex = 0;
   int _difficulty = 1;
+  int _worldId = 1;
 
   late final WorldUberShaderComponent worldShaderComponent;
   late final ParticleShaderComponent particleShaderComponent;
@@ -120,6 +134,18 @@ class BoredGamesGame extends FlameGame
   double _perfWorstDt = 0;
   int _perfFrames = 0;
   final bool _perfLogEnabled = kDebugMode;
+  static const int _perfSampleWindow = 240;
+  final List<double> _perfFrameSamples = List<double>.filled(
+    _perfSampleWindow,
+    0,
+    growable: false,
+  );
+  int _perfSampleCursor = 0;
+  int _perfSampleCount = 0;
+  int _perfJankFrames = 0;
+  int _perfSevereJankFrames = 0;
+  double _perfOwnUpdateAccumMs = 0;
+  double _perfOwnUpdateWorstMs = 0;
 
   double _autoWaveTimer = 0;
   bool _hasPlacedTower = false;
@@ -135,7 +161,7 @@ class BoredGamesGame extends FlameGame
   FpsBackgroundComponent? _fpsBackground;
   double _focusModeTimer = 0;
   static const double _focusModeMaxDuration = 10.0;
-  
+
   // Manual Long Press
   double _longPressTimer = 0;
   bool _isLongPressing = false;
@@ -159,7 +185,8 @@ class BoredGamesGame extends FlameGame
 
   Vector2? _lastMousePosition;
   Vector2? get mousePosition => _lastMousePosition;
-  Vector2 _lastWorldPosition = Vector2.zero(); // Changed to non-nullable and initialized
+  Vector2 _lastWorldPosition =
+      Vector2.zero(); // Changed to non-nullable and initialized
   Vector2? get lastPointer => _lastMousePosition;
   bool _draggingPlacement = false;
   double _worldScale = 1.0;
@@ -169,13 +196,17 @@ class BoredGamesGame extends FlameGame
   bool _focusMode = false;
   bool _sellMode = false;
   double _focusFxPulse = 0;
-  final math.Random _threatShakeRandom = math.Random();
+  final _FastRng _threatShakeRandom = _FastRng();
   double _threatShakeTimer = 0;
   double _threatShakeDuration = 0;
   double _threatShakeIntensity = 0;
   Vector2 _threatShakeOffset = Vector2.zero();
   double _fxBudgetTimer = 0;
+  double _ambientIntensityTimer = 0;
+  double _lastAmbientIntensity = 0.5;
   static const double _focusZoom = 2.5;
+  static const double _ambientIntensityInterval = 0.6;
+  static const double _ambientIntensityMaxStep = 0.08;
   static const double sellRefundRate = 0.2;
   QualityLevel _quality = QualityLevel.high;
   bool autoQuality = true;
@@ -200,7 +231,6 @@ class BoredGamesGame extends FlameGame
   bool _awaitingUpgradeChoice = false;
   int _maxLives = 0;
 
-
   /// Whether pulse ability is ready
   bool get pulseReady => _pulseCooldownTimer <= 0;
 
@@ -209,7 +239,8 @@ class BoredGamesGame extends FlameGame
       (_pulseCooldownTimer / pulseCooldown).clamp(0.0, 1.0);
 
   /// Whether mine ability is ready
-  bool get mineReady => _mineCooldownTimer <= 0 && _activeMines.length < maxActiveMines;
+  bool get mineReady =>
+      _mineCooldownTimer <= 0 && _activeMines.length < maxActiveMines;
 
   /// Mine cooldown remaining (0-1 normalized)
   double get mineCooldownPercent =>
@@ -279,11 +310,13 @@ class BoredGamesGame extends FlameGame
 
   bool get postProcessEnabled => _quality == QualityLevel.high;
 
-  int get pulseCost => math.max(1, (pulseCostBase * _upgradeStats.abilityCostMult).round());
+  int get pulseCost =>
+      math.max(1, (pulseCostBase * _upgradeStats.abilityCostMult).round());
 
   // double get pulseCooldown => pulseCooldownBase * _upgradeStats.pulseCooldownMult; // Removed, now a constant
 
-  int get mineCost => math.max(1, (mineCostBase * _upgradeStats.abilityCostMult).round());
+  int get mineCost =>
+      math.max(1, (mineCostBase * _upgradeStats.abilityCostMult).round());
 
   // double get mineCooldown => mineCooldownBase * _upgradeStats.mineCooldownMult; // Removed, now a constant
 
@@ -291,16 +324,20 @@ class BoredGamesGame extends FlameGame
 
   // PendingAbility get pendingAbility => _pendingAbility; // Moved to field definition
 
-  double towerRange(TowerType type) => type.range * _upgradeStats.towerRangeMult;
+  double towerRange(TowerType type) =>
+      type.range * _upgradeStats.towerRangeMult;
 
-  double towerDamage(TowerType type) => type.damage * _upgradeStats.towerDamageMult;
+  double towerDamage(TowerType type) =>
+      type.damage * _upgradeStats.towerDamageMult;
 
-  double towerFireRate(TowerType type) => type.fireRate * _upgradeStats.towerFireRateMult;
+  double towerFireRate(TowerType type) =>
+      type.fireRate * _upgradeStats.towerFireRateMult;
 
   double towerProjectileSpeed(TowerType type) =>
       type.projectileSpeed * _upgradeStats.projectileSpeedMult;
 
-  double towerSlowAmount(TowerType type) => type.slowAmount * _upgradeStats.slowMult;
+  double towerSlowAmount(TowerType type) =>
+      type.slowAmount * _upgradeStats.slowMult;
 
   int towerCost(TowerType type) {
     final base = math.max(1, (type.cost * _upgradeStats.towerCostMult).round());
@@ -324,11 +361,12 @@ class BoredGamesGame extends FlameGame
   void update(double dt) {
     // Store raw dt for FPS calculation (before scaling)
     _lastDt = dt;
+    final perfStopwatch =
+        _perfLogEnabled && _visualReady ? (Stopwatch()..start()) : null;
 
     // Apply time scale for speed control
     final scaledDt = dt * timeScale;
     super.update(scaledDt);
-    _updatePerfStats(dt);
 
     // Update game time
     gameTime += scaledDt;
@@ -354,6 +392,17 @@ class BoredGamesGame extends FlameGame
     _updateFocusFx(scaledDt);
     _updateFocusTimer(scaledDt);
     _updateLongPress(scaledDt);
+    _updateAmbientSoundscape(scaledDt);
+
+    if (perfStopwatch != null) {
+      perfStopwatch.stop();
+      final ownUpdateMs = perfStopwatch.elapsedMicroseconds / 1000.0;
+      _perfOwnUpdateAccumMs += ownUpdateMs;
+      if (ownUpdateMs > _perfOwnUpdateWorstMs) {
+        _perfOwnUpdateWorstMs = ownUpdateMs;
+      }
+    }
+    _updatePerfStats(dt);
   }
 
   void _updateLongPress(double dt) {
@@ -367,6 +416,158 @@ class BoredGamesGame extends FlameGame
     }
   }
 
+  void _updateAmbientSoundscape(double dt) {
+    _ambientIntensityTimer += dt;
+    if (_ambientIntensityTimer < _ambientIntensityInterval) return;
+    _ambientIntensityTimer = 0;
+
+    if (_gameEnded) {
+      AmbientSoundscapeService.instance.setIntensity(0.35);
+      return;
+    }
+
+    final totalWaves = math.max(1, _totalWaves);
+    final waveIndex = (enemyManager.currentWave - 1).clamp(0, totalWaves - 1);
+    final waveProgress = totalWaves == 1 ? 1.0 : waveIndex / (totalWaves - 1);
+    final spawnProgress = enemyManager.waveProgress;
+    final enemyDensity = (enemyManager.aliveCount / 40.0).clamp(0.0, 1.0);
+    final bossPresent = enemyManager.currentBoss != null;
+
+    var intensity =
+        0.22 + waveProgress * 0.4 + enemyDensity * 0.3 + spawnProgress * 0.2;
+
+    var scale = 1.0;
+    var bias = 0.0;
+    var minClamp = 0.2;
+    var maxClamp = 1.0;
+    switch (enemyManager.currentModifier) {
+      case WaveModifier.overload:
+        scale = 1.08;
+        bias = 0.12 + enemyDensity * 0.06;
+        minClamp = 0.35;
+        break;
+      case WaveModifier.juggernaut:
+        scale = 0.98;
+        bias = 0.12 + waveProgress * 0.06;
+        minClamp = 0.3;
+        maxClamp = 0.95;
+        break;
+      case WaveModifier.phantom:
+        scale = 0.92;
+        bias = 0.08 + (1.0 - spawnProgress) * 0.12;
+        minClamp = 0.25;
+        maxClamp = 0.85;
+        break;
+      case WaveModifier.mixed:
+        scale = 1.04;
+        bias = 0.1 + enemyDensity * 0.04;
+        minClamp = 0.32;
+        maxClamp = 0.98;
+        break;
+      case WaveModifier.normal:
+        maxClamp = 0.9;
+        break;
+    }
+
+    intensity = intensity * scale + bias;
+    if (bossPresent) intensity = 1.0;
+    intensity = intensity.clamp(minClamp, maxClamp);
+
+    var worldScale = 1.0;
+    var worldBias = 0.0;
+    var worldMin = 0.2;
+    var worldMax = 1.0;
+    switch (_worldId) {
+      case 1:
+        worldScale = 0.95;
+        worldBias = 0.03;
+        worldMin = 0.22;
+        worldMax = 0.88;
+        break;
+      case 2:
+        worldScale = 1.05;
+        worldBias = 0.05;
+        worldMin = 0.25;
+        worldMax = 0.95;
+        break;
+      case 3:
+        worldScale = 0.85;
+        worldBias = 0.02;
+        worldMin = 0.18;
+        worldMax = 0.78;
+        break;
+      case 4:
+        worldScale = 1.1;
+        worldBias = 0.06;
+        worldMin = 0.28;
+        worldMax = 1.0;
+        break;
+      case 5:
+        worldScale = 0.92;
+        worldBias = 0.04;
+        worldMin = 0.22;
+        worldMax = 0.9;
+        break;
+      case 6:
+        worldScale = 1.0;
+        worldBias = 0.05;
+        worldMin = 0.24;
+        worldMax = 1.0;
+        break;
+    }
+
+    intensity = intensity * worldScale + worldBias;
+    minClamp = math.max(minClamp, worldMin);
+    maxClamp = math.min(maxClamp, worldMax);
+
+    final enemies = enemyManager.activeEnemies;
+    if (enemies.isNotEmpty) {
+      double sumSpeed = 0;
+      double sumHealth = 0;
+      double sumSize = 0;
+      var phantomCount = 0;
+
+      for (final enemy in enemies) {
+        final type = enemy.type;
+        sumSpeed += type.speedMult;
+        sumHealth += type.healthMult;
+        sumSize += type.sizeMult;
+        if (type.isPhantom) phantomCount++;
+      }
+
+      final count = enemies.length.toDouble();
+      final avgSpeed = sumSpeed / count;
+      final avgHealth = sumHealth / count;
+      final avgSize = sumSize / count;
+      final phantomRatio = (phantomCount / count).clamp(0.0, 1.0);
+      final fastScore = ((avgSpeed - 1.0) / 0.5).clamp(0.0, 1.0);
+      final tankScore = ((avgHealth - 1.0) / 2.0).clamp(0.0, 1.0);
+      final sizeScore = ((avgSize - 1.0) / 0.6).clamp(0.0, 1.0);
+      final swarmScore = (count / 60.0).clamp(0.0, 1.0);
+
+      intensity += fastScore * 0.06;
+      intensity += tankScore * 0.05;
+      intensity += sizeScore * 0.04;
+      intensity += swarmScore * 0.04;
+      intensity -= phantomRatio * 0.08;
+
+      minClamp += tankScore * 0.03;
+      maxClamp -= phantomRatio * 0.1;
+    }
+
+    intensity = intensity.clamp(minClamp, maxClamp);
+
+    final delta = intensity - _lastAmbientIntensity;
+    final step =
+        delta.clamp(-_ambientIntensityMaxStep, _ambientIntensityMaxStep);
+    final smoothed = (_lastAmbientIntensity + step).clamp(minClamp, maxClamp);
+
+    if ((smoothed - _lastAmbientIntensity).abs() > 0.01) {
+      AmbientSoundscapeService.instance.setIntensity(smoothed);
+      _lastAmbientIntensity = smoothed;
+    }
+  }
+
   void _updateFocusTimer(double dt) {
     if (!_focusMode) return;
     _focusModeTimer -= dt;
@@ -377,6 +578,7 @@ class BoredGamesGame extends FlameGame
 
   void _updatePerfStats(double rawDt) {
     if (!_perfLogEnabled || !_visualReady) return;
+    _recordFrameSample(rawDt);
 
     _perfTimer += rawDt;
     _perfAccumDt += rawDt;
@@ -389,9 +591,23 @@ class BoredGamesGame extends FlameGame
 
     final avgFps = _perfFrames / _perfAccumDt;
     final worstMs = _perfWorstDt * 1000;
+    final p95Ms = _framePercentileMs(0.95);
+    final p99Ms = _framePercentileMs(0.99);
+    final ownAvgMs =
+        _perfFrames > 0 ? _perfOwnUpdateAccumMs / _perfFrames : 0.0;
+    final jankPct =
+        _perfFrames > 0 ? (_perfJankFrames * 100.0 / _perfFrames) : 0.0;
+    final severeJankPct =
+        _perfFrames > 0 ? (_perfSevereJankFrames * 100.0 / _perfFrames) : 0.0;
     debugPrint(
       'perf fps=${avgFps.toStringAsFixed(1)} '
+      'p95Ms=${p95Ms.toStringAsFixed(1)} '
+      'p99Ms=${p99Ms.toStringAsFixed(1)} '
       'worstMs=${worstMs.toStringAsFixed(1)} '
+      'ownAvgMs=${ownAvgMs.toStringAsFixed(2)} '
+      'ownWorstMs=${_perfOwnUpdateWorstMs.toStringAsFixed(2)} '
+      'jank=${jankPct.toStringAsFixed(1)}% '
+      'severe=${severeJankPct.toStringAsFixed(1)}% '
       'enemies=${enemyManager.aliveCount} '
       'bullets=${bulletManager.activeCount} '
       'towers=${towerManager.towerCount} '
@@ -403,6 +619,38 @@ class BoredGamesGame extends FlameGame
     _perfAccumDt = 0;
     _perfFrames = 0;
     _perfWorstDt = 0;
+    _perfJankFrames = 0;
+    _perfSevereJankFrames = 0;
+    _perfOwnUpdateAccumMs = 0;
+    _perfOwnUpdateWorstMs = 0;
+  }
+
+  void _recordFrameSample(double rawDt) {
+    final frameMs = rawDt * 1000.0;
+    _perfFrameSamples[_perfSampleCursor] = frameMs;
+    _perfSampleCursor = (_perfSampleCursor + 1) % _perfSampleWindow;
+    if (_perfSampleCount < _perfSampleWindow) {
+      _perfSampleCount++;
+    }
+    if (frameMs > 18.0) {
+      _perfJankFrames++;
+    }
+    if (frameMs > 33.0) {
+      _perfSevereJankFrames++;
+    }
+  }
+
+  double _framePercentileMs(double percentile) {
+    final count = _perfSampleCount;
+    if (count == 0) return 0.0;
+    final values = List<double>.generate(count, (i) {
+      final index =
+          (_perfSampleCursor - 1 - i + _perfSampleWindow) % _perfSampleWindow;
+      return _perfFrameSamples[index];
+    });
+    values.sort();
+    final rank = ((count - 1) * percentile).round().clamp(0, count - 1);
+    return values[rank];
   }
 
   @override
@@ -591,7 +839,8 @@ class BoredGamesGame extends FlameGame
   }
 
   @override
-  KeyEventResult onKeyEvent(KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
+  KeyEventResult onKeyEvent(
+      KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
     if (event is KeyDownEvent) {
       // Space bar activates Neon Pulse
       if (event.logicalKey == LogicalKeyboardKey.space) {
@@ -685,8 +934,8 @@ class BoredGamesGame extends FlameGame
       }
     }
 
-    final minePos = gridToWorld(targetCell, tileSize) +
-        Vector2(tileSize / 2, tileSize / 2);
+    final minePos =
+        gridToWorld(targetCell, tileSize) + Vector2(tileSize / 2, tileSize / 2);
 
     // Don't place too close to existing mines (using squared distance to avoid sqrt)
     final minDistThreshold = tileSize * 0.8;
@@ -732,7 +981,6 @@ class BoredGamesGame extends FlameGame
         math.max(1, (goldReward * _upgradeStats.goldGainMult).round());
     gold += reward;
     score += 10;
-    AudioService.instance.playGoldEarned();
 
     // Register kill in combo display
     killComboDisplay.registerKill(
@@ -746,9 +994,10 @@ class BoredGamesGame extends FlameGame
       battleDialogue.onBossDefeated(enemy.displayName);
 
       // Check if this was the final boss
-      final wasFinalBoss = enemy.displayName.toLowerCase().contains('decompiler') ||
-          enemy.displayName.toLowerCase().contains('void') ||
-          (levelConfig?.id ?? 0) >= 50;
+      final wasFinalBoss =
+          enemy.displayName.toLowerCase().contains('decompiler') ||
+              enemy.displayName.toLowerCase().contains('void') ||
+              (levelConfig?.id ?? 0) >= 50;
 
       if (wasFinalBoss) {
         // Stop the epic final boss music
@@ -796,6 +1045,7 @@ class BoredGamesGame extends FlameGame
     // Notify event feed and battle dialogue
     gameEventFeed.bossSpawned(bossName);
     battleDialogue.onBossSpawn(bossName);
+    AudioService.instance.playBossSpawn();
 
     // Check if this is the final boss (Decompiler) - play epic theme
     final isFinalBoss = bossName.toLowerCase().contains('decompiler') ||
@@ -816,6 +1066,7 @@ class BoredGamesGame extends FlameGame
     // Phase 2 = 50% health (triggers at 75% -> 50% transition)
     if (phase == 2) {
       battleDialogue.onBossHalfHealth(bossName);
+      AudioService.instance.playBossPhase();
     }
   }
 
@@ -905,6 +1156,8 @@ class BoredGamesGame extends FlameGame
       _gameEnded = true;
       AudioService.instance.playVictory();
       onVictory?.call();
+    } else {
+      AudioService.instance.playWaveComplete();
     }
 
     _applyVisual(() => visualDirector.notifyWaveComplete(waveNumber));
@@ -957,11 +1210,13 @@ class BoredGamesGame extends FlameGame
 
   void startWave({int count = 6}) {
     enemyManager.startWave(count: count);
-    _applyVisual(() => visualDirector.notifyWaveStart(enemyManager.currentWave, enemyManager.currentModifier));
+    _applyVisual(() => visualDirector.notifyWaveStart(
+        enemyManager.currentWave, enemyManager.currentModifier));
     notifyTutorialWaveStart();
 
     // Notify event feed
     gameEventFeed.waveStarted(enemyManager.currentWave);
+    AudioService.instance.playWaveStart();
 
     // Battle dialogue for big waves
     battleDialogue.onBigWaveStart(enemyManager.currentWave);
@@ -1284,10 +1539,10 @@ class BoredGamesGame extends FlameGame
 
   void exitFocusMode({bool playSfx = true}) {
     if (!_focusMode) return;
-    
+
     // Remove tower boost
     _focusTower?.exitFpsBoost();
-    
+
     _focusTower = null;
     _focusMode = false;
 
@@ -1408,7 +1663,8 @@ class BoredGamesGame extends FlameGame
       _autoWaveTimer = 0;
 
       // Notify event feed
-      gameEventFeed.towerBuilt(towerManager.selectedTowerType.name.toUpperCase());
+      gameEventFeed
+          .towerBuilt(towerManager.selectedTowerType.name.toUpperCase());
 
       // Battle dialogue for first tower
       if (wasFirstTower) {
@@ -1489,8 +1745,8 @@ class BoredGamesGame extends FlameGame
       final scaledWidth = worldWidth * _worldScale;
       final scaledHeight = worldHeight * _worldScale;
       final offsetX = (availableWidth - scaledWidth) / 2;
-      final offsetY = HudComponent.topBarHeight +
-          (availableHeight - scaledHeight) / 2;
+      final offsetY =
+          HudComponent.topBarHeight + (availableHeight - scaledHeight) / 2;
       worldRoot
         ..position = Vector2(offsetX, offsetY)
         ..scale = Vector2.all(_worldScale);
@@ -1504,11 +1760,18 @@ class BoredGamesGame extends FlameGame
 
     if (_threatShakeTimer < _threatShakeDuration) {
       _threatShakeTimer += dt;
-      final progress = (_threatShakeTimer / _threatShakeDuration).clamp(0.0, 1.0);
+      final progress =
+          (_threatShakeTimer / _threatShakeDuration).clamp(0.0, 1.0);
       final decay = 1 - progress;
       _threatShakeOffset = Vector2(
-        (_threatShakeRandom.nextDouble() - 0.5) * 2 * _threatShakeIntensity * decay,
-        (_threatShakeRandom.nextDouble() - 0.5) * 2 * _threatShakeIntensity * decay,
+        (_threatShakeRandom.nextDouble() - 0.5) *
+            2 *
+            _threatShakeIntensity *
+            decay,
+        (_threatShakeRandom.nextDouble() - 0.5) *
+            2 *
+            _threatShakeIntensity *
+            decay,
       );
     } else {
       _threatShakeOffset = Vector2.zero();
@@ -1628,8 +1891,7 @@ class BoredGamesGame extends FlameGame
     final enemies = enemyManager.aliveCount;
     final bullets = bulletManager.activeCount;
     final towers = towerManager.towerCount;
-    final heavyLoad =
-        enemies >= (isTouchLayout ? 24 : 32) ||
+    final heavyLoad = enemies >= (isTouchLayout ? 24 : 32) ||
         bullets >= (isTouchLayout ? 120 : 160) ||
         towers >= (isTouchLayout ? 18 : 26);
 
@@ -1643,7 +1905,8 @@ class BoredGamesGame extends FlameGame
     ImpactEffect.fxScale = fxScale;
     ExplosionEffect.fxScale = fxScale;
     PixelDisintegrationEffect.fxScale = fxScale;
-    PixelDisintegrationEffect.reduceFx = _quality == QualityLevel.medium || heavyLoad;
+    PixelDisintegrationEffect.reduceFx =
+        _quality == QualityLevel.medium || heavyLoad;
     PixelDisintegrationEffect.lowFx = _quality == QualityLevel.low || heavyLoad;
     Projectile.lowFx = _quality == QualityLevel.low || heavyLoad;
     Projectile.allowTrails = _quality == QualityLevel.high && !heavyLoad;
@@ -1687,11 +1950,13 @@ class BoredGamesGame extends FlameGame
 
   bool isWorldPointVisible(Vector2 worldPos, {double padding = 40}) {
     if (!_worldLayoutReady || size.isZero()) return true;
-    final screen = worldToScreen(worldPos);
-    return screen.x >= -padding &&
-        screen.x <= size.x + padding &&
-        screen.y >= -padding &&
-        screen.y <= size.y + padding;
+    // Inline worldToScreen math to avoid per-call Vector2 allocations.
+    final screenX = worldRoot.position.x + (worldPos.x * _worldScale);
+    final screenY = worldRoot.position.y + (worldPos.y * _worldScale);
+    return screenX >= -padding &&
+        screenX <= size.x + padding &&
+        screenY >= -padding &&
+        screenY <= size.y + padding;
   }
 
   void _syncEnemyViewport() {
@@ -1711,7 +1976,7 @@ class BoredGamesGame extends FlameGame
     await StorageService.instance.initialize();
     await UpgradeService.instance.initialize();
     await AudioService.instance.initialize();
-    
+
     _metaStats = UpgradeService.instance.metaStats;
     _upgradeStats = _metaStats;
     final levelId = levelConfig?.id ?? 1;
@@ -1719,12 +1984,14 @@ class BoredGamesGame extends FlameGame
     _progressIndex = DifficultyCurve.progressIndex(levelId: levelId);
     final worldIndex = DifficultyCurve.worldForLevel(levelId);
     final localIndex = DifficultyCurve.localIndexForLevel(levelId);
+    _worldId = worldIndex;
     final tunedGold = DifficultyCurve.startingGold(
       world: worldIndex,
       localIndex: localIndex,
     );
     gold = tunedGold + _upgradeStats.startingGoldBonus;
-    lives = (levelConfig?.startingLives ?? 20) + _upgradeStats.startingLivesBonus;
+    lives =
+        (levelConfig?.startingLives ?? 20) + _upgradeStats.startingLivesBonus;
     _maxLives = lives;
     final qualitySettings = StorageService.instance.loadQualitySettings();
     if (qualitySettings != null) {
@@ -1815,7 +2082,8 @@ class BoredGamesGame extends FlameGame
     );
 
     // Particle system
-    particleEmitter = ParticleEmitter(position: Vector2.zero(), maxParticles: 200);
+    particleEmitter =
+        ParticleEmitter(position: Vector2.zero(), maxParticles: 200);
     GameParticles.instance.setEmitter(particleEmitter);
 
     // Add logical layers; order matters for rendering priority.
@@ -1843,8 +2111,7 @@ class BoredGamesGame extends FlameGame
       enableVignette: false,
       enableScanlines: false,
       enableFlash: false,
-    )
-      ..priority = 1000;
+    )..priority = 1000;
     add(screenEffects);
     await add(screenPostProcessComponent);
 
@@ -1886,14 +2153,15 @@ class BoredGamesGame extends FlameGame
   }
 }
 
-class PerspectiveWorldRoot extends PositionComponent with HasGameRef<BoredGamesGame> {
+class PerspectiveWorldRoot extends PositionComponent
+    with HasGameRef<BoredGamesGame> {
   @override
   void renderTree(Canvas canvas) {
     if (gameRef.focusModeActive) {
       canvas.save();
       final halfW = gameRef.size.x / 2;
       final halfH = gameRef.size.y / 2;
-      
+
       // Perspective Transform
       final matrix = Matrix4.identity()
         ..setEntry(3, 2, 0.0015) // Perspective intensity
@@ -1904,7 +2172,7 @@ class PerspectiveWorldRoot extends PositionComponent with HasGameRef<BoredGamesG
       canvas.translate(halfW, halfH);
       canvas.transform(matrix.storage);
       canvas.translate(-halfW, -halfH);
-      
+
       super.renderTree(canvas);
       canvas.restore();
     } else {

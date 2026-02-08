@@ -4,6 +4,23 @@ import 'package:flutter/material.dart';
 import '../../services/audio_service.dart';
 import 'enemy.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Boss types with unique mechanics
 enum BossType {
   // Mini-bosses (appear at end of each level)
@@ -189,7 +206,7 @@ class Boss extends Enemy {
   double _lastAnnouncementAlpha = -1;
 
   // Cached Random instance to avoid per-frame allocations
-  static final math.Random _random = math.Random();
+  static final _FastRng _random = _FastRng();
 
   // Pre-allocated Vector2 for temporary calculations in render methods
   static final Vector2 _tempOffset = Vector2.zero();
@@ -205,6 +222,7 @@ class Boss extends Enemy {
     super.startPosition,
     super.onDeath,
     super.onReachBase,
+    super.onMoved,
     this.onPhaseChange,
     this.onAbilityUsed,
   }) : _mechanicState = BossMechanicState() {
@@ -1051,7 +1069,7 @@ class Boss extends Enemy {
         double cx = 0, cy = 0;
         for (int j = 0; j < 5; j++) {
           final t = (j + 1) / 5;
-          final jitter = (math.Random(i * 10 + j).nextDouble() - 0.5) * 15;
+          final jitter = (_FastRng(i * 10 + j).nextDouble() - 0.5) * 15;
           cx = math.cos(crackAngle) * crackLength * t + jitter * math.sin(crackAngle);
           cy = math.sin(crackAngle) * crackLength * t + jitter * math.cos(crackAngle);
           _crackPath.lineTo(cx, cy);
@@ -1103,7 +1121,7 @@ class _AuraParticle {
   _AuraParticle({
     required this.startOffset,
     required this.color,
-    required math.Random random,
+    required _FastRng random,
   }) {
     _timer = 0;
     _lifetime = 0.8 + random.nextDouble() * 1.2;
@@ -1147,3 +1165,4 @@ class _AuraParticle {
     canvas.drawCircle(Offset(_posX, _posY), size, _paint);
   }
 }
+

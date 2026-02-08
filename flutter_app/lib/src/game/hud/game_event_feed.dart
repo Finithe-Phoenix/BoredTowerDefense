@@ -169,6 +169,13 @@ class _GameEvent {
   static final Paint _pulseRingPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
+  final TextPainter _textPainter = TextPainter(textDirection: TextDirection.ltr);
+  String _cachedText = '';
+  int _cachedTextColorValue = 0;
+  int _cachedShadowColorValue = 0;
+  int _cachedShadowDarkValue = 0;
+  double _cachedFontSize = 0;
+  double _cachedAlpha = -1;
   double get height => 22.0;
 
   bool get isExpired => _lifetime >= duration;
@@ -198,43 +205,57 @@ class _GameEvent {
     final fontSize = compact ? 10.0 : 11.0;
 
     // Icon based on type
-    final iconPaint = Paint()
-      ..color = color.withOpacity(alpha);
+    _iconPaint.color = color.withOpacity(alpha);
 
     canvas.save();
     canvas.translate(x + slideX, y);
 
     // Icon background
+    _iconBgPaint.color = color.withOpacity(0.2 * alpha);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, iconSize, iconSize),
         const Radius.circular(3),
       ),
-      Paint()..color = color.withOpacity(0.2 * alpha),
+      _iconBgPaint,
     );
 
     // Icon symbol
     _drawIcon(canvas, type, iconSize, color.withOpacity(alpha));
 
     // Message text
-    final textPainter = TextPainter(
-      text: TextSpan(
+    final textColor = Colors.white.withOpacity(0.9 * alpha);
+    final shadowColor = color.withOpacity(0.5 * alpha);
+    final shadowDark = Colors.black.withOpacity(0.8 * alpha);
+    if (_cachedText != message ||
+        _cachedTextColorValue != textColor.value ||
+        _cachedShadowColorValue != shadowColor.value ||
+        _cachedShadowDarkValue != shadowDark.value ||
+        _cachedFontSize != fontSize ||
+        _cachedAlpha != alpha) {
+      _cachedText = message;
+      _cachedTextColorValue = textColor.value;
+      _cachedShadowColorValue = shadowColor.value;
+      _cachedShadowDarkValue = shadowDark.value;
+      _cachedFontSize = fontSize;
+      _cachedAlpha = alpha;
+      _textPainter.text = TextSpan(
         text: message,
         style: TextStyle(
-          color: Colors.white.withOpacity(0.9 * alpha),
+          color: textColor,
           fontSize: fontSize,
           fontWeight: FontWeight.w600,
           letterSpacing: 1,
           shadows: [
-            Shadow(color: color.withOpacity(0.5 * alpha), blurRadius: 6),
-            Shadow(color: Colors.black.withOpacity(0.8 * alpha), blurRadius: 4),
+            Shadow(color: shadowColor, blurRadius: 6),
+            Shadow(color: shadowDark, blurRadius: 4),
           ],
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      );
+      _textPainter.layout();
+    }
 
-    textPainter.paint(canvas, Offset(iconSize + 8, (iconSize - textPainter.height) / 2));
+    _textPainter.paint(canvas, Offset(iconSize + 8, (iconSize - _textPainter.height) / 2));
 
     // Pulsing accent for important events
     if (type == GameEventType.bossSpawn || type == GameEventType.warning) {
@@ -244,7 +265,7 @@ class _GameEvent {
           Rect.fromLTWH(-2, -2, iconSize + 4, iconSize + 4),
           const Radius.circular(5),
         ),
-        Paint()
+        _pulseRingPaint
           ..color = color.withOpacity(0.3 * pulse * alpha)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2,
@@ -257,7 +278,7 @@ class _GameEvent {
   void _drawIcon(Canvas canvas, GameEventType type, double size, Color color) {
     final centerX = size / 2;
     final centerY = size / 2;
-    final paint = Paint()
+    _iconPaint
       ..color = color
       ..strokeWidth = 1.5
       ..style = PaintingStyle.stroke
@@ -268,58 +289,63 @@ class _GameEvent {
         // Wave icon (three horizontal lines)
         for (int i = 0; i < 3; i++) {
           final y = 4.0 + i * 4;
-          canvas.drawLine(Offset(3, y), Offset(size - 3, y), paint);
+          canvas.drawLine(Offset(3, y), Offset(size - 3, y), _iconPaint);
         }
         break;
 
       case GameEventType.waveComplete:
         // Checkmark
-        canvas.drawLine(Offset(3, centerY), Offset(centerX - 1, size - 4), paint..strokeWidth = 2);
-        canvas.drawLine(Offset(centerX - 1, size - 4), Offset(size - 3, 4), paint);
+        _iconPaint.strokeWidth = 2;
+        canvas.drawLine(Offset(3, centerY), Offset(centerX - 1, size - 4), _iconPaint);
+        _iconPaint.strokeWidth = 1.5;
+        canvas.drawLine(Offset(centerX - 1, size - 4), Offset(size - 3, 4), _iconPaint);
         break;
 
       case GameEventType.bossSpawn:
       case GameEventType.bossDefeat:
         // Skull/danger icon
-        canvas.drawCircle(Offset(centerX, centerY - 1), 5, paint);
-        canvas.drawLine(Offset(3, size - 3), Offset(size - 3, size - 3), paint);
+        canvas.drawCircle(Offset(centerX, centerY - 1), 5, _iconPaint);
+        canvas.drawLine(Offset(3, size - 3), Offset(size - 3, size - 3), _iconPaint);
         break;
 
       case GameEventType.towerBuilt:
         // Tower icon (triangle pointing up)
-        canvas.drawLine(Offset(centerX, 2), Offset(2, size - 2), paint);
-        canvas.drawLine(Offset(2, size - 2), Offset(size - 2, size - 2), paint);
-        canvas.drawLine(Offset(size - 2, size - 2), Offset(centerX, 2), paint);
+        canvas.drawLine(Offset(centerX, 2), Offset(2, size - 2), _iconPaint);
+        canvas.drawLine(Offset(2, size - 2), Offset(size - 2, size - 2), _iconPaint);
+        canvas.drawLine(Offset(size - 2, size - 2), Offset(centerX, 2), _iconPaint);
         break;
 
       case GameEventType.ability:
         // Lightning bolt
-        canvas.drawLine(Offset(centerX + 2, 2), Offset(centerX - 2, centerY), paint..strokeWidth = 2);
-        canvas.drawLine(Offset(centerX - 2, centerY), Offset(centerX + 2, centerY), paint);
-        canvas.drawLine(Offset(centerX + 2, centerY), Offset(centerX - 2, size - 2), paint);
+        _iconPaint.strokeWidth = 2;
+        canvas.drawLine(Offset(centerX + 2, 2), Offset(centerX - 2, centerY), _iconPaint);
+        _iconPaint.strokeWidth = 1.5;
+        canvas.drawLine(Offset(centerX - 2, centerY), Offset(centerX + 2, centerY), _iconPaint);
+        canvas.drawLine(Offset(centerX + 2, centerY), Offset(centerX - 2, size - 2), _iconPaint);
         break;
 
       case GameEventType.gold:
         // Coin icon
-        canvas.drawCircle(Offset(centerX, centerY), 5, paint);
-        final dollarPaint = Paint()
-          ..color = color
-          ..strokeWidth = 1.5
-          ..style = PaintingStyle.stroke;
-        canvas.drawLine(Offset(centerX, centerY - 3), Offset(centerX, centerY + 3), dollarPaint);
+        canvas.drawCircle(Offset(centerX, centerY), 5, _iconPaint);
+        _iconPaint.strokeWidth = 1.5;
+        canvas.drawLine(Offset(centerX, centerY - 3), Offset(centerX, centerY + 3), _iconPaint);
         break;
 
       case GameEventType.warning:
         // Exclamation mark
-        canvas.drawLine(Offset(centerX, 3), Offset(centerX, size - 6), paint..strokeWidth = 2);
-        canvas.drawCircle(Offset(centerX, size - 3), 1.5, Paint()..color = color);
+        _iconPaint.strokeWidth = 2;
+        canvas.drawLine(Offset(centerX, 3), Offset(centerX, size - 6), _iconPaint);
+        _iconPaint.strokeWidth = 1.5;
+        canvas.drawCircle(Offset(centerX, size - 3), 1.5, _iconPaint);
         break;
 
       case GameEventType.info:
         // Info icon
-        canvas.drawCircle(Offset(centerX, centerY), 5, paint);
-        canvas.drawLine(Offset(centerX, centerY), Offset(centerX, size - 4), Paint()..color = color..strokeWidth = 2);
-        canvas.drawCircle(Offset(centerX, 4), 1.5, Paint()..color = color);
+        canvas.drawCircle(Offset(centerX, centerY), 5, _iconPaint);
+        _iconPaint.strokeWidth = 2;
+        canvas.drawLine(Offset(centerX, centerY), Offset(centerX, size - 4), _iconPaint);
+        _iconPaint.strokeWidth = 1.5;
+        canvas.drawCircle(Offset(centerX, 4), 1.5, _iconPaint);
         break;
     }
   }

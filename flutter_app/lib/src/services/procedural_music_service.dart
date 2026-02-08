@@ -7,6 +7,23 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Procedural Synthwave Music Generator
 /// Inspired by TTGL, Daft Punk, and TRON soundtracks
 ///
@@ -43,7 +60,7 @@ class ProceduralMusicService {
   Directory? _tempDir;
 
   // Musical constants
-  final _random = math.Random();
+  final _random = _FastRng();
 
   // BPM per world (TRON/synthwave style: 100-140 BPM)
   static const Map<int, int> _worldBPM = {
@@ -2615,3 +2632,4 @@ class _EpicMelodyNote {
     required this.duration,
   });
 }
+

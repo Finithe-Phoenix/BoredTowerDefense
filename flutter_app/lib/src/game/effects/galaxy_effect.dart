@@ -3,6 +3,23 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Spiral galaxy effect for ultimate abilities
 /// Features 7 layers: core, spiral arms, star particles, dust lanes, halo, absorption, expansion
 class GalaxyEffect extends PositionComponent {
@@ -10,7 +27,7 @@ class GalaxyEffect extends PositionComponent {
     required Vector2 position,
     required double galaxySize,
     required double duration,
-  }) : _random = math.Random() {
+  }) : _random = _FastRng() {
     _reset(
       position: position,
       galaxySize: galaxySize,
@@ -92,7 +109,7 @@ class GalaxyEffect extends PositionComponent {
   final List<_DustLane> _dustLanes = [];
   final List<_AbsorptionParticle> _absorptionParticles = [];
   double _time = 0;
-  final math.Random _random;
+  final _FastRng _random;
   bool _counted = false;
   bool _inPool = false;
 
@@ -170,6 +187,8 @@ class GalaxyEffect extends PositionComponent {
 
   // Reusable path for drawing
   final Path _reusablePath = Path();
+  final List<Offset> _dustOuterPoints = [];
+  final List<Offset> _dustInnerPoints = [];
 
   void _markActive() {
     if (_counted) return;
@@ -348,6 +367,14 @@ class GalaxyEffect extends PositionComponent {
     super.render(canvas);
 
     final progress = _time / duration;
+    if (_coreIntensity <= 0 &&
+        _haloAlpha <= 0 &&
+        _spiralArms.isEmpty &&
+        _stars.isEmpty &&
+        _dustLanes.isEmpty &&
+        _absorptionParticles.isEmpty) {
+      return;
+    }
 
     canvas.save();
     canvas.scale(_expansionScale);
@@ -542,8 +569,8 @@ class GalaxyEffect extends PositionComponent {
 
       // Create a curved dust lane shape
       final segments = 10;
-      final List<Offset> outerPoints = [];
-      final List<Offset> innerPoints = [];
+      _dustOuterPoints.clear();
+      _dustInnerPoints.clear();
 
       for (int i = 0; i <= segments; i++) {
         final t = i / segments;
@@ -554,22 +581,26 @@ class GalaxyEffect extends PositionComponent {
         final centerX = math.cos(curveAngle) * r;
         final centerY = math.sin(curveAngle) * r;
 
-        outerPoints.add(Offset(
+        _dustOuterPoints.add(Offset(
           centerX + math.cos(perpAngle) * halfWidth,
           centerY + math.sin(perpAngle) * halfWidth,
         ));
-        innerPoints.add(Offset(
+        _dustInnerPoints.add(Offset(
           centerX - math.cos(perpAngle) * halfWidth,
           centerY - math.sin(perpAngle) * halfWidth,
         ));
       }
 
-      _reusablePath.moveTo(outerPoints.first.dx, outerPoints.first.dy);
-      for (final p in outerPoints.skip(1)) {
-        _reusablePath.lineTo(p.dx, p.dy);
-      }
-      for (final p in innerPoints.reversed) {
-        _reusablePath.lineTo(p.dx, p.dy);
+      if (_dustOuterPoints.isNotEmpty) {
+        _reusablePath.moveTo(_dustOuterPoints.first.dx, _dustOuterPoints.first.dy);
+        for (int i = 1; i < _dustOuterPoints.length; i++) {
+          final p = _dustOuterPoints[i];
+          _reusablePath.lineTo(p.dx, p.dy);
+        }
+        for (int i = _dustInnerPoints.length - 1; i >= 0; i--) {
+          final p = _dustInnerPoints[i];
+          _reusablePath.lineTo(p.dx, p.dy);
+        }
       }
       _reusablePath.close();
 
@@ -838,3 +869,4 @@ class _AbsorptionParticle {
     }
   }
 }
+

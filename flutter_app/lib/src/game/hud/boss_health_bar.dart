@@ -23,10 +23,91 @@ class BossHealthBar extends PositionComponent {
   String _bossName = '';
   int _currentPhase = 1;
 
+  TextPainter? _bossNamePainter;
+  String _bossNameText = '';
+  int _bossNameColorValue = 0;
+  TextPainter? _healthPainter;
+  String _healthText = '';
+  TextPainter? _phasePainter;
+  String _phaseText = '';
+  int _phaseColorValue = 0;
+
   // Visual constants
-  static const double _barWidth = 600;
-  static const double _barHeight = 40;
+  double _barWidth = 520;
+  double _barHeight = 32;
+  double _nameGap = 16;
+  double _healthGap = 10;
+  double _phaseOffsetX = 15;
+  double _phaseDotOffsetY = 15;
+  double _nameFontSize = 20;
+  double _healthFontSize = 14;
+  double _phaseFontSize = 13;
+  double _lastLayoutWidth = -1;
+  double _lastLayoutTopInset = -1;
+  bool _compact = false;
   static const double _borderWidth = 3;
+  static final Paint _phaseDotPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _skullPaint = Paint()
+    ..color = const Color(0xFFFF0066)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _glowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _barBgPaint = Paint();
+  static final Paint _healthFillPaint = Paint();
+  static final Paint _pulsePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _divisionPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _barBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = _borderWidth;
+  static final Paint _accentPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeWidth = 4;
+  Shader? _healthFillShader;
+  double _healthShaderWidth = -1;
+  int _healthShaderPhaseColor = 0;
+
+  void updateLayout({
+    required double screenWidth,
+    required double topInset,
+    required bool compact,
+  }) {
+    if (_lastLayoutWidth == screenWidth &&
+        _lastLayoutTopInset == topInset &&
+        _compact == compact) {
+      return;
+    }
+
+    _lastLayoutWidth = screenWidth;
+    _lastLayoutTopInset = topInset;
+    _compact = compact;
+
+    final widthTarget = screenWidth * (compact ? 0.55 : 0.7);
+    _barWidth = widthTarget.clamp(260.0, 520.0);
+    _barHeight = compact ? 26.0 : 32.0;
+    _nameGap = compact ? 8.0 : 12.0;
+    _healthGap = compact ? 6.0 : 8.0;
+    _phaseOffsetX = compact ? 10.0 : 15.0;
+    _phaseDotOffsetY = compact ? 10.0 : 15.0;
+    _nameFontSize = compact ? 16.0 : 20.0;
+    _healthFontSize = compact ? 12.0 : 14.0;
+    _phaseFontSize = compact ? 11.0 : 13.0;
+
+    position = Vector2(
+      screenWidth / 2,
+      topInset - (compact ? 4.0 : 2.0),
+    );
+
+    _bossNamePainter = null;
+    _healthPainter = null;
+    _phasePainter = null;
+    _healthFillShader = null;
+    _healthShaderWidth = -1;
+  }
 
   /// Update the boss being tracked
   void setBoss(Boss? boss) {
@@ -130,11 +211,8 @@ class BossHealthBar extends PositionComponent {
       const Radius.circular(8),
     );
 
-    final glowPaint = Paint()
-      ..color = _getPhaseColor(_currentPhase).withOpacity(0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-
-    canvas.drawRRect(glowRect, glowPaint);
+    _glowPaint.color = _getPhaseColor(_currentPhase).withOpacity(0.3);
+    canvas.drawRRect(glowRect, _glowPaint);
   }
 
   void _renderHealthBar(Canvas canvas) {
@@ -145,11 +223,9 @@ class BossHealthBar extends PositionComponent {
     );
 
     // Background
-    final bgPaint = Paint()
-      ..color = const Color(0xFF000000).withOpacity(0.8);
     canvas.drawRRect(
       RRect.fromRectAndRadius(barRect, const Radius.circular(6)),
-      bgPaint,
+      _barBgPaint..color = const Color(0xFF000000).withOpacity(0.8),
     );
 
     // Health fill with gradient
@@ -162,55 +238,52 @@ class BossHealthBar extends PositionComponent {
     );
 
     final phaseColor = _getPhaseColor(_currentPhase);
-    final gradient = LinearGradient(
-      colors: [
-        phaseColor,
-        phaseColor.withOpacity(0.6),
-      ],
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-    ).createShader(healthRect);
+    if (_healthFillShader == null ||
+        _healthShaderWidth != healthWidth ||
+        _healthShaderPhaseColor != phaseColor.value) {
+      _healthShaderWidth = healthWidth;
+      _healthShaderPhaseColor = phaseColor.value;
+      _healthFillShader = LinearGradient(
+        colors: [
+          phaseColor,
+          phaseColor.withOpacity(0.6),
+        ],
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+      ).createShader(healthRect);
+    }
 
-    final healthPaint = Paint()..shader = gradient;
     canvas.drawRRect(
       RRect.fromRectAndRadius(healthRect, const Radius.circular(4)),
-      healthPaint,
+      _healthFillPaint..shader = _healthFillShader,
     );
 
     // Animated pulse on health bar
     final pulseAlpha = (math.sin(_animationPhase * 2) * 0.3 + 0.3);
-    final pulsePaint = Paint()
-      ..color = Colors.white.withOpacity(pulseAlpha)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
     canvas.drawRRect(
       RRect.fromRectAndRadius(healthRect, const Radius.circular(4)),
-      pulsePaint,
+      _pulsePaint..color = Colors.white.withOpacity(pulseAlpha),
     );
 
     // Segmented divisions (phase markers)
-    final divisionPaint = Paint()
-      ..color = const Color(0xFF000000).withOpacity(0.6)
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke;
+    _divisionPaint.color = const Color(0xFF000000).withOpacity(0.6);
 
     for (int i = 1; i < 4; i++) {
       final x = -_barWidth / 2 + (_barWidth * i / 4);
       canvas.drawLine(
         Offset(x, -_barHeight / 2),
         Offset(x, _barHeight / 2),
-        divisionPaint,
+        _divisionPaint,
       );
     }
 
     // Border
-    final borderPaint = Paint()
-      ..color = phaseColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _borderWidth;
-
     canvas.drawRRect(
       RRect.fromRectAndRadius(barRect, const Radius.circular(6)),
-      borderPaint,
+      _barBorderPaint
+        ..color = phaseColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _borderWidth,
     );
 
     // Corner accents
@@ -218,7 +291,7 @@ class BossHealthBar extends PositionComponent {
   }
 
   void _renderCornerAccents(Canvas canvas, Rect barRect, Color color) {
-    final accentPaint = Paint()
+    _accentPaint
       ..color = color
       ..strokeWidth = 4
       ..strokeCap = StrokeCap.round
@@ -244,7 +317,7 @@ class BossHealthBar extends PositionComponent {
           corner.dx + (isLeft ? accentLength : -accentLength),
           corner.dy,
         ),
-        accentPaint,
+        _accentPaint,
       );
 
       // Vertical line
@@ -254,114 +327,133 @@ class BossHealthBar extends PositionComponent {
           corner.dx,
           corner.dy + (isTop ? accentLength : -accentLength),
         ),
-        accentPaint,
+        _accentPaint,
       );
     }
   }
 
   void _renderBossName(Canvas canvas) {
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: _bossName,
-        style: TextStyle(
-          color: _getPhaseColor(_currentPhase),
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 3,
-          shadows: [
-            Shadow(
-              color: Colors.black.withOpacity(0.8),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-            Shadow(
-              color: _getPhaseColor(_currentPhase).withOpacity(0.6),
-              blurRadius: 10,
-            ),
-          ],
+    final phaseColor = _getPhaseColor(_currentPhase);
+    if (_bossNamePainter == null ||
+        _bossNameText != _bossName ||
+        _bossNameColorValue != phaseColor.value) {
+      _bossNameText = _bossName;
+      _bossNameColorValue = phaseColor.value;
+      _bossNamePainter = TextPainter(
+        text: TextSpan(
+          text: _bossName,
+          style: TextStyle(
+            color: phaseColor,
+            fontSize: _nameFontSize,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 3,
+            shadows: [
+              Shadow(
+                color: Colors.black.withOpacity(0.8),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+              Shadow(
+                color: phaseColor.withOpacity(0.6),
+                blurRadius: 10,
+              ),
+            ],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    textPainter.layout();
-    textPainter.paint(
+    _bossNamePainter!.paint(
       canvas,
-      Offset(-textPainter.width / 2, -_barHeight / 2 - 35),
+      Offset(
+        -_bossNamePainter!.width / 2,
+        -_barHeight / 2 - _nameGap,
+      ),
     );
 
     // Subtitle: Health percentage
     final healthText = '${(_displayedHealth * 100).toInt()}%';
-    final healthPainter = TextPainter(
-      text: TextSpan(
-        text: healthText,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.9),
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(
-              color: Colors.black.withOpacity(0.8),
-              blurRadius: 3,
-            ),
-          ],
+    if (_healthPainter == null || _healthText != healthText) {
+      _healthText = healthText;
+      _healthPainter = TextPainter(
+        text: TextSpan(
+          text: healthText,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.9),
+            fontSize: _healthFontSize,
+            fontWeight: FontWeight.bold,
+            shadows: [
+              Shadow(
+                color: Colors.black.withOpacity(0.8),
+                blurRadius: 3,
+              ),
+            ],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    healthPainter.layout();
-    healthPainter.paint(
+    _healthPainter!.paint(
       canvas,
-      Offset(-healthPainter.width / 2, _barHeight / 2 + 10),
+      Offset(
+        -_healthPainter!.width / 2,
+        _barHeight / 2 + _healthGap,
+      ),
     );
   }
 
   void _renderPhaseIndicator(Canvas canvas) {
     // Phase indicator on the right side
     final phaseText = 'PHASE $_currentPhase/4';
-    final phasePainter = TextPainter(
-      text: TextSpan(
-        text: phaseText,
-        style: TextStyle(
-          color: _getPhaseColor(_currentPhase),
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 2,
-          shadows: [
-            Shadow(
-              color: Colors.black.withOpacity(0.8),
-              blurRadius: 3,
-            ),
-          ],
+    final phaseColor = _getPhaseColor(_currentPhase);
+    if (_phasePainter == null ||
+        _phaseText != phaseText ||
+        _phaseColorValue != phaseColor.value) {
+      _phaseText = phaseText;
+      _phaseColorValue = phaseColor.value;
+      _phasePainter = TextPainter(
+        text: TextSpan(
+          text: phaseText,
+          style: TextStyle(
+            color: phaseColor,
+            fontSize: _phaseFontSize,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+            shadows: [
+              Shadow(
+                color: Colors.black.withOpacity(0.8),
+                blurRadius: 3,
+              ),
+            ],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    phasePainter.layout();
-    phasePainter.paint(
+    _phasePainter!.paint(
       canvas,
-      Offset(_barWidth / 2 + 15, -phasePainter.height / 2),
+      Offset(_barWidth / 2 + _phaseOffsetX, -_phasePainter!.height / 2),
     );
 
     // Phase indicator dots
     for (int i = 0; i < 4; i++) {
       final isActive = i < _currentPhase;
-      final dotPaint = Paint()
-        ..color = isActive
-            ? _getPhaseColor(_currentPhase)
-            : Colors.grey.withOpacity(0.3)
-        ..style = PaintingStyle.fill;
-
-      if (isActive) {
-        dotPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      }
+      _phaseDotPaint
+        ..color = isActive ? phaseColor : Colors.grey.withOpacity(0.3)
+        ..style = PaintingStyle.fill
+        ..maskFilter =
+            isActive ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
 
       canvas.drawCircle(
-        Offset(_barWidth / 2 + 15 + (i * 12), phasePainter.height / 2 + 15),
+        Offset(
+          _barWidth / 2 + _phaseOffsetX + (i * 12),
+          _phasePainter!.height / 2 + _phaseDotOffsetY,
+        ),
         isActive ? 5 : 4,
-        dotPaint,
+        _phaseDotPaint,
       );
     }
 
@@ -373,7 +465,7 @@ class BossHealthBar extends PositionComponent {
 
   void _renderWarningSkull(Canvas canvas) {
     // Simple skull warning indicator
-    final skullPaint = Paint()
+    _skullPaint
       ..color = const Color(0xFFFF0066)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -382,16 +474,17 @@ class BossHealthBar extends PositionComponent {
     final skullY = 0.0;
 
     // Skull (simplified)
-    canvas.drawCircle(Offset(skullX, skullY - 5), 12, skullPaint);
+    canvas.drawCircle(Offset(skullX, skullY - 5), 12, _skullPaint);
 
     // Crossbones
     canvas.drawLine(
       Offset(skullX - 8, skullY + 10),
       Offset(skullX + 8, skullY + 10),
-      Paint()
+      _barBorderPaint
         ..color = const Color(0xFFFF0066)
         ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round,
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke,
     );
 
     // Pulsing glow
@@ -399,7 +492,7 @@ class BossHealthBar extends PositionComponent {
     canvas.drawCircle(
       Offset(skullX, skullY),
       18,
-      Paint()
+      _glowPaint
         ..color = const Color(0xFFFF0066).withOpacity(glowAlpha * 0.3)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
     );

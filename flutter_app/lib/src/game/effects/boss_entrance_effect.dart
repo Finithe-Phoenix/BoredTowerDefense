@@ -2,6 +2,23 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Epic boss entrance effect with screen shake, particles, and dramatic visuals
 class BossEntranceEffect extends PositionComponent {
   BossEntranceEffect({
@@ -22,19 +39,61 @@ class BossEntranceEffect extends PositionComponent {
   final List<_EntranceParticle> _particles = [];
   static const int _particleCount = 60;
 
+  static final Paint _shockGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _shockRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _shockInnerPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _particleTrailPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _hexRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _lightningGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 6
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _lightningCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Path _hexPath = Path();
+  static final Path _boltPath = Path();
+  static final List<Offset> _hexUnitPoints = _buildHexUnitPoints();
+
+  static List<Offset> _buildHexUnitPoints() {
+    final points = <Offset>[];
+    const sides = 6;
+    for (int i = 0; i < sides; i++) {
+      final angle = (i / sides) * math.pi * 2 - math.pi / 2;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+    }
+    return points;
+  }
+
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
 
     // Initialize particles in a circular pattern
+    final rng = _FastRng();
     for (int i = 0; i < _particleCount; i++) {
       final angle = (i / _particleCount) * math.pi * 2;
-      final speed = 200 + math.Random().nextDouble() * 150;
+      final speed = 200 + rng.nextDouble() * 150;
       _particles.add(_EntranceParticle(
         angle: angle,
         speed: speed,
         color: _bossColor,
-        size: 4 + math.Random().nextDouble() * 6,
+        size: 4 + rng.nextDouble() * 6,
+        lifetime: 1.0 + rng.nextDouble() * 0.8,
       ));
     }
   }
@@ -45,9 +104,11 @@ class BossEntranceEffect extends PositionComponent {
 
     _elapsed += dt;
 
-    // Update particles
-    for (final particle in _particles) {
-      particle.update(dt);
+    // Update particles (only when any could still be active)
+    if (_elapsed < _duration * 0.8) {
+      for (final particle in _particles) {
+        particle.update(dt);
+      }
     }
 
     // Remove effect when done
@@ -61,6 +122,7 @@ class BossEntranceEffect extends PositionComponent {
     super.render(canvas);
 
     final progress = (_elapsed / _duration).clamp(0.0, 1.0);
+    if (progress >= 1.0) return;
 
     // Phase 1: Expanding shockwave (0 - 0.4)
     if (progress < 0.4) {
@@ -86,58 +148,48 @@ class BossEntranceEffect extends PositionComponent {
   void _renderShockwave(Canvas canvas, double progress) {
     final radius = 50 + (progress * 400);
     final alpha = (1 - progress);
+    if (alpha <= 0.01) return;
 
     // Outer glow
-    final glowPaint = Paint()
-      ..color = _bossColor.withOpacity(alpha * 0.4)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
-
-    canvas.drawCircle(Offset.zero, radius, glowPaint);
+    _shockGlowPaint.color = _bossColor.withOpacity(alpha * 0.4);
+    canvas.drawCircle(Offset.zero, radius, _shockGlowPaint);
 
     // Shockwave ring
-    final ringPaint = Paint()
+    _shockRingPaint
       ..color = _bossColor.withOpacity(alpha * 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6 * (1 - progress * 0.5)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-
-    canvas.drawCircle(Offset.zero, radius, ringPaint);
+      ..strokeWidth = 6 * (1 - progress * 0.5);
+    canvas.drawCircle(Offset.zero, radius, _shockRingPaint);
 
     // Inner bright ring
-    final innerPaint = Paint()
+    _shockInnerPaint
       ..color = Colors.white.withOpacity(alpha * 0.8)
-      ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
-
-    canvas.drawCircle(Offset.zero, radius, innerPaint);
+    canvas.drawCircle(Offset.zero, radius, _shockInnerPaint);
   }
 
   void _renderParticles(Canvas canvas) {
     for (final particle in _particles) {
       if (!particle.isActive) continue;
+      if (particle.alpha <= 0.01) continue;
 
       final px = math.cos(particle.angle) * particle.distance;
       final py = math.sin(particle.angle) * particle.distance;
 
       // Particle trail
-      final trailPaint = Paint()
-        ..color = particle.color.withOpacity(particle.alpha * 0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
+      _particleTrailPaint.color =
+          particle.color.withOpacity(particle.alpha * 0.4);
       canvas.drawCircle(
         Offset(px, py),
         particle.size * 1.5,
-        trailPaint,
+        _particleTrailPaint,
       );
 
       // Particle core
-      final corePaint = Paint()
-        ..color = particle.color.withOpacity(particle.alpha);
-
+      _particleCorePaint.color = particle.color.withOpacity(particle.alpha);
       canvas.drawCircle(
         Offset(px, py),
         particle.size,
-        corePaint,
+        _particleCorePaint,
       );
     }
   }
@@ -148,15 +200,14 @@ class BossEntranceEffect extends PositionComponent {
       final ringProgress = (progress + i * 0.2).clamp(0.0, 1.0);
       final radius = 80 + (ringProgress * 200);
       final alpha = (1 - ringProgress) * 0.5;
+      if (alpha <= 0.02) continue;
 
       // Warning ring (hexagonal)
-      final path = Path();
-      const sides = 6;
-      for (int j = 0; j < sides; j++) {
-        final angle = (j / sides) * math.pi * 2 - math.pi / 2;
-        final x = math.cos(angle) * radius;
-        final y = math.sin(angle) * radius;
-
+      final path = _hexPath..reset();
+      for (int j = 0; j < _hexUnitPoints.length; j++) {
+        final p = _hexUnitPoints[j];
+        final x = p.dx * radius;
+        final y = p.dy * radius;
         if (j == 0) {
           path.moveTo(x, y);
         } else {
@@ -165,18 +216,12 @@ class BossEntranceEffect extends PositionComponent {
       }
       path.close();
 
-      final hexPaint = Paint()
-        ..color = const Color(0xFFFF0066).withOpacity(alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-      canvas.drawPath(path, hexPaint);
+      _hexRingPaint.color = const Color(0xFFFF0066).withOpacity(alpha);
+      canvas.drawPath(path, _hexRingPaint);
     }
   }
 
   void _renderLightning(Canvas canvas, double progress) {
-    final random = math.Random(42); // Fixed seed for consistent pattern
     final boltCount = 8;
 
     for (int i = 0; i < boltCount; i++) {
@@ -189,11 +234,12 @@ class BossEntranceEffect extends PositionComponent {
       final endX = math.cos(angle) * distance;
       final endY = math.sin(angle) * distance;
 
-      final boltPath = Path();
+      final boltPath = _boltPath..reset();
       boltPath.moveTo(startX, startY);
 
       // Add zigzag segments
       final segments = 6;
+      int state = ((progress * 100000).toInt() ^ (i * 1315423911)) & 0x7fffffff;
       for (int j = 1; j <= segments; j++) {
         final t = j / segments;
         final x = startX + (endX - startX) * t;
@@ -201,7 +247,8 @@ class BossEntranceEffect extends PositionComponent {
 
         // Random offset perpendicular to bolt direction
         final perpAngle = angle + math.pi / 2;
-        final offset = (random.nextDouble() - 0.5) * 30;
+        state = _lcgNext(state);
+        final offset = (_lcgUnit(state) - 0.5) * 30;
         final offsetX = math.cos(perpAngle) * offset;
         final offsetY = math.sin(perpAngle) * offset;
 
@@ -210,22 +257,12 @@ class BossEntranceEffect extends PositionComponent {
 
       // Render lightning
       final alpha = (1 - progress) * 0.6;
-      final glowPaint = Paint()
-        ..color = Colors.white.withOpacity(alpha * 0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      if (alpha <= 0.02) continue;
+      _lightningGlowPaint.color = Colors.white.withOpacity(alpha * 0.5);
+      canvas.drawPath(boltPath, _lightningGlowPaint);
 
-      canvas.drawPath(boltPath, glowPaint);
-
-      final corePaint = Paint()
-        ..color = Colors.white.withOpacity(alpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round;
-
-      canvas.drawPath(boltPath, corePaint);
+      _lightningCorePaint.color = Colors.white.withOpacity(alpha);
+      canvas.drawPath(boltPath, _lightningCorePaint);
     }
   }
 
@@ -252,9 +289,9 @@ class _EntranceParticle {
     required this.speed,
     required this.color,
     required this.size,
+    required this.lifetime,
   }) : distance = 0,
-       _timer = 0,
-       lifetime = 1.0 + math.Random().nextDouble() * 0.8;
+       _timer = 0;
 
   final double angle;
   final double speed;
@@ -277,3 +314,4 @@ class _EntranceParticle {
     distance += speed * dt * speedMultiplier;
   }
 }
+

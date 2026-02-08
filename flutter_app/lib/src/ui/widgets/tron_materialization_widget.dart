@@ -1,6 +1,23 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Pattern type for the wireframe materialization
 enum TronPattern {
   grid,
@@ -317,7 +334,7 @@ class _TronMaterializationWidgetState extends State<TronMaterializationWidget>
 
   void _generateParticles(Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final random = math.Random(42);
+    final random = _FastRng(42);
 
     final particleCount = widget.reducedMotion ? 10 : 30;
 
@@ -393,14 +410,35 @@ class _TronMaterializationPainter extends CustomPainter {
     required this.reducedMotion,
   });
 
+  static final Paint _glowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _trailPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _pointPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _particleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _particleCorePaint = Paint();
+  static final Map<int, Shader> _trailShaderCache = {};
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Fade out effect for lines after materialization completes
     final lineFadeOut = (progress > 0.7
             ? 1.0 - ((progress - 0.7) / 0.3)
             : 1.0)
         .clamp(0.0, 1.0)
         .toDouble();
+    if (lineFadeOut <= 0.01) return;
 
     // Draw wireframe lines
     for (final line in lines) {
@@ -429,26 +467,21 @@ class _TronMaterializationPainter extends CustomPainter {
 
   void _drawWireframeLine(
       Canvas canvas, _WireframeLine line, double lineProgress, double fadeOut) {
+    if (fadeOut <= 0.01) return;
     final currentEnd = Offset.lerp(line.start, line.end, lineProgress)!;
 
     // Glow (skip if reduced motion)
     if (!reducedMotion) {
-      final glowPaint = Paint()
-        ..color = primaryColor.withOpacity(0.3 * fadeOut)
-        ..strokeWidth = 4
-        ..style = PaintingStyle.stroke
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-      canvas.drawLine(line.start, currentEnd, glowPaint);
+      _glowPaint.color = primaryColor.withOpacity(0.3 * fadeOut);
+      canvas.drawLine(line.start, currentEnd, _glowPaint);
     }
 
     // Main line
-    final linePaint = Paint()
+    _linePaint
       ..color = primaryColor.withOpacity(fadeOut)
-      ..strokeWidth = reducedMotion ? 1.0 : 1.5
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = reducedMotion ? 1.0 : 1.5;
 
-    canvas.drawLine(line.start, currentEnd, linePaint);
+    canvas.drawLine(line.start, currentEnd, _linePaint);
   }
 
   void _drawLightTrail(Canvas canvas, _WireframeLine line, double progress) {
@@ -462,29 +495,40 @@ class _TronMaterializationPainter extends CustomPainter {
     final endPoint = Offset.lerp(line.start, line.end, trailEnd)!;
 
     // Gradient trail
-    final trailPaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          secondaryColor.withOpacity(0),
-          secondaryColor.withOpacity(0.8),
-          Colors.white,
-        ],
-        stops: const [0.0, 0.6, 1.0],
-      ).createShader(Rect.fromPoints(startPoint, endPoint))
-      ..strokeWidth = 3
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-    canvas.drawLine(startPoint, endPoint, trailPaint);
+    final dx = endPoint.dx - startPoint.dx;
+    final dy = endPoint.dy - startPoint.dy;
+    final length = math.sqrt(dx * dx + dy * dy);
+    if (length > 0.01) {
+      final lenKey = (length * 4).round();
+      final shaderKey = (secondaryColor.value << 8) ^ lenKey;
+      final shader = _trailShaderCache.putIfAbsent(
+        shaderKey,
+        () {
+          if (_trailShaderCache.length > 128) {
+            _trailShaderCache.clear();
+          }
+          return LinearGradient(
+          colors: [
+            secondaryColor.withOpacity(0),
+            secondaryColor.withOpacity(0.8),
+            Colors.white,
+          ],
+          stops: const [0.0, 0.6, 1.0],
+        ).createShader(Rect.fromLTWH(0, 0, lenKey / 4.0, 1));
+        },
+      );
+      _trailPaint.shader = shader;
+      canvas.save();
+      canvas.translate(startPoint.dx, startPoint.dy);
+      canvas.rotate(math.atan2(dy, dx));
+      canvas.drawLine(Offset.zero, Offset(length, 0), _trailPaint);
+      canvas.restore();
+      _trailPaint.shader = null;
+    }
 
     // Bright leading point
-    final pointPaint = Paint()
-      ..color = Colors.white
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-    canvas.drawCircle(endPoint, 3, pointPaint);
+    _pointPaint.color = Colors.white;
+    canvas.drawCircle(endPoint, 3, _pointPaint);
   }
 
   void _drawParticle(Canvas canvas, _LightParticle particle, double progress) {
@@ -492,19 +536,16 @@ class _TronMaterializationPainter extends CustomPainter {
     if (age > 0.4) return;
 
     final alpha = (1.0 - age / 0.4).clamp(0.0, 1.0);
+    if (alpha <= 0.01) return;
     final particleSize = 2.0 + alpha * 2.0;
 
     // Glow
-    final glowPaint = Paint()
-      ..color = secondaryColor.withOpacity(alpha * 0.6)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-    canvas.drawCircle(particle.position, particleSize * 2, glowPaint);
+    _particleGlowPaint.color = secondaryColor.withOpacity(alpha * 0.6);
+    canvas.drawCircle(particle.position, particleSize * 2, _particleGlowPaint);
 
     // Core
-    final corePaint = Paint()..color = Colors.white.withOpacity(alpha);
-
-    canvas.drawCircle(particle.position, particleSize, corePaint);
+    _particleCorePaint.color = Colors.white.withOpacity(alpha);
+    canvas.drawCircle(particle.position, particleSize, _particleCorePaint);
   }
 
   @override
@@ -538,3 +579,4 @@ class _LightParticle {
     required this.velocity,
   });
 }
+

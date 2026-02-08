@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 // =============================================================================
 // CACHED STATIC PAINTS - Avoid per-frame allocations
 // =============================================================================
@@ -37,6 +39,16 @@ final Paint _holoFragmentGlowPaint = Paint()
   ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
 final Paint _holoGlitchPaint = Paint();
 final Path _reusablePath = Path();
+final List<Offset> _unitHexShield = List<Offset>.unmodifiable(_buildUnitHexShield());
+
+List<Offset> _buildUnitHexShield() {
+  final points = <Offset>[];
+  for (int i = 0; i < 6; i++) {
+    final angle = i * math.pi / 3 - math.pi / 6;
+    points.add(Offset(math.cos(angle), math.sin(angle)));
+  }
+  return points;
+}
 
 // Cached blur filters
 final Map<int, MaskFilter> _blurCache = {};
@@ -69,7 +81,7 @@ class DebrisParticles extends PositionComponent {
     required this.color,
     required this.duration,
     required this.intensity,
-  }) : _random = math.Random() {
+  }) : _rngState = 0x6d2b79f5 {
     _reset(
       position: position,
       areaSize: areaSize,
@@ -156,9 +168,17 @@ class DebrisParticles extends PositionComponent {
   final List<_HoloDataFragment> _holoFragments = [];
 
   double _time = 0;
-  final math.Random _random;
+  int _rngState;
+  int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  double _nextUnit() {
+    _rngState = _lcgNext(_rngState);
+    return _rngState / 0x7fffffff;
+  }
+  int _nextInt(int max) => (_nextUnit() * max).floor();
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Spawn timers
   double _metalSpawnTimer = 0;
@@ -251,6 +271,17 @@ class DebrisParticles extends PositionComponent {
     super.update(dt);
 
     if (lowFx && intensity < 0.3) return;
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _time += dt;
 
@@ -365,6 +396,7 @@ class DebrisParticles extends PositionComponent {
 
   void _spawnParticles(double dt) {
     final spawnRate = intensity * (lowFx ? 0.3 : (reduceFx ? 0.6 : 1.0));
+    if (spawnRate <= 0.01) return;
 
     // Layer 1: Metal fragments
     final maxMetal = _scaledCount(12);
@@ -424,111 +456,111 @@ class DebrisParticles extends PositionComponent {
   // ===========================================================================
 
   _MetalFragment _createMetalFragment() {
-    final angle = _random.nextDouble() * math.pi * 2;
-    final dist = _random.nextDouble() * areaSize * 0.5;
+    final angle = _nextUnit() * math.pi * 2;
+    final dist = _nextUnit() * areaSize * 0.5;
     return _MetalFragment(
       x: math.cos(angle) * dist,
       y: math.sin(angle) * dist,
-      velocityX: (_random.nextDouble() - 0.5) * 15,
-      velocityY: -20 - _random.nextDouble() * 30,
-      size: 2 + _random.nextDouble() * 3,
-      rotation: _random.nextDouble() * math.pi * 2,
-      rotationSpeed: (_random.nextDouble() - 0.5) * 4,
-      lifetime: 1.5 + _random.nextDouble() * 1.5,
-      wobblePhase: _random.nextDouble() * math.pi * 2,
-      wobbleSpeed: 2 + _random.nextDouble() * 3,
-      wobbleAmount: 3 + _random.nextDouble() * 5,
+      velocityX: (_nextUnit() - 0.5) * 15,
+      velocityY: -20 - _nextUnit() * 30,
+      size: 2 + _nextUnit() * 3,
+      rotation: _nextUnit() * math.pi * 2,
+      rotationSpeed: (_nextUnit() - 0.5) * 4,
+      lifetime: 1.5 + _nextUnit() * 1.5,
+      wobblePhase: _nextUnit() * math.pi * 2,
+      wobbleSpeed: 2 + _nextUnit() * 3,
+      wobbleAmount: 3 + _nextUnit() * 5,
       color: _techColor,
-      shape: _random.nextInt(3), // 0=square, 1=triangle, 2=diamond
+      shape: _nextInt(3), // 0=square, 1=triangle, 2=diamond
     );
   }
 
   _HotEmber _createHotEmber() {
-    final angle = _random.nextDouble() * math.pi * 2;
-    final dist = _random.nextDouble() * areaSize * 0.4;
+    final angle = _nextUnit() * math.pi * 2;
+    final dist = _nextUnit() * areaSize * 0.4;
     return _HotEmber(
       x: math.cos(angle) * dist,
       y: math.sin(angle) * dist,
-      velocityX: (_random.nextDouble() - 0.5) * 10,
-      velocityY: -15 - _random.nextDouble() * 25,
-      size: 2 + _random.nextDouble() * 2.5,
-      lifetime: 2 + _random.nextDouble() * 2,
-      pulsePhase: _random.nextDouble() * math.pi * 2,
-      pulseSpeed: 4 + _random.nextDouble() * 4,
-      wobblePhase: _random.nextDouble() * math.pi * 2,
-      wobbleAmount: 2 + _random.nextDouble() * 4,
-      color: _random.nextDouble() > 0.5 ? _hotColor : _emberColor,
+      velocityX: (_nextUnit() - 0.5) * 10,
+      velocityY: -15 - _nextUnit() * 25,
+      size: 2 + _nextUnit() * 2.5,
+      lifetime: 2 + _nextUnit() * 2,
+      pulsePhase: _nextUnit() * math.pi * 2,
+      pulseSpeed: 4 + _nextUnit() * 4,
+      wobblePhase: _nextUnit() * math.pi * 2,
+      wobbleAmount: 2 + _nextUnit() * 4,
+      color: _nextUnit() > 0.5 ? _hotColor : _emberColor,
     );
   }
 
   _HexShieldPiece _createHexShieldPiece() {
-    final angle = _random.nextDouble() * math.pi * 2;
-    final dist = _random.nextDouble() * areaSize * 0.6;
+    final angle = _nextUnit() * math.pi * 2;
+    final dist = _nextUnit() * areaSize * 0.6;
     return _HexShieldPiece(
       x: math.cos(angle) * dist,
       y: math.sin(angle) * dist,
-      velocityX: (_random.nextDouble() - 0.5) * 12,
-      velocityY: -12 - _random.nextDouble() * 20,
-      size: 5 + _random.nextDouble() * 6,
-      rotation: _random.nextDouble() * math.pi * 2,
-      rotationSpeed: (_random.nextDouble() - 0.5) * 2,
-      lifetime: 2.5 + _random.nextDouble() * 2,
-      wobblePhase: _random.nextDouble() * math.pi * 2,
-      wobbleAmount: 4 + _random.nextDouble() * 6,
+      velocityX: (_nextUnit() - 0.5) * 12,
+      velocityY: -12 - _nextUnit() * 20,
+      size: 5 + _nextUnit() * 6,
+      rotation: _nextUnit() * math.pi * 2,
+      rotationSpeed: (_nextUnit() - 0.5) * 2,
+      lifetime: 2.5 + _nextUnit() * 2,
+      wobblePhase: _nextUnit() * math.pi * 2,
+      wobbleAmount: 4 + _nextUnit() * 6,
       color: _techColor,
-      flickerPhase: _random.nextDouble() * math.pi * 2,
-      isBroken: _random.nextDouble() > 0.6,
+      flickerPhase: _nextUnit() * math.pi * 2,
+      isBroken: _nextUnit() > 0.6,
     );
   }
 
   _ElectricalSpark _createElectricalSpark() {
-    final angle = _random.nextDouble() * math.pi * 2;
-    final dist = _random.nextDouble() * areaSize * 0.5;
+    final angle = _nextUnit() * math.pi * 2;
+    final dist = _nextUnit() * areaSize * 0.5;
     return _ElectricalSpark(
       x: math.cos(angle) * dist,
       y: math.sin(angle) * dist,
-      velocityX: (_random.nextDouble() - 0.5) * 25,
-      velocityY: -25 - _random.nextDouble() * 35,
-      size: 1.5 + _random.nextDouble() * 2,
-      lifetime: 0.5 + _random.nextDouble() * 0.8,
-      color: _random.nextDouble() > 0.3 ? _techColor : Colors.white,
-      arcLength: 3 + _random.nextDouble() * 6,
-      arcAngle: _random.nextDouble() * math.pi * 2,
-      flickerSpeed: 15 + _random.nextDouble() * 25,
+      velocityX: (_nextUnit() - 0.5) * 25,
+      velocityY: -25 - _nextUnit() * 35,
+      size: 1.5 + _nextUnit() * 2,
+      lifetime: 0.5 + _nextUnit() * 0.8,
+      color: _nextUnit() > 0.3 ? _techColor : Colors.white,
+      arcLength: 3 + _nextUnit() * 6,
+      arcAngle: _nextUnit() * math.pi * 2,
+      flickerSpeed: 15 + _nextUnit() * 25,
     );
   }
 
   _SmokeWisp _createSmokeWisp() {
-    final angle = _random.nextDouble() * math.pi * 2;
-    final dist = _random.nextDouble() * areaSize * 0.3;
+    final angle = _nextUnit() * math.pi * 2;
+    final dist = _nextUnit() * areaSize * 0.3;
     return _SmokeWisp(
       x: math.cos(angle) * dist,
       y: math.sin(angle) * dist,
-      velocityY: -8 - _random.nextDouble() * 12,
-      size: 8 + _random.nextDouble() * 12,
-      lifetime: 3 + _random.nextDouble() * 2,
-      driftPhase: _random.nextDouble() * math.pi * 2,
-      driftAmount: 10 + _random.nextDouble() * 15,
-      expansionRate: 0.3 + _random.nextDouble() * 0.4,
+      velocityY: -8 - _nextUnit() * 12,
+      size: 8 + _nextUnit() * 12,
+      lifetime: 3 + _nextUnit() * 2,
+      driftPhase: _nextUnit() * math.pi * 2,
+      driftAmount: 10 + _nextUnit() * 15,
+      expansionRate: 0.3 + _nextUnit() * 0.4,
     );
   }
 
   _HoloDataFragment _createHoloDataFragment() {
-    final angle = _random.nextDouble() * math.pi * 2;
-    final dist = _random.nextDouble() * areaSize * 0.5;
+    final angle = _nextUnit() * math.pi * 2;
+    final dist = _nextUnit() * areaSize * 0.5;
     return _HoloDataFragment(
       x: math.cos(angle) * dist,
       y: math.sin(angle) * dist,
-      velocityX: (_random.nextDouble() - 0.5) * 18,
-      velocityY: -18 - _random.nextDouble() * 28,
-      size: 3 + _random.nextDouble() * 4,
-      lifetime: 1.2 + _random.nextDouble() * 1.5,
-      wobblePhase: _random.nextDouble() * math.pi * 2,
-      wobbleAmount: 3 + _random.nextDouble() * 5,
+      velocityX: (_nextUnit() - 0.5) * 18,
+      velocityY: -18 - _nextUnit() * 28,
+      size: 3 + _nextUnit() * 4,
+      lifetime: 1.2 + _nextUnit() * 1.5,
+      wobblePhase: _nextUnit() * math.pi * 2,
+      wobbleAmount: 3 + _nextUnit() * 5,
       color: _holoColor,
-      glitchIntensity: 0.3 + _random.nextDouble() * 0.7,
-      glitchSpeed: 10 + _random.nextDouble() * 20,
-      rgbOffset: 1 + _random.nextDouble() * 3,
+      glitchIntensity: 0.3 + _nextUnit() * 0.7,
+      glitchSpeed: 10 + _nextUnit() * 20,
+      rgbOffset: 1 + _nextUnit() * 3,
     );
   }
 
@@ -538,14 +570,24 @@ class DebrisParticles extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     if (lowFx && intensity < 0.3) return;
+    if (_metalFragments.isEmpty &&
+        _hotEmbers.isEmpty &&
+        _hexShieldPieces.isEmpty &&
+        _electricalSparks.isEmpty &&
+        _smokeWisps.isEmpty &&
+        _holoFragments.isEmpty) {
+      return;
+    }
 
     // Calculate fade out near end of duration
     final fadeOut = duration > 10
         ? 1.0
         : (_time < duration - 0.5 ? 1.0 : (duration - _time) / 0.5).clamp(0.0, 1.0);
+    if (fadeOut <= 0.01) return;
 
     // Layer 5: Smoke wisps (behind everything)
     if (!lowFx) {
@@ -568,6 +610,17 @@ class DebrisParticles extends PositionComponent {
     if (!reduceFx) {
       _renderHoloDataFragments(canvas, fadeOut);
     }
+  }
+
+  bool _isOffscreen({double padding = 80}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   void _renderMetalFragments(Canvas canvas, double fadeOut) {
@@ -630,9 +683,10 @@ class DebrisParticles extends PositionComponent {
       final effectiveSize = ember.size * pulse;
 
       // Trail
-      if (!lowFx && ember.trailX.isNotEmpty) {
-        for (int i = 0; i < ember.trailX.length; i++) {
-          final t = i / ember.trailX.length;
+      if (!lowFx && ember.trailCount > 1) {
+        final count = ember.trailCount;
+        for (int i = 0; i < count; i++) {
+          final t = i / count;
           final trailAlpha = alpha * (1 - t) * 0.4;
           final trailSize = effectiveSize * (1 - t * 0.6);
 
@@ -641,9 +695,11 @@ class DebrisParticles extends PositionComponent {
             ..strokeWidth = trailSize;
 
           if (i > 0) {
+            final prevIdx = ember.trailIndex(i - 1);
+            final idx = ember.trailIndex(i);
             canvas.drawLine(
-              Offset(ember.trailX[i - 1], ember.trailY[i - 1]),
-              Offset(ember.trailX[i], ember.trailY[i]),
+              Offset(ember.trailX[prevIdx], ember.trailY[prevIdx]),
+              Offset(ember.trailX[idx], ember.trailY[idx]),
               _emberTrailPaint,
             );
           }
@@ -708,12 +764,11 @@ class DebrisParticles extends PositionComponent {
 
   void _drawHexagon(Canvas canvas, double size, Paint paint, bool broken) {
     _reusablePath.reset();
-    final skipSide = broken ? _random.nextInt(6) : -1;
+    final skipSide = broken ? _nextInt(6) : -1;
 
-    for (int i = 0; i < 6; i++) {
-      final angle = i * math.pi / 3 - math.pi / 6;
-      final px = math.cos(angle) * size * 0.5;
-      final py = math.sin(angle) * size * 0.5;
+    for (int i = 0; i < _unitHexShield.length; i++) {
+      final px = _unitHexShield[i].dx * size * 0.5;
+      final py = _unitHexShield[i].dy * size * 0.5;
 
       if (i == 0) {
         _reusablePath.moveTo(px, py);
@@ -742,8 +797,8 @@ class DebrisParticles extends PositionComponent {
       final y = spark.currentY;
 
       // Draw arc/streak
-      final arcEndX = x + math.cos(spark.arcAngle) * spark.arcLength;
-      final arcEndY = y + math.sin(spark.arcAngle) * spark.arcLength;
+      final arcEndX = x + spark.dirX * spark.arcLength;
+      final arcEndY = y + spark.dirY * spark.arcLength;
 
       // Glow
       if (!lowFx) {
@@ -998,8 +1053,8 @@ class _HotEmber {
     required this.color,
   }) : _remainingLife = lifetime,
        currentPulse = pulsePhase,
-       trailX = [],
-       trailY = [];
+       trailX = List<double>.filled(maxTrailLength, 0.0),
+       trailY = List<double>.filled(maxTrailLength, 0.0);
 
   double x;
   double y;
@@ -1019,20 +1074,32 @@ class _HotEmber {
   final List<double> trailX;
   final List<double> trailY;
   static const int maxTrailLength = 6;
+  int _trailHead = 0;
+  int _trailCount = 0;
 
   bool get isAlive => _remainingLife > 0;
   double get alpha => (_remainingLife / lifetime).clamp(0.0, 1.0);
   double get currentX => x + _wobbleOffset;
   double get currentY => y;
+  int get trailCount => _trailCount;
+
+  int trailIndex(int i) {
+    if (_trailCount == 0) return 0;
+    var start = _trailHead - _trailCount;
+    if (start < 0) {
+      start += maxTrailLength;
+    }
+    return (start + i) % maxTrailLength;
+  }
 
   void update(double dt, double time) {
     // Update trail
-    if (trailX.length >= maxTrailLength) {
-      trailX.removeAt(0);
-      trailY.removeAt(0);
+    trailX[_trailHead] = currentX;
+    trailY[_trailHead] = currentY;
+    _trailHead = (_trailHead + 1) % maxTrailLength;
+    if (_trailCount < maxTrailLength) {
+      _trailCount++;
     }
-    trailX.add(currentX);
-    trailY.add(currentY);
 
     x += velocityX * dt;
     y += velocityY * dt;
@@ -1122,7 +1189,9 @@ class _ElectricalSpark {
     required this.arcLength,
     required this.arcAngle,
     required this.flickerSpeed,
-  }) : _remainingLife = lifetime,
+  }) : dirX = math.cos(arcAngle),
+       dirY = math.sin(arcAngle),
+       _remainingLife = lifetime,
        _flickerTime = 0;
 
   double x;
@@ -1134,6 +1203,8 @@ class _ElectricalSpark {
   Color color;
   double arcLength;
   double arcAngle;
+  double dirX;
+  double dirY;
   double flickerSpeed;
   double _remainingLife;
   double _flickerTime;
@@ -1156,6 +1227,8 @@ class _ElectricalSpark {
 
     // Randomly change arc direction
     arcAngle += (math.sin(time * 10) * 0.5) * dt;
+    dirX = math.cos(arcAngle);
+    dirY = math.sin(arcAngle);
 
     _flickerTime += dt;
     _remainingLife -= dt;

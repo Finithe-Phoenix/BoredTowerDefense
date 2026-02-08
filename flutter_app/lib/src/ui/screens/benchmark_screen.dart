@@ -12,6 +12,23 @@ import '../theme/neon_theme.dart';
 import '../widgets/cyber_grid_background.dart';
 import '../widgets/tron_button.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Benchmark screen that auto-plays the game to stress test
 /// both device performance and game functionality
 class BenchmarkScreen extends StatefulWidget {
@@ -293,7 +310,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       }
 
       // FALLBACK: Try random positions if smart placement fails
-      final random = math.Random();
+      final random = _FastRng();
       final tileSize = game.tileSize;
 
       for (int attempt = 0; attempt < 20; attempt++) {
@@ -913,3 +930,4 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
     return (letter: 'F', color: NeonColors.red);
   }
 }
+

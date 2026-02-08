@@ -30,7 +30,7 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
   final List<_WarpLine> _warpLines = [];
   final List<_EnergyParticle> _particles = [];
   final List<_Constellation> _constellations = [];
-  final math.Random _random = math.Random();
+  late final _FastRng _rng = _FastRng(DateTime.now().millisecondsSinceEpoch);
   double _glitchIntensity = 0;
 
   @override
@@ -69,22 +69,22 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
 
     // Initialize stars (distant background)
     for (int i = 0; i < 200; i++) {
-      _stars.add(_Star.random(_random));
+      _stars.add(_Star.random(_rng));
     }
 
     // Initialize warp lines
     for (int i = 0; i < 30; i++) {
-      _warpLines.add(_WarpLine.random(_random));
+      _warpLines.add(_WarpLine.random(_rng));
     }
 
     // Initialize floating particles
     for (int i = 0; i < 80; i++) {
-      _particles.add(_EnergyParticle.random(_random));
+      _particles.add(_EnergyParticle.random(_rng));
     }
 
     // Initialize constellations (connecting lines between stars)
     for (int i = 0; i < 15; i++) {
-      _constellations.add(_Constellation.random(_random));
+      _constellations.add(_Constellation.random(_rng));
     }
   }
 
@@ -207,6 +207,23 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
 
 // ==================== DATA CLASSES ====================
 
+class _FastRng {
+  int _state;
+
+  _FastRng(int seed) : _state = seed & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 class _Star {
   double x, y;
   double size;
@@ -214,6 +231,7 @@ class _Star {
   double twinkleSpeed;
   double brightness;
   Color color;
+  final MaskFilter glowMask;
 
   _Star({
     required this.x,
@@ -223,23 +241,27 @@ class _Star {
     required this.twinkleSpeed,
     required this.brightness,
     required this.color,
+    required this.glowMask,
   });
 
-  factory _Star.random(math.Random r) {
+  factory _Star.random(_FastRng r) {
     final colors = [Colors.white, Colors.white, NeonColors.cyan, NeonColors.blue];
+    final size = 0.5 + r.nextDouble() * 2.5;
     return _Star(
       x: r.nextDouble(),
       y: r.nextDouble(),
-      size: 0.5 + r.nextDouble() * 2.5,
+      size: size,
       twinklePhase: r.nextDouble() * math.pi * 2,
       twinkleSpeed: 0.5 + r.nextDouble() * 2,
       brightness: 0.3 + r.nextDouble() * 0.7,
       color: colors[r.nextInt(colors.length)],
+      glowMask: MaskFilter.blur(BlurStyle.normal, size * 2),
     );
   }
 }
 
 class _WarpLine {
+  static final _FastRng _rng = _FastRng(0x51f1e3);
   double angle;
   double startRadius;
   double length;
@@ -256,7 +278,7 @@ class _WarpLine {
     required this.color,
   });
 
-  factory _WarpLine.random(math.Random r) {
+  factory _WarpLine.random(_FastRng r) {
     return _WarpLine(
       angle: r.nextDouble() * math.pi * 2,
       startRadius: 0.15 + r.nextDouble() * 0.1,
@@ -271,12 +293,13 @@ class _WarpLine {
     progress += speed * dt;
     if (progress > 1) {
       progress = 0;
-      angle = math.Random().nextDouble() * math.pi * 2;
+      angle = _rng.nextDouble() * math.pi * 2;
     }
   }
 }
 
 class _EnergyParticle {
+  static final _FastRng _rng = _FastRng(0x63d2a5);
   double x, y;
   double vx, vy;
   double life;
@@ -286,6 +309,7 @@ class _EnergyParticle {
   double orbitAngle;
   double orbitRadius;
   bool isOrbiting;
+  final MaskFilter glowMask;
 
   _EnergyParticle({
     required this.x,
@@ -299,11 +323,13 @@ class _EnergyParticle {
     required this.orbitAngle,
     required this.orbitRadius,
     required this.isOrbiting,
+    required this.glowMask,
   });
 
-  factory _EnergyParticle.random(math.Random r) {
+  factory _EnergyParticle.random(_FastRng r) {
     final colors = [NeonColors.cyan, NeonColors.magenta, NeonColors.purple, NeonColors.orange];
     final isOrbit = r.nextDouble() > 0.7;
+    final size = 1 + r.nextDouble() * 3;
     return _EnergyParticle(
       x: r.nextDouble(),
       y: r.nextDouble(),
@@ -311,11 +337,12 @@ class _EnergyParticle {
       vy: (r.nextDouble() - 0.5) * 0.015,
       life: r.nextDouble(),
       maxLife: 0.6 + r.nextDouble() * 0.4,
-      size: 1 + r.nextDouble() * 3,
+      size: size,
       color: colors[r.nextInt(colors.length)],
       orbitAngle: r.nextDouble() * math.pi * 2,
       orbitRadius: 0.3 + r.nextDouble() * 0.2,
       isOrbiting: isOrbit,
+      glowMask: MaskFilter.blur(BlurStyle.normal, size * 2),
     );
   }
 
@@ -331,9 +358,8 @@ class _EnergyParticle {
 
     life -= dt * 0.25;
     if (life <= 0 || x < 0 || x > 1 || y < 0 || y > 1) {
-      final r = math.Random();
-      x = r.nextDouble();
-      y = r.nextDouble();
+      x = _rng.nextDouble();
+      y = _rng.nextDouble();
       life = maxLife;
     }
   }
@@ -352,7 +378,7 @@ class _Constellation {
     required this.opacity,
   });
 
-  factory _Constellation.random(math.Random r) {
+  factory _Constellation.random(_FastRng r) {
     final numPoints = 3 + r.nextInt(4);
     final baseX = r.nextDouble();
     final baseY = r.nextDouble();
@@ -403,9 +429,152 @@ class _UltraEpicUniversePainter extends CustomPainter {
     required this.glitchIntensity,
   });
 
+  static final Paint _bgBasePaint = Paint();
+  static final Paint _nebulaPaint1 = Paint();
+  static final Paint _nebulaPaint2 = Paint();
+  static final Paint _nebulaPaint3 = Paint();
+  static final Paint _starGlowPaint = Paint();
+  static final Paint _starCorePaint = Paint();
+  static final Paint _starBrightPaint = Paint();
+  static final Paint _constellationLinePaint = Paint()
+    ..strokeWidth = 0.5
+    ..style = PaintingStyle.stroke;
+  static final Paint _constellationDotPaint = Paint();
+  static final Path _constellationPath = Path();
+  static final Paint _warpLinePaint = Paint()
+    ..strokeWidth = 1.5
+    ..strokeCap = StrokeCap.round;
+  static final Paint _eventHorizonPaint = Paint()..color = Colors.black;
+  static final Paint _photonPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _diskPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _innerGlowPaint = Paint();
+  static final Paint _lensPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _orbitPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _markerPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _beamPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _pulsePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _linkPaint = Paint()
+    ..strokeWidth = 0.5;
+  static final Paint _floatGlowPaint = Paint();
+  static final Paint _floatCorePaint = Paint();
+  static final Paint _planetAuraPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _planetBodyPaint = Paint();
+  static final Paint _planetBandPaint = Paint()..strokeWidth = 1;
+  static final Paint _planetAtmoPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _planetSpecularPaint = Paint();
+  static final Paint _planetRingPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _moonGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _moonPaint = Paint();
+  static final Paint _panelBgPaint = Paint();
+  static final Paint _panelBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _panelLinePaint = Paint()..strokeWidth = 1;
+  static final Paint _statusBgPaint = Paint();
+  static final Paint _statusFillPaint = Paint();
+  static final Paint _targetBracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _targetDotPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _orbitParticlePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _beaconPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _beaconRayPaint = Paint()..strokeWidth = 2;
+  static final Paint _scanlinePaint = Paint();
+  static final Paint _scanlinePaint2 = Paint();
+  static final Paint _volumetricRayPaint = Paint();
+  static final Paint _glitchRedPaint = Paint();
+  static final Paint _glitchCyanPaint = Paint();
+  static final Paint _glitchNoisePaint = Paint();
+  static final Paint _vignettePaint = Paint();
+  static final TextPainter _symbolPainter =
+      TextPainter(textDirection: TextDirection.ltr);
+  static final TextPainter _idPainter =
+      TextPainter(textDirection: TextDirection.ltr);
+  static final TextPainter _namePainter =
+      TextPainter(textDirection: TextDirection.ltr);
+  static final TextPainter _tagPainter =
+      TextPainter(textDirection: TextDirection.ltr);
+  static final Map<int, TextPainter> _idPainterCache = {};
+  static final Map<int, TextPainter> _namePainterCache = {};
+  static final Map<int, TextPainter> _tagPainterCache = {};
+  static final Path _bandPath = Path();
+  static final Path _volumetricRayPath = Path();
+
+  static const int _bhFadeLevels = 32;
+  static final Map<int, Shader> _diskShaderCache = {};
+  static final Map<int, Shader> _innerGlowShaderCache = {};
+  static int _symbolFadeLevel = -1;
+
+  static Size? _beamShaderSize;
+  static final Map<int, Shader> _beamShaderCache = {};
+  static const int _beamOpacityLevels = 32;
+
+  static Size? _planetShaderSize;
+  static final Map<int, Shader> _planetAuraShaderCache = {};
+  static final Map<int, Shader> _planetBodyShaderCache = {};
+  static final Map<int, Shader> _planetSpecularShaderCache = {};
+  static final Map<int, Shader> _moonShaderCache = {};
+  static const int _planetFadeLevels = 32;
+
+  static Size? _vignetteShaderSize;
+  static Shader? _vignetteShader;
+
+  static const int _warpIntensityLevels = 32;
+  static final Map<int, ColorFilter> _warpFilterCache = {};
+  static final Map<int, Shader> _warpShaderCache = {};
+
+  static Size? _deepSpaceShaderSize;
+  static int _deepSpaceShaderLevel = -1;
+  static Shader? _bgBaseShader;
+  static Shader? _nebulaShader1;
+  static Shader? _nebulaShader2;
+  static Shader? _nebulaShader3;
+
+  static double _beaconRayShaderHeight = 0;
+  static Shader? _beaconRayShader;
+  static const int _beaconRayIntensityLevels = 32;
+  static final Map<int, ColorFilter> _beaconRayFilterCache = {};
+
+  static double _scanlineShaderWidth = 0;
+  static Shader? _scanlineShader;
+  static const int _scanlineIntensityLevels = 32;
+  static final Map<int, ColorFilter> _scanlineFilterCache = {};
+
+  static Size? _volumetricRayShaderSize;
+  static Shader? _volumetricRayShader;
+  static const int _volumetricRayIntensityLevels = 32;
+  static final Map<int, ColorFilter> _volumetricRayFilterCache = {};
+
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
+    _ensureShaderCaches(size);
 
     // Layer 1: Deep space background
     _drawDeepSpaceBackground(canvas, size);
@@ -453,6 +622,35 @@ class _UltraEpicUniversePainter extends CustomPainter {
     _drawVignette(canvas, size);
   }
 
+  void _ensureShaderCaches(Size size) {
+    if (_beamShaderSize != size) {
+      _beamShaderSize = size;
+      _beamShaderCache.clear();
+    }
+    if (_planetShaderSize != size) {
+      _planetShaderSize = size;
+      _planetAuraShaderCache.clear();
+      _planetBodyShaderCache.clear();
+      _planetSpecularShaderCache.clear();
+      _moonShaderCache.clear();
+    }
+    if (_diskShaderCache.length > 128) _diskShaderCache.clear();
+    if (_innerGlowShaderCache.length > 128) _innerGlowShaderCache.clear();
+    if (_beamShaderCache.length > 128) _beamShaderCache.clear();
+    if (_planetAuraShaderCache.length > 128) _planetAuraShaderCache.clear();
+    if (_planetBodyShaderCache.length > 128) _planetBodyShaderCache.clear();
+    if (_planetSpecularShaderCache.length > 128) _planetSpecularShaderCache.clear();
+    if (_moonShaderCache.length > 128) _moonShaderCache.clear();
+    if (_warpFilterCache.length > 64) _warpFilterCache.clear();
+    if (_warpShaderCache.length > 64) _warpShaderCache.clear();
+    if (_beaconRayFilterCache.length > 64) _beaconRayFilterCache.clear();
+    if (_scanlineFilterCache.length > 64) _scanlineFilterCache.clear();
+    if (_volumetricRayFilterCache.length > 64) _volumetricRayFilterCache.clear();
+    if (_idPainterCache.length > 128) _idPainterCache.clear();
+    if (_namePainterCache.length > 128) _namePainterCache.clear();
+    if (_tagPainterCache.length > 128) _tagPainterCache.clear();
+  }
+
   Offset _getWorldPosition(int index) {
     final count = worlds.length;
     final baseAngle = (index / count) * math.pi * 2 - math.pi / 2;
@@ -467,58 +665,76 @@ class _UltraEpicUniversePainter extends CustomPainter {
   void _drawDeepSpaceBackground(Canvas canvas, Size size) {
     // Multi-layer nebula gradient
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+    _ensureDeepSpaceShaders(size);
 
     // Base dark gradient
-    final basePaint = Paint()
-      ..shader = RadialGradient(
-        center: Alignment.center,
-        radius: 1.2,
-        colors: [
-          const Color(0xFF0a0a15),
-          const Color(0xFF050510),
-          Colors.black,
-        ],
-      ).createShader(rect);
-    canvas.drawRect(rect, basePaint);
+    _bgBasePaint.shader = _bgBaseShader;
+    canvas.drawRect(rect, _bgBasePaint);
 
     // Purple nebula cloud
-    final nebula1 = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.4),
-        radius: 0.8,
-        colors: [
-          NeonColors.purple.withOpacity(0.12 * materializeValue),
-          NeonColors.purple.withOpacity(0.05 * materializeValue),
-          Colors.transparent,
-        ],
-      ).createShader(rect);
-    canvas.drawRect(rect, nebula1);
+    _nebulaPaint1.shader = _nebulaShader1;
+    canvas.drawRect(rect, _nebulaPaint1);
 
     // Cyan nebula cloud
-    final nebula2 = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.4, 0.3),
-        radius: 0.7,
-        colors: [
-          NeonColors.cyan.withOpacity(0.08 * materializeValue),
-          NeonColors.blue.withOpacity(0.04 * materializeValue),
-          Colors.transparent,
-        ],
-      ).createShader(rect);
-    canvas.drawRect(rect, nebula2);
+    _nebulaPaint2.shader = _nebulaShader2;
+    canvas.drawRect(rect, _nebulaPaint2);
 
     // Orange/pink nebula accent
-    final nebula3 = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.5, -0.5),
-        radius: 0.5,
-        colors: [
-          NeonColors.orange.withOpacity(0.06 * materializeValue),
-          NeonColors.magenta.withOpacity(0.03 * materializeValue),
-          Colors.transparent,
-        ],
-      ).createShader(rect);
-    canvas.drawRect(rect, nebula3);
+    _nebulaPaint3.shader = _nebulaShader3;
+    canvas.drawRect(rect, _nebulaPaint3);
+  }
+
+  void _ensureDeepSpaceShaders(Size size) {
+    const levels = 32;
+    final level = (materializeValue * levels).round().clamp(0, levels);
+    if (_deepSpaceShaderSize == size && _deepSpaceShaderLevel == level) {
+      return;
+    }
+
+    _deepSpaceShaderSize = size;
+    _deepSpaceShaderLevel = level;
+    final t = level / levels;
+    final rect = Rect.fromLTWH(0, 0, size.width, size.height);
+
+    _bgBaseShader = const RadialGradient(
+      center: Alignment.center,
+      radius: 1.2,
+      colors: [
+        Color(0xFF0a0a15),
+        Color(0xFF050510),
+        Colors.black,
+      ],
+    ).createShader(rect);
+
+    _nebulaShader1 = RadialGradient(
+      center: const Alignment(-0.3, -0.4),
+      radius: 0.8,
+      colors: [
+        NeonColors.purple.withOpacity(0.12 * t),
+        NeonColors.purple.withOpacity(0.05 * t),
+        Colors.transparent,
+      ],
+    ).createShader(rect);
+
+    _nebulaShader2 = RadialGradient(
+      center: const Alignment(0.4, 0.3),
+      radius: 0.7,
+      colors: [
+        NeonColors.cyan.withOpacity(0.08 * t),
+        NeonColors.blue.withOpacity(0.04 * t),
+        Colors.transparent,
+      ],
+    ).createShader(rect);
+
+    _nebulaShader3 = RadialGradient(
+      center: const Alignment(0.5, -0.5),
+      radius: 0.5,
+      colors: [
+        NeonColors.orange.withOpacity(0.06 * t),
+        NeonColors.magenta.withOpacity(0.03 * t),
+        Colors.transparent,
+      ],
+    ).createShader(rect);
   }
 
   void _drawStarField(Canvas canvas, Size size) {
@@ -530,23 +746,21 @@ class _UltraEpicUniversePainter extends CustomPainter {
       final alpha = star.brightness * twinkle * starFade;
 
       // Star glow
-      final glowPaint = Paint()
+      _starGlowPaint
         ..color = star.color.withOpacity(alpha * 0.5)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, star.size * 2);
+        ..maskFilter = star.glowMask;
 
       final pos = Offset(star.x * size.width, star.y * size.height);
-      canvas.drawCircle(pos, star.size * 1.5, glowPaint);
+      canvas.drawCircle(pos, star.size * 1.5, _starGlowPaint);
 
       // Star core
-      final corePaint = Paint()
-        ..color = star.color.withOpacity(alpha);
-      canvas.drawCircle(pos, star.size * 0.5, corePaint);
+      _starCorePaint.color = star.color.withOpacity(alpha);
+      canvas.drawCircle(pos, star.size * 0.5, _starCorePaint);
 
       // Bright center for larger stars
       if (star.size > 1.5) {
-        final brightPaint = Paint()
-          ..color = Colors.white.withOpacity(alpha * 0.8);
-        canvas.drawCircle(pos, star.size * 0.2, brightPaint);
+        _starBrightPaint.color = Colors.white.withOpacity(alpha * 0.8);
+        canvas.drawCircle(pos, star.size * 0.2, _starBrightPaint);
       }
     }
   }
@@ -558,12 +772,9 @@ class _UltraEpicUniversePainter extends CustomPainter {
     for (final constellation in constellations) {
       if (constellation.points.length < 2) continue;
 
-      final linePaint = Paint()
-        ..color = constellation.color.withOpacity(constellation.opacity * constFade)
-        ..strokeWidth = 0.5
-        ..style = PaintingStyle.stroke;
-
-      final path = Path();
+      _constellationLinePaint.color =
+          constellation.color.withOpacity(constellation.opacity * constFade);
+      final path = _constellationPath..reset();
       for (int i = 0; i < constellation.points.length; i++) {
         final p = constellation.points[i];
         final pos = Offset(p.dx * size.width, p.dy * size.height);
@@ -573,16 +784,16 @@ class _UltraEpicUniversePainter extends CustomPainter {
           path.lineTo(pos.dx, pos.dy);
         }
       }
-      canvas.drawPath(path, linePaint);
+      canvas.drawPath(path, _constellationLinePaint);
 
       // Small dots at constellation points
-      final dotPaint = Paint()
-        ..color = constellation.color.withOpacity(constellation.opacity * 2 * constFade);
+      _constellationDotPaint.color =
+          constellation.color.withOpacity(constellation.opacity * 2 * constFade);
       for (final p in constellation.points) {
         canvas.drawCircle(
           Offset(p.dx * size.width, p.dy * size.height),
           1.5,
-          dotPaint,
+          _constellationDotPaint,
         );
       }
     }
@@ -608,39 +819,60 @@ class _UltraEpicUniversePainter extends CustomPainter {
       // Fade based on progress
       final lineFade = math.sin(line.progress * math.pi);
 
-      final linePaint = Paint()
-        ..shader = LinearGradient(
+      final dx = endPos.dx - startPos.dx;
+      final dy = endPos.dy - startPos.dy;
+      final length = math.sqrt(dx * dx + dy * dy);
+      if (length <= 0.01) continue;
+
+      final intensity = (warpFade * lineFade).clamp(0.0, 1.0);
+      final level = (intensity * _warpIntensityLevels).round().clamp(0, _warpIntensityLevels);
+      final filterKey = (line.color.value << 6) ^ level;
+      _warpLinePaint.colorFilter = _warpFilterCache.putIfAbsent(
+        filterKey,
+        () => ColorFilter.mode(
+          line.color.withOpacity(level / _warpIntensityLevels),
+          BlendMode.modulate,
+        ),
+      );
+
+      final lenKey = (length * 4).round();
+      final shader = _warpShaderCache.putIfAbsent(
+        lenKey,
+        () => const LinearGradient(
           colors: [
             Colors.transparent,
-            line.color.withOpacity(warpFade * lineFade * 0.6),
-            Colors.white.withOpacity(warpFade * lineFade * 0.8),
+            Colors.white70,
+            Colors.white,
           ],
-        ).createShader(Rect.fromPoints(startPos, endPos))
-        ..strokeWidth = 1.5
-        ..strokeCap = StrokeCap.round;
+          stops: [0.0, 0.7, 1.0],
+        ).createShader(Rect.fromLTWH(0, 0, lenKey / 4.0, 1)),
+      );
+      _warpLinePaint.shader = shader;
 
-      canvas.drawLine(startPos, endPos, linePaint);
+      canvas.save();
+      canvas.translate(startPos.dx, startPos.dy);
+      canvas.rotate(math.atan2(dy, dx));
+      canvas.drawLine(Offset.zero, Offset(length, 0), _warpLinePaint);
+      canvas.restore();
     }
+    _warpLinePaint.shader = null;
+    _warpLinePaint.colorFilter = null;
   }
 
   void _drawBlackHole(Canvas canvas, Size size) {
     if (materializeValue < 0.2) return;
     final bhFade = ((materializeValue - 0.2) / 0.4).clamp(0.0, 1.0);
+    final bhLevel = (bhFade * _bhFadeLevels).round().clamp(0, _bhFadeLevels);
     final pulse = 0.85 + 0.15 * pulseValue;
 
     // Event horizon (complete black)
     final eventHorizonRadius = 35.0 * pulse;
-    final eventHorizonPaint = Paint()
-      ..color = Colors.black;
-    canvas.drawCircle(center, eventHorizonRadius, eventHorizonPaint);
+    _eventHorizonPaint.color = Colors.black;
+    canvas.drawCircle(center, eventHorizonRadius, _eventHorizonPaint);
 
     // Photon sphere (bright ring at edge)
-    final photonPaint = Paint()
-      ..color = NeonColors.orange.withOpacity(0.8 * bhFade)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawCircle(center, eventHorizonRadius + 2, photonPaint);
+    _photonPaint.color = NeonColors.orange.withOpacity(0.8 * bhFade);
+    canvas.drawCircle(center, eventHorizonRadius + 2, _photonPaint);
 
     // Accretion disk - multiple rings with rotation
     for (int i = 0; i < 5; i++) {
@@ -656,62 +888,75 @@ class _UltraEpicUniversePainter extends CustomPainter {
       canvas.translate(-center.dx, -center.dy);
 
       // Disk gradient
-      final diskPaint = Paint()
-        ..shader = SweepGradient(
+      final radiusKey = (diskRadius * 2).round();
+      final shaderKey = (i << 24) ^ (bhLevel << 16) ^ radiusKey;
+      final shader = _diskShaderCache.putIfAbsent(
+        shaderKey,
+        () => SweepGradient(
           colors: [
-            NeonColors.orange.withOpacity(opacity * bhFade),
-            NeonColors.yellow.withOpacity(opacity * 0.7 * bhFade),
-            NeonColors.orange.withOpacity(opacity * bhFade),
-            Colors.red.withOpacity(opacity * 0.5 * bhFade),
-            NeonColors.orange.withOpacity(opacity * bhFade),
+            NeonColors.orange.withOpacity(opacity * (bhLevel / _bhFadeLevels)),
+            NeonColors.yellow.withOpacity(opacity * 0.7 * (bhLevel / _bhFadeLevels)),
+            NeonColors.orange.withOpacity(opacity * (bhLevel / _bhFadeLevels)),
+            Colors.red.withOpacity(opacity * 0.5 * (bhLevel / _bhFadeLevels)),
+            NeonColors.orange.withOpacity(opacity * (bhLevel / _bhFadeLevels)),
           ],
-        ).createShader(Rect.fromCircle(center: center, radius: diskRadius))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8 - i * 1.0
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+        ).createShader(Rect.fromCircle(center: center, radius: diskRadius)),
+      );
+      _diskPaint
+        ..shader = shader
+        ..strokeWidth = 8 - i * 1.0;
 
-      canvas.drawCircle(center, diskRadius, diskPaint);
+      canvas.drawCircle(center, diskRadius, _diskPaint);
       canvas.restore();
     }
 
     // Inner glow
-    final innerGlow = Paint()
-      ..shader = RadialGradient(
+    final innerRadiusKey = (eventHorizonRadius * 2 * 2).round();
+    final innerShaderKey = (bhLevel << 16) ^ innerRadiusKey;
+    _innerGlowPaint.shader = _innerGlowShaderCache.putIfAbsent(
+      innerShaderKey,
+      () => RadialGradient(
         colors: [
           Colors.transparent,
-          NeonColors.cyan.withOpacity(0.2 * bhFade),
-          NeonColors.purple.withOpacity(0.3 * bhFade),
+          NeonColors.cyan.withOpacity(0.2 * (bhLevel / _bhFadeLevels)),
+          NeonColors.purple.withOpacity(0.3 * (bhLevel / _bhFadeLevels)),
           Colors.transparent,
         ],
         stops: const [0.0, 0.3, 0.6, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: eventHorizonRadius * 2));
-    canvas.drawCircle(center, eventHorizonRadius * 2, innerGlow);
+      ).createShader(Rect.fromCircle(center: center, radius: eventHorizonRadius * 2)),
+    );
+    canvas.drawCircle(center, eventHorizonRadius * 2, _innerGlowPaint);
 
     // Gravitational lensing effect (distortion rings)
     for (int i = 0; i < 3; i++) {
       final lensRadius = eventHorizonRadius * (1.3 + i * 0.4);
-      final lensPaint = Paint()
-        ..color = Colors.white.withOpacity(0.05 * bhFade * (1 - i * 0.25))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
-      canvas.drawCircle(center, lensRadius, lensPaint);
+      _lensPaint.color =
+          Colors.white.withOpacity(0.05 * bhFade * (1 - i * 0.25));
+      canvas.drawCircle(center, lensRadius, _lensPaint);
     }
 
     // Central singularity text
-    final textPainter = TextPainter(
-      text: TextSpan(
+    if (_symbolFadeLevel != bhLevel) {
+      _symbolFadeLevel = bhLevel;
+      _symbolPainter.text = TextSpan(
         text: '◉',
         style: TextStyle(
           fontSize: 14,
-          color: NeonColors.cyan.withOpacity(bhFade * 0.9),
+          color: NeonColors.cyan.withOpacity((bhLevel / _bhFadeLevels) * 0.9),
           shadows: [
-            Shadow(color: NeonColors.cyan.withOpacity(0.8), blurRadius: 10),
+            Shadow(
+              color: NeonColors.cyan.withOpacity(0.8),
+              blurRadius: 10,
+            ),
           ],
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    textPainter.paint(canvas, center - Offset(textPainter.width / 2, textPainter.height / 2));
+      );
+      _symbolPainter.layout();
+    }
+    _symbolPainter.paint(
+      canvas,
+      center - Offset(_symbolPainter.width / 2, _symbolPainter.height / 2),
+    );
   }
 
   void _drawOrbitalPaths(Canvas canvas) {
@@ -719,10 +964,8 @@ class _UltraEpicUniversePainter extends CustomPainter {
     final orbitFade = ((materializeValue - 0.5) / 0.3).clamp(0.0, 1.0);
 
     // Draw orbital paths for each world tier
-    final orbitRadii = [radius * 0.75, radius * 0.95];
-
-    for (int i = 0; i < orbitRadii.length; i++) {
-      final orbitR = orbitRadii[i];
+    for (int i = 0; i < 2; i++) {
+      final orbitR = radius * (i == 0 ? 0.75 : 0.95);
 
       // Dashed orbit ring
       final segmentCount = 60;
@@ -732,17 +975,15 @@ class _UltraEpicUniversePainter extends CustomPainter {
         final startAngle = (seg / segmentCount) * math.pi * 2;
         final sweepAngle = (1 / segmentCount) * math.pi * 2 * 0.8;
 
-        final orbitPaint = Paint()
-          ..color = NeonColors.cyan.withOpacity(0.15 * orbitFade * (1 - i * 0.3))
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1;
+        _orbitPaint.color =
+            NeonColors.cyan.withOpacity(0.15 * orbitFade * (1 - i * 0.3));
 
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: orbitR),
           startAngle + mainAnimation * 0.2,
           sweepAngle,
           false,
-          orbitPaint,
+          _orbitPaint,
         );
       }
 
@@ -754,10 +995,8 @@ class _UltraEpicUniversePainter extends CustomPainter {
           center.dy + orbitR * math.sin(markerAngle),
         );
 
-        final markerPaint = Paint()
-          ..color = NeonColors.cyan.withOpacity(0.4 * orbitFade)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-        canvas.drawCircle(markerPos, 2, markerPaint);
+        _markerPaint.color = NeonColors.cyan.withOpacity(0.4 * orbitFade);
+        canvas.drawCircle(markerPos, 2, _markerPaint);
       }
     }
   }
@@ -776,35 +1015,52 @@ class _UltraEpicUniversePainter extends CustomPainter {
       final pulseOffset = math.sin(mainAnimation * math.pi * 6 + i * 0.8);
       final connectionOpacity = netFade * (0.2 + pulseOffset * 0.1) * (isHovered ? 2 : 1);
 
-      // Energy beam with gradient
-      final beamPaint = Paint()
-        ..shader = LinearGradient(
-          colors: [
-            NeonColors.orange.withOpacity(connectionOpacity * 0.8),
-            world.accent.withOpacity(connectionOpacity),
-            world.accent.withOpacity(connectionOpacity * 0.3),
-          ],
-        ).createShader(Rect.fromPoints(center, pos))
-        ..strokeWidth = isHovered ? 2 : 1;
-      canvas.drawLine(center, pos, beamPaint);
+      // Energy beam with cached gradient
+      final dx = pos.dx - center.dx;
+      final dy = pos.dy - center.dy;
+      final length = math.sqrt(dx * dx + dy * dy);
+      if (length > 0.01) {
+        final level = (connectionOpacity * _beamOpacityLevels)
+            .round()
+            .clamp(0, _beamOpacityLevels);
+        final lenKey = (length * 4).round();
+        final shaderKey =
+            (world.accent.value << 8) ^ (level << 16) ^ lenKey ^ (i << 24);
+        final shader = _beamShaderCache.putIfAbsent(
+          shaderKey,
+          () => LinearGradient(
+            colors: [
+              NeonColors.orange.withOpacity(0.8 * (level / _beamOpacityLevels)),
+              world.accent.withOpacity(level / _beamOpacityLevels),
+              world.accent.withOpacity(0.3 * (level / _beamOpacityLevels)),
+            ],
+          ).createShader(Rect.fromLTWH(0, 0, lenKey / 4.0, 1)),
+        );
+        _beamPaint
+          ..shader = shader
+          ..strokeWidth = isHovered ? 2 : 1;
+        canvas.save();
+        canvas.translate(center.dx, center.dy);
+        canvas.rotate(math.atan2(dy, dx));
+        canvas.drawLine(Offset.zero, Offset(length, 0), _beamPaint);
+        canvas.restore();
+        _beamPaint.shader = null;
+      }
 
       // Traveling energy pulse
       final pulseT = (mainAnimation * 2 + i * 0.2) % 1.0;
       final pulsePos = Offset.lerp(center, pos, pulseT)!;
 
-      final pulsePaint = Paint()
-        ..color = Colors.white.withOpacity(connectionOpacity * 0.9)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(pulsePos, isHovered ? 4 : 2, pulsePaint);
+      _pulsePaint.color =
+          Colors.white.withOpacity(connectionOpacity * 0.9);
+      canvas.drawCircle(pulsePos, isHovered ? 4 : 2, _pulsePaint);
 
       // Connect to adjacent worlds
       final nextI = (i + 1) % worlds.length;
       final nextPos = _getWorldPosition(nextI);
 
-      final linkPaint = Paint()
-        ..color = world.accent.withOpacity(netFade * 0.15)
-        ..strokeWidth = 0.5;
-      canvas.drawLine(pos, nextPos, linkPaint);
+      _linkPaint.color = world.accent.withOpacity(netFade * 0.15);
+      canvas.drawLine(pos, nextPos, _linkPaint);
     }
   }
 
@@ -813,15 +1069,16 @@ class _UltraEpicUniversePainter extends CustomPainter {
       final pos = Offset(particle.x * size.width, particle.y * size.height);
 
       // Glow
-      final glowPaint = Paint()
-        ..color = particle.color.withOpacity(particle.alpha * 0.5 * materializeValue)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, particle.size * 2);
-      canvas.drawCircle(pos, particle.size * 1.5, glowPaint);
+      _floatGlowPaint
+        ..color =
+            particle.color.withOpacity(particle.alpha * 0.5 * materializeValue)
+        ..maskFilter = particle.glowMask;
+      canvas.drawCircle(pos, particle.size * 1.5, _floatGlowPaint);
 
       // Core
-      final corePaint = Paint()
-        ..color = particle.color.withOpacity(particle.alpha * 0.8 * materializeValue);
-      canvas.drawCircle(pos, particle.size * 0.6, corePaint);
+      _floatCorePaint.color =
+          particle.color.withOpacity(particle.alpha * 0.8 * materializeValue);
+      canvas.drawCircle(pos, particle.size * 0.6, _floatCorePaint);
     }
   }
 
@@ -841,16 +1098,26 @@ class _UltraEpicUniversePainter extends CustomPainter {
 
     // Outer energy aura
     final auraRadius = planetRadius * 2.2;
-    final auraPaint = Paint()
-      ..shader = RadialGradient(
+    final nodeLevel = (nodeFade * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
+    final auraLevel = isHovered ? _planetFadeLevels : nodeLevel;
+    final auraKey = (world.accent.value << 8) ^
+        (auraLevel << 16) ^
+        (isHovered ? 1 : 0) ^
+        (auraRadius * 2).round();
+    _planetAuraPaint.shader = _planetAuraShaderCache.putIfAbsent(
+      auraKey,
+      () => RadialGradient(
         colors: [
-          world.accent.withOpacity(isHovered ? 0.5 : 0.25 * nodeFade),
-          world.accent.withOpacity(isHovered ? 0.2 : 0.1 * nodeFade),
+          world.accent.withOpacity(isHovered ? 0.5 : 0.25 * (auraLevel / _planetFadeLevels)),
+          world.accent.withOpacity(isHovered ? 0.2 : 0.1 * (auraLevel / _planetFadeLevels)),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: pos, radius: auraRadius))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-    canvas.drawCircle(pos, auraRadius, auraPaint);
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: auraRadius)),
+    );
+    canvas.save();
+    canvas.translate(pos.dx, pos.dy);
+    canvas.drawCircle(Offset.zero, auraRadius, _planetAuraPaint);
+    canvas.restore();
 
     // Planet ring (Saturn-style) for some worlds
     if (index % 2 == 0) {
@@ -858,55 +1125,59 @@ class _UltraEpicUniversePainter extends CustomPainter {
     }
 
     // Planet body with gradient
-    final bodyGradient = RadialGradient(
-      center: const Alignment(-0.3, -0.3),
-      colors: [
-        world.accent.withOpacity(0.9 * nodeFade),
-        world.accent.withOpacity(0.5 * nodeFade),
-        Colors.black.withOpacity(0.8 * nodeFade),
-      ],
+    final bodyKey = (world.accent.value << 8) ^ (nodeLevel << 16) ^ (planetRadius * 2).round();
+    _planetBodyPaint.shader = _planetBodyShaderCache.putIfAbsent(
+      bodyKey,
+      () => RadialGradient(
+        center: const Alignment(-0.3, -0.3),
+        colors: [
+          world.accent.withOpacity(0.9 * (nodeLevel / _planetFadeLevels)),
+          world.accent.withOpacity(0.5 * (nodeLevel / _planetFadeLevels)),
+          Colors.black.withOpacity(0.8 * (nodeLevel / _planetFadeLevels)),
+        ],
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: planetRadius)),
     );
-
-    final bodyPaint = Paint()
-      ..shader = bodyGradient.createShader(Rect.fromCircle(center: pos, radius: planetRadius));
-    canvas.drawCircle(pos, planetRadius, bodyPaint);
+    canvas.save();
+    canvas.translate(pos.dx, pos.dy);
+    canvas.drawCircle(Offset.zero, planetRadius, _planetBodyPaint);
+    canvas.restore();
 
     // Planet surface detail (bands)
     for (int band = 0; band < 3; band++) {
       final bandY = pos.dy - planetRadius * 0.5 + band * planetRadius * 0.5;
-      final bandPaint = Paint()
-        ..color = world.accent.withOpacity(0.3 * nodeFade)
-        ..strokeWidth = 1;
+      _planetBandPaint.color = world.accent.withOpacity(0.3 * nodeFade);
 
       // Curved band
-      final bandPath = Path();
+      final bandPath = _bandPath..reset();
       bandPath.moveTo(pos.dx - planetRadius * 0.8, bandY);
       bandPath.quadraticBezierTo(
         pos.dx, bandY + 5,
         pos.dx + planetRadius * 0.8, bandY,
       );
-      canvas.drawPath(bandPath, bandPaint);
+      canvas.drawPath(bandPath, _planetBandPaint);
     }
 
     // Atmosphere glow
-    final atmoPaint = Paint()
-      ..color = world.accent.withOpacity(0.4 * nodeFade)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawCircle(pos, planetRadius, atmoPaint);
+    _planetAtmoPaint.color = world.accent.withOpacity(0.4 * nodeFade);
+    canvas.drawCircle(pos, planetRadius, _planetAtmoPaint);
 
     // Specular highlight
-    final specularPaint = Paint()
-      ..shader = RadialGradient(
+    final specKey = (nodeLevel << 16) ^ (planetRadius * 2).round();
+    _planetSpecularPaint.shader = _planetSpecularShaderCache.putIfAbsent(
+      specKey,
+      () => RadialGradient(
         center: const Alignment(-0.5, -0.5),
         radius: 0.5,
         colors: [
-          Colors.white.withOpacity(0.5 * nodeFade),
+          Colors.white.withOpacity(0.5 * (nodeLevel / _planetFadeLevels)),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: pos, radius: planetRadius));
-    canvas.drawCircle(pos, planetRadius * 0.5, specularPaint);
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: planetRadius)),
+    );
+    canvas.save();
+    canvas.translate(pos.dx, pos.dy);
+    canvas.drawCircle(Offset.zero, planetRadius * 0.5, _planetSpecularPaint);
+    canvas.restore();
 
     // Small moon for some worlds
     if (index % 3 == 0) {
@@ -914,23 +1185,33 @@ class _UltraEpicUniversePainter extends CustomPainter {
     }
 
     // World identifier
-    final idPainter = TextPainter(
-      text: TextSpan(
-        text: 'W${world.id}',
-        style: TextStyle(
-          fontSize: isHovered ? 16 : 13,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 2,
-          color: Colors.white.withOpacity(nodeFade),
-          shadows: [
-            Shadow(color: world.accent.withOpacity(0.9), blurRadius: 10),
-            Shadow(color: world.accent.withOpacity(0.5), blurRadius: 20),
-          ],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    idPainter.paint(canvas, pos - Offset(idPainter.width / 2, idPainter.height / 2));
+    final idLevel = (nodeFade * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
+    final idKey = (world.id << 16) ^ (idLevel << 1) ^ (isHovered ? 1 : 0);
+    final idPainter = _idPainterCache.putIfAbsent(
+      idKey,
+      () {
+        final painter = TextPainter(textDirection: TextDirection.ltr);
+        painter.text = TextSpan(
+          text: 'W${world.id}',
+          style: TextStyle(
+            fontSize: isHovered ? 16 : 13,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+            color: Colors.white.withOpacity(idLevel / _planetFadeLevels),
+            shadows: [
+              Shadow(color: world.accent.withOpacity(0.9), blurRadius: 10),
+              Shadow(color: world.accent.withOpacity(0.5), blurRadius: 20),
+            ],
+          ),
+        );
+        painter.layout();
+        return painter;
+      },
+    );
+    idPainter.paint(
+      canvas,
+      pos - Offset(idPainter.width / 2, idPainter.height / 2),
+    );
 
     // Holographic info panel when hovered
     if (isHovered) {
@@ -954,11 +1235,10 @@ class _UltraEpicUniversePainter extends CustomPainter {
     // Ring gradient
     for (int r = 0; r < 3; r++) {
       final ringR = radius * (0.9 + r * 0.1);
-      final ringPaint = Paint()
+      _planetRingPaint
         ..color = color.withOpacity((0.4 - r * 0.1) * opacity * (isHovered ? 1.5 : 1))
-        ..style = PaintingStyle.stroke
         ..strokeWidth = (3 - r).toDouble();
-      canvas.drawCircle(center, ringR, ringPaint);
+      canvas.drawCircle(center, ringR, _planetRingPaint);
     }
 
     canvas.restore();
@@ -973,24 +1253,30 @@ class _UltraEpicUniversePainter extends CustomPainter {
     );
 
     // Moon glow
-    final glowPaint = Paint()
-      ..color = color.withOpacity(0.3 * opacity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawCircle(moonPos, 8, glowPaint);
+    _moonGlowPaint.color = color.withOpacity(0.3 * opacity);
+    canvas.drawCircle(moonPos, 8, _moonGlowPaint);
 
     // Moon body
-    final moonPaint = Paint()
-      ..shader = RadialGradient(
+    final moonLevel = (opacity * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
+    final moonKey = (color.value << 8) ^ (moonLevel << 16);
+    _moonPaint.shader = _moonShaderCache.putIfAbsent(
+      moonKey,
+      () => RadialGradient(
         center: const Alignment(-0.3, -0.3),
         colors: [
-          Colors.white.withOpacity(0.8 * opacity),
-          color.withOpacity(0.4 * opacity),
+          Colors.white.withOpacity(0.8 * (moonLevel / _planetFadeLevels)),
+          color.withOpacity(0.4 * (moonLevel / _planetFadeLevels)),
         ],
-      ).createShader(Rect.fromCircle(center: moonPos, radius: 5));
-    canvas.drawCircle(moonPos, 5, moonPaint);
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: 5)),
+    );
+    canvas.save();
+    canvas.translate(moonPos.dx, moonPos.dy);
+    canvas.drawCircle(Offset.zero, 5, _moonPaint);
+    canvas.restore();
   }
 
   void _drawHolographicPanel(Canvas canvas, Offset pos, double radius, WorldInfo world, double opacity) {
+    if (opacity <= 0.01) return;
     final panelOffset = Offset(radius + 50, -30);
     final panelPos = pos + panelOffset;
     final panelWidth = 100.0;
@@ -1002,49 +1288,61 @@ class _UltraEpicUniversePainter extends CustomPainter {
       const Radius.circular(4),
     );
 
-    final bgPaint = Paint()
-      ..color = Colors.black.withOpacity(0.7 * opacity);
-    canvas.drawRRect(panelRect, bgPaint);
+    _panelBgPaint.color = Colors.black.withOpacity(0.7 * opacity);
+    canvas.drawRRect(panelRect, _panelBgPaint);
 
     // Panel border
-    final borderPaint = Paint()
-      ..color = world.accent.withOpacity(0.8 * opacity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawRRect(panelRect, borderPaint);
+    _panelBorderPaint.color = world.accent.withOpacity(0.8 * opacity);
+    canvas.drawRRect(panelRect, _panelBorderPaint);
 
     // Connection line to planet
-    final linePaint = Paint()
-      ..color = world.accent.withOpacity(0.5 * opacity)
-      ..strokeWidth = 1;
-    canvas.drawLine(pos + Offset(radius, 0), panelPos + Offset(0, panelHeight / 2), linePaint);
+    _panelLinePaint.color = world.accent.withOpacity(0.5 * opacity);
+    canvas.drawLine(
+      pos + Offset(radius, 0),
+      panelPos + Offset(0, panelHeight / 2),
+      _panelLinePaint,
+    );
 
     // World name
-    final namePainter = TextPainter(
-      text: TextSpan(
-        text: world.name,
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.bold,
-          color: world.accent.withOpacity(opacity),
-          letterSpacing: 1,
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final nameLevel = (opacity * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
+    final nameKey = world.name.hashCode ^ (nameLevel << 1) ^ world.accent.value;
+    final namePainter = _namePainterCache.putIfAbsent(
+      nameKey,
+      () {
+        final painter = TextPainter(textDirection: TextDirection.ltr);
+        painter.text = TextSpan(
+          text: world.name,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: world.accent.withOpacity(nameLevel / _planetFadeLevels),
+            letterSpacing: 1,
+          ),
+        );
+        painter.layout();
+        return painter;
+      },
+    );
     namePainter.paint(canvas, panelPos + const Offset(8, 8));
 
     // Tagline
-    final tagPainter = TextPainter(
-      text: TextSpan(
-        text: world.tagline,
-        style: TextStyle(
-          fontSize: 8,
-          color: Colors.white.withOpacity(0.7 * opacity),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    final tagLevel = (opacity * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
+    final tagKey = world.tagline.hashCode ^ (tagLevel << 1);
+    final tagPainter = _tagPainterCache.putIfAbsent(
+      tagKey,
+      () {
+        final painter = TextPainter(textDirection: TextDirection.ltr);
+        painter.text = TextSpan(
+          text: world.tagline,
+          style: TextStyle(
+            fontSize: 8,
+            color: Colors.white.withOpacity(0.7 * (tagLevel / _planetFadeLevels)),
+          ),
+        );
+        painter.layout();
+        return painter;
+      },
+    );
     tagPainter.paint(canvas, panelPos + const Offset(8, 24));
 
     // Status bar
@@ -1057,9 +1355,8 @@ class _UltraEpicUniversePainter extends CustomPainter {
       statusHeight,
     );
 
-    final statusBgPaint = Paint()
-      ..color = Colors.white.withOpacity(0.2 * opacity);
-    canvas.drawRect(statusRect, statusBgPaint);
+    _statusBgPaint.color = Colors.white.withOpacity(0.2 * opacity);
+    canvas.drawRect(statusRect, _statusBgPaint);
 
     final progress = 0.3 + (world.id / 10) * 0.7; // Fake progress based on world id
     final statusFillRect = Rect.fromLTWH(
@@ -1068,56 +1365,39 @@ class _UltraEpicUniversePainter extends CustomPainter {
       statusWidth * progress,
       statusHeight,
     );
-    final statusFillPaint = Paint()
-      ..color = world.accent.withOpacity(opacity);
-    canvas.drawRect(statusFillRect, statusFillPaint);
+    _statusFillPaint.color = world.accent.withOpacity(opacity);
+    canvas.drawRect(statusFillRect, _statusFillPaint);
   }
 
   void _drawTargetingBrackets(Canvas canvas, Offset center, double radius, Color color, double opacity) {
+    if (opacity <= 0.01) return;
     final bracketSize = 15.0;
-    final bracketPaint = Paint()
-      ..color = color.withOpacity(opacity)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+    _targetBracketPaint.color = color.withOpacity(opacity);
 
-    final corners = [
-      Offset(center.dx - radius, center.dy - radius), // TL
-      Offset(center.dx + radius, center.dy - radius), // TR
-      Offset(center.dx - radius, center.dy + radius), // BL
-      Offset(center.dx + radius, center.dy + radius), // BR
-    ];
+    final tl = Offset(center.dx - radius, center.dy - radius);
+    final tr = Offset(center.dx + radius, center.dy - radius);
+    final bl = Offset(center.dx - radius, center.dy + radius);
+    final br = Offset(center.dx + radius, center.dy + radius);
 
-    final directions = [
-      [Offset(1, 0), Offset(0, 1)],  // TL
-      [Offset(-1, 0), Offset(0, 1)], // TR
-      [Offset(1, 0), Offset(0, -1)], // BL
-      [Offset(-1, 0), Offset(0, -1)], // BR
-    ];
-
-    for (int i = 0; i < 4; i++) {
-      canvas.drawLine(
-        corners[i],
-        corners[i] + directions[i][0] * bracketSize,
-        bracketPaint,
-      );
-      canvas.drawLine(
-        corners[i],
-        corners[i] + directions[i][1] * bracketSize,
-        bracketPaint,
-      );
-    }
+    canvas.drawLine(tl, tl + Offset(bracketSize, 0), _targetBracketPaint);
+    canvas.drawLine(tl, tl + Offset(0, bracketSize), _targetBracketPaint);
+    canvas.drawLine(tr, tr + Offset(-bracketSize, 0), _targetBracketPaint);
+    canvas.drawLine(tr, tr + Offset(0, bracketSize), _targetBracketPaint);
+    canvas.drawLine(bl, bl + Offset(bracketSize, 0), _targetBracketPaint);
+    canvas.drawLine(bl, bl + Offset(0, -bracketSize), _targetBracketPaint);
+    canvas.drawLine(br, br + Offset(-bracketSize, 0), _targetBracketPaint);
+    canvas.drawLine(br, br + Offset(0, -bracketSize), _targetBracketPaint);
 
     // Corner dots
-    final dotPaint = Paint()
-      ..color = color.withOpacity(opacity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    for (final corner in corners) {
-      canvas.drawCircle(corner, 3, dotPaint);
-    }
+    _targetDotPaint.color = color.withOpacity(opacity);
+    canvas.drawCircle(tl, 3, _targetDotPaint);
+    canvas.drawCircle(tr, 3, _targetDotPaint);
+    canvas.drawCircle(bl, 3, _targetDotPaint);
+    canvas.drawCircle(br, 3, _targetDotPaint);
   }
 
   void _drawOrbitingParticles(Canvas canvas, Offset center, double radius, Color color, double opacity) {
+    if (opacity <= 0.01) return;
     for (int i = 0; i < 8; i++) {
       final angle = mainAnimation * math.pi * 8 + (i / 8) * math.pi * 2;
       final particlePos = Offset(
@@ -1125,84 +1405,153 @@ class _UltraEpicUniversePainter extends CustomPainter {
         center.dy + radius * math.sin(angle),
       );
 
-      final particlePaint = Paint()
-        ..color = color.withOpacity(0.8 * opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      canvas.drawCircle(particlePos, 3, particlePaint);
+      _orbitParticlePaint.color = color.withOpacity(0.8 * opacity);
+      canvas.drawCircle(particlePos, 3, _orbitParticlePaint);
     }
   }
 
   void _drawPulsarBeacon(Canvas canvas, Offset pos, double radius, Color color, double opacity, int index) {
     // Pulsing energy beacon above planet
+    if (opacity <= 0.01) return;
     final beaconY = pos.dy - radius - 15;
     final pulsePhase = (mainAnimation * 4 + index * 0.3) % 1.0;
     final beaconAlpha = math.sin(pulsePhase * math.pi);
 
     if (beaconAlpha > 0.1) {
-      final beaconPaint = Paint()
-        ..color = color.withOpacity(beaconAlpha * 0.6 * opacity)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(Offset(pos.dx, beaconY), 4 + beaconAlpha * 2, beaconPaint);
+      _beaconPaint.color = color.withOpacity(beaconAlpha * 0.6 * opacity);
+      canvas.drawCircle(
+        Offset(pos.dx, beaconY),
+        4 + beaconAlpha * 2,
+        _beaconPaint,
+      );
 
       // Beacon ray upward
-      final rayPaint = Paint()
-        ..shader = LinearGradient(
+      if (_beaconRayShader == null || _beaconRayShaderHeight != 20) {
+        _beaconRayShaderHeight = 20;
+        _beaconRayShader = const LinearGradient(
           begin: Alignment.bottomCenter,
           end: Alignment.topCenter,
           colors: [
-            color.withOpacity(beaconAlpha * 0.4 * opacity),
+            Colors.white,
             Colors.transparent,
           ],
-        ).createShader(Rect.fromLTWH(pos.dx - 1, beaconY - 20, 2, 20))
-        ..strokeWidth = 2;
-      canvas.drawLine(Offset(pos.dx, beaconY), Offset(pos.dx, beaconY - 20), rayPaint);
+        ).createShader(const Rect.fromLTWH(0, 0, 2, 20));
+      }
+      _beaconRayPaint.shader = _beaconRayShader;
+      final intensity = (beaconAlpha * 0.4 * opacity).clamp(0.0, 1.0);
+      final level = (intensity * _beaconRayIntensityLevels)
+          .round()
+          .clamp(0, _beaconRayIntensityLevels);
+      final key = (color.value << 6) ^ level;
+      _beaconRayPaint.colorFilter = _beaconRayFilterCache.putIfAbsent(
+        key,
+        () => ColorFilter.mode(
+          color.withOpacity(level / _beaconRayIntensityLevels),
+          BlendMode.modulate,
+        ),
+      );
+      canvas.save();
+      canvas.translate(pos.dx - 1, beaconY - 20);
+      canvas.drawLine(
+        const Offset(1, 20),
+        const Offset(1, 0),
+        _beaconRayPaint,
+      );
+      canvas.restore();
+      _beaconRayPaint.colorFilter = null;
     }
   }
 
   void _drawScanLines(Canvas canvas, Size size) {
     if (materializeValue < 0.8) return;
     final scanFade = ((materializeValue - 0.8) / 0.2).clamp(0.0, 1.0);
+    if (scanFade <= 0.01) return;
 
     // Horizontal scan lines
     final scanY = (mainAnimation * 2 % 1.0) * size.height;
 
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
+    if (_scanlineShader == null || _scanlineShaderWidth != size.width) {
+      _scanlineShaderWidth = size.width;
+      _scanlineShader = const LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: [
           Colors.transparent,
-          NeonColors.cyan.withOpacity(0.15 * scanFade),
-          NeonColors.cyan.withOpacity(0.3 * scanFade),
-          NeonColors.cyan.withOpacity(0.15 * scanFade),
+          Colors.white54,
+          Colors.white,
+          Colors.white54,
           Colors.transparent,
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 2, size.width, 4));
-
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 2, size.width, 4), scanPaint);
+      ).createShader(Rect.fromLTWH(0, 0, _scanlineShaderWidth, 4));
+    }
+    _scanlinePaint.shader = _scanlineShader;
+    final scanIntensity = (0.3 * scanFade).clamp(0.0, 1.0);
+    final scanLevel = (scanIntensity * _scanlineIntensityLevels)
+        .round()
+        .clamp(0, _scanlineIntensityLevels);
+    final scanKey = (NeonColors.cyan.value << 6) ^ scanLevel;
+    _scanlinePaint.colorFilter = _scanlineFilterCache.putIfAbsent(
+      scanKey,
+      () => ColorFilter.mode(
+        NeonColors.cyan.withOpacity(scanLevel / _scanlineIntensityLevels),
+        BlendMode.modulate,
+      ),
+    );
+    canvas.save();
+    canvas.translate(0, scanY - 2);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 4), _scanlinePaint);
+    canvas.restore();
+    _scanlinePaint.colorFilter = null;
 
     // Secondary scan line
     final scan2Y = ((mainAnimation * 2 + 0.5) % 1.0) * size.height;
-    final scan2Paint = Paint()
-      ..color = NeonColors.magenta.withOpacity(0.1 * scanFade);
-    canvas.drawRect(Rect.fromLTWH(0, scan2Y - 1, size.width, 2), scan2Paint);
+    _scanlinePaint2.color = NeonColors.magenta.withOpacity(0.1 * scanFade);
+    canvas.drawRect(
+      Rect.fromLTWH(0, scan2Y - 1, size.width, 2),
+      _scanlinePaint2,
+    );
   }
 
   void _drawVolumetricRays(Canvas canvas, Size size) {
     if (materializeValue < 0.7) return;
     final rayFade = ((materializeValue - 0.7) / 0.3).clamp(0.0, 1.0);
+    if (rayFade <= 0.01) return;
+    final rayLength = size.width * 0.7;
+    if (_volumetricRayShader == null || _volumetricRayShaderSize != size) {
+      _volumetricRayShaderSize = size;
+      _volumetricRayShader = const RadialGradient(
+        center: Alignment.center,
+        radius: 0.8,
+        colors: [
+          Colors.white,
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromCircle(center: center, radius: rayLength));
+    }
+    _volumetricRayPaint.shader = _volumetricRayShader;
+    final rayIntensity = (0.03 * rayFade).clamp(0.0, 1.0);
+    final rayLevel = (rayIntensity * _volumetricRayIntensityLevels)
+        .round()
+        .clamp(0, _volumetricRayIntensityLevels);
+    final rayKey = (NeonColors.cyan.value << 6) ^ rayLevel;
+    _volumetricRayPaint.colorFilter = _volumetricRayFilterCache.putIfAbsent(
+      rayKey,
+      () => ColorFilter.mode(
+        NeonColors.cyan.withOpacity(rayLevel / _volumetricRayIntensityLevels),
+        BlendMode.modulate,
+      ),
+    );
 
     // Light rays from center
     for (int i = 0; i < 6; i++) {
       final angle = (i / 6) * math.pi * 2 + mainAnimation * 0.3;
-      final rayLength = size.width * 0.7;
 
       final endPos = Offset(
         center.dx + rayLength * math.cos(angle),
         center.dy + rayLength * math.sin(angle),
       );
 
-      final rayPath = Path();
+      final rayPath = _volumetricRayPath..reset();
       rayPath.moveTo(center.dx, center.dy);
 
       // Cone shape
@@ -1220,65 +1569,77 @@ class _UltraEpicUniversePainter extends CustomPainter {
       );
       rayPath.close();
 
-      final rayPaint = Paint()
-        ..shader = RadialGradient(
-          center: Alignment.center,
-          radius: 0.8,
-          colors: [
-            NeonColors.cyan.withOpacity(0.03 * rayFade),
-            Colors.transparent,
-          ],
-        ).createShader(Rect.fromCircle(center: center, radius: rayLength));
-
-      canvas.drawPath(rayPath, rayPaint);
+      canvas.drawPath(rayPath, _volumetricRayPaint);
     }
+    _volumetricRayPaint.colorFilter = null;
   }
 
   void _drawGlitchEffect(Canvas canvas, Size size) {
-    final random = math.Random();
+    if (glitchIntensity <= 0.01) return;
+    if (size.width <= 0 || size.height <= 0) return;
+    int state = ((mainAnimation * 1000000).toInt() ^
+            (glitchIntensity * 10000).toInt()) &
+        0x7fffffff;
+
+    _glitchRedPaint.color = Colors.red.withOpacity(0.1 * glitchIntensity);
+    _glitchCyanPaint.color = NeonColors.cyan.withOpacity(0.1 * glitchIntensity);
 
     // Random horizontal slice displacement
     for (int i = 0; i < 5; i++) {
-      final sliceY = random.nextDouble() * size.height;
-      final sliceHeight = 2 + random.nextDouble() * 8;
-      final offsetX = (random.nextDouble() - 0.5) * 20 * glitchIntensity;
+      state = _lcgNext(state);
+      final sliceY = _lcgUnit(state) * size.height;
+      state = _lcgNext(state);
+      final sliceHeight = 2 + _lcgUnit(state) * 8;
+      state = _lcgNext(state);
+      final offsetX = (_lcgUnit(state) - 0.5) * 20 * glitchIntensity;
 
       // RGB split
       final redRect = Rect.fromLTWH(-offsetX, sliceY, size.width, sliceHeight);
       final cyanRect = Rect.fromLTWH(offsetX, sliceY, size.width, sliceHeight);
 
-      canvas.drawRect(redRect, Paint()..color = Colors.red.withOpacity(0.1 * glitchIntensity));
-      canvas.drawRect(cyanRect, Paint()..color = NeonColors.cyan.withOpacity(0.1 * glitchIntensity));
+      canvas.drawRect(redRect, _glitchRedPaint);
+      canvas.drawRect(cyanRect, _glitchCyanPaint);
     }
 
     // Static noise
     for (int i = 0; i < 50; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = random.nextDouble() * size.height;
-      final noiseSize = 1 + random.nextDouble() * 3;
+      state = _lcgNext(state);
+      final x = _lcgUnit(state) * size.width;
+      state = _lcgNext(state);
+      final y = _lcgUnit(state) * size.height;
+      state = _lcgNext(state);
+      final noiseSize = 1 + _lcgUnit(state) * 3;
+      state = _lcgNext(state);
+      final noiseAlpha = _lcgUnit(state) * 0.3 * glitchIntensity;
+      if (noiseAlpha <= 0.01) continue;
 
+      _glitchNoisePaint.color = Colors.white.withOpacity(noiseAlpha);
       canvas.drawRect(
         Rect.fromLTWH(x, y, noiseSize, noiseSize),
-        Paint()..color = Colors.white.withOpacity(random.nextDouble() * 0.3 * glitchIntensity),
+        _glitchNoisePaint,
       );
     }
   }
 
   void _drawVignette(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
 
-    final vignettePaint = Paint()
-      ..shader = RadialGradient(
+    if (_vignetteShader == null || _vignetteShaderSize != size) {
+      _vignetteShaderSize = size;
+      _vignetteShader = const RadialGradient(
         colors: [
           Colors.transparent,
           Colors.transparent,
-          Colors.black.withOpacity(0.4),
-          Colors.black.withOpacity(0.8),
+          Color(0x66000000),
+          Color(0xCC000000),
         ],
-        stops: const [0.0, 0.5, 0.8, 1.0],
+        stops: [0.0, 0.5, 0.8, 1.0],
       ).createShader(rect);
+    }
+    _vignettePaint.shader = _vignetteShader;
 
-    canvas.drawRect(rect, vignettePaint);
+    canvas.drawRect(rect, _vignettePaint);
   }
 
   @override

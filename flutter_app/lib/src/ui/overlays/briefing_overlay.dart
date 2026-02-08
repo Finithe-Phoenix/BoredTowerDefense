@@ -690,19 +690,23 @@ class _CornerPainter extends CustomPainter {
 
   _CornerPainter({required this.color});
 
+  static final Paint _strokePaint = Paint()..style = PaintingStyle.stroke;
+  static final Path _cornerPath = Path();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    if (size.width <= 0 || size.height <= 0) return;
+    _strokePaint
       ..color = color.withOpacity(0.6)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 2;
 
-    final path = Path()
+    _cornerPath
+      ..reset()
       ..moveTo(0, size.height * 0.7)
       ..lineTo(0, 0)
       ..lineTo(size.width * 0.7, 0);
 
-    canvas.drawPath(path, paint);
+    canvas.drawPath(_cornerPath, _strokePaint);
   }
 
   @override
@@ -716,10 +720,23 @@ class _ScanLinePainter extends CustomPainter {
 
   _ScanLinePainter({required this.progress, required this.color});
 
+  static final Paint _scanPaint = Paint();
+  static final Map<int, Shader> _scanShaders = {};
+
+  static int _scanKey(Size size, int colorValue) {
+    return (size.width.round() << 16) ^ colorValue;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..shader = LinearGradient(
+    if (size.width <= 0 || size.height <= 0) return;
+    final y = progress * size.height;
+    final key = _scanKey(size, color.value);
+    final shader = _scanShaders.putIfAbsent(key, () {
+      if (_scanShaders.length > 32) {
+        _scanShaders.clear();
+      }
+      return LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
@@ -729,12 +746,15 @@ class _ScanLinePainter extends CustomPainter {
         ],
         stops: const [0.0, 0.5, 1.0],
       ).createShader(Rect.fromLTWH(0, 0, size.width, 100));
-
-    final y = progress * size.height;
+    });
+    _scanPaint.shader = shader;
+    canvas.save();
+    canvas.translate(0, y - 50);
     canvas.drawRect(
-      Rect.fromLTWH(0, y - 50, size.width, 100),
-      paint,
+      Rect.fromLTWH(0, 0, size.width, 100),
+      _scanPaint,
     );
+    canvas.restore();
   }
 
   @override

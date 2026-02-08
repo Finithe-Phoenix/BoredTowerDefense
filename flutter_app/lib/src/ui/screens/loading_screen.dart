@@ -8,6 +8,23 @@ import '../../services/sprite_cache_service.dart';
 import '../../services/storage_service.dart';
 import '../../services/level_service.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Tech-grid loading screen with cyberpunk visual effects.
 ///
 /// Layers (bottom to top):
@@ -48,7 +65,7 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   // Data stream particles
   final List<_DataParticle> _particles = [];
-  final math.Random _random = math.Random();
+  final _FastRng _random = _FastRng();
 
   // Timers for cleanup
   Timer? _glitchDelayTimer;
@@ -621,9 +638,14 @@ class _ScanLinePainter extends CustomPainter {
   static final Paint _scanPaint = Paint();
   static final Paint _subtleScanPaint = Paint()..color = const Color(0x08000000);
   static final Paint _verticalScanPaint = Paint();
+  static final Map<int, Shader> _scanShaderCache = {};
+  static final Map<int, Shader> _verticalShaderCache = {};
+  static double _scanShaderWidth = 0;
+  static double _verticalShaderHeight = 0;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Subtle horizontal scanlines (CRT effect)
     for (double y = 0; y < size.height; y += 3) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), _subtleScanPaint);
@@ -631,36 +653,53 @@ class _ScanLinePainter extends CustomPainter {
 
     // Primary horizontal scan beam
     final scanY = animation * (size.height + 100) - 50;
-    final scanGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        NeonColors.cyan.withOpacity(0.08),
-        NeonColors.cyan.withOpacity(0.2 + pulseAnimation * 0.1),
-        NeonColors.cyan.withOpacity(0.08),
-        Colors.transparent,
-      ],
-    );
     final scanRect = Rect.fromLTWH(0, scanY, size.width, 80);
-    _scanPaint.shader = scanGradient.createShader(scanRect);
+    if (_scanShaderWidth != size.width) {
+      _scanShaderWidth = size.width;
+      _scanShaderCache.clear();
+    }
+    const pulseLevels = 16;
+    final pulseLevel = (pulseAnimation * pulseLevels).round().clamp(0, pulseLevels);
+    final scanKey = (_scanShaderWidth.round() << 8) ^ pulseLevel;
+    final scanShader = _scanShaderCache.putIfAbsent(scanKey, () {
+      final midOpacity = 0.2 + (pulseLevel / pulseLevels) * 0.1;
+      return LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          NeonColors.cyan.withOpacity(0.08),
+          NeonColors.cyan.withOpacity(midOpacity),
+          NeonColors.cyan.withOpacity(0.08),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, _scanShaderWidth, 80));
+    });
+    _scanPaint.shader = scanShader;
     canvas.drawRect(scanRect, _scanPaint);
 
     // Secondary vertical scan beam (slower)
     final scanX = ((animation * 0.7) % 1.0) * (size.width + 60) - 30;
-    final vScanGradient = LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: [
-        Colors.transparent,
-        NeonColors.magenta.withOpacity(0.05),
-        NeonColors.magenta.withOpacity(0.12),
-        NeonColors.magenta.withOpacity(0.05),
-        Colors.transparent,
-      ],
-    );
     final vScanRect = Rect.fromLTWH(scanX, 0, 60, size.height);
-    _verticalScanPaint.shader = vScanGradient.createShader(vScanRect);
+    if (_verticalShaderHeight != size.height) {
+      _verticalShaderHeight = size.height;
+      _verticalShaderCache.clear();
+    }
+    final vKey = _verticalShaderHeight.round();
+    final vShader = _verticalShaderCache.putIfAbsent(vKey, () {
+      return LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Colors.transparent,
+          NeonColors.magenta.withOpacity(0.05),
+          NeonColors.magenta.withOpacity(0.12),
+          NeonColors.magenta.withOpacity(0.05),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, 60, _verticalShaderHeight));
+    });
+    _verticalScanPaint.shader = vShader;
     canvas.drawRect(vScanRect, _verticalScanPaint);
   }
 
@@ -1002,7 +1041,7 @@ class _GlitchTextWidget extends StatelessWidget {
 
   static const _glitchChars = r'!@#$%^&*()_+-=[]{}|;:<>/?01';
 
-  String _generateGlitchText(String original, math.Random random) {
+  String _generateGlitchText(String original, _FastRng random) {
     if (!isGlitching) return original;
     final chars = original.split('');
     final glitchCount = (chars.length * 0.3).round();
@@ -1015,7 +1054,7 @@ class _GlitchTextWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final random = math.Random(glitchFrame);
+    final random = _FastRng(glitchFrame);
     final displayText = _generateGlitchText(text, random);
     final primaryColor = isComplete ? NeonColors.green : NeonColors.cyan;
 
@@ -1082,34 +1121,59 @@ class _DataStreamPainter extends CustomPainter {
   static final Paint _particlePaint = Paint();
   static final Paint _glowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static const int _charPainterCacheLimit = 64;
+  static final Map<int, TextPainter> _charPainterCache = {};
 
   @override
   void paint(Canvas canvas, Size size) {
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-
+    var cacheExceeded = false;
     for (final p in particles) {
+      if (p.opacity <= 0.02) continue;
       final x = p.x * size.width;
       final y = p.y * size.height;
 
       // Particle glow
-      _glowPaint.color = p.color.withOpacity(p.opacity * 0.3);
-      canvas.drawCircle(Offset(x, y), p.size * 2, _glowPaint);
+      final glowAlpha = p.opacity * 0.3;
+      if (glowAlpha > 0.01) {
+        _glowPaint.color = p.color.withOpacity(glowAlpha);
+        canvas.drawCircle(Offset(x, y), p.size * 2, _glowPaint);
+      }
 
       // Particle core
       _particlePaint.color = p.color.withOpacity(p.opacity);
       canvas.drawCircle(Offset(x, y), p.size, _particlePaint);
 
       // Binary character above particle
-      textPainter.text = TextSpan(
-        text: p.char,
-        style: TextStyle(
-          fontFamily: 'monospace',
-          fontSize: 10,
-          color: p.color.withOpacity(p.opacity * 0.7),
-        ),
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, Offset(x - 3, y - 14));
+      final textAlpha = p.opacity * 0.7;
+      if (textAlpha >= 0.05) {
+        final alphaKey = (textAlpha * 32).round().clamp(0, 32);
+        final rgb = p.color.value & 0x00FFFFFF;
+        final charCode = p.char.codeUnitAt(0) & 0xFF;
+        final cacheKey = (alphaKey << 32) | (charCode << 24) | rgb;
+        final painter = _charPainterCache.putIfAbsent(cacheKey, () {
+          final tp = TextPainter(textDirection: TextDirection.ltr);
+          tp.text = TextSpan(
+            text: p.char,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 10,
+              color: p.color.withOpacity(alphaKey / 32),
+            ),
+          );
+          tp.layout();
+          return tp;
+        });
+        painter.paint(canvas, Offset(x - 3, y - 14));
+        if (_charPainterCache.length > _charPainterCacheLimit) {
+          cacheExceeded = true;
+        }
+      }
+    }
+    if (cacheExceeded) {
+      for (final tp in _charPainterCache.values) {
+        tp.dispose();
+      }
+      _charPainterCache.clear();
     }
   }
 
@@ -1219,3 +1283,4 @@ class _CornerPainter extends CustomPainter {
   bool shouldRepaint(covariant _CornerPainter oldDelegate) =>
       oldDelegate.pulseProgress != pulseProgress || oldDelegate.isActive != isActive;
 }
+

@@ -18,6 +18,23 @@ import 'enemy_manager.dart';
 import '../../services/audio_service.dart';
 import '../../models/upgrade_data.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   TowerManager({
     required this.tileSize,
@@ -38,10 +55,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   bool blockRejected = false;
   double _ghostPulse = 0;
   double _targetingAccumulator = 0;
-  final math.Random _random = math.Random();
+  final _FastRng _random = _FastRng();
+  final List<Enemy> _teslaNearbyScratch = <Enemy>[];
   static const double _targetingIntervalBase = 1 / 30;
-  double _resonanceTimer = 0;
-  static const double _resonanceInterval = 0.5;
 
   /// Currently selected tower type for placement
   TowerType selectedTowerType = TowerType.pulseArcher;
@@ -81,6 +97,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     final cell = screenToGrid(tower.position, tileSize);
     occupied.remove(cell);
     tower.removeFromParent();
+    if (_towers.isNotEmpty) {
+      _updateResonanceFields();
+    }
     return true;
   }
 
@@ -127,6 +146,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     add(tower);
     _towers.add(tower);
     occupied.add(cell);
+    if (_towers.isNotEmpty) {
+      _updateResonanceFields();
+    }
 
     // Play build sound
     AudioService.instance.playBuild();
@@ -188,7 +210,7 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     target.takeDamage(damage);
 
     // Chain logic
-    final nearby = <Enemy>[];
+    final nearby = _teslaNearbyScratch;
     enemyManager?.queryEnemiesInRange(target.position, 60, nearby);
     int chained = 0;
     for (final e in nearby) {
@@ -197,6 +219,7 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
            chained++;
        }
     }
+    nearby.clear();
     // Sound removed - Tesla fires too rapidly
   }
 
@@ -262,9 +285,9 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     if (_targetingAccumulator >= interval) {
       _targetingAccumulator = 0;
       final manager = enemyManager;
-      if (manager != null) {
-        manager.rebuildSpatialIndex();
-        for (final tower in towers) {
+      if (manager != null && manager.aliveCount > 0) {
+        manager.rebuildSpatialIndex(force: false);
+        for (final tower in _towers) {
           tower.updateTargeting(manager);
         }
       }
@@ -275,15 +298,7 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       _ghostPulse -= math.pi * 2;
     }
 
-    if (towerCount > 0) {
-      _resonanceTimer += dt;
-      if (_resonanceTimer >= _resonanceInterval) {
-        _resonanceTimer = 0;
-        _updateResonanceFields();
-      }
-    } else {
-      _resonanceTimer = 0;
-    }
+    // Resonance fields are recomputed only when towers are placed/removed.
   }
 
   void _updateResonanceFields() {
@@ -406,3 +421,4 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     return world.tileTypes[candidate.y][candidate.x] != 2;
   }
 }
+

@@ -16,6 +16,7 @@ import '../../services/level_service.dart';
 class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Button references for state updates
   final List<HudButton> _towerButtons = [];
+  final Map<HudButton, TowerType> _towerButtonTypes = <HudButton, TowerType>{};
   late HudButton pulseAbilityBtn;
   late HudButton mineAbilityBtn;
   late HudButton sellButton;
@@ -24,7 +25,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   double _time = 0;
   final Map<String, _TextCache> _textCache = {};
-  static const int _maxTextCacheSize = 100; // Limit cache to prevent memory leak
+  static const int _maxTextCacheSize =
+      100; // Limit cache to prevent memory leak
 
   // Speed control
   static const List<double> speedOptions = [1.0, 2.0];
@@ -69,8 +71,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   final Paint _towerInfoBorderPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
-  final Paint _resourceCardAccentPaint = Paint()
-    ..strokeWidth = 2;
+  final Paint _resourceCardAccentPaint = Paint()..strokeWidth = 2;
   final Paint _resourceCardDotGlowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
   final Paint _resourceCardDotCorePaint = Paint();
@@ -89,11 +90,36 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   final Paint _glowLineOuterPaint = Paint()
     ..strokeWidth = 6
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-  final Paint _glowLineCorePaint = Paint()
-    ..strokeWidth = 1;
+  final Paint _glowLineCorePaint = Paint()..strokeWidth = 1;
   final Paint _hexPatternPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.5;
+  final Paint _abilityHintBgPaint = Paint();
+  final Paint _abilityHintBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _speedBgPaint = Paint();
+  final Paint _speedBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _speedGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  final Paint _statPillBgPaint = Paint();
+  final Paint _statPillBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  final Paint _statPillIconOuterPaint = Paint();
+  final Paint _statPillIconInnerPaint = Paint();
+  final Paint _centerLinePaint = Paint()..strokeWidth = 1;
+  final Paint _centerDiamondPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _centerInnerDiamondPaint = Paint();
+  final Path _centerDiamondPath = Path();
+  final Path _centerInnerDiamondPath = Path();
+  final Paint _overdriveDotPaint = Paint();
+  final Paint _overdriveDotCorePaint = Paint();
+  final Paint _costPillPaint = Paint();
 
   // Wave Indicator optimized paints
   static final Paint _waveIndicatorBgPaint = Paint();
@@ -115,6 +141,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _waveIndicatorEnemyDotPaint = Paint();
   static final Paint _waveIndicatorEnemyGlowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _waveIndicatorTipPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _waveIndicatorEnemyPanelBgPaint = Paint();
+  static final Paint _waveIndicatorEnemyPanelBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _waveIndicatorBurstPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Path _waveIndicatorFramePath = Path();
+  static final Path _waveIndicatorEnemyPanelPath = Path();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA STREAM EFFECT PAINTS (Towers to HUD connection visualization)
@@ -156,12 +192,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
   static final Paint _glitchNoisePaint = Paint();
   static final Paint _glitchBlockPaint = Paint();
-  static final Paint _glitchLinePaint = Paint()
-    ..strokeWidth = 2;
-  static final Paint _glitchScanlinePaint = Paint()
-    ..strokeWidth = 1;
-  static final Paint _glitchStaticPaint = Paint()
-    ..strokeWidth = 1;
+  static final Paint _glitchLinePaint = Paint()..strokeWidth = 2;
+  static final Paint _glitchScanlinePaint = Paint()..strokeWidth = 1;
+  static final Paint _glitchStaticPaint = Paint()..strokeWidth = 1;
   static final Paint _glitchEdgePaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 3
@@ -171,7 +204,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _glitchDataPaint = Paint()
     ..strokeWidth = 1
     ..strokeCap = StrokeCap.round;
-  static final math.Random _glitchRandom = math.Random();
+  static int _glitchRngState = 0x51f1e3;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CRT/SCANLINE EFFECT PAINTS (Retro monitor aesthetic)
@@ -181,17 +214,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _crtVignettePaint = Paint();
   static final Paint _crtScreenGlowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-  static final Paint _crtRgbLinePaint = Paint()
-    ..strokeWidth = 1;
+  static final Paint _crtRgbLinePaint = Paint()..strokeWidth = 1;
   static final Paint _crtFlickerPaint = Paint();
-  static final Paint _crtPhosphorPaint = Paint()
-    ..blendMode = BlendMode.plus;
+  static final Paint _crtPhosphorPaint = Paint()..blendMode = BlendMode.plus;
   static final Paint _crtCurveHighlightPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
-  static final Paint _crtInterlacePaint = Paint()
-    ..strokeWidth = 0.5;
+  static final Paint _crtInterlacePaint = Paint()..strokeWidth = 0.5;
   static final Paint _crtNoisePaint = Paint();
-  static final math.Random _crtRandom = math.Random();
+  static int _crtRngState = 0x63d2a5;
   static double _crtFlickerPhase = 0.0;
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -239,7 +269,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     ..strokeWidth = 1.5
     ..strokeCap = StrokeCap.round;
   static final Path _holoPreviewPath = Path();
-  static final math.Random _holoPreviewRandom = math.Random();
+  static int _holoPreviewRngState = 0x9e3779b;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HOLOGRAPHIC MINIMAP PAINTS
@@ -271,15 +301,63 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _minimapHexPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.3;
-  static final Paint _minimapDataPaint = Paint()
-    ..strokeCap = StrokeCap.round;
+  static final Paint _minimapDataPaint = Paint()..strokeCap = StrokeCap.round;
   static final Paint _minimapPulsePaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
   static final Path _minimapPath = Path();
-  static final math.Random _minimapRandom = math.Random();
+  static int _minimapRngState = 0x1f3d5b;
   static double _minimapScanAngle = 0.0;
+
+  static int _lcgNext(int state) => (1664525 * state + 1013904223) & 0x7fffffff;
+
+  static double _glitchNextUnit() {
+    _glitchRngState = _lcgNext(_glitchRngState);
+    return _glitchRngState / 0x7fffffff;
+  }
+
+  static int _glitchNextInt(int max) {
+    if (max <= 0) return 0;
+    _glitchRngState = _lcgNext(_glitchRngState);
+    return _glitchRngState % max;
+  }
+
+  static bool _glitchNextBool() {
+    _glitchRngState = _lcgNext(_glitchRngState);
+    return (_glitchRngState & 1) == 0;
+  }
+
+  static double _crtNextUnit() {
+    _crtRngState = _lcgNext(_crtRngState);
+    return _crtRngState / 0x7fffffff;
+  }
+
+  static int _crtNextInt(int max) {
+    if (max <= 0) return 0;
+    _crtRngState = _lcgNext(_crtRngState);
+    return _crtRngState % max;
+  }
+
+  static bool _crtNextBool() {
+    _crtRngState = _lcgNext(_crtRngState);
+    return (_crtRngState & 1) == 0;
+  }
+
+  static double _holoPreviewNextUnit() {
+    _holoPreviewRngState = _lcgNext(_holoPreviewRngState);
+    return _holoPreviewRngState / 0x7fffffff;
+  }
+
+  static bool _holoPreviewNextBool() {
+    _holoPreviewRngState = _lcgNext(_holoPreviewRngState);
+    return (_holoPreviewRngState & 1) == 0;
+  }
+
+  static double _minimapNextUnit() {
+    _minimapRngState = _lcgNext(_minimapRngState);
+    return _minimapRngState / 0x7fffffff;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ADDITIONAL OPTIMIZED PAINTS (Avoid inline allocations in hot paths)
@@ -292,9 +370,41 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _alertGradientPaint = Paint();
   static final Paint _panelGradientPaint = Paint();
   static final Paint _genericBgPaint = Paint();
-  static final Paint _genericBorderPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _genericBorderPaint = Paint()
+    ..style = PaintingStyle.stroke;
   static final Paint _progressFillPaint = Paint();
   static final Paint _highlightGradientPaint = Paint();
+  static final Paint _cooldownBgPaint = Paint()
+    ..color = const Color(0xFF0a0a18);
+  static final Paint _cooldownGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _cooldownFillPaint = Paint();
+  static final Paint _cooldownBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _alertGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+  static final Paint _alertSecondaryGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _alertBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _alertInnerBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _alertScanlinePaint = Paint()..strokeWidth = 1;
+  static final Paint _alertCornerPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _alertCornerCorePaint = Paint();
+  static final Paint _alertIconGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Path _alertPath = Path();
+  static final Path _alertInnerPath = Path();
+  static final Paint _alertChevronPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Path _alertLeftChevronPath = Path();
+  static final Path _alertRightChevronPath = Path();
 
   double _layoutButtonWidth = 100.0;
   double _layoutAbilityWidth = 110.0;
@@ -314,7 +424,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   // Layout constants
   static double topBarHeight = 60.0;
-  static double bottomBarHeight = 20.0; // Reduced since buttons are now on sides
+  static double bottomBarHeight =
+      20.0; // Reduced since buttons are now on sides
   static double buttonHeight = 44.0;
   static double buttonSpacing = 12.0;
   static const bool reduceFlicker = true;
@@ -343,11 +454,15 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   Future<void> onLoad() async {
     await super.onLoad();
     priority = 100;
+    final game = findGame();
+    if (game is! BoredGamesGame) {
+      return;
+    }
 
     // Initialize boss health bar
     _bossHealthBar = BossHealthBar(
-      screenWidth: gameRef.size.x,
-      screenHeight: gameRef.size.y,
+      screenWidth: game.size.x,
+      screenHeight: game.size.y,
     );
     add(_bossHealthBar!);
   }
@@ -398,25 +513,31 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final leftButtonSpacing = (5.0 * scale).clamp(3.0, 8.0);
 
     // Calculate available height for left panel
-    final topOffset = topBarHeight + 100 * scale; // Below top bar and wave indicator
+    final compactWave = compact || screenHeight < 720;
+    final waveOffset = compactWave ? 60.0 * scale : 100.0 * scale;
+    final topOffset = topBarHeight + waveOffset;
     final availableHeight = screenHeight - topOffset - 20;
 
     // Dynamic tower buttons based on unlocks
     final unlockedTowers = LevelService.instance.getUnlockedTowers();
     _towerButtons.clear();
+    _towerButtonTypes.clear();
     _layoutButtonWidth = leftButtonWidth;
 
     // Calculate total buttons needed (towers + sell + upgrades + wave)
     final totalLeftButtons = unlockedTowers.length + 3;
-    final totalButtonsHeight = totalLeftButtons * leftButtonHeight + (totalLeftButtons - 1) * leftButtonSpacing;
+    final totalButtonsHeight = totalLeftButtons * leftButtonHeight +
+        (totalLeftButtons - 1) * leftButtonSpacing;
 
     // Adjust button height if needed to fit
     var adjustedButtonHeight = leftButtonHeight;
     var adjustedSpacing = leftButtonSpacing;
     if (totalButtonsHeight > availableHeight) {
       final ratio = availableHeight / totalButtonsHeight;
-      adjustedButtonHeight = (leftButtonHeight * ratio).clamp(24.0, leftButtonHeight);
-      adjustedSpacing = (leftButtonSpacing * ratio).clamp(2.0, leftButtonSpacing);
+      adjustedButtonHeight =
+          (leftButtonHeight * ratio).clamp(24.0, leftButtonHeight);
+      adjustedSpacing =
+          (leftButtonSpacing * ratio).clamp(2.0, leftButtonSpacing);
     }
 
     final leftPanelStartY = topOffset;
@@ -435,11 +556,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         onPressed: () => gameRef.towerManager.setSelectedTowerType(type),
       );
       _towerButtons.add(btn);
-      add(btn);
+      _towerButtonTypes[btn] = type;
     }
 
     // Action buttons below tower buttons
-    final actionButtonsStartY = leftPanelStartY + unlockedTowers.length * (adjustedButtonHeight + adjustedSpacing) + adjustedSpacing * 2;
+    final actionButtonsStartY = leftPanelStartY +
+        unlockedTowers.length * (adjustedButtonHeight + adjustedSpacing) +
+        adjustedSpacing * 2;
 
     sellButton = HudButton(
       label: 'SELL',
@@ -452,7 +575,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     upgradeButton = HudButton(
       label: 'UPGRADES',
-      position: Vector2(leftPanelX, actionButtonsStartY + adjustedButtonHeight + adjustedSpacing),
+      position: Vector2(leftPanelX,
+          actionButtonsStartY + adjustedButtonHeight + adjustedSpacing),
       size: Vector2(leftButtonWidth, adjustedButtonHeight),
       color: const Color(0xFF9C27B0),
       reduceFlicker: reduceFlicker,
@@ -461,7 +585,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     waveButton = HudButton(
       label: 'START WAVE',
-      position: Vector2(leftPanelX, actionButtonsStartY + 2 * (adjustedButtonHeight + adjustedSpacing)),
+      position: Vector2(leftPanelX,
+          actionButtonsStartY + 2 * (adjustedButtonHeight + adjustedSpacing)),
       size: Vector2(leftButtonWidth, adjustedButtonHeight),
       color: const Color(0xFF00FF88),
       reduceFlicker: reduceFlicker,
@@ -498,7 +623,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     mineAbilityBtn = HudButton(
       label: 'MINE',
-      position: Vector2(rightPanelX, rightAbilitiesY + rightButtonHeight + rightButtonSpacing),
+      position: Vector2(rightPanelX,
+          rightAbilitiesY + rightButtonHeight + rightButtonSpacing),
       size: Vector2(rightButtonWidth, rightButtonHeight),
       color: const Color(0xFFFF0066),
       reduceFlicker: reduceFlicker,
@@ -553,9 +679,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   void update(double dt) {
     super.update(dt);
     _time += dt;
+    final game = findGame();
+    if (game is! BoredGamesGame) {
+      return;
+    }
 
     // Wave transition animation
-    final currentWave = gameRef.enemyManager.currentWave;
+    final currentWave = game.enemyManager.currentWave;
     if (currentWave != _waveTransitionFrom && currentWave > 0) {
       if (_waveTransitionFrom > 0 && currentWave > _waveTransitionFrom) {
         _waveTransitionActive = true;
@@ -570,44 +700,50 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       }
     }
 
-    final selected = gameRef.towerManager.selectedTowerType;
+    final selected = game.towerManager.selectedTowerType;
     for (final btn in _towerButtons) {
-        final btnType = TowerType.values.firstWhere((t) => btn.label == t.name.split(' ').last.toUpperCase());
-        btn.isSelected = selected == btnType;
+      btn.isSelected = identical(_towerButtonTypes[btn], selected);
     }
 
-    waveButton.enabled = !gameRef.enemyManager.spawning;
-    pulseAbilityBtn.isSelected =
-        gameRef.pendingAbility == PendingAbility.pulse;
-    mineAbilityBtn.isSelected =
-        gameRef.pendingAbility == PendingAbility.mine;
-    sellButton.enabled = gameRef.towerManager.towers.isNotEmpty;
-    sellButton.isSelected = gameRef.sellMode;
+    waveButton.enabled = !game.enemyManager.spawning;
+    pulseAbilityBtn.isSelected = game.pendingAbility == PendingAbility.pulse;
+    mineAbilityBtn.isSelected = game.pendingAbility == PendingAbility.mine;
+    sellButton.enabled = game.towerManager.towers.isNotEmpty;
+    sellButton.isSelected = game.sellMode;
     upgradeButton.isSelected =
-        gameRef.awaitingUpgradeChoice || gameRef.upgradeOverlayActive;
+        game.awaitingUpgradeChoice || game.upgradeOverlayActive;
     _updateSelectionCache(selected);
     _updateResourceCache();
 
     // Update boss health bar
-    _bossHealthBar?.setBoss(gameRef.enemyManager.currentBoss);
+    _bossHealthBar?.setBoss(game.enemyManager.currentBoss);
+    _bossHealthBar?.updateLayout(
+      screenWidth: game.size.x,
+      topInset: topBarHeight,
+      compact: _isCompactHud(game.size.x, game.size.y) || game.size.y < 720,
+    );
   }
 
   @override
   void renderTree(Canvas canvas) {
-    if (gameRef.hideHud) return; // Hide in benchmark mode
-    if (gameRef.focusModeActive) return;
+    final game = findGame();
+    if (game is! BoredGamesGame) return;
+    if (game.hideHud) return; // Hide in benchmark mode
+    if (game.focusModeActive) return;
     super.renderTree(canvas);
   }
 
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    final game = findGame();
+    if (game is! BoredGamesGame) return;
 
-    final screenWidth = gameRef.size.x;
-    final screenHeight = gameRef.size.y;
+    final screenWidth = game.size.x;
+    final screenHeight = game.size.y;
 
-    if (gameRef.hideHud) return; // Hide HUD in benchmark/screenshot mode
-    if (gameRef.focusModeActive) return; // Hide standard HUD in FPS mode
+    if (game.hideHud) return; // Hide HUD in benchmark/screenshot mode
+    if (game.focusModeActive) return; // Hide standard HUD in FPS mode
 
     // Draw data stream effects (background layer - behind HUD panels)
     _drawDataStreamEffects(canvas, screenWidth, screenHeight);
@@ -616,7 +752,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _drawBottomPanel(canvas, screenWidth, screenHeight);
 
     // Draw holographic minimap (top-right corner)
-    if (!gameRef.reduceFx) {
+    if (!game.reduceFx) {
       _drawHolographicMinimap(canvas, screenWidth, screenHeight);
     }
 
@@ -631,7 +767,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // ═══ CRT/SCANLINE OVERLAY EFFECT (Always on for cyberpunk aesthetic) ═══
-    if (!gameRef.reduceFx) {
+    if (!game.reduceFx) {
       _drawCrtScanlineEffect(canvas, screenWidth, screenHeight);
     }
   }
@@ -639,7 +775,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   // ═══════════════════════════════════════════════════════════════════════════
   // CRT/SCANLINE EFFECT (Retro monitor aesthetic over HUD)
   // ═══════════════════════════════════════════════════════════════════════════
-  void _drawCrtScanlineEffect(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawCrtScanlineEffect(
+      Canvas canvas, double screenWidth, double screenHeight) {
     final animPhase = _time;
     _crtFlickerPhase += 0.016; // ~60fps time step
 
@@ -677,15 +814,18 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       for (double x = 0; x < screenWidth; x += rgbSpacing) {
         // Red line
         _crtRgbLinePaint.color = const Color(0xFFFF0000).withOpacity(0.02);
-        canvas.drawLine(Offset(x, 0), Offset(x, topPanelHeight), _crtRgbLinePaint);
+        canvas.drawLine(
+            Offset(x, 0), Offset(x, topPanelHeight), _crtRgbLinePaint);
 
         // Green line
         _crtRgbLinePaint.color = const Color(0xFF00FF00).withOpacity(0.02);
-        canvas.drawLine(Offset(x + 2, 0), Offset(x + 2, topPanelHeight), _crtRgbLinePaint);
+        canvas.drawLine(
+            Offset(x + 2, 0), Offset(x + 2, topPanelHeight), _crtRgbLinePaint);
 
         // Blue line
         _crtRgbLinePaint.color = const Color(0xFF0000FF).withOpacity(0.02);
-        canvas.drawLine(Offset(x + 4, 0), Offset(x + 4, topPanelHeight), _crtRgbLinePaint);
+        canvas.drawLine(
+            Offset(x + 4, 0), Offset(x + 4, topPanelHeight), _crtRgbLinePaint);
       }
       canvas.restore();
     }
@@ -708,7 +848,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _crtVignettePaint.shader = topVignetteGradient.createShader(
       Rect.fromLTWH(0, 0, screenWidth, topPanelHeight),
     );
-    canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight), _crtVignettePaint);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, screenWidth, topPanelHeight), _crtVignettePaint);
     _crtVignettePaint.shader = null;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -716,8 +857,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     final flickerValue = math.sin(_crtFlickerPhase * 50) * 0.02;
     if (flickerValue.abs() > 0.01) {
-      _crtFlickerPaint.color = Colors.white.withOpacity(flickerValue.abs() * 0.5);
-      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, topPanelHeight), _crtFlickerPaint);
+      _crtFlickerPaint.color =
+          Colors.white.withOpacity(flickerValue.abs() * 0.5);
+      canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, topPanelHeight), _crtFlickerPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -732,7 +875,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       _crtInterlacePaint.color = const Color(0xFF000000).withOpacity(0.04);
 
       for (double y = frameEven ? 0 : 1; y < topPanelHeight; y += 2) {
-        canvas.drawLine(Offset(0, y), Offset(screenWidth, y), _crtInterlacePaint);
+        canvas.drawLine(
+            Offset(0, y), Offset(screenWidth, y), _crtInterlacePaint);
       }
       canvas.restore();
     }
@@ -741,9 +885,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 6: PHOSPHOR GLOW (subtle colored glow on edges)
     // ═══════════════════════════════════════════════════════════════════════
     final phosphorPulse = 0.5 + math.sin(animPhase * 2) * 0.3;
-    _crtPhosphorPaint.color = const Color(0xFF00FFFF).withOpacity(0.02 * phosphorPulse);
+    _crtPhosphorPaint.color =
+        const Color(0xFF00FFFF).withOpacity(0.02 * phosphorPulse);
     canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, 2), _crtPhosphorPaint);
-    canvas.drawRect(Rect.fromLTWH(0, topPanelHeight - 2, screenWidth, 2), _crtPhosphorPaint);
+    canvas.drawRect(Rect.fromLTWH(0, topPanelHeight - 2, screenWidth, 2),
+        _crtPhosphorPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 7: SCREEN CURVE HIGHLIGHT (simulates curved CRT glass)
@@ -773,15 +919,15 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 8: STATIC NOISE (occasional digital artifacts)
     // ═══════════════════════════════════════════════════════════════════════
-    if (!gameRef.reduceFx && _crtRandom.nextDouble() < 0.05) {
-      final noiseCount = 3 + _crtRandom.nextInt(5);
+    if (!gameRef.reduceFx && _crtNextUnit() < 0.05) {
+      final noiseCount = 3 + _crtNextInt(5);
       for (int i = 0; i < noiseCount; i++) {
-        final noiseX = _crtRandom.nextDouble() * screenWidth;
-        final noiseY = _crtRandom.nextDouble() * topPanelHeight;
-        final noiseW = 1 + _crtRandom.nextDouble() * 3;
-        final noiseH = 1 + _crtRandom.nextDouble() * 2;
+        final noiseX = _crtNextUnit() * screenWidth;
+        final noiseY = _crtNextUnit() * topPanelHeight;
+        final noiseW = 1 + _crtNextUnit() * 3;
+        final noiseH = 1 + _crtNextUnit() * 2;
 
-        _crtNoisePaint.color = _crtRandom.nextBool()
+        _crtNoisePaint.color = _crtNextBool()
             ? Colors.white.withOpacity(0.15)
             : Colors.black.withOpacity(0.2);
 
@@ -797,10 +943,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     if (bottomPanelY < screenHeight) {
       canvas.save();
-      canvas.clipRect(Rect.fromLTWH(0, bottomPanelY, screenWidth, screenHeight - bottomPanelY));
+      canvas.clipRect(Rect.fromLTWH(
+          0, bottomPanelY, screenWidth, screenHeight - bottomPanelY));
 
       _crtScanlinePaint.color = const Color(0xFF000000).withOpacity(0.06);
-      for (double y = bottomPanelY + scanlineOffset; y < screenHeight; y += scanlineSpacing) {
+      for (double y = bottomPanelY + scanlineOffset;
+          y < screenHeight;
+          y += scanlineSpacing) {
         canvas.drawLine(
           Offset(0, y),
           Offset(screenWidth, y),
@@ -817,11 +966,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final edgeGlowAlpha = 0.05 + math.sin(animPhase * 1.5) * 0.02;
 
       // Top-left corner glow
-      _crtScreenGlowPaint.color = const Color(0xFF00FFFF).withOpacity(edgeGlowAlpha);
+      _crtScreenGlowPaint.color =
+          const Color(0xFF00FFFF).withOpacity(edgeGlowAlpha);
       canvas.drawCircle(const Offset(0, 0), 60, _crtScreenGlowPaint);
 
       // Top-right corner glow
-      _crtScreenGlowPaint.color = const Color(0xFFFF00FF).withOpacity(edgeGlowAlpha);
+      _crtScreenGlowPaint.color =
+          const Color(0xFFFF00FF).withOpacity(edgeGlowAlpha);
       canvas.drawCircle(Offset(screenWidth, 0), 60, _crtScreenGlowPaint);
     }
   }
@@ -829,7 +980,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   // ═══════════════════════════════════════════════════════════════════════════
   // HOLOGRAPHIC MINIMAP WITH REAL-TIME ENTITY TRACKING
   // ═══════════════════════════════════════════════════════════════════════════
-  void _drawHolographicMinimap(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawHolographicMinimap(
+      Canvas canvas, double screenWidth, double screenHeight) {
     // Minimap positioned at bottom-left corner
     const minimapSize = 120.0;
     const minimapMargin = 15.0;
@@ -838,7 +990,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Check if we have enough vertical space (avoid overlapping with bottom panel)
     final bottomPanelTop = screenHeight - HudComponent.bottomBarHeight - 60;
     final minimapBottom = screenHeight - minimapMargin;
-    if (minimapBottom - minimapSize < bottomPanelTop + 20) return; // Not enough space
+    if (minimapBottom - minimapSize < bottomPanelTop + 20)
+      return; // Not enough space
 
     final minimapRect = Rect.fromLTWH(
       minimapMargin,
@@ -858,14 +1011,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final towers = gameRef.towerManager.towers;
     final enemies = gameRef.enemyManager.activeEnemies;
     final pathPoints = gameRef.worldLayer.waypoints;
-    final basePos = pathPoints.isNotEmpty ? pathPoints.last : Vector2(worldSize.x, worldSize.y / 2);
+    final basePos = pathPoints.isNotEmpty
+        ? pathPoints.last
+        : Vector2(worldSize.x, worldSize.y / 2);
 
     // Calculate scale factors
     final scaleX = (minimapSize - minimapPadding * 2) / worldSize.x;
     final scaleY = (minimapSize - minimapPadding * 2) / worldSize.y;
     final scale = math.min(scaleX, scaleY);
-    final offsetX = minimapRect.left + minimapPadding + (minimapSize - minimapPadding * 2 - worldSize.x * scale) / 2;
-    final offsetY = minimapRect.top + minimapPadding + (minimapSize - minimapPadding * 2 - worldSize.y * scale) / 2;
+    final offsetX = minimapRect.left +
+        minimapPadding +
+        (minimapSize - minimapPadding * 2 - worldSize.x * scale) / 2;
+    final offsetY = minimapRect.top +
+        minimapPadding +
+        (minimapSize - minimapPadding * 2 - worldSize.y * scale) / 2;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: BACKGROUND WITH HOLOGRAPHIC TINT
@@ -888,13 +1047,21 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 2: HEXAGONAL GRID OVERLAY
     // ═══════════════════════════════════════════════════════════════════════
     canvas.save();
-    canvas.clipRRect(RRect.fromRectAndRadius(minimapRect, const Radius.circular(6)));
+    canvas.clipRRect(
+        RRect.fromRectAndRadius(minimapRect, const Radius.circular(6)));
 
     _minimapHexPaint.color = NeonTheme.cyberCyan.withOpacity(0.1);
     final hexGridSize = 12.0;
-    for (double y = minimapRect.top; y < minimapRect.bottom; y += hexGridSize * 0.866) {
-      final rowOffset = ((y - minimapRect.top) / (hexGridSize * 0.866)).floor() % 2 == 0 ? 0.0 : hexGridSize / 2;
-      for (double x = minimapRect.left + rowOffset; x < minimapRect.right; x += hexGridSize) {
+    for (double y = minimapRect.top;
+        y < minimapRect.bottom;
+        y += hexGridSize * 0.866) {
+      final rowOffset =
+          ((y - minimapRect.top) / (hexGridSize * 0.866)).floor() % 2 == 0
+              ? 0.0
+              : hexGridSize / 2;
+      for (double x = minimapRect.left + rowOffset;
+          x < minimapRect.right;
+          x += hexGridSize) {
         _drawMiniHex(canvas, x, y, hexGridSize / 2, _minimapHexPaint);
       }
     }
@@ -937,7 +1104,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
           final dotY = offsetY + (p1.y + (p2.y - p1.y) * pathT) * scale;
 
           final dotAlpha = (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
-          _minimapDataPaint.color = NeonTheme.cyberMagenta.withOpacity(dotAlpha * 0.8);
+          _minimapDataPaint.color =
+              NeonTheme.cyberMagenta.withOpacity(dotAlpha * 0.8);
           canvas.drawCircle(Offset(dotX, dotY), 2, _minimapDataPaint);
         }
       }
@@ -953,7 +1121,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Tower range indicator (subtle)
       final rangeRadius = tower.range * scale * 0.5;
       _minimapPulsePaint.color = tower.color.withOpacity(0.1);
-      canvas.drawCircle(Offset(towerX, towerY), rangeRadius, _minimapPulsePaint);
+      canvas.drawCircle(
+          Offset(towerX, towerY), rangeRadius, _minimapPulsePaint);
 
       // Tower glow
       _minimapTowerPaint.color = tower.color.withOpacity(0.7);
@@ -1124,16 +1293,24 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Small "TACTICAL" text indicator (draw as lines to avoid TextPainter overhead)
     final labelX = minimapRect.left + 4;
     // T
-    canvas.drawLine(Offset(labelX, labelY), Offset(labelX + 4, labelY), _minimapDataPaint);
-    canvas.drawLine(Offset(labelX + 2, labelY), Offset(labelX + 2, labelY + 5), _minimapDataPaint);
+    canvas.drawLine(
+        Offset(labelX, labelY), Offset(labelX + 4, labelY), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 2, labelY), Offset(labelX + 2, labelY + 5),
+        _minimapDataPaint);
     // A
-    canvas.drawLine(Offset(labelX + 6, labelY + 5), Offset(labelX + 8, labelY), _minimapDataPaint);
-    canvas.drawLine(Offset(labelX + 8, labelY), Offset(labelX + 10, labelY + 5), _minimapDataPaint);
-    canvas.drawLine(Offset(labelX + 7, labelY + 3), Offset(labelX + 9, labelY + 3), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 6, labelY + 5), Offset(labelX + 8, labelY),
+        _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 8, labelY), Offset(labelX + 10, labelY + 5),
+        _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 7, labelY + 3),
+        Offset(labelX + 9, labelY + 3), _minimapDataPaint);
     // C
-    canvas.drawLine(Offset(labelX + 14, labelY), Offset(labelX + 12, labelY), _minimapDataPaint);
-    canvas.drawLine(Offset(labelX + 12, labelY), Offset(labelX + 12, labelY + 5), _minimapDataPaint);
-    canvas.drawLine(Offset(labelX + 12, labelY + 5), Offset(labelX + 14, labelY + 5), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 14, labelY), Offset(labelX + 12, labelY),
+        _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 12, labelY),
+        Offset(labelX + 12, labelY + 5), _minimapDataPaint);
+    canvas.drawLine(Offset(labelX + 12, labelY + 5),
+        Offset(labelX + 14, labelY + 5), _minimapDataPaint);
 
     // Entity count indicator
     final entityCount = enemies.length;
@@ -1168,7 +1345,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   /// Draw a small hexagon for the minimap grid
-  void _drawMiniHex(Canvas canvas, double cx, double cy, double radius, Paint paint) {
+  void _drawMiniHex(
+      Canvas canvas, double cx, double cy, double radius, Paint paint) {
     _minimapPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = i * math.pi / 3 - math.pi / 6;
@@ -1187,7 +1365,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   // ═══════════════════════════════════════════════════════════════════════════
   // GLITCH DISTORTION EFFECT (Wave transitions)
   // ═══════════════════════════════════════════════════════════════════════════
-  void _drawGlitchDistortionEffect(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawGlitchDistortionEffect(
+      Canvas canvas, double screenWidth, double screenHeight) {
     final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
 
     // Flash intensity - peaks early then fades
@@ -1202,7 +1381,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Glitch intensity - highest in the middle of transition
     final glitchIntensity = t < 0.5 ? t * 2 : (1 - t) * 2;
-    final isGlitching = _glitchRandom.nextDouble() < glitchIntensity * 0.8;
+    final isGlitching = _glitchNextUnit() < glitchIntensity * 0.8;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: CHROMATIC ABERRATION (RGB SPLIT)
@@ -1211,17 +1390,21 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final chromaOffset = glitchIntensity * 8;
 
       // Red channel shift - left
-      _glitchRedPaint.color = const Color(0xFFFF0044).withOpacity(glitchIntensity * 0.15);
+      _glitchRedPaint.color =
+          const Color(0xFFFF0044).withOpacity(glitchIntensity * 0.15);
       canvas.save();
       canvas.translate(-chromaOffset, 0);
-      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchRedPaint);
+      canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchRedPaint);
       canvas.restore();
 
       // Cyan channel shift - right
-      _glitchCyanPaint.color = const Color(0xFF00FFFF).withOpacity(glitchIntensity * 0.15);
+      _glitchCyanPaint.color =
+          const Color(0xFF00FFFF).withOpacity(glitchIntensity * 0.15);
       canvas.save();
       canvas.translate(chromaOffset, 0);
-      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchCyanPaint);
+      canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchCyanPaint);
       canvas.restore();
     }
 
@@ -1231,14 +1414,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (glitchIntensity > 0.3) {
       final blockCount = (glitchIntensity * 6).round();
       for (int i = 0; i < blockCount; i++) {
-        if (_glitchRandom.nextDouble() > 0.5) continue; // Random skip
+        if (_glitchNextUnit() > 0.5) continue; // Random skip
 
-        final blockY = _glitchRandom.nextDouble() * screenHeight;
-        final blockHeight = 2 + _glitchRandom.nextDouble() * 15;
-        final displacement = (_glitchRandom.nextDouble() - 0.5) * 30 * glitchIntensity;
+        final blockY = _glitchNextUnit() * screenHeight;
+        final blockHeight = 2 + _glitchNextUnit() * 15;
+        final displacement = (_glitchNextUnit() - 0.5) * 30 * glitchIntensity;
 
         // Draw displaced block with color tint
-        final blockColor = _glitchRandom.nextBool()
+        final blockColor = _glitchNextBool()
             ? const Color(0xFFFF0066)
             : const Color(0xFF00FFFF);
 
@@ -1256,19 +1439,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (glitchIntensity > 0.4 && isGlitching) {
       final noiseCount = (glitchIntensity * 20).round();
       for (int i = 0; i < noiseCount; i++) {
-        final noiseX = _glitchRandom.nextDouble() * screenWidth;
-        final noiseY = _glitchRandom.nextDouble() * screenHeight;
-        final noiseW = 5 + _glitchRandom.nextDouble() * 25;
-        final noiseH = 2 + _glitchRandom.nextDouble() * 8;
+        final noiseX = _glitchNextUnit() * screenWidth;
+        final noiseY = _glitchNextUnit() * screenHeight;
+        final noiseW = 5 + _glitchNextUnit() * 25;
+        final noiseH = 2 + _glitchNextUnit() * 8;
 
-        final noiseColor = _glitchRandom.nextDouble() < 0.3
+        final noiseColor = _glitchNextUnit() < 0.3
             ? Colors.white
-            : (_glitchRandom.nextBool()
+            : (_glitchNextBool()
                 ? const Color(0xFFFF0066)
                 : const Color(0xFF00FFFF));
 
         _glitchNoisePaint.color = noiseColor.withOpacity(glitchIntensity * 0.5);
-        canvas.drawRect(Rect.fromLTWH(noiseX, noiseY, noiseW, noiseH), _glitchNoisePaint);
+        canvas.drawRect(
+            Rect.fromLTWH(noiseX, noiseY, noiseW, noiseH), _glitchNoisePaint);
       }
     }
 
@@ -1281,11 +1465,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       for (int i = 0; i < scanlineCount; i++) {
         final y = i * scanlineSpacing;
-        final jitter = isGlitching && _glitchRandom.nextDouble() < 0.1
-            ? (_glitchRandom.nextDouble() - 0.5) * 10 * glitchIntensity
+        final jitter = isGlitching && _glitchNextUnit() < 0.1
+            ? (_glitchNextUnit() - 0.5) * 10 * glitchIntensity
             : 0.0;
 
-        final scanAlpha = (0.03 + math.sin(_time * 30 + i * 0.1) * 0.02) * glitchIntensity;
+        final scanAlpha =
+            (0.03 + math.sin(_time * 30 + i * 0.1) * 0.02) * glitchIntensity;
         _glitchScanlinePaint.color = Colors.black.withOpacity(scanAlpha);
         canvas.drawLine(
           Offset(jitter, y),
@@ -1301,11 +1486,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (glitchIntensity > 0.5 && isGlitching) {
       final staticLineCount = (glitchIntensity * 15).round();
       for (int i = 0; i < staticLineCount; i++) {
-        final y = _glitchRandom.nextDouble() * screenHeight;
-        final startX = _glitchRandom.nextDouble() * screenWidth * 0.3;
-        final endX = startX + _glitchRandom.nextDouble() * screenWidth * 0.7;
+        final y = _glitchNextUnit() * screenHeight;
+        final startX = _glitchNextUnit() * screenWidth * 0.3;
+        final endX = startX + _glitchNextUnit() * screenWidth * 0.7;
 
-        _glitchStaticPaint.color = Colors.white.withOpacity(glitchIntensity * 0.4);
+        _glitchStaticPaint.color =
+            Colors.white.withOpacity(glitchIntensity * 0.4);
         canvas.drawLine(Offset(startX, y), Offset(endX, y), _glitchStaticPaint);
       }
     }
@@ -1316,21 +1502,26 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (flashAlpha > 0.01) {
       // White core flash
       _glitchFlashPaint.color = Colors.white.withOpacity(flashAlpha * 0.5);
-      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchFlashPaint);
+      canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, screenHeight), _glitchFlashPaint);
 
       // Cyberpunk color overlay
       final colorFlash = t < 0.15
           ? const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.3)
           : const Color(0xFFFF00FF).withOpacity(flashAlpha * 0.2);
       _colorFlashPaint.color = colorFlash;
-      canvas.drawRect(Rect.fromLTWH(0, 0, screenWidth, screenHeight), _colorFlashPaint);
+      canvas.drawRect(
+          Rect.fromLTWH(0, 0, screenWidth, screenHeight), _colorFlashPaint);
 
       // Animated scan lines
       if (t < 0.3) {
         for (int i = 0; i < 8; i++) {
-          final scanY = (screenHeight / 8) * i + (_time * 500 % (screenHeight / 8));
-          _glitchLinePaint.color = const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.4);
-          canvas.drawLine(Offset(0, scanY), Offset(screenWidth, scanY), _glitchLinePaint);
+          final scanY =
+              (screenHeight / 8) * i + (_time * 500 % (screenHeight / 8));
+          _glitchLinePaint.color =
+              const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.4);
+          canvas.drawLine(
+              Offset(0, scanY), Offset(screenWidth, scanY), _glitchLinePaint);
         }
       }
     }
@@ -1340,10 +1531,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     if (t < 0.4) {
       final edgeAlpha = t < 0.1 ? (t / 0.1) : (1 - (t - 0.1) / 0.3);
-      final edgeJitter = isGlitching ? (_glitchRandom.nextDouble() - 0.5) * 5 : 0.0;
+      final edgeJitter = isGlitching ? (_glitchNextUnit() - 0.5) * 5 : 0.0;
 
       // Glitched border edges
-      _glitchEdgePaint.color = const Color(0xFFFF00FF).withOpacity(edgeAlpha * 0.6);
+      _glitchEdgePaint.color =
+          const Color(0xFFFF00FF).withOpacity(edgeAlpha * 0.6);
 
       // Top edge with jitter
       canvas.drawLine(
@@ -1360,9 +1552,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
 
       // Cyan secondary edges
-      _glitchEdgePaint.color = const Color(0xFF00FFFF).withOpacity(edgeAlpha * 0.4);
+      _glitchEdgePaint.color =
+          const Color(0xFF00FFFF).withOpacity(edgeAlpha * 0.4);
       canvas.drawLine(Offset(2, 0), Offset(2, screenHeight), _glitchEdgePaint);
-      canvas.drawLine(Offset(screenWidth - 2, 0), Offset(screenWidth - 2, screenHeight), _glitchEdgePaint);
+      canvas.drawLine(Offset(screenWidth - 2, 0),
+          Offset(screenWidth - 2, screenHeight), _glitchEdgePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1371,16 +1565,17 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (glitchIntensity > 0.6 && isGlitching) {
       final dataCount = (glitchIntensity * 8).round();
       for (int i = 0; i < dataCount; i++) {
-        final dataX = _glitchRandom.nextDouble() * screenWidth;
-        final dataY = _glitchRandom.nextDouble() * screenHeight;
-        final dataLength = 3 + _glitchRandom.nextInt(8);
+        final dataX = _glitchNextUnit() * screenWidth;
+        final dataY = _glitchNextUnit() * screenHeight;
+        final dataLength = 3 + _glitchNextInt(8);
 
-        _glitchDataPaint.color = const Color(0xFF00FF00).withOpacity(glitchIntensity * 0.4);
+        _glitchDataPaint.color =
+            const Color(0xFF00FF00).withOpacity(glitchIntensity * 0.4);
 
         // Draw small data blips
         for (int j = 0; j < dataLength; j++) {
           final blipX = dataX + j * 4;
-          final blipHeight = 2 + _glitchRandom.nextDouble() * 6;
+          final blipHeight = 2 + _glitchNextUnit() * 6;
           canvas.drawLine(
             Offset(blipX, dataY),
             Offset(blipX, dataY + blipHeight),
@@ -1414,7 +1609,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
       redPainter.paint(
         canvas,
-        Offset(centerX - redPainter.width / 2 - textGlitchOffset, centerY - redPainter.height / 2),
+        Offset(centerX - redPainter.width / 2 - textGlitchOffset,
+            centerY - redPainter.height / 2),
       );
 
       // Cyan shadow
@@ -1430,7 +1626,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
       cyanPainter.paint(
         canvas,
-        Offset(centerX - cyanPainter.width / 2 + textGlitchOffset, centerY - cyanPainter.height / 2),
+        Offset(centerX - cyanPainter.width / 2 + textGlitchOffset,
+            centerY - cyanPainter.height / 2),
       );
 
       // Main text
@@ -1450,7 +1647,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
       mainPainter.paint(
         canvas,
-        Offset(centerX - mainPainter.width / 2, centerY - mainPainter.height / 2),
+        Offset(
+            centerX - mainPainter.width / 2, centerY - mainPainter.height / 2),
       );
     }
 
@@ -1477,18 +1675,19 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
   }
 
-  void _drawFocusTimerOverlay(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawFocusTimerOverlay(
+      Canvas canvas, double screenWidth, double screenHeight) {
     if (!gameRef.focusModeActive) return;
-    
+
     final timer = gameRef.focusModeTimer;
     final max = gameRef.focusModeMaxDuration;
     final progress = (timer / max).clamp(0.0, 1.0);
-    
+
     final barWidth = 200.0;
     final barHeight = 4.0;
     final x = (screenWidth - barWidth) / 2;
     final y = topBarHeight + 20;
-    
+
     // Draw timer bar
     canvas.drawRect(
       Rect.fromLTWH(x, y, barWidth, barHeight),
@@ -1501,7 +1700,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       Rect.fromLTWH(x, y, barWidth * progress, barHeight),
       _focusTimerFillPaint,
     );
-    
+
     final labelPainter = _getPainter(
       'focus-timer-label',
       'OVERDRIVE ACTIVE - ${timer.toStringAsFixed(1)}s',
@@ -1514,7 +1713,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         shadows: [Shadow(color: color, blurRadius: 4)],
       ),
     );
-    labelPainter.paint(canvas, Offset(x + (barWidth - labelPainter.width) / 2, y - 14));
+    labelPainter.paint(
+        canvas, Offset(x + (barWidth - labelPainter.width) / 2, y - 14));
   }
 
   void _drawAbilityTargetHint(Canvas canvas, double screenHeight) {
@@ -1523,10 +1723,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     final isTouch = gameRef.isTouchLayout;
     final label = switch (pending) {
-      PendingAbility.pulse =>
-        isTouch ? 'TOCA EL CAMPO' : 'CLICK EL CAMPO',
-      PendingAbility.mine =>
-        isTouch ? 'TOCA EL CAMINO' : 'CLICK EL CAMINO',
+      PendingAbility.pulse => isTouch ? 'TOCA EL CAMPO' : 'CLICK EL CAMPO',
+      PendingAbility.mine => isTouch ? 'TOCA EL CAMINO' : 'CLICK EL CAMINO',
       PendingAbility.none => '',
     };
     if (label.isEmpty) return;
@@ -1534,9 +1732,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final color = pending == PendingAbility.pulse
         ? const Color(0xFF00FFFF)
         : const Color(0xFFFF0066);
-    final button = pending == PendingAbility.pulse
-        ? pulseAbilityBtn
-        : mineAbilityBtn;
+    final button =
+        pending == PendingAbility.pulse ? pulseAbilityBtn : mineAbilityBtn;
 
     final painter = _getPainter(
       'ability-hint-$label-${isTouch ? 't' : 'd'}',
@@ -1559,17 +1756,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       Rect.fromLTWH(x - 6, y - 2, painter.width + 12, painter.height + 4),
       const Radius.circular(6),
     );
-    canvas.drawRRect(
-      rect,
-      Paint()..color = Colors.black.withOpacity(0.6),
-    );
-    canvas.drawRRect(
-      rect,
-      Paint()
-        ..color = color.withOpacity(0.4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    _abilityHintBgPaint.color = Colors.black.withOpacity(0.6);
+    canvas.drawRRect(rect, _abilityHintBgPaint);
+    _abilityHintBorderPaint.color = color.withOpacity(0.4);
+    canvas.drawRRect(rect, _abilityHintBorderPaint);
     painter.paint(canvas, Offset(x, y));
   }
 
@@ -1628,21 +1818,28 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Modern gaming HUD - slim top bar with gradient fade
     final panelRect = Rect.fromLTWH(0, 0, screenWidth, 50);
-    final gradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFF000000).withOpacity(0.9),
-        const Color(0xFF000000).withOpacity(0.5),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.7, 1.0],
-    ).createShader(panelRect);
-    canvas.drawRect(panelRect, Paint()..shader = gradient);
+    if (_topPanelRect != panelRect) {
+      _topPanelRect = panelRect;
+      _topPanelShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          const Color(0xFF000000).withOpacity(0.9),
+          const Color(0xFF000000).withOpacity(0.5),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.7, 1.0],
+      ).createShader(panelRect);
+    }
+    _panelPaint.shader = _topPanelShader;
+    canvas.drawRect(panelRect, _panelPaint);
+    _panelPaint.shader = null;
 
     // ═══ LEFT SIDE: Gold & Lives (horizontal layout) ═══
-    _drawCompactStat(canvas, 16, 14, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700));
-    _drawCompactStat(canvas, 110, 14, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466));
+    _drawCompactStat(
+        canvas, 16, 14, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700));
+    _drawCompactStat(
+        canvas, 110, 14, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466));
 
     // ═══ CENTER: Speed controls ═══
     _drawSpeedControls(canvas, screenWidth);
@@ -1660,7 +1857,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 10)],
       ),
     );
-    scorePainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 8));
+    scorePainter.paint(
+        canvas, Offset(screenWidth - scorePainter.width - 16, 8));
 
     final scoreLabelPainter = _getPainter(
       'score-label-modern',
@@ -1672,7 +1870,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         letterSpacing: 2,
       ),
     );
-    scoreLabelPainter.paint(canvas, Offset(screenWidth - scorePainter.width - 16, 32));
+    scoreLabelPainter.paint(
+        canvas, Offset(screenWidth - scorePainter.width - 16, 32));
 
     // ═══ WAVE INDICATOR - Below top bar, centered ═══
     _drawWaveIndicator(canvas, screenWidth);
@@ -1682,7 +1881,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   /// Compact stat display for top bar (horizontal)
-  void _drawCompactStat(Canvas canvas, double x, double y, String label, String value, Color color) {
+  void _drawCompactStat(Canvas canvas, double x, double y, String label,
+      String value, Color color) {
     // Label
     final labelPainter = _getPainter(
       'compact-label-$label',
@@ -1741,28 +1941,22 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final bgColor = isActive
           ? const Color(0xFF00FF88).withOpacity(0.25)
           : const Color(0xFF0a0a18).withOpacity(0.6);
-      canvas.drawRRect(rrect, Paint()..color = bgColor);
+      _speedBgPaint.color = bgColor;
+      canvas.drawRRect(rrect, _speedBgPaint);
 
       // Border
       final borderColor = isActive
           ? const Color(0xFF00FF88).withOpacity(0.8)
           : Colors.white.withOpacity(0.2);
-      canvas.drawRRect(
-        rrect,
-        Paint()
-          ..color = borderColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = isActive ? 1.5 : 1,
-      );
+      _speedBorderPaint
+        ..color = borderColor
+        ..strokeWidth = isActive ? 1.5 : 1;
+      canvas.drawRRect(rrect, _speedBorderPaint);
 
       // Glow when active
       if (isActive) {
-        canvas.drawRRect(
-          rrect.inflate(2),
-          Paint()
-            ..color = const Color(0xFF00FF88).withOpacity(0.3)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-        );
+        _speedGlowPaint.color = const Color(0xFF00FF88).withOpacity(0.3);
+        canvas.drawRRect(rrect.inflate(2), _speedGlowPaint);
       }
 
       // Label
@@ -1771,7 +1965,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         'speed-$label-$isActive',
         label,
         TextStyle(
-          color: isActive ? const Color(0xFF00FF88) : Colors.white.withOpacity(0.5),
+          color: isActive
+              ? const Color(0xFF00FF88)
+              : Colors.white.withOpacity(0.5),
           fontSize: 11,
           fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
           fontFamily: 'monospace',
@@ -1794,18 +1990,21 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   bool handleSpeedTap(Vector2 tapPosition) {
     if (gameRef.hideHud || gameRef.focusModeActive) return false;
 
-    if (_speed1xRect != null && _speed1xRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
+    if (_speed1xRect != null &&
+        _speed1xRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
       gameRef.timeScale = speedOptions[0];
       return true;
     }
-    if (_speed2xRect != null && _speed2xRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
+    if (_speed2xRect != null &&
+        _speed2xRect!.contains(Offset(tapPosition.x, tapPosition.y))) {
       gameRef.timeScale = speedOptions[1];
       return true;
     }
     return false;
   }
 
-  void _drawModernStat(Canvas canvas, double x, double y, String label, String value, Color color, IconData icon) {
+  void _drawModernStat(Canvas canvas, double x, double y, String label,
+      String value, Color color, IconData icon) {
     // Glowing background pill
     final pillWidth = 100.0;
     final pillHeight = 24.0;
@@ -1815,30 +2014,24 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
 
     // Background with color tint
-    canvas.drawRRect(
-      pillRect,
-      Paint()..color = color.withOpacity(0.15),
-    );
+    _statPillBgPaint.color = color.withOpacity(0.15);
+    canvas.drawRRect(pillRect, _statPillBgPaint);
 
     // Border glow
-    canvas.drawRRect(
-      pillRect,
-      Paint()
-        ..color = color.withOpacity(0.4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
-    );
+    _statPillBorderPaint.color = color.withOpacity(0.4);
+    canvas.drawRRect(pillRect, _statPillBorderPaint);
 
     // Icon circle
+    _statPillIconOuterPaint.color = color.withOpacity(0.3);
     canvas.drawCircle(
       Offset(x + 14, y + pillHeight / 2),
       8,
-      Paint()..color = color.withOpacity(0.3),
+      _statPillIconOuterPaint,
     );
     canvas.drawCircle(
       Offset(x + 14, y + pillHeight / 2),
       4,
-      Paint()..color = color,
+      _statPillIconInnerPaint..color = color,
     );
 
     // Value
@@ -1853,7 +2046,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         shadows: [Shadow(color: color.withOpacity(0.8), blurRadius: 6)],
       ),
     );
-    valuePainter.paint(canvas, Offset(x + 28, y + (pillHeight - valuePainter.height) / 2));
+    valuePainter.paint(
+        canvas, Offset(x + 28, y + (pillHeight - valuePainter.height) / 2));
   }
 
   void _drawWaveIndicator(Canvas canvas, double screenWidth) {
@@ -1863,6 +2057,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final waveProgress = gameRef.enemyManager.waveProgress.clamp(0.0, 1.0);
     final isSpawning = gameRef.enemyManager.spawning;
     final enemiesAlive = gameRef.enemyManager.aliveCount;
+    final bossActive = gameRef.enemyManager.currentBoss != null;
+    final compactWave =
+        _isCompactHud(screenWidth, gameRef.size.y) || gameRef.size.y < 720;
+
+    if (bossActive || compactWave) {
+      _drawCompactWaveIndicator(
+        canvas,
+        currentWave,
+        totalWaves,
+        isSpawning,
+        enemiesAlive,
+      );
+      return;
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // ════════════════════════════════════════════════════════════════════════════
@@ -1874,7 +2082,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     double shakeX = 0.0;
     double shakeY = 0.0;
     if (_waveTransitionActive) {
-      final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+      final t =
+          (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
       if (t < 0.2) {
         transitionScale = 1.0 + (t / 0.2) * 0.35;
         shakeX = math.sin(t * 60) * 5 * (1 - t / 0.2);
@@ -1899,14 +2108,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     const containerY = 48.0;
 
     // ═══ HEXAGONAL CYBERPUNK FRAME ═══
-    final framePath = Path();
+    final framePath = _waveIndicatorFramePath..reset();
     const cut = 14.0;
     const innerCut = 6.0;
     framePath.moveTo(containerX + cut, containerY);
     framePath.lineTo(containerX + containerWidth - cut, containerY);
     framePath.lineTo(containerX + containerWidth, containerY + cut);
-    framePath.lineTo(containerX + containerWidth, containerY + containerHeight - cut);
-    framePath.lineTo(containerX + containerWidth - cut, containerY + containerHeight);
+    framePath.lineTo(
+        containerX + containerWidth, containerY + containerHeight - cut);
+    framePath.lineTo(
+        containerX + containerWidth - cut, containerY + containerHeight);
     framePath.lineTo(containerX + cut, containerY + containerHeight);
     framePath.lineTo(containerX, containerY + containerHeight - cut);
     framePath.lineTo(containerX, containerY + cut);
@@ -1921,7 +2132,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         const Color(0xFF0c0418).withOpacity(0.94),
         const Color(0xFF100820).withOpacity(0.92),
       ],
-    ).createShader(Rect.fromLTWH(containerX, containerY, containerWidth, containerHeight));
+    ).createShader(
+        Rect.fromLTWH(containerX, containerY, containerWidth, containerHeight));
     _waveIndicatorBgPaint.shader = bgGradient;
     canvas.drawPath(framePath, _waveIndicatorBgPaint);
 
@@ -1979,7 +2191,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       _waveIndicatorCornerPaint,
     );
     canvas.drawLine(
-      Offset(containerX + containerWidth - cut - 16, containerY + containerHeight),
+      Offset(
+          containerX + containerWidth - cut - 16, containerY + containerHeight),
       Offset(containerX + containerWidth - cut, containerY + containerHeight),
       _waveIndicatorCornerPaint,
     );
@@ -1999,7 +2212,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _waveIndicatorAccentPaint.color = primaryColor.withOpacity(0.5);
     canvas.drawLine(
       Offset(containerX + containerWidth - 12, containerY + 16),
-      Offset(containerX + containerWidth - 12, containerY + containerHeight - 16),
+      Offset(
+          containerX + containerWidth - 12, containerY + containerHeight - 16),
       _waveIndicatorAccentPaint,
     );
 
@@ -2042,7 +2256,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         fontFamily: 'monospace',
       ),
     );
-    labelPainter.paint(canvas, Offset(centerX - labelPainter.width / 2, containerY + 4));
+    labelPainter.paint(
+        canvas, Offset(centerX - labelPainter.width / 2, containerY + 4));
 
     // ═══ SUBTITLE WITH PROGRESS ═══
     final subtitleY = containerY + 48;
@@ -2058,7 +2273,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         fontFamily: 'monospace',
       ),
     );
-    subtitlePainter.paint(canvas, Offset(centerX - subtitlePainter.width / 2, subtitleY));
+    subtitlePainter.paint(
+        canvas, Offset(centerX - subtitlePainter.width / 2, subtitleY));
 
     // ═══ PROGRESS BAR (Enhanced) ═══
     const barWidth = 150.0;
@@ -2105,12 +2321,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Progress tip glow
       if (fillWidth > 4) {
+        _waveIndicatorTipPaint.color =
+            Colors.white.withOpacity(0.8 * pulseIntensity);
         canvas.drawCircle(
           Offset(barX + fillWidth, barY + progressBarHeight / 2),
           4,
-          Paint()
-            ..color = Colors.white.withOpacity(0.8 * pulseIntensity)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          _waveIndicatorTipPaint,
         );
       }
     }
@@ -2129,29 +2345,29 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       const enemyPanelHeight = 28.0;
 
       // Mini panel background
-      final enemyPanelPath = Path();
+      final enemyPanelPath = _waveIndicatorEnemyPanelPath..reset();
       const miniCut = 5.0;
       enemyPanelPath.moveTo(enemyPanelX + miniCut, enemyPanelY);
-      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth - miniCut, enemyPanelY);
-      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth, enemyPanelY + miniCut);
-      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth, enemyPanelY + enemyPanelHeight - miniCut);
-      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth - miniCut, enemyPanelY + enemyPanelHeight);
-      enemyPanelPath.lineTo(enemyPanelX + miniCut, enemyPanelY + enemyPanelHeight);
-      enemyPanelPath.lineTo(enemyPanelX, enemyPanelY + enemyPanelHeight - miniCut);
+      enemyPanelPath.lineTo(
+          enemyPanelX + enemyPanelWidth - miniCut, enemyPanelY);
+      enemyPanelPath.lineTo(
+          enemyPanelX + enemyPanelWidth, enemyPanelY + miniCut);
+      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth,
+          enemyPanelY + enemyPanelHeight - miniCut);
+      enemyPanelPath.lineTo(enemyPanelX + enemyPanelWidth - miniCut,
+          enemyPanelY + enemyPanelHeight);
+      enemyPanelPath.lineTo(
+          enemyPanelX + miniCut, enemyPanelY + enemyPanelHeight);
+      enemyPanelPath.lineTo(
+          enemyPanelX, enemyPanelY + enemyPanelHeight - miniCut);
       enemyPanelPath.lineTo(enemyPanelX, enemyPanelY + miniCut);
       enemyPanelPath.close();
 
-      canvas.drawPath(
-        enemyPanelPath,
-        Paint()..color = const Color(0xFF0a0a18).withOpacity(0.9),
-      );
-      canvas.drawPath(
-        enemyPanelPath,
-        Paint()
-          ..color = urgentColor.withOpacity(0.6)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
+      _waveIndicatorEnemyPanelBgPaint.color =
+          const Color(0xFF0a0a18).withOpacity(0.9);
+      canvas.drawPath(enemyPanelPath, _waveIndicatorEnemyPanelBgPaint);
+      _waveIndicatorEnemyPanelBorderPaint.color = urgentColor.withOpacity(0.6);
+      canvas.drawPath(enemyPanelPath, _waveIndicatorEnemyPanelBorderPaint);
 
       // Enemy indicator dot
       _waveIndicatorEnemyGlowPaint.color = urgentColor.withOpacity(0.5);
@@ -2181,13 +2397,15 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
       enemyPainter.paint(
         canvas,
-        Offset(enemyPanelX + 16, enemyPanelY + (enemyPanelHeight - enemyPainter.height) / 2),
+        Offset(enemyPanelX + 16,
+            enemyPanelY + (enemyPanelHeight - enemyPainter.height) / 2),
       );
     }
 
     // ═══ WAVE TRANSITION EFFECT ═══
     if (_waveTransitionActive) {
-      final t = (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
+      final t =
+          (_waveTransitionTimer / _waveTransitionDuration).clamp(0.0, 1.0);
       final transitionAlpha = t < 0.4 ? t * 2.5 : (1 - t) * 1.67;
       if (transitionAlpha > 0.05) {
         // "INCOMING" text with dramatic effect
@@ -2201,28 +2419,99 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
             letterSpacing: 2.0,
             fontFamily: 'monospace',
             shadows: [
-              Shadow(color: magentaColor.withOpacity(transitionAlpha * 0.7), blurRadius: 10),
-              Shadow(color: magentaColor.withOpacity(transitionAlpha * 0.4), blurRadius: 20),
+              Shadow(
+                  color: magentaColor.withOpacity(transitionAlpha * 0.7),
+                  blurRadius: 10),
+              Shadow(
+                  color: magentaColor.withOpacity(transitionAlpha * 0.4),
+                  blurRadius: 20),
             ],
           ),
         );
         incomingPainter.paint(
           canvas,
-          Offset(centerX - incomingPainter.width / 2, containerY + containerHeight + 14),
+          Offset(centerX - incomingPainter.width / 2,
+              containerY + containerHeight + 14),
         );
 
         // Extra glow burst during transition
         if (t < 0.3) {
           final burstAlpha = (0.3 - t) / 0.3;
-          canvas.drawPath(
-            framePath,
-            Paint()
-              ..color = magentaColor.withOpacity(burstAlpha * 0.4)
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
-          );
+          _waveIndicatorBurstPaint.color =
+              magentaColor.withOpacity(burstAlpha * 0.4);
+          canvas.drawPath(framePath, _waveIndicatorBurstPaint);
         }
       }
     }
+  }
+
+  void _drawCompactWaveIndicator(
+    Canvas canvas,
+    int currentWave,
+    int totalWaves,
+    bool isSpawning,
+    int enemiesAlive,
+  ) {
+    final waveText = 'WAVE $currentWave/$totalWaves';
+    final enemyText = '$enemiesAlive EN';
+    final primaryColor =
+        isSpawning ? const Color(0xFFFF00FF) : const Color(0xFF00FFFF);
+
+    final labelPainter = _getPainter(
+      'wave-compact-$waveText',
+      waveText,
+      TextStyle(
+        color: primaryColor,
+        fontSize: 12,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.2,
+        shadows: [Shadow(color: primaryColor.withOpacity(0.6), blurRadius: 4)],
+      ),
+    );
+    final enemyPainter = _getPainter(
+      'wave-compact-enemy-$enemyText',
+      enemyText,
+      TextStyle(
+        color: Colors.white.withOpacity(0.7),
+        fontSize: 10,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.8,
+      ),
+    );
+
+    final paddingX = 10.0;
+    final paddingY = 4.0;
+    final pillWidth =
+        math.max(labelPainter.width, enemyPainter.width) + paddingX * 2;
+    final pillHeight = labelPainter.height + enemyPainter.height + paddingY * 3;
+
+    final x = 16.0;
+    final y = 32.0;
+    final rrect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(x, y, pillWidth, pillHeight),
+      const Radius.circular(10),
+    );
+
+    _waveIndicatorBgPaint.color = const Color(0xFF0b0b17).withOpacity(0.85);
+    canvas.drawRRect(rrect, _waveIndicatorBgPaint);
+
+    _waveIndicatorBorderPaint.color = primaryColor.withOpacity(0.7);
+    canvas.drawRRect(rrect, _waveIndicatorBorderPaint);
+
+    labelPainter.paint(
+      canvas,
+      Offset(
+        x + (pillWidth - labelPainter.width) / 2,
+        y + paddingY,
+      ),
+    );
+    enemyPainter.paint(
+      canvas,
+      Offset(
+        x + (pillWidth - enemyPainter.width) / 2,
+        y + paddingY + labelPainter.height + 2,
+      ),
+    );
   }
 
   void _drawResourcePanels(Canvas canvas, double screenWidth) {
@@ -2310,14 +2599,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // Left side resources
-    _drawResourceCard(canvas, 20, 8, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700), 0);
-    _drawResourceCard(canvas, 130, 8, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466), 1);
-    _drawResourceCard(canvas, 240, 8, 'SCORE', '${gameRef.score}', const Color(0xFF00FF88), 2);
+    _drawResourceCard(
+        canvas, 20, 8, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700), 0);
+    _drawResourceCard(canvas, 130, 8, 'LIVES', '${gameRef.lives}',
+        const Color(0xFFFF4466), 1);
+    _drawResourceCard(canvas, 240, 8, 'SCORE', '${gameRef.score}',
+        const Color(0xFF00FF88), 2);
 
     // Right side resources
-    _drawResourceCard(canvas, screenWidth - 340, 8, 'WAVE', '${gameRef.enemyManager.currentWave}', const Color(0xFFFF00FF), 3);
-    _drawResourceCard(canvas, screenWidth - 230, 8, 'ENEMIES', '${gameRef.enemyManager.aliveCount}', const Color(0xFFFF6644), 4);
-    _drawResourceCard(canvas, screenWidth - 120, 8, 'TOWERS', '${gameRef.towerManager.towers.length}', const Color(0xFF44AAFF), 5);
+    _drawResourceCard(canvas, screenWidth - 340, 8, 'WAVE',
+        '${gameRef.enemyManager.currentWave}', const Color(0xFFFF00FF), 3);
+    _drawResourceCard(canvas, screenWidth - 230, 8, 'ENEMIES',
+        '${gameRef.enemyManager.aliveCount}', const Color(0xFFFF6644), 4);
+    _drawResourceCard(canvas, screenWidth - 120, 8, 'TOWERS',
+        '${gameRef.towerManager.towers.length}', const Color(0xFF44AAFF), 5);
 
     // Overdrive (FPS) uses indicator
     _drawOverdriveUses(canvas, screenWidth);
@@ -2325,29 +2620,32 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _drawOverdriveUses(Canvas canvas, double screenWidth) {
     if (_isCompactHud(screenWidth, gameRef.size.y)) return;
-    
+
     final uses = gameRef.fpsUsesTotal;
     final max = gameRef.maxFpsUsesMatch;
     final remaining = (max - uses).clamp(0, max);
-    final color = remaining > 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF0066);
-    
+    final color =
+        remaining > 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF0066);
+
     final x = screenWidth / 2 - 145; // Below selection info or logo
     final y = 70.0;
-    
+
     // Draw small circles/dots for available uses
     for (int i = 0; i < max; i++) {
       final isUsed = i < uses;
       final dotX = x + i * 20;
-      final dotPaint = Paint()
+      _overdriveDotPaint
         ..color = isUsed ? Colors.white12 : color.withOpacity(0.8)
-        ..maskFilter = isUsed ? null : const MaskFilter.blur(BlurStyle.normal, 2);
-      
-      canvas.drawCircle(Offset(dotX, y), 4, dotPaint);
+        ..maskFilter =
+            isUsed ? null : const MaskFilter.blur(BlurStyle.normal, 2);
+
+      canvas.drawCircle(Offset(dotX, y), 4, _overdriveDotPaint);
       if (!isUsed) {
-        canvas.drawCircle(Offset(dotX, y), 2, Paint()..color = Colors.white);
+        _overdriveDotCorePaint.color = Colors.white;
+        canvas.drawCircle(Offset(dotX, y), 2, _overdriveDotCorePaint);
       }
     }
-    
+
     final labelPainter = _getPainter(
       'overdrive-label',
       'OVERDRIVE USES',
@@ -2382,9 +2680,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawRRect(rrect, _resourceCardPaint);
 
     // Animated border
-    final borderAlpha = reduceFlicker
-        ? 0.35
-        : 0.3 + math.sin(_time * 2 + index * 0.5) * 0.1;
+    final borderAlpha =
+        reduceFlicker ? 0.35 : 0.3 + math.sin(_time * 2 + index * 0.5) * 0.1;
     _resourceCardBorderPaint.color = color.withOpacity(borderAlpha);
     canvas.drawRRect(rrect, _resourceCardBorderPaint);
 
@@ -2396,16 +2693,20 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawLine(Offset(x, y), Offset(x + 8, y), _resourceCardAccentPaint);
 
     // Bottom-right corner
-    canvas.drawLine(Offset(x + cardWidth - 8, y + cardHeight), Offset(x + cardWidth, y + cardHeight), _resourceCardAccentPaint);
-    canvas.drawLine(Offset(x + cardWidth, y + cardHeight - 8), Offset(x + cardWidth, y + cardHeight), _resourceCardAccentPaint);
+    canvas.drawLine(Offset(x + cardWidth - 8, y + cardHeight),
+        Offset(x + cardWidth, y + cardHeight), _resourceCardAccentPaint);
+    canvas.drawLine(Offset(x + cardWidth, y + cardHeight - 8),
+        Offset(x + cardWidth, y + cardHeight), _resourceCardAccentPaint);
 
     // Icon indicator (glowing dot)
     _resourceCardDotGlowPaint.color = color.withOpacity(0.8);
     final dotRadius = compact ? 3.5 : 5.0;
-    canvas.drawCircle(Offset(x + 12, y + cardHeight / 2), dotRadius, _resourceCardDotGlowPaint);
+    canvas.drawCircle(Offset(x + 12, y + cardHeight / 2), dotRadius,
+        _resourceCardDotGlowPaint);
 
     _resourceCardDotCorePaint.color = color;
-    canvas.drawCircle(Offset(x + 12, y + cardHeight / 2), dotRadius * 0.6, _resourceCardDotCorePaint);
+    canvas.drawCircle(Offset(x + 12, y + cardHeight / 2), dotRadius * 0.6,
+        _resourceCardDotCorePaint);
 
     // Label
     final labelPainter = _getPainter(
@@ -2442,37 +2743,37 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final centerX = screenWidth / 2;
 
     // Decorative lines emanating from center
-    final linePaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.2)
-      ..strokeWidth = 1;
+    _centerLinePaint.color = const Color(0xFF00FFFF).withOpacity(0.2);
 
-    canvas.drawLine(Offset(centerX - 80, 30), Offset(centerX - 30, 30), linePaint);
-    canvas.drawLine(Offset(centerX + 30, 30), Offset(centerX + 80, 30), linePaint);
+    canvas.drawLine(
+        Offset(centerX - 80, 30), Offset(centerX - 30, 30), _centerLinePaint);
+    canvas.drawLine(
+        Offset(centerX + 30, 30), Offset(centerX + 80, 30), _centerLinePaint);
 
     // Small diamond accent
-    final diamondPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    _centerDiamondPaint.color = const Color(0xFF00FFFF).withOpacity(0.5);
 
-    final diamondPath = Path()
+    final diamondPath = _centerDiamondPath..reset();
+    diamondPath
       ..moveTo(centerX, 22)
       ..lineTo(centerX + 8, 30)
       ..lineTo(centerX, 38)
       ..lineTo(centerX - 8, 30)
       ..close();
 
-    canvas.drawPath(diamondPath, diamondPaint);
+    canvas.drawPath(diamondPath, _centerDiamondPaint);
 
     // Inner filled diamond
-    final innerDiamond = Path()
+    final innerDiamond = _centerInnerDiamondPath..reset();
+    innerDiamond
       ..moveTo(centerX, 26)
       ..lineTo(centerX + 4, 30)
       ..lineTo(centerX, 34)
       ..lineTo(centerX - 4, 30)
       ..close();
 
-    canvas.drawPath(innerDiamond, Paint()..color = const Color(0xFF00FFFF).withOpacity(0.3));
+    _centerInnerDiamondPaint.color = const Color(0xFF00FFFF).withOpacity(0.3);
+    canvas.drawPath(innerDiamond, _centerInnerDiamondPaint);
   }
 
   void _drawProgressBars(Canvas canvas, double screenWidth) {
@@ -2491,10 +2792,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final totalWaves = gameRef.totalWaves <= 0 ? 1 : gameRef.totalWaves;
     final currentWave = gameRef.enemyManager.currentWave;
     final waveProgress = gameRef.enemyManager.waveProgress.clamp(0.0, 1.0);
-    final waveActive = gameRef.enemyManager.spawning || gameRef.enemyManager.aliveCount > 0;
+    final waveActive =
+        gameRef.enemyManager.spawning || gameRef.enemyManager.aliveCount > 0;
     double levelProgress = 0.0;
     if (currentWave > 0) {
-      final completed = waveActive ? (currentWave - 1 + waveProgress) : currentWave.toDouble();
+      final completed = waveActive
+          ? (currentWave - 1 + waveProgress)
+          : currentWave.toDouble();
       levelProgress = (completed / totalWaves).clamp(0.0, 1.0);
     }
 
@@ -2567,9 +2871,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
 
     // Labels
-    levelLabel.paint(canvas, Offset(startX - levelLabel.width - labelGap, levelY - 3));
+    levelLabel.paint(
+        canvas, Offset(startX - levelLabel.width - labelGap, levelY - 3));
     levelValue.paint(canvas, Offset(startX + barWidth + labelGap, levelY - 3));
-    waveLabel.paint(canvas, Offset(startX - waveLabel.width - labelGap, waveY - 3));
+    waveLabel.paint(
+        canvas, Offset(startX - waveLabel.width - labelGap, waveY - 3));
     waveValue.paint(canvas, Offset(startX + barWidth + labelGap, waveY - 3));
   }
 
@@ -2647,7 +2953,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final badgeX = centerX - badgeWidth / 2 + glitchOffset;
 
     // ═══ FRAGMENTED CONTAINER - Cut corners ═══
-    final alertPath = Path();
+    final alertPath = _alertPath..reset();
     const cut = 8.0;
     alertPath.moveTo(badgeX + cut, badgeY);
     alertPath.lineTo(badgeX + badgeWidth - cut, badgeY);
@@ -2660,20 +2966,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     alertPath.close();
 
     // Danger glow - INTENSE
-    canvas.drawPath(
-      alertPath,
-      Paint()
-        ..color = color.withOpacity(0.5 * dangerPulse)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16),
-    );
+    _alertGlowPaint.color = color.withOpacity(0.5 * dangerPulse);
+    canvas.drawPath(alertPath, _alertGlowPaint);
 
     // Secondary glow layer
-    canvas.drawPath(
-      alertPath,
-      Paint()
-        ..color = color.withOpacity(0.3 * pulseAlpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
-    );
+    _alertSecondaryGlowPaint.color = color.withOpacity(0.3 * pulseAlpha);
+    canvas.drawPath(alertPath, _alertSecondaryGlowPaint);
 
     // Dark background with gradient
     final alertGradient = LinearGradient(
@@ -2684,53 +2982,46 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         const Color(0xFF0a0a18).withOpacity(0.95),
       ],
     ).createShader(Rect.fromLTWH(badgeX, badgeY, badgeWidth, badgeHeight));
-    canvas.drawPath(alertPath, Paint()..shader = alertGradient);
+    _alertGradientPaint.shader = alertGradient;
+    canvas.drawPath(alertPath, _alertGradientPaint);
 
     // ═══ GLITCH SCANLINES ═══
     if (!reduceFlicker) {
       for (int i = 0; i < 4; i++) {
         final scanY = badgeY + (i * 8) + (_time * 30 % 8);
         if (scanY < badgeY + badgeHeight) {
+          _alertScanlinePaint.color =
+              color.withOpacity(isGlitching ? 0.15 : 0.05);
           canvas.drawLine(
             Offset(badgeX, scanY),
             Offset(badgeX + badgeWidth, scanY),
-            Paint()
-              ..color = color.withOpacity(isGlitching ? 0.15 : 0.05)
-              ..strokeWidth = 1,
+            _alertScanlinePaint,
           );
         }
       }
     }
 
     // Border - AGGRESSIVE double line
-    canvas.drawPath(
-      alertPath,
-      Paint()
-        ..color = color.withOpacity(0.9 * pulseAlpha)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
-    );
+    _alertBorderPaint.color = color.withOpacity(0.9 * pulseAlpha);
+    canvas.drawPath(alertPath, _alertBorderPaint);
 
     // Inner border for depth
-    final innerPath = Path();
+    final innerPath = _alertInnerPath..reset();
     const innerCut = 6.0;
     const inset = 2.0;
     innerPath.moveTo(badgeX + inset + innerCut, badgeY + inset);
     innerPath.lineTo(badgeX + badgeWidth - inset - innerCut, badgeY + inset);
     innerPath.lineTo(badgeX + badgeWidth - inset, badgeY + inset + innerCut);
-    innerPath.lineTo(badgeX + badgeWidth - inset, badgeY + badgeHeight - inset - innerCut);
-    innerPath.lineTo(badgeX + badgeWidth - inset - innerCut, badgeY + badgeHeight - inset);
+    innerPath.lineTo(
+        badgeX + badgeWidth - inset, badgeY + badgeHeight - inset - innerCut);
+    innerPath.lineTo(
+        badgeX + badgeWidth - inset - innerCut, badgeY + badgeHeight - inset);
     innerPath.lineTo(badgeX + inset + innerCut, badgeY + badgeHeight - inset);
     innerPath.lineTo(badgeX + inset, badgeY + badgeHeight - inset - innerCut);
     innerPath.lineTo(badgeX + inset, badgeY + inset + innerCut);
     innerPath.close();
-    canvas.drawPath(
-      innerPath,
-      Paint()
-        ..color = color.withOpacity(0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    _alertInnerBorderPaint.color = color.withOpacity(0.3);
+    canvas.drawPath(innerPath, _alertInnerBorderPaint);
 
     // ═══ CORNER DANGER POINTS ═══
     final alertCorners = [
@@ -2746,26 +3037,21 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     for (int i = 0; i < alertCorners.length; i++) {
       final corner = alertCorners[i];
       final cornerPulse = 0.5 + math.sin(_time * 6 + i * 0.9) * 0.5;
-      canvas.drawCircle(
-        corner,
-        3,
-        Paint()
-          ..color = color.withOpacity(cornerPulse)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-      );
-      canvas.drawCircle(corner, 1.5, Paint()..color = Colors.white);
+      _alertCornerPaint.color = color.withOpacity(cornerPulse);
+      canvas.drawCircle(corner, 3, _alertCornerPaint);
+      _alertCornerCorePaint.color = Colors.white;
+      canvas.drawCircle(corner, 1.5, _alertCornerCorePaint);
     }
 
     // ═══ WARNING ICON with glitch ═══
     final iconCenterY = badgeY + badgeHeight / 2;
 
     // Icon glow
+    _alertIconGlowPaint.color = color.withOpacity(0.4 * dangerPulse);
     canvas.drawCircle(
       Offset(badgeX + 20 + glitchOffset * 0.3, iconCenterY),
       12,
-      Paint()
-        ..color = color.withOpacity(0.4 * dangerPulse)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+      _alertIconGlowPaint,
     );
 
     // Glitch layers for icon
@@ -2858,24 +3144,21 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // ═══ DANGER DECORATORS ═══
     // Left and right chevrons
-    final chevronPaint = Paint()
-      ..color = color.withOpacity(0.6 * dangerPulse)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    _alertChevronPaint.color = color.withOpacity(0.6 * dangerPulse);
 
     // Left chevron
-    final leftChevron = Path();
+    final leftChevron = _alertLeftChevronPath..reset();
     leftChevron.moveTo(badgeX - 12, iconCenterY - 6);
     leftChevron.lineTo(badgeX - 6, iconCenterY);
     leftChevron.lineTo(badgeX - 12, iconCenterY + 6);
-    canvas.drawPath(leftChevron, chevronPaint);
+    canvas.drawPath(leftChevron, _alertChevronPaint);
 
     // Right chevron
-    final rightChevron = Path();
+    final rightChevron = _alertRightChevronPath..reset();
     rightChevron.moveTo(badgeX + badgeWidth + 12, iconCenterY - 6);
     rightChevron.lineTo(badgeX + badgeWidth + 6, iconCenterY);
     rightChevron.lineTo(badgeX + badgeWidth + 12, iconCenterY + 6);
-    canvas.drawPath(rightChevron, chevronPaint);
+    canvas.drawPath(rightChevron, _alertChevronPaint);
   }
 
   /// Returns (icon, label, color) for wave modifier
@@ -2894,7 +3177,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
   }
 
-  void _drawBottomPanel(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawBottomPanel(
+      Canvas canvas, double screenWidth, double screenHeight) {
     // With the new side-panel layout, we only need a minimal bottom area
     // Draw cost indicators next to the tower buttons on the left
     _drawModernCostIndicators(canvas, screenWidth, screenHeight);
@@ -2917,7 +3201,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         fontSize: 11,
         fontWeight: FontWeight.bold,
         letterSpacing: 1,
-        shadows: [Shadow(color: selected.color.withOpacity(0.5), blurRadius: 4)],
+        shadows: [
+          Shadow(color: selected.color.withOpacity(0.5), blurRadius: 4)
+        ],
       ),
     );
     namePainter.paint(canvas, Offset(panelX, panelY));
@@ -2926,7 +3212,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final damage = gameRef.towerDamage(selected).round();
     final range = gameRef.towerRange(selected).round();
     final fireRate = gameRef.towerFireRate(selected);
-    final statsText = 'DMG $damage  •  RNG $range  •  SPD ${fireRate.toStringAsFixed(1)}';
+    final statsText =
+        'DMG $damage  •  RNG $range  •  SPD ${fireRate.toStringAsFixed(1)}';
     final statsPainter = _getPainter(
       'selected-stats-$damage-$range-$fireRate',
       statsText,
@@ -2939,11 +3226,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     statsPainter.paint(canvas, Offset(panelX, panelY + 14));
   }
 
-  void _drawModernCostIndicators(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawModernCostIndicators(
+      Canvas canvas, double screenWidth, double screenHeight) {
     // Use responsive layout - get positions from tower buttons
     final unlockedTowers = LevelService.instance.getUnlockedTowers();
 
-    for (int i = 0; i < unlockedTowers.length && i < _towerButtons.length; i++) {
+    for (int i = 0;
+        i < unlockedTowers.length && i < _towerButtons.length;
+        i++) {
       final type = unlockedTowers[i];
       final cost = gameRef.towerCost(type);
       final button = _towerButtons[i];
@@ -2964,7 +3254,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       canvas.drawRRect(
         pillRect,
-        Paint()..color = (canAfford ? type.color : const Color(0xFFFF4444)).withOpacity(0.2),
+        _costPillPaint
+          ..color = (canAfford ? type.color : const Color(0xFFFF4444))
+              .withOpacity(0.2),
       );
 
       final fontSize = (9.0 * _currentScale).clamp(7.0, 11.0);
@@ -2980,7 +3272,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
       costPainter.paint(
         canvas,
-        Offset(costX + (pillWidth - costPainter.width) / 2, costY + (pillHeight - costPainter.height) / 2),
+        Offset(costX + (pillWidth - costPainter.width) / 2,
+            costY + (pillHeight - costPainter.height) / 2),
       );
     }
   }
@@ -2997,13 +3290,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final panelRect = Rect.fromLTWH(panelX, panelY, panelWidth, panelHeight);
 
     final hslColor = HSLColor.fromColor(selected.color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 30) % 360).toColor();
+    final tertiaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: HOLOGRAPHIC PROJECTION GLOW
     // ═══════════════════════════════════════════════════════════════════════
-    _holoPreviewGlowPaint.color = selected.color.withOpacity(0.15 + math.sin(_time * 2) * 0.05);
+    _holoPreviewGlowPaint.color =
+        selected.color.withOpacity(0.15 + math.sin(_time * 2) * 0.05);
     canvas.drawRRect(
       RRect.fromRectAndRadius(panelRect.inflate(8), const Radius.circular(8)),
       _holoPreviewGlowPaint,
@@ -3031,12 +3327,18 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     if (!lowFx) {
       canvas.save();
-      canvas.clipRRect(RRect.fromRectAndRadius(panelRect, const Radius.circular(6)));
+      canvas.clipRRect(
+          RRect.fromRectAndRadius(panelRect, const Radius.circular(6)));
       _holoPreviewHexPaint.color = selected.color.withOpacity(0.08);
       const hexSize = 12.0;
-      for (double y = panelY - hexSize; y < panelY + panelHeight + hexSize; y += hexSize * 1.5) {
-        for (double x = panelX - hexSize; x < panelX + panelWidth + hexSize; x += hexSize * 1.73) {
-          final offsetX = ((y ~/ (hexSize * 1.5)) % 2 == 0) ? 0.0 : hexSize * 0.866;
+      for (double y = panelY - hexSize;
+          y < panelY + panelHeight + hexSize;
+          y += hexSize * 1.5) {
+        for (double x = panelX - hexSize;
+            x < panelX + panelWidth + hexSize;
+            x += hexSize * 1.73) {
+          final offsetX =
+              ((y ~/ (hexSize * 1.5)) % 2 == 0) ? 0.0 : hexSize * 0.866;
           _holoPreviewPath.reset();
           for (int i = 0; i < 6; i++) {
             final angle = (i * 60 - 30) * math.pi / 180;
@@ -3071,7 +3373,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
           Colors.transparent,
         ],
       ).createShader(Rect.fromLTWH(panelX, scanY - 8, panelWidth, 16));
-      canvas.drawRect(Rect.fromLTWH(panelX, scanY - 8, panelWidth, 16), _holoPreviewScanPaint);
+      canvas.drawRect(Rect.fromLTWH(panelX, scanY - 8, panelWidth, 16),
+          _holoPreviewScanPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3087,17 +3390,33 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _holoPreviewCornerPaint.color = selected.color;
     final cornerLen = 15.0 + math.sin(_time * 3) * 2;
     // Top-left
-    canvas.drawLine(Offset(panelX, panelY + cornerLen), Offset(panelX, panelY), _holoPreviewCornerPaint);
-    canvas.drawLine(Offset(panelX, panelY), Offset(panelX + cornerLen, panelY), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX, panelY + cornerLen), Offset(panelX, panelY),
+        _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX, panelY), Offset(panelX + cornerLen, panelY),
+        _holoPreviewCornerPaint);
     // Top-right
-    canvas.drawLine(Offset(panelX + panelWidth - cornerLen, panelY), Offset(panelX + panelWidth, panelY), _holoPreviewCornerPaint);
-    canvas.drawLine(Offset(panelX + panelWidth, panelY), Offset(panelX + panelWidth, panelY + cornerLen), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX + panelWidth - cornerLen, panelY),
+        Offset(panelX + panelWidth, panelY), _holoPreviewCornerPaint);
+    canvas.drawLine(
+        Offset(panelX + panelWidth, panelY),
+        Offset(panelX + panelWidth, panelY + cornerLen),
+        _holoPreviewCornerPaint);
     // Bottom-left
-    canvas.drawLine(Offset(panelX, panelY + panelHeight - cornerLen), Offset(panelX, panelY + panelHeight), _holoPreviewCornerPaint);
-    canvas.drawLine(Offset(panelX, panelY + panelHeight), Offset(panelX + cornerLen, panelY + panelHeight), _holoPreviewCornerPaint);
+    canvas.drawLine(Offset(panelX, panelY + panelHeight - cornerLen),
+        Offset(panelX, panelY + panelHeight), _holoPreviewCornerPaint);
+    canvas.drawLine(
+        Offset(panelX, panelY + panelHeight),
+        Offset(panelX + cornerLen, panelY + panelHeight),
+        _holoPreviewCornerPaint);
     // Bottom-right
-    canvas.drawLine(Offset(panelX + panelWidth - cornerLen, panelY + panelHeight), Offset(panelX + panelWidth, panelY + panelHeight), _holoPreviewCornerPaint);
-    canvas.drawLine(Offset(panelX + panelWidth, panelY + panelHeight - cornerLen), Offset(panelX + panelWidth, panelY + panelHeight), _holoPreviewCornerPaint);
+    canvas.drawLine(
+        Offset(panelX + panelWidth - cornerLen, panelY + panelHeight),
+        Offset(panelX + panelWidth, panelY + panelHeight),
+        _holoPreviewCornerPaint);
+    canvas.drawLine(
+        Offset(panelX + panelWidth, panelY + panelHeight - cornerLen),
+        Offset(panelX + panelWidth, panelY + panelHeight),
+        _holoPreviewCornerPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: TOWER NAME HEADER WITH GLITCH
@@ -3106,8 +3425,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Glitch offset (occasional)
     double glitchX = 0;
-    if (!lowFx && _holoPreviewRandom.nextDouble() < 0.02) {
-      glitchX = (_holoPreviewRandom.nextDouble() - 0.5) * 4;
+    if (!lowFx && _holoPreviewNextUnit() < 0.02) {
+      glitchX = (_holoPreviewNextUnit() - 0.5) * 4;
     }
 
     final namePainter = _towerInfoNamePainter ??
@@ -3152,7 +3471,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     const barSpacing = 18.0;
 
     // Helper to draw stat bar
-    void drawStatBar(double y, String label, double value, double maxValue, double baseValue, Color barColor) {
+    void drawStatBar(double y, String label, double value, double maxValue,
+        double baseValue, Color barColor) {
       // Label
       final labelPainter = _getPainter(
         'stat-$label',
@@ -3170,7 +3490,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final barX = panelX + labelWidth + 8;
       _holoPreviewBarBgPaint.color = const Color(0xFF0a0a18);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(barX, y, barWidth, barHeight), const Radius.circular(2)),
+        RRect.fromRectAndRadius(Rect.fromLTWH(barX, y, barWidth, barHeight),
+            const Radius.circular(2)),
         _holoPreviewBarBgPaint,
       );
 
@@ -3182,7 +3503,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (!lowFx) {
         _holoPreviewBarGlowPaint.color = barColor.withOpacity(0.4);
         canvas.drawRRect(
-          RRect.fromRectAndRadius(Rect.fromLTWH(barX, y, fillWidth, barHeight), const Radius.circular(2)),
+          RRect.fromRectAndRadius(Rect.fromLTWH(barX, y, fillWidth, barHeight),
+              const Radius.circular(2)),
           _holoPreviewBarGlowPaint,
         );
       }
@@ -3198,7 +3520,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         ],
       ).createShader(Rect.fromLTWH(barX, y, fillWidth, barHeight));
       canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromLTWH(barX + 1, y + 1, fillWidth - 2, barHeight - 2), const Radius.circular(1)),
+        RRect.fromRectAndRadius(
+            Rect.fromLTWH(barX + 1, y + 1, fillWidth - 2, barHeight - 2),
+            const Radius.circular(1)),
         _holoPreviewBarFillPaint,
       );
 
@@ -3217,17 +3541,22 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Value display with upgrade indicator
       final hasBonus = value > baseValue;
-      final valueText = label == 'SPD' ? value.toStringAsFixed(1) : value.round().toString();
+      final valueText =
+          label == 'SPD' ? value.toStringAsFixed(1) : value.round().toString();
       final bonusIndicator = hasBonus ? ' ▲' : '';
       final valuePainter = _getPainter(
         'val-$label-$valueText',
         '$valueText$bonusIndicator',
         TextStyle(
-          color: hasBonus ? const Color(0xFF00FF88) : Colors.white.withOpacity(0.8),
+          color: hasBonus
+              ? const Color(0xFF00FF88)
+              : Colors.white.withOpacity(0.8),
           fontSize: 9,
           fontFamily: 'monospace',
           fontWeight: FontWeight.bold,
-          shadows: hasBonus ? [Shadow(color: const Color(0xFF00FF88), blurRadius: 4)] : null,
+          shadows: hasBonus
+              ? [Shadow(color: const Color(0xFF00FF88), blurRadius: 4)]
+              : null,
         ),
       );
       valuePainter.paint(canvas, Offset(barX + barWidth + 6, y + 1));
@@ -3235,8 +3564,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Draw the three stat bars
     drawStatBar(barY, 'DMG', damage, 200, baseDamage, selected.color);
-    drawStatBar(barY + barSpacing, 'RNG', range, 350, baseRange, secondaryColor);
-    drawStatBar(barY + barSpacing * 2, 'SPD', fireRate, 5.0, baseFireRate, tertiaryColor);
+    drawStatBar(
+        barY + barSpacing, 'RNG', range, 350, baseRange, secondaryColor);
+    drawStatBar(barY + barSpacing * 2, 'SPD', fireRate, 5.0, baseFireRate,
+        tertiaryColor);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 8: COST DISPLAY WITH HOLOGRAPHIC CREDITS
@@ -3268,25 +3599,35 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         fontFamily: 'monospace',
         fontWeight: FontWeight.bold,
         shadows: [
-          Shadow(color: (canAfford ? NeonColors.green : NeonColors.magenta).withOpacity(0.6), blurRadius: 4),
+          Shadow(
+              color: (canAfford ? NeonColors.green : NeonColors.magenta)
+                  .withOpacity(0.6),
+              blurRadius: 4),
         ],
       ),
     );
-    costPainter.paint(canvas, Offset(costPillRect.left + (costPillRect.width - costPainter.width) / 2, costY + 2));
+    costPainter.paint(
+        canvas,
+        Offset(costPillRect.left + (costPillRect.width - costPainter.width) / 2,
+            costY + 2));
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 9: UPGRADE BONUSES INDICATOR
     // ═══════════════════════════════════════════════════════════════════════
     final stats = gameRef.upgradeStats;
-    final hasBonuses = stats.towerDamageMult > 1.0 || stats.towerRangeMult > 1.0 || stats.towerFireRateMult > 1.0;
+    final hasBonuses = stats.towerDamageMult > 1.0 ||
+        stats.towerRangeMult > 1.0 ||
+        stats.towerFireRateMult > 1.0;
 
     if (hasBonuses) {
       final bonusX = panelX + 10;
       final bonusY = costY + 2;
 
       // Pulsing bonus indicator
-      _holoPreviewBonusPaint.color = const Color(0xFF00FF88).withOpacity(0.6 + math.sin(_time * 4) * 0.3);
-      canvas.drawCircle(Offset(bonusX + 4, bonusY + 6), 4, _holoPreviewBonusPaint);
+      _holoPreviewBonusPaint.color =
+          const Color(0xFF00FF88).withOpacity(0.6 + math.sin(_time * 4) * 0.3);
+      canvas.drawCircle(
+          Offset(bonusX + 4, bonusY + 6), 4, _holoPreviewBonusPaint);
 
       // UPGRADED text
       final upgradedPainter = _getPainter(
@@ -3307,14 +3648,16 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 10: HOLOGRAPHIC PROJECTION LINES
     // ═══════════════════════════════════════════════════════════════════════
     if (!lowFx) {
-      _holoPreviewProjectionPaint.color = selected.color.withOpacity(0.2 + math.sin(_time * 2) * 0.1);
+      _holoPreviewProjectionPaint.color =
+          selected.color.withOpacity(0.2 + math.sin(_time * 2) * 0.1);
 
       // Top projection rays
       for (int i = 0; i < 3; i++) {
         final rayX = panelX + 40 + i * 50;
         canvas.drawLine(
           Offset(rayX, panelY),
-          Offset(rayX + (_holoPreviewRandom.nextDouble() - 0.5) * 10, panelY - 15 - _holoPreviewRandom.nextDouble() * 10),
+          Offset(rayX + (_holoPreviewNextUnit() - 0.5) * 10,
+              panelY - 15 - _holoPreviewNextUnit() * 10),
           _holoPreviewProjectionPaint,
         );
       }
@@ -3325,7 +3668,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       for (int i = 0; i < 4; i++) {
         final dotY = panelY + 10 + i * 25 + streamPhase * 25;
         if (dotY < panelY + panelHeight - 10) {
-          canvas.drawCircle(Offset(panelX + panelWidth - 4, dotY), 1.5, _holoPreviewDataPaint);
+          canvas.drawCircle(Offset(panelX + panelWidth - 4, dotY), 1.5,
+              _holoPreviewDataPaint);
         }
       }
     }
@@ -3336,15 +3680,18 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (!lowFx && canAfford) {
       final pulsePhase = (_time * 1.5) % 1.0;
       final pulseRadius = 6 + pulsePhase * 20;
-      _holoPreviewPulsePaint.color = selected.color.withOpacity((1 - pulsePhase) * 0.3);
+      _holoPreviewPulsePaint.color =
+          selected.color.withOpacity((1 - pulsePhase) * 0.3);
       canvas.drawRRect(
-        RRect.fromRectAndRadius(panelRect.inflate(pulseRadius), Radius.circular(6 + pulseRadius * 0.3)),
+        RRect.fromRectAndRadius(panelRect.inflate(pulseRadius),
+            Radius.circular(6 + pulseRadius * 0.3)),
         _holoPreviewPulsePaint,
       );
     }
   }
 
-  void _drawAbilityCooldowns(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawAbilityCooldowns(
+      Canvas canvas, double screenWidth, double screenHeight) {
     if (_isCompactHud(screenWidth, screenHeight)) return;
 
     // Use responsive layout variables
@@ -3368,7 +3715,11 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
 
     // Mine cooldown - below mine button
-    final mineBarY = _rightAbilitiesY + _rightButtonHeight + _rightButtonSpacing + _rightButtonHeight + 2;
+    final mineBarY = _rightAbilitiesY +
+        _rightButtonHeight +
+        _rightButtonSpacing +
+        _rightButtonHeight +
+        2;
     _drawCooldownBar(
       canvas,
       x: _rightPanelX,
@@ -3402,13 +3753,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       Rect.fromLTWH(x, y, width, height),
       const Radius.circular(4),
     );
-    canvas.drawRRect(bgRect, Paint()..color = const Color(0xFF0a0a18));
+    canvas.drawRRect(bgRect, _cooldownBgPaint);
 
     // Progress fill
     if (progress > 0) {
-      final progressColor = ready
-          ? color
-          : Color.lerp(const Color(0xFF1a1a3a), color, progress)!;
+      final progressColor =
+          ready ? color : Color.lerp(const Color(0xFF1a1a3a), color, progress)!;
 
       final progressRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(x + 2, y + 2, (width - 4) * progress, height - 4),
@@ -3417,15 +3767,12 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Glow effect when ready
       if (ready) {
-        canvas.drawRRect(
-          progressRect,
-          Paint()
-            ..color = progressColor.withOpacity(0.5)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
-        );
+        _cooldownGlowPaint.color = progressColor.withOpacity(0.5);
+        canvas.drawRRect(progressRect, _cooldownGlowPaint);
       }
 
-      canvas.drawRRect(progressRect, Paint()..color = progressColor.withOpacity(0.8));
+      _cooldownFillPaint.color = progressColor.withOpacity(0.8);
+      canvas.drawRRect(progressRect, _cooldownFillPaint);
 
       // Animated highlight
       if (ready && !reduceFlicker) {
@@ -3440,17 +3787,19 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
         canvas.save();
         canvas.clipRRect(progressRect);
-        canvas.drawRect(Rect.fromLTWH(highlightX - 15, y, 30, height), Paint()..shader = highlightGradient);
+        _highlightGradientPaint.shader = highlightGradient;
+        canvas.drawRect(
+          Rect.fromLTWH(highlightX - 15, y, 30, height),
+          _highlightGradientPaint,
+        );
         canvas.restore();
       }
     }
 
     // Border
-    final borderPaint = Paint()
-      ..color = (ready ? color : const Color(0xFF333355)).withOpacity(0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawRRect(bgRect, borderPaint);
+    _cooldownBorderPaint.color =
+        (ready ? color : const Color(0xFF333355)).withOpacity(0.6);
+    canvas.drawRRect(bgRect, _cooldownBorderPaint);
 
     // Label + hotkey or count
     final hotkeyText = hotkey.isEmpty ? '' : ' $hotkey';
@@ -3467,15 +3816,14 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         fontFamily: 'monospace',
         fontWeight: FontWeight.bold,
         letterSpacing: 0.5,
-        shadows: ready
-            ? [Shadow(color: color, blurRadius: 6)]
-            : null,
+        shadows: ready ? [Shadow(color: color, blurRadius: 6)] : null,
       ),
     );
 
     labelPainter.paint(
       canvas,
-      Offset(x + (width - labelPainter.width) / 2, y + (height - labelPainter.height) / 2),
+      Offset(x + (width - labelPainter.width) / 2,
+          y + (height - labelPainter.height) / 2),
     );
   }
 
@@ -3490,7 +3838,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     return true;
   }
 
-  void _drawCostIndicators(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawCostIndicators(
+      Canvas canvas, double screenWidth, double screenHeight) {
     final useTwoRows = _layoutTwoRows;
     final buttonWidth = _layoutButtonWidth;
     final abilityWidth = _layoutAbilityWidth;
@@ -3516,7 +3865,10 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     final costs = [
       (gameRef.towerCost(TowerType.pulseArcher), TowerType.pulseArcher.color),
-      (gameRef.towerCost(TowerType.circuitCannon), TowerType.circuitCannon.color),
+      (
+        gameRef.towerCost(TowerType.circuitCannon),
+        TowerType.circuitCannon.color
+      ),
       (gameRef.towerCost(TowerType.phaseMage), TowerType.phaseMage.color),
       (gameRef.towerCost(TowerType.glimmerField), TowerType.glimmerField.color),
     ];
@@ -3550,7 +3902,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final pulseX = useTwoRows
         ? _layoutRow2StartX + abilityWidth / 2
         : startX + 4 * (buttonWidth + spacing) + abilityWidth / 2;
-    final canAffordPulse = gameRef.gold >= gameRef.pulseCost && gameRef.pulseReady;
+    final canAffordPulse =
+        gameRef.gold >= gameRef.pulseCost && gameRef.pulseReady;
     final pulseColor = canAffordPulse
         ? const Color(0xFF00FFFF).withOpacity(0.9)
         : const Color(0xFFFF4444).withOpacity(0.7);
@@ -3567,7 +3920,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
     pulseCostPainter.paint(
       canvas,
-      Offset(pulseX - pulseCostPainter.width / 2, useTwoRows ? row2CostY : row1CostY),
+      Offset(pulseX - pulseCostPainter.width / 2,
+          useTwoRows ? row2CostY : row1CostY),
     );
 
     // Mine cost
@@ -3595,11 +3949,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
     mineCostPainter.paint(
       canvas,
-      Offset(mineX - mineCostPainter.width / 2, useTwoRows ? row2CostY : row1CostY),
+      Offset(mineX - mineCostPainter.width / 2,
+          useTwoRows ? row2CostY : row1CostY),
     );
   }
 
-  void _drawGlowingLine(Canvas canvas, double x1, double y1, double x2, double y2, Color color, double intensity) {
+  void _drawGlowingLine(Canvas canvas, double x1, double y1, double x2,
+      double y2, Color color, double intensity) {
     // Outer glow
     _glowLineOuterPaint.color = color.withOpacity(intensity * 0.3);
     canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _glowLineOuterPaint);
@@ -3609,7 +3965,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _glowLineCorePaint);
   }
 
-  void _drawHexPattern(Canvas canvas, double x, double y, int count, double alpha) {
+  void _drawHexPattern(
+      Canvas canvas, double x, double y, int count, double alpha) {
     _hexPatternPaint.color = const Color(0xFF00FFFF).withOpacity(alpha);
 
     const hexSize = 8.0;
@@ -3617,7 +3974,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       for (int j = 0; j < 2; j++) {
         final offsetX = x + i * hexSize * 1.5;
         final offsetY = y + j * hexSize * 0.866 + (i % 2) * hexSize * 0.433;
-        _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.4, _hexPatternPaint);
+        _drawHexagon(
+            canvas, Offset(offsetX, offsetY), hexSize * 0.4, _hexPatternPaint);
       }
     }
   }
@@ -3671,7 +4029,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   Shader _getTowerInfoShader(Rect rect, TowerType type) {
-    if (_towerInfoRect == rect && _towerInfoShader != null && _towerInfoType == type) {
+    if (_towerInfoRect == rect &&
+        _towerInfoShader != null &&
+        _towerInfoType == type) {
       return _towerInfoShader!;
     }
     final shader = LinearGradient(
@@ -3687,7 +4047,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   Shader _getResourceCardShader(Rect rect, Color color) {
-    final key = Object.hash(rect.left, rect.top, rect.width, rect.height, color.value);
+    final key =
+        Object.hash(rect.left, rect.top, rect.width, rect.height, color.value);
     final cached = _resourceCardShaders[key];
     if (cached != null && cached.rect == rect && cached.color == color) {
       return cached.shader;
@@ -3769,7 +4130,9 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         fontFamily: 'monospace',
         fontWeight: FontWeight.bold,
         letterSpacing: 1,
-        shadows: [Shadow(color: selected.color.withOpacity(0.6), blurRadius: 6)],
+        shadows: [
+          Shadow(color: selected.color.withOpacity(0.6), blurRadius: 6)
+        ],
       ),
     );
     _towerInfoStatsPainter = _buildPainter(
@@ -3792,27 +4155,33 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     final towers = gameRef.towerManager.towers.length;
 
     if (gold != _lastGold) {
-      _getPainter('value-GOLD', '$gold', _resourceValueStyle(const Color(0xFFFFD700)));
+      _getPainter(
+          'value-GOLD', '$gold', _resourceValueStyle(const Color(0xFFFFD700)));
       _lastGold = gold;
     }
     if (lives != _lastLives) {
-      _getPainter('value-LIVES', '$lives', _resourceValueStyle(const Color(0xFFFF4466)));
+      _getPainter('value-LIVES', '$lives',
+          _resourceValueStyle(const Color(0xFFFF4466)));
       _lastLives = lives;
     }
     if (score != _lastScore) {
-      _getPainter('value-SCORE', '$score', _resourceValueStyle(const Color(0xFF00FF88)));
+      _getPainter('value-SCORE', '$score',
+          _resourceValueStyle(const Color(0xFF00FF88)));
       _lastScore = score;
     }
     if (wave != _lastWave) {
-      _getPainter('value-WAVE', '$wave', _resourceValueStyle(const Color(0xFFFF00FF)));
+      _getPainter(
+          'value-WAVE', '$wave', _resourceValueStyle(const Color(0xFFFF00FF)));
       _lastWave = wave;
     }
     if (enemies != _lastEnemies) {
-      _getPainter('value-ENEMIES', '$enemies', _resourceValueStyle(const Color(0xFFFF6644)));
+      _getPainter('value-ENEMIES', '$enemies',
+          _resourceValueStyle(const Color(0xFFFF6644)));
       _lastEnemies = enemies;
     }
     if (towers != _lastTowers) {
-      _getPainter('value-TOWERS', '$towers', _resourceValueStyle(const Color(0xFF44AAFF)));
+      _getPainter('value-TOWERS', '$towers',
+          _resourceValueStyle(const Color(0xFF44AAFF)));
       _lastTowers = towers;
     }
   }
@@ -3859,25 +4228,21 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   // ═══════════════════════════════════════════════════════════════════════════
   // DATA STREAM EFFECTS (Towers to HUD connection visualization)
   // ═══════════════════════════════════════════════════════════════════════════
-  void _drawDataStreamEffects(Canvas canvas, double screenWidth, double screenHeight) {
+  void _drawDataStreamEffects(
+      Canvas canvas, double screenWidth, double screenHeight) {
     // Only draw when there are active towers
     final towers = gameRef.towerManager.towers;
     if (towers.isEmpty || reduceFlicker) return;
 
     final targetY = topBarHeight; // HUD area at top
-    final streamCount = math.min(towers.length, 6); // Limit streams for performance
-
-    // Get colors for data streams based on active tower types
-    final activeColors = <Color>[];
-    for (int i = 0; i < streamCount; i++) {
-      activeColors.add(towers[i].color);
-    }
+    final streamCount =
+        math.min(towers.length, 6); // Limit streams for performance
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: AMBIENT DATA STREAMS FROM SCREEN EDGES
     // ═══════════════════════════════════════════════════════════════════════
     for (int i = 0; i < streamCount; i++) {
-      final color = activeColors[i];
+      final color = towers[i].color;
       final streamPhase = (_time * 2 + i * 0.4) % 1.0;
 
       // Calculate stream position - distribute across screen width
@@ -3894,11 +4259,13 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
         // Particle glow
         _dataStreamGlowPaint.color = color.withOpacity(alpha * 0.3);
-        canvas.drawCircle(Offset(particleX, particleY), 4, _dataStreamGlowPaint);
+        canvas.drawCircle(
+            Offset(particleX, particleY), 4, _dataStreamGlowPaint);
 
         // Particle core
         _dataStreamParticlePaint.color = color.withOpacity(alpha);
-        canvas.drawCircle(Offset(particleX, particleY), 2, _dataStreamParticlePaint);
+        canvas.drawCircle(
+            Offset(particleX, particleY), 2, _dataStreamParticlePaint);
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -3931,7 +4298,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 3: HUD ENTRY NODES (where data "enters" the HUD)
     // ═══════════════════════════════════════════════════════════════════════
     for (int i = 0; i < streamCount; i++) {
-      final color = activeColors[i];
+      final color = towers[i].color;
       final nodeX = (screenWidth / (streamCount + 1)) * (i + 1);
       final nodeY = targetY + 5;
 
@@ -3955,7 +4322,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final pulseAlpha = (1 - pulsePhase) * 0.3;
 
       _dataStreamPulsePaint.color = color.withOpacity(pulseAlpha);
-      canvas.drawCircle(Offset(nodeX, nodeY), pulseRadius, _dataStreamPulsePaint);
+      canvas.drawCircle(
+          Offset(nodeX, nodeY), pulseRadius, _dataStreamPulsePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3998,7 +4366,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final px = 8 + math.sin(_time * 2 + p) * 2;
 
       final alpha = (1 - particlePhase) * 0.25;
-      _dataStreamParticlePaint.color = const Color(0xFF00FFFF).withOpacity(alpha);
+      _dataStreamParticlePaint.color =
+          const Color(0xFF00FFFF).withOpacity(alpha);
       canvas.drawCircle(Offset(px, py), 1.5, _dataStreamParticlePaint);
     }
 
@@ -4010,7 +4379,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       final px = screenWidth - 8 + math.sin(_time * 2.2 + p) * 2;
 
       final alpha = (1 - particlePhase) * 0.25;
-      _dataStreamParticlePaint.color = const Color(0xFFFF00FF).withOpacity(alpha);
+      _dataStreamParticlePaint.color =
+          const Color(0xFFFF00FF).withOpacity(alpha);
       canvas.drawCircle(Offset(px, py), 1.5, _dataStreamParticlePaint);
     }
 
@@ -4027,7 +4397,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         final arcAlpha = arcPulse * 0.15;
 
         // Draw curved connection
-        _dataStreamArcPaint.color = const Color(0xFF00FFFF).withOpacity(arcAlpha);
+        _dataStreamArcPaint.color =
+            const Color(0xFF00FFFF).withOpacity(arcAlpha);
         _dataStreamPath.reset();
         _dataStreamPath.moveTo(x1 + 6, y);
         _dataStreamPath.quadraticBezierTo(
@@ -4043,7 +4414,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         final dotX = x1 + 6 + (x2 - x1 - 12) * dotProgress;
         final dotY = y - math.sin(dotProgress * math.pi) * 8;
 
-        _dataStreamParticlePaint.color = const Color(0xFFFFFFFF).withOpacity(arcPulse);
+        _dataStreamParticlePaint.color =
+            const Color(0xFFFFFFFF).withOpacity(arcPulse);
         canvas.drawCircle(Offset(dotX, dotY), 1.5, _dataStreamParticlePaint);
       }
     }
@@ -4064,4 +4436,3 @@ class _CardShaderCache {
   final Color color;
   final Shader shader;
 }
-

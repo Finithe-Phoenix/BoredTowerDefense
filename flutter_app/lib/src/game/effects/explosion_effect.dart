@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 /// Epic explosion effect with particles, shockwave, and energy discharge
 class ExplosionEffect extends PositionComponent {
   ExplosionEffect._internal({
@@ -10,7 +12,7 @@ class ExplosionEffect extends PositionComponent {
     required Color color,
     required double explosionSize,
     required double duration,
-  }) : _random = math.Random() {
+  }) {
     _reset(
       position: position,
       color: color,
@@ -41,6 +43,10 @@ class ExplosionEffect extends PositionComponent {
   static void clearPool() {
     _pool.clear();
     _activeCount = 0;
+    _ExplosionParticle.clearPool();
+    _EnergyArc.clearPool();
+    _DebrisChunk.clearPool();
+    _SmokePuff.clearPool();
   }
 
   static ExplosionEffect? spawn({
@@ -80,9 +86,46 @@ class ExplosionEffect extends PositionComponent {
   final List<_DebrisChunk> _debris = [];
   final List<_SmokePuff> _smokePuffs = [];
   double _time = 0;
-  final math.Random _random;
+  int _rngState = 0x6d2b79f5;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
+
+  void _recycleParticles() {
+    for (final particle in _particles) {
+      particle.recycle();
+    }
+    _particles.clear();
+  }
+
+  void _recycleEnergyArcs() {
+    for (final arc in _energyArcs) {
+      arc.recycle();
+    }
+    _energyArcs.clear();
+  }
+
+  void _recycleDebris() {
+    for (final chunk in _debris) {
+      chunk.recycle();
+    }
+    _debris.clear();
+  }
+
+  void _recycleSmoke() {
+    for (final puff in _smokePuffs) {
+      puff.recycle();
+    }
+    _smokePuffs.clear();
+  }
 
   // Shockwave properties
   double _shockwaveRadius = 0;
@@ -150,6 +193,16 @@ class ExplosionEffect extends PositionComponent {
     ..strokeWidth = 1.5;
   static final Paint _debrisShardPaint = Paint();
   static final Path _debrisPath = Path();
+  static final List<Offset> _unitHex = List<Offset>.unmodifiable(_buildUnitHex());
+
+  static List<Offset> _buildUnitHex() {
+    final points = <Offset>[];
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+    }
+    return points;
+  }
   static final Paint _smokePaint = Paint();
   static final Paint _smokeInnerPaint = Paint();
   static final Paint _heatDistortionPaint = Paint()
@@ -205,14 +258,15 @@ class ExplosionEffect extends PositionComponent {
     this.color = color;
     this.explosionSize = explosionSize;
     this.duration = duration;
+    _rngState = (position.hashCode ^ color.value ^ (explosionSize * 1000).round() ^ 0x6d2b79f5) & 0x7fffffff;
     _time = 0;
     _shockwaveRadius = 0;
     _shockwaveAlpha = 1.0;
     _coreFlashIntensity = 1.0;
-    _particles.clear();
-    _energyArcs.clear();
-    _debris.clear();
-    _smokePuffs.clear();
+    _recycleParticles();
+    _recycleEnergyArcs();
+    _recycleDebris();
+    _recycleSmoke();
     _initializeParticles();
     _initializeEnergyArcs();
     _initializeDebris();
@@ -224,32 +278,32 @@ class ExplosionEffect extends PositionComponent {
     if (particleCount == 0) return;
 
     for (int i = 0; i < particleCount; i++) {
-      final angle = (i / particleCount) * math.pi * 2 + _random.nextDouble() * 0.3;
-      final speed = 80 + _random.nextDouble() * 120;
-      final particleSize = 2 + _random.nextDouble() * 4;
-      final lifetime = 0.3 + _random.nextDouble() * 0.3;
+      final angle = (i / particleCount) * math.pi * 2 + _nextUnit() * 0.3;
+      final speed = 80 + _nextUnit() * 120;
+      final particleSize = 2 + _nextUnit() * 4;
+      final lifetime = 0.3 + _nextUnit() * 0.3;
 
-      _particles.add(_ExplosionParticle(
+      _particles.add(_ExplosionParticle.obtain(
         angle: angle,
         speed: speed,
         size: particleSize,
         lifetime: lifetime,
-        decay: 0.8 + _random.nextDouble() * 0.2,
-        trailLength: (3 + _random.nextInt(4)).toDouble(),
+        decay: 0.8 + _nextUnit() * 0.2,
+        trailLength: (3 + _nextInt(4)).toDouble(),
       ));
     }
 
     // Add some slower, larger particles for debris
     final debrisCount = _scaledCount(8, allowZero: true);
     for (int i = 0; i < debrisCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final speed = 30 + _random.nextDouble() * 50;
+      final angle = _nextUnit() * math.pi * 2;
+      final speed = 30 + _nextUnit() * 50;
 
-      _particles.add(_ExplosionParticle(
+      _particles.add(_ExplosionParticle.obtain(
         angle: angle,
         speed: speed,
-        size: 4 + _random.nextDouble() * 3,
-        lifetime: 0.4 + _random.nextDouble() * 0.2,
+        size: 4 + _nextUnit() * 3,
+        lifetime: 0.4 + _nextUnit() * 0.2,
         decay: 0.95,
         trailLength: 2,
         isDebris: true,
@@ -262,15 +316,15 @@ class ExplosionEffect extends PositionComponent {
     if (arcCount == 0) return;
 
     for (int i = 0; i < arcCount; i++) {
-      final angle = (i / arcCount) * math.pi * 2 + _random.nextDouble() * 0.3;
-      final length = explosionSize * 0.8 + _random.nextDouble() * explosionSize * 0.6;
+      final angle = (i / arcCount) * math.pi * 2 + _nextUnit() * 0.3;
+      final length = explosionSize * 0.8 + _nextUnit() * explosionSize * 0.6;
 
-      _energyArcs.add(_EnergyArc(
+      _energyArcs.add(_EnergyArc.obtain(
         angle: angle,
         length: length,
-        width: 1.5 + _random.nextDouble() * 2.5,
-        lifetime: 0.15 + _random.nextDouble() * 0.15,
-        segments: 4 + _random.nextInt(3),
+        width: 1.5 + _nextUnit() * 2.5,
+        lifetime: 0.15 + _nextUnit() * 0.15,
+        segments: 4 + _nextInt(3),
       ));
     }
   }
@@ -280,41 +334,41 @@ class ExplosionEffect extends PositionComponent {
     if (debrisCount == 0) return;
 
     for (int i = 0; i < debrisCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final speed = 40 + _random.nextDouble() * 100;
-      final shapeType = _random.nextInt(6); // 0=square, 1=triangle, 2=line, 3=hexShard, 4=crystal, 5=spark
+      final angle = _nextUnit() * math.pi * 2;
+      final speed = 40 + _nextUnit() * 100;
+      final shapeType = _nextInt(6); // 0=square, 1=triangle, 2=line, 3=hexShard, 4=crystal, 5=spark
 
-      _debris.add(_DebrisChunk(
+      _debris.add(_DebrisChunk.obtain(
         angle: angle,
         speed: speed,
-        size: shapeType >= 3 ? 2 + _random.nextDouble() * 3 : 3 + _random.nextDouble() * 4,
-        rotation: _random.nextDouble() * math.pi * 2,
-        rotationSpeed: (_random.nextDouble() - 0.5) * (shapeType >= 3 ? 30 : 20),
-        lifetime: 0.5 + _random.nextDouble() * 0.4,
+        size: shapeType >= 3 ? 2 + _nextUnit() * 3 : 3 + _nextUnit() * 4,
+        rotation: _nextUnit() * math.pi * 2,
+        rotationSpeed: (_nextUnit() - 0.5) * (shapeType >= 3 ? 30 : 20),
+        lifetime: 0.5 + _nextUnit() * 0.4,
         shape: shapeType,
-        gravity: shapeType == 5 ? 20 + _random.nextDouble() * 20 : 50 + _random.nextDouble() * 40,
-        hasTrail: shapeType >= 3 && _random.nextDouble() > 0.5,
-        glowIntensity: 0.3 + _random.nextDouble() * 0.5,
-        bounceEnabled: shapeType < 3 && _random.nextDouble() > 0.6,
-        bounceDamping: 0.5 + _random.nextDouble() * 0.3,
+        gravity: shapeType == 5 ? 20 + _nextUnit() * 20 : 50 + _nextUnit() * 40,
+        hasTrail: shapeType >= 3 && _nextUnit() > 0.5,
+        glowIntensity: 0.3 + _nextUnit() * 0.5,
+        bounceEnabled: shapeType < 3 && _nextUnit() > 0.6,
+        bounceDamping: 0.5 + _nextUnit() * 0.3,
       ));
     }
 
     // Add some large dramatic shards
     final shardCount = _scaledCount(4, allowZero: true);
     for (int i = 0; i < shardCount; i++) {
-      final angle = (i / shardCount) * math.pi * 2 + _random.nextDouble() * 0.3;
-      _debris.add(_DebrisChunk(
+      final angle = (i / shardCount) * math.pi * 2 + _nextUnit() * 0.3;
+      _debris.add(_DebrisChunk.obtain(
         angle: angle,
-        speed: 60 + _random.nextDouble() * 60,
-        size: 5 + _random.nextDouble() * 4,
-        rotation: _random.nextDouble() * math.pi * 2,
-        rotationSpeed: (_random.nextDouble() - 0.5) * 15,
-        lifetime: 0.6 + _random.nextDouble() * 0.3,
+        speed: 60 + _nextUnit() * 60,
+        size: 5 + _nextUnit() * 4,
+        rotation: _nextUnit() * math.pi * 2,
+        rotationSpeed: (_nextUnit() - 0.5) * 15,
+        lifetime: 0.6 + _nextUnit() * 0.3,
         shape: 4, // Crystal shard
-        gravity: 40 + _random.nextDouble() * 25,
+        gravity: 40 + _nextUnit() * 25,
         hasTrail: true,
-        glowIntensity: 0.6 + _random.nextDouble() * 0.3,
+        glowIntensity: 0.6 + _nextUnit() * 0.3,
         bounceEnabled: false,
         bounceDamping: 0.6,
       ));
@@ -326,16 +380,16 @@ class ExplosionEffect extends PositionComponent {
     if (smokeCount == 0) return;
 
     for (int i = 0; i < smokeCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final delay = _random.nextDouble() * 0.1;
+      final angle = _nextUnit() * math.pi * 2;
+      final delay = _nextUnit() * 0.1;
 
-      _smokePuffs.add(_SmokePuff(
+      _smokePuffs.add(_SmokePuff.obtain(
         angle: angle,
-        speed: 15 + _random.nextDouble() * 25,
-        size: 8 + _random.nextDouble() * 12,
-        lifetime: 0.5 + _random.nextDouble() * 0.3,
+        speed: 15 + _nextUnit() * 25,
+        size: 8 + _nextUnit() * 12,
+        lifetime: 0.5 + _nextUnit() * 0.3,
         delay: delay,
-        expansionRate: 1.5 + _random.nextDouble(),
+        expansionRate: 1.5 + _nextUnit(),
       ));
     }
   }
@@ -351,6 +405,17 @@ class ExplosionEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _time += dt;
     final progress = _time / duration;
@@ -390,9 +455,18 @@ class ExplosionEffect extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     final progress = _time / duration;
+    if (_particles.isEmpty &&
+        _energyArcs.isEmpty &&
+        _debris.isEmpty &&
+        _smokePuffs.isEmpty &&
+        _shockwaveAlpha <= 0.01 &&
+        _coreFlashIntensity <= 0.01) {
+      return;
+    }
 
     // Draw smoke (behind everything)
     _drawSmoke(canvas);
@@ -433,6 +507,17 @@ class ExplosionEffect extends PositionComponent {
     // CHROMATIC GLITCH OVERLAY (on top of everything)
     // ═══════════════════════════════════════════════════════════════════════
     _drawChromaticGlitchOverlay(canvas, progress);
+  }
+
+  bool _isOffscreen({double padding = 80}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   void _drawShockwaveRing(Canvas canvas, double progress, double sizeMult, double alphaMult) {
@@ -496,8 +581,8 @@ class ExplosionEffect extends PositionComponent {
       _reusablePath.reset();
       _reusablePath.moveTo(0, 0);
 
-      final endX = math.cos(arc.angle) * arc.length;
-      final endY = math.sin(arc.angle) * arc.length;
+      final endX = arc.dirX * arc.length;
+      final endY = arc.dirY * arc.length;
 
       // Add zigzag segments
       const segments = 4;
@@ -507,8 +592,9 @@ class ExplosionEffect extends PositionComponent {
         final baseY = endY * t;
 
         // Add random offset perpendicular to direction
-        final perpX = -math.sin(arc.angle) * (i == segments ? 0 : (_random.nextDouble() - 0.5) * 10);
-        final perpY = math.cos(arc.angle) * (i == segments ? 0 : (_random.nextDouble() - 0.5) * 10);
+        final jitter = (i == segments ? 0 : (_nextUnit() - 0.5) * 10);
+        final perpX = arc.perpX * jitter;
+        final perpY = arc.perpY * jitter;
 
         _reusablePath.lineTo(baseX + perpX, baseY + perpY);
       }
@@ -527,8 +613,8 @@ class ExplosionEffect extends PositionComponent {
     for (final particle in _particles) {
       if (!particle.isAlive) continue;
 
-      final x = math.cos(particle.angle) * particle.distance;
-      final y = math.sin(particle.angle) * particle.distance;
+      final x = particle.dirX * particle.distance;
+      final y = particle.dirY * particle.distance;
       final alpha = particle.alphaValue;
 
       // Draw particle trail
@@ -537,8 +623,8 @@ class ExplosionEffect extends PositionComponent {
           ..color = color.withOpacity(alpha * 0.5)
           ..strokeWidth = particle.currentSize * 0.7;
 
-        final trailStartX = math.cos(particle.angle) * (particle.distance - particle.trailLength * 8);
-        final trailStartY = math.sin(particle.angle) * (particle.distance - particle.trailLength * 8);
+        final trailStartX = particle.dirX * (particle.distance - particle.trailLength * 8);
+        final trailStartY = particle.dirY * (particle.distance - particle.trailLength * 8);
 
         canvas.drawLine(
           Offset(trailStartX, trailStartY),
@@ -611,8 +697,8 @@ class ExplosionEffect extends PositionComponent {
     for (final chunk in _debris) {
       if (!chunk.isAlive) continue;
 
-      final x = math.cos(chunk.angle) * chunk.distance;
-      final y = math.sin(chunk.angle) * chunk.distance + chunk.fallOffset;
+      final x = chunk.dirX * chunk.distance;
+      final y = chunk.dirY * chunk.distance + chunk.fallOffset;
       final alpha = chunk.alphaValue;
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -668,10 +754,9 @@ class ExplosionEffect extends PositionComponent {
 
         case 3: // Hexagonal shard
           _debrisPath.reset();
-          for (int i = 0; i < 6; i++) {
-            final angle = i * math.pi / 3;
-            final px = math.cos(angle) * chunk.size * 0.5;
-            final py = math.sin(angle) * chunk.size * 0.5;
+          for (int i = 0; i < _unitHex.length; i++) {
+            final px = _unitHex[i].dx * chunk.size * 0.5;
+            final py = _unitHex[i].dy * chunk.size * 0.5;
             if (i == 0) {
               _debrisPath.moveTo(px, py);
             } else {
@@ -752,8 +837,8 @@ class ExplosionEffect extends PositionComponent {
     for (final puff in _smokePuffs) {
       if (!puff.isActive) continue;
 
-      final x = math.cos(puff.angle) * puff.distance;
-      final y = math.sin(puff.angle) * puff.distance;
+      final x = puff.dirX * puff.distance;
+      final y = puff.dirY * puff.distance;
       final alpha = puff.alphaValue;
       final currentSize = puff.currentSize;
 
@@ -958,8 +1043,8 @@ class ExplosionEffect extends PositionComponent {
     final scanlineCount = (6 * glitchIntensity).ceil();
     for (int i = 0; i < scanlineCount; i++) {
       final scanY = (math.sin(_time * 20 + i * 3) * explosionSize * 0.8);
-      final scanWidth = explosionSize * (0.3 + _random.nextDouble() * 0.5);
-      final scanAlpha = glitchIntensity * 0.3 * _random.nextDouble();
+      final scanWidth = explosionSize * (0.3 + _nextUnit() * 0.5);
+      final scanAlpha = glitchIntensity * 0.3 * _nextUnit();
 
       // RGB offset scanlines
       _chromaGlitchPaint.color = const Color(0xFFFF0000).withOpacity(scanAlpha);
@@ -1021,8 +1106,8 @@ class ExplosionEffect extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     final sparkCount = (8 * glitchIntensity).ceil();
     for (int i = 0; i < sparkCount; i++) {
-      final sparkAngle = _random.nextDouble() * math.pi * 2;
-      final sparkDist = _random.nextDouble() * explosionSize * 0.6;
+      final sparkAngle = _nextUnit() * math.pi * 2;
+      final sparkDist = _nextUnit() * explosionSize * 0.6;
 
       final sx = math.cos(sparkAngle) * sparkDist;
       final sy = math.sin(sparkAngle) * sparkDist;
@@ -1044,13 +1129,13 @@ class ExplosionEffect extends PositionComponent {
     if (glitchIntensity > 0.5) {
       final noiseCount = (10 * glitchIntensity).ceil();
       for (int i = 0; i < noiseCount; i++) {
-        final nx = (_random.nextDouble() - 0.5) * explosionSize * 1.5;
-        final ny = (_random.nextDouble() - 0.5) * explosionSize * 1.5;
-        final noiseSize = 1 + _random.nextDouble() * 3;
+        final nx = (_nextUnit() - 0.5) * explosionSize * 1.5;
+        final ny = (_nextUnit() - 0.5) * explosionSize * 1.5;
+        final noiseSize = 1 + _nextUnit() * 3;
 
-        final noiseColor = _random.nextInt(3) == 0
+        final noiseColor = _nextInt(3) == 0
             ? const Color(0xFFFF0000)
-            : _random.nextInt(2) == 0
+            : _nextInt(2) == 0
                 ? const Color(0xFF00FF00)
                 : const Color(0xFF0000FF);
 
@@ -1070,6 +1155,10 @@ class ExplosionEffect extends PositionComponent {
       }
       _counted = false;
     }
+    _recycleParticles();
+    _recycleEnergyArcs();
+    _recycleDebris();
+    _recycleSmoke();
     if (parent != null) {
       removeFromParent();
     }
@@ -1093,25 +1182,75 @@ class ExplosionEffect extends PositionComponent {
 }
 
 class _ExplosionParticle {
-  _ExplosionParticle({
-    required this.angle,
-    required this.speed,
-    required this.size,
-    required this.lifetime,
-    required this.decay,
-    required this.trailLength,
-    this.isDebris = false,
+  static const int _maxPool = 2048;
+  static final List<_ExplosionParticle> _pool = [];
+
+  static _ExplosionParticle obtain({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double decay,
+    required double trailLength,
+    bool isDebris = false,
+  }) {
+    if (_pool.isNotEmpty) {
+      final particle = _pool.removeLast();
+      particle.reset(
+        angle: angle,
+        speed: speed,
+        size: size,
+        lifetime: lifetime,
+        decay: decay,
+        trailLength: trailLength,
+        isDebris: isDebris,
+      );
+      return particle;
+    }
+    return _ExplosionParticle._internal(
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      decay: decay,
+      trailLength: trailLength,
+      isDebris: isDebris,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _ExplosionParticle._internal({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double decay,
+    required double trailLength,
+    bool isDebris = false,
   }) : _time = 0,
        distance = 0,
-       currentSize = size;
+       currentSize = size {
+    reset(
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      decay: decay,
+      trailLength: trailLength,
+      isDebris: isDebris,
+    );
+  }
 
-  final double angle;
-  final double speed;
-  final double size;
-  final double lifetime;
-  final double decay;
-  final double trailLength;
-  final bool isDebris;
+  late double angle;
+  late double dirX;
+  late double dirY;
+  late double speed;
+  late double size;
+  late double lifetime;
+  late double decay;
+  late double trailLength;
+  late bool isDebris;
 
   double _time;
   double distance;
@@ -1121,6 +1260,35 @@ class _ExplosionParticle {
 
   double get alphaValue => isAlive ? (1 - _time / lifetime) : 0;
 
+  void reset({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double decay,
+    required double trailLength,
+    required bool isDebris,
+  }) {
+    this.angle = angle;
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    this.speed = speed;
+    this.size = size;
+    this.lifetime = lifetime;
+    this.decay = decay;
+    this.trailLength = trailLength;
+    this.isDebris = isDebris;
+    _time = 0;
+    distance = 0;
+    currentSize = size;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
+  }
+
   void update(double dt) {
     _time += dt;
     distance += speed * dt * decay;
@@ -1129,19 +1297,63 @@ class _ExplosionParticle {
 }
 
 class _EnergyArc {
-  _EnergyArc({
-    required this.angle,
-    required this.length,
-    required this.width,
-    required this.lifetime,
-    this.segments = 4,
-  }) : _time = 0;
+  static const int _maxPool = 512;
+  static final List<_EnergyArc> _pool = [];
 
-  final double angle;
-  final double length;
-  final double width;
-  final double lifetime;
-  final int segments;
+  static _EnergyArc obtain({
+    required double angle,
+    required double length,
+    required double width,
+    required double lifetime,
+    int segments = 4,
+  }) {
+    if (_pool.isNotEmpty) {
+      final arc = _pool.removeLast();
+      arc.reset(
+        angle: angle,
+        length: length,
+        width: width,
+        lifetime: lifetime,
+        segments: segments,
+      );
+      return arc;
+    }
+    return _EnergyArc._internal(
+      angle: angle,
+      length: length,
+      width: width,
+      lifetime: lifetime,
+      segments: segments,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _EnergyArc._internal({
+    required double angle,
+    required double length,
+    required double width,
+    required double lifetime,
+    int segments = 4,
+  }) : _time = 0 {
+    reset(
+      angle: angle,
+      length: length,
+      width: width,
+      lifetime: lifetime,
+      segments: segments,
+    );
+  }
+
+  late double angle;
+  late double dirX;
+  late double dirY;
+  late double perpX;
+  late double perpY;
+  late double length;
+  late double width;
+  late double lifetime;
+  late int segments;
 
   double _time;
 
@@ -1149,25 +1361,103 @@ class _EnergyArc {
 
   double get alphaValue => isAlive ? (1 - _time / lifetime) : 0;
 
+  void reset({
+    required double angle,
+    required double length,
+    required double width,
+    required double lifetime,
+    required int segments,
+  }) {
+    this.angle = angle;
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    perpX = -dirY;
+    perpY = dirX;
+    this.length = length;
+    this.width = width;
+    this.lifetime = lifetime;
+    this.segments = segments;
+    _time = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
+  }
+
   void update(double dt) {
     _time += dt;
   }
 }
 
 class _DebrisChunk {
-  _DebrisChunk({
-    required this.angle,
-    required this.speed,
-    required this.size,
-    required this.rotation,
-    required this.rotationSpeed,
-    required this.lifetime,
-    required this.shape,
-    required this.gravity,
-    this.hasTrail = false,
-    this.glowIntensity = 0.4,
-    this.bounceEnabled = false,
-    this.bounceDamping = 0.6,
+  static const int _maxPool = 1024;
+  static final List<_DebrisChunk> _pool = [];
+
+  static _DebrisChunk obtain({
+    required double angle,
+    required double speed,
+    required double size,
+    required double rotation,
+    required double rotationSpeed,
+    required double lifetime,
+    required int shape,
+    required double gravity,
+    bool hasTrail = false,
+    double glowIntensity = 0.4,
+    bool bounceEnabled = false,
+    double bounceDamping = 0.6,
+  }) {
+    if (_pool.isNotEmpty) {
+      final chunk = _pool.removeLast();
+      chunk.reset(
+        angle: angle,
+        speed: speed,
+        size: size,
+        rotation: rotation,
+        rotationSpeed: rotationSpeed,
+        lifetime: lifetime,
+        shape: shape,
+        gravity: gravity,
+        hasTrail: hasTrail,
+        glowIntensity: glowIntensity,
+        bounceEnabled: bounceEnabled,
+        bounceDamping: bounceDamping,
+      );
+      return chunk;
+    }
+    return _DebrisChunk._internal(
+      angle: angle,
+      speed: speed,
+      size: size,
+      rotation: rotation,
+      rotationSpeed: rotationSpeed,
+      lifetime: lifetime,
+      shape: shape,
+      gravity: gravity,
+      hasTrail: hasTrail,
+      glowIntensity: glowIntensity,
+      bounceEnabled: bounceEnabled,
+      bounceDamping: bounceDamping,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _DebrisChunk._internal({
+    required double angle,
+    required double speed,
+    required double size,
+    required double rotation,
+    required double rotationSpeed,
+    required double lifetime,
+    required int shape,
+    required double gravity,
+    bool hasTrail = false,
+    double glowIntensity = 0.4,
+    bool bounceEnabled = false,
+    double bounceDamping = 0.6,
   }) : _time = 0,
        distance = 0,
        currentRotation = rotation,
@@ -1175,20 +1465,37 @@ class _DebrisChunk {
        _prevX = 0,
        _prevY = 0,
        _velocityY = 0,
-       _bounced = false;
+       _bounced = false {
+    reset(
+      angle: angle,
+      speed: speed,
+      size: size,
+      rotation: rotation,
+      rotationSpeed: rotationSpeed,
+      lifetime: lifetime,
+      shape: shape,
+      gravity: gravity,
+      hasTrail: hasTrail,
+      glowIntensity: glowIntensity,
+      bounceEnabled: bounceEnabled,
+      bounceDamping: bounceDamping,
+    );
+  }
 
-  final double angle;
-  final double speed;
-  final double size;
-  final double rotation;
-  final double rotationSpeed;
-  final double lifetime;
-  final int shape;
-  final double gravity;
-  final bool hasTrail;
-  final double glowIntensity;
-  final bool bounceEnabled;
-  final double bounceDamping;
+  late double angle;
+  late double dirX;
+  late double dirY;
+  late double speed;
+  late double size;
+  late double rotation;
+  late double rotationSpeed;
+  late double lifetime;
+  late int shape;
+  late double gravity;
+  late bool hasTrail;
+  late double glowIntensity;
+  late bool bounceEnabled;
+  late double bounceDamping;
 
   double _time;
   double distance;
@@ -1206,10 +1513,54 @@ class _DebrisChunk {
   double get prevX => _prevX;
   double get prevY => _prevY;
 
+  void reset({
+    required double angle,
+    required double speed,
+    required double size,
+    required double rotation,
+    required double rotationSpeed,
+    required double lifetime,
+    required int shape,
+    required double gravity,
+    required bool hasTrail,
+    required double glowIntensity,
+    required bool bounceEnabled,
+    required double bounceDamping,
+  }) {
+    this.angle = angle;
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    this.speed = speed;
+    this.size = size;
+    this.rotation = rotation;
+    this.rotationSpeed = rotationSpeed;
+    this.lifetime = lifetime;
+    this.shape = shape;
+    this.gravity = gravity;
+    this.hasTrail = hasTrail;
+    this.glowIntensity = glowIntensity;
+    this.bounceEnabled = bounceEnabled;
+    this.bounceDamping = bounceDamping;
+    _time = 0;
+    distance = 0;
+    currentRotation = rotation;
+    fallOffset = 0;
+    _prevX = 0;
+    _prevY = 0;
+    _velocityY = 0;
+    _bounced = false;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
+  }
+
   void update(double dt) {
     // Store previous position for trail
-    final currentX = math.cos(angle) * distance;
-    final currentY = math.sin(angle) * distance + fallOffset;
+    final currentX = dirX * distance;
+    final currentY = dirY * distance + fallOffset;
     _prevX = currentX;
     _prevY = currentY;
 
@@ -1232,23 +1583,69 @@ class _DebrisChunk {
 }
 
 class _SmokePuff {
-  _SmokePuff({
-    required this.angle,
-    required this.speed,
-    required this.size,
-    required this.lifetime,
-    required this.delay,
-    required this.expansionRate,
+  static const int _maxPool = 512;
+  static final List<_SmokePuff> _pool = [];
+
+  static _SmokePuff obtain({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required double expansionRate,
+  }) {
+    if (_pool.isNotEmpty) {
+      final puff = _pool.removeLast();
+      puff.reset(
+        angle: angle,
+        speed: speed,
+        size: size,
+        lifetime: lifetime,
+        delay: delay,
+        expansionRate: expansionRate,
+      );
+      return puff;
+    }
+    return _SmokePuff._internal(
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      delay: delay,
+      expansionRate: expansionRate,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _SmokePuff._internal({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required double expansionRate,
   }) : _time = 0,
        distance = 0,
-       currentSize = 0;
+       currentSize = 0 {
+    reset(
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      delay: delay,
+      expansionRate: expansionRate,
+    );
+  }
 
-  final double angle;
-  final double speed;
-  final double size;
-  final double lifetime;
-  final double delay;
-  final double expansionRate;
+  late double angle;
+  late double dirX;
+  late double dirY;
+  late double speed;
+  late double size;
+  late double lifetime;
+  late double delay;
+  late double expansionRate;
 
   double _time;
   double distance;
@@ -1262,6 +1659,33 @@ class _SmokePuff {
     return (1 - activeTime / lifetime).clamp(0.0, 1.0);
   }
 
+  void reset({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required double expansionRate,
+  }) {
+    this.angle = angle;
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    this.speed = speed;
+    this.size = size;
+    this.lifetime = lifetime;
+    this.delay = delay;
+    this.expansionRate = expansionRate;
+    _time = 0;
+    distance = 0;
+    currentSize = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
+  }
+
   void update(double dt) {
     _time += dt;
     if (_time > delay) {
@@ -1271,3 +1695,4 @@ class _SmokePuff {
     }
   }
 }
+

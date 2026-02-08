@@ -27,8 +27,19 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
   final Color glowColor;
   final bool reducedFx;
   final double horizonRatio; // Where the horizon line is (0.55 = 55% from top)
+  late final Color _specularCoreColor = Color.lerp(glowColor, const Color(0xFFFFFFFF), 0.5)!;
 
   double _time = 0;
+
+  // Cached static layer (base surface + static grid + fresnel).
+  Picture? _staticLayer;
+  bool _staticLayerDirty = true;
+  double _staticLayerWidth = 0;
+  double _staticLayerHeight = 0;
+
+  // Quantized intensity filters to avoid per-frame ColorFilter allocations.
+  static const int _intensityLevels = 64;
+  final Map<int, ColorFilter> _intensityFilterCache = {};
 
   // Static paints to avoid per-frame allocations
   static final Paint _baseSurfacePaint = Paint();
@@ -49,6 +60,9 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
   static final Paint _specularCorePaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _specularCoreHighlightPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _specularFlarePaint = Paint();
 
   // Light streak data
   late List<_LightStreak> _lightStreaks;
@@ -56,7 +70,7 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
   // Specular highlight data
   late List<_SpecularHighlight> _specularHighlights;
 
-  final math.Random _random = math.Random(123);
+  int _rngState = 0x6d2b79f5;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SHADER CACHE - Avoid per-frame createShader() allocations
@@ -145,6 +159,7 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
   @override
   Future<void> onLoad() async {
     await super.onLoad();
+    _rngState = 0x6d2b79f5 ^ glowColor.value;
     size = gameRef.size;
     anchor = Anchor.topLeft;
     position = Vector2.zero();
@@ -160,11 +175,11 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
     }
 
     _lightStreaks = List.generate(5, (i) => _LightStreak(
-      y: horizonRatio + _random.nextDouble() * (1.0 - horizonRatio) * 0.8,
-      speed: 0.02 + _random.nextDouble() * 0.04,
-      width: 0.1 + _random.nextDouble() * 0.3,
-      intensity: 0.03 + _random.nextDouble() * 0.05,
-      phase: _random.nextDouble() * math.pi * 2,
+      y: horizonRatio + _nextUnit() * (1.0 - horizonRatio) * 0.8,
+      speed: 0.02 + _nextUnit() * 0.04,
+      width: 0.1 + _nextUnit() * 0.3,
+      intensity: 0.03 + _nextUnit() * 0.05,
+      phase: _nextUnit() * math.pi * 2,
     ));
   }
 
@@ -175,11 +190,11 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
     }
 
     _specularHighlights = List.generate(4, (i) => _SpecularHighlight(
-      xPhase: _random.nextDouble() * math.pi * 2,
-      yOffset: horizonRatio + 0.1 + _random.nextDouble() * 0.3,
-      speed: 0.3 + _random.nextDouble() * 0.5,
-      size: 20 + _random.nextDouble() * 40,
-      intensity: 0.08 + _random.nextDouble() * 0.07,
+      xPhase: _nextUnit() * math.pi * 2,
+      yOffset: horizonRatio + 0.1 + _nextUnit() * 0.3,
+      speed: 0.3 + _nextUnit() * 0.5,
+      size: 20 + _nextUnit() * 40,
+      intensity: 0.08 + _nextUnit() * 0.07,
     ));
   }
 
@@ -190,6 +205,10 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
     _invalidateShaderCache(); // Invalidate cached shaders on resize
     _initializeLightStreaks();
     _initializeSpecularHighlights();
+    _staticLayerDirty = true;
+    _staticLayer?.dispose();
+    _staticLayer = null;
+    _intensityFilterCache.clear();
   }
 
   @override
@@ -210,18 +229,17 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
     canvas.save();
     canvas.clipRect(Rect.fromLTWH(0, horizonY, size.x, size.y - horizonY));
 
-    // Layer 1: Base reflective surface gradient
-    _drawBaseReflectiveSurface(canvas, horizonY);
+    _ensureStaticLayer(horizonY);
+    if (_staticLayer != null) {
+      canvas.drawPicture(_staticLayer!);
+    }
 
-    // Layer 2: Faded mirror of grid lines
-    _drawReflectedGridLines(canvas, horizonY);
+    // Layer 2 (dynamic): Animated vertical grid lines
+    _drawReflectedGridLinesDynamic(canvas, horizonY);
 
     if (!reducedFx) {
       // Layer 3: Animated light streaks
       _drawLightStreaks(canvas, horizonY);
-
-      // Layer 4: Fresnel effect
-      _drawFresnelEffect(canvas, horizonY);
 
       // Layer 5: Ripple distortion
       _drawRippleDistortion(canvas, horizonY);
@@ -231,6 +249,34 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
     }
 
     canvas.restore();
+  }
+
+  void _ensureStaticLayer(double horizonY) {
+    if (!_staticLayerDirty &&
+        _staticLayerWidth == size.x &&
+        _staticLayerHeight == size.y) {
+      return;
+    }
+
+    _staticLayerWidth = size.x;
+    _staticLayerHeight = size.y;
+    final recorder = PictureRecorder();
+    final staticCanvas = Canvas(recorder);
+
+    // Layer 1: Base reflective surface gradient
+    _drawBaseReflectiveSurface(staticCanvas, horizonY);
+
+    // Layer 2: Static mirrored grid lines (horizontal only)
+    _drawReflectedGridLinesStatic(staticCanvas, horizonY);
+
+    if (!reducedFx) {
+      // Layer 4: Fresnel effect
+      _drawFresnelEffect(staticCanvas, horizonY);
+    }
+
+    _staticLayer?.dispose();
+    _staticLayer = recorder.endRecording();
+    _staticLayerDirty = false;
   }
 
   /// Layer 1: Base reflective surface - darker at horizon, lighter at bottom
@@ -247,8 +293,7 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
   }
 
   /// Layer 2: Mirrored grid lines with blur and low opacity
-  void _drawReflectedGridLines(Canvas canvas, double horizonY) {
-    final vanishingX = size.x / 2;
+  void _drawReflectedGridLinesStatic(Canvas canvas, double horizonY) {
     final reflectionHeight = size.y - horizonY;
 
     // Reflected horizontal lines (inverted from perspective grid)
@@ -287,6 +332,10 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
         _gridLinePaint,
       );
     }
+  }
+
+  void _drawReflectedGridLinesDynamic(Canvas canvas, double horizonY) {
+    final vanishingX = size.x / 2;
 
     // Reflected vertical converging lines
     final vLineCount = 12;
@@ -345,26 +394,16 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
       final pulseIntensity = streak.intensity * (0.7 + 0.3 * math.sin(_time * 2 + streak.phase));
 
       // Fade at edges of streak
-      final streakRect = Rect.fromLTWH(x - streakWidth / 2, y - 3, streakWidth, 6);
+      _lightStreakPaint.shader = _getStreakShader(streak, streakWidth);
+      _lightStreakPaint.colorFilter = _getIntensityFilter(pulseIntensity);
 
-      // Outer glow
-      _lightStreakPaint.shader = LinearGradient(
-        begin: Alignment.centerLeft,
-        end: Alignment.centerRight,
-        colors: [
-          glowColor.withOpacity(0),
-          glowColor.withOpacity(pulseIntensity * 0.5),
-          glowColor.withOpacity(pulseIntensity * 0.8),
-          glowColor.withOpacity(pulseIntensity * 0.5),
-          glowColor.withOpacity(0),
-        ],
-        stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
-      ).createShader(streakRect);
-
+      canvas.save();
+      canvas.translate(x - streakWidth / 2, y - 8);
       canvas.drawRect(
-        Rect.fromLTWH(x - streakWidth / 2, y - 8, streakWidth, 16),
+        Rect.fromLTWH(0, 0, streakWidth, 16),
         _lightStreakPaint,
       );
+      canvas.restore();
 
       // Core bright line
       _lightStreakCorePaint.color = glowColor.withOpacity(pulseIntensity);
@@ -481,34 +520,80 @@ class ReflectiveFloorComponent extends PositionComponent with HasGameRef<FlameGa
       canvas.drawCircle(Offset(x, y), highlight.size * 0.7, _specularCorePaint);
 
       // Bright core (white-ish)
-      final coreColor = Color.lerp(glowColor, const Color(0xFFFFFFFF), 0.5)!;
+      _specularCoreHighlightPaint.color = _specularCoreColor.withOpacity(pulseIntensity);
       canvas.drawCircle(
         Offset(x, y),
         highlight.size * 0.3,
-        Paint()
-          ..color = coreColor.withOpacity(pulseIntensity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        _specularCoreHighlightPaint,
       );
 
       // Horizontal lens flare streak
       final flareWidth = highlight.size * 3;
-      final flarePaint = Paint()
-        ..shader = LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            glowColor.withOpacity(0),
-            glowColor.withOpacity(pulseIntensity * 0.3),
-            glowColor.withOpacity(0),
-          ],
-        ).createShader(Rect.fromLTWH(x - flareWidth / 2, y - 2, flareWidth, 4));
+      _specularFlarePaint.shader = _getFlareShader(highlight, flareWidth);
+      _specularFlarePaint.colorFilter = _getIntensityFilter(pulseIntensity);
 
+      canvas.save();
+      canvas.translate(x - flareWidth / 2, y - 2);
       canvas.drawRect(
-        Rect.fromLTWH(x - flareWidth / 2, y - 2, flareWidth, 4),
-        flarePaint,
+        Rect.fromLTWH(0, 0, flareWidth, 4),
+        _specularFlarePaint,
       );
+      canvas.restore();
     }
   }
+
+  Shader _getStreakShader(_LightStreak streak, double streakWidth) {
+    if (streak.cachedShader == null || streak.cachedWidth != streakWidth) {
+      streak.cachedWidth = streakWidth;
+      streak.cachedShader = const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Color(0x00FFFFFF),
+          Color(0x80FFFFFF), // 0.5 alpha
+          Color(0xCCFFFFFF), // 0.8 alpha
+          Color(0x80FFFFFF),
+          Color(0x00FFFFFF),
+        ],
+        stops: [0.0, 0.2, 0.5, 0.8, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, streakWidth, 16));
+    }
+    return streak.cachedShader!;
+  }
+
+  Shader _getFlareShader(_SpecularHighlight highlight, double flareWidth) {
+    if (highlight.cachedFlareShader == null || highlight.cachedFlareWidth != flareWidth) {
+      highlight.cachedFlareWidth = flareWidth;
+      highlight.cachedFlareShader = const LinearGradient(
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+        colors: [
+          Color(0x00FFFFFF),
+          Color(0x4DFFFFFF), // 0.3 alpha
+          Color(0x00FFFFFF),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, flareWidth, 4));
+    }
+    return highlight.cachedFlareShader!;
+  }
+
+  ColorFilter _getIntensityFilter(double intensity) {
+    final level = (intensity * _intensityLevels).round().clamp(0, _intensityLevels);
+    return _intensityFilterCache.putIfAbsent(
+      level,
+      () => ColorFilter.mode(
+        glowColor.withOpacity(level / _intensityLevels),
+        BlendMode.modulate,
+      ),
+    );
+  }
+
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
 }
 
 /// Data class for animated light streaks
@@ -518,6 +603,8 @@ class _LightStreak {
   final double width; // Streak width as ratio of screen width
   final double intensity; // Base intensity
   final double phase; // Animation phase offset
+  Shader? cachedShader;
+  double cachedWidth = 0;
 
   _LightStreak({
     required this.y,
@@ -535,6 +622,8 @@ class _SpecularHighlight {
   final double speed; // Animation speed
   final double size; // Highlight size in pixels
   final double intensity; // Base intensity
+  Shader? cachedFlareShader;
+  double cachedFlareWidth = 0;
 
   _SpecularHighlight({
     required this.xPhase,

@@ -49,7 +49,14 @@ class _NeonButtonState extends State<NeonButton>
   bool _isHovered = false;
   bool _isPressed = false;
 
-  final _random = math.Random();
+  int _rngState = 0x6ac690c5;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
   final List<_Particle> _particles = [];
   final List<_ElectricArc> _arcs = [];
   double _glitchOffset = 0;
@@ -102,13 +109,13 @@ class _NeonButtonState extends State<NeonButton>
   void _initParticles() {
     for (int i = 0; i < 20; i++) {
       _particles.add(_Particle(
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        vx: (_random.nextDouble() - 0.5) * 0.01,
-        vy: (_random.nextDouble() - 0.5) * 0.01,
-        size: 1 + _random.nextDouble() * 2,
-        life: _random.nextDouble(),
-        maxLife: 0.5 + _random.nextDouble() * 0.5,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        vx: (_nextUnit() - 0.5) * 0.01,
+        vy: (_nextUnit() - 0.5) * 0.01,
+        size: 1 + _nextUnit() * 2,
+        life: _nextUnit(),
+        maxLife: 0.5 + _nextUnit() * 0.5,
       ));
     }
   }
@@ -121,10 +128,10 @@ class _NeonButtonState extends State<NeonButton>
       if (p.life <= 0) {
         // Respawn particle
         if (_isHovered) {
-          p.x = _random.nextDouble();
-          p.y = _random.nextDouble();
-          p.vx = (_random.nextDouble() - 0.5) * 0.02;
-          p.vy = (_random.nextDouble() - 0.5) * 0.02;
+          p.x = _nextUnit();
+          p.y = _nextUnit();
+          p.vx = (_nextUnit() - 0.5) * 0.02;
+          p.vy = (_nextUnit() - 0.5) * 0.02;
           p.life = p.maxLife;
         }
       } else {
@@ -139,9 +146,9 @@ class _NeonButtonState extends State<NeonButton>
     }
 
     // Random glitch trigger
-    if (_isHovered && _random.nextDouble() > 0.995) {
+    if (_isHovered && _nextUnit() > 0.995) {
       _showGlitch = true;
-      _glitchOffset = (_random.nextDouble() - 0.5) * 8;
+      _glitchOffset = (_nextUnit() - 0.5) * 8;
       Future.delayed(const Duration(milliseconds: 50), () {
         if (mounted) setState(() => _showGlitch = false);
       });
@@ -155,13 +162,13 @@ class _NeonButtonState extends State<NeonButton>
     }
 
     // Generate new arcs randomly
-    if (_random.nextDouble() > 0.9 && _arcs.length < 3) {
+    if (_nextUnit() > 0.9 && _arcs.length < 3) {
       _arcs.add(_ElectricArc(
-        startX: _random.nextDouble(),
-        startY: _random.nextBool() ? 0 : 1,
-        segments: 4 + _random.nextInt(4),
-        life: 0.1 + _random.nextDouble() * 0.1,
-        intensity: 0.5 + _random.nextDouble() * 0.5,
+        startX: _nextUnit(),
+        startY: _nextBool() ? 0 : 1,
+        segments: 4 + _nextInt(4),
+        life: 0.1 + _nextUnit() * 0.1,
+        intensity: 0.5 + _nextUnit() * 0.5,
       ));
     }
 
@@ -345,12 +352,15 @@ class _EpicNeonButtonPainter extends CustomPainter {
   final bool showGlitch;
   final double glitchOffset;
 
-  final _random = math.Random(42);
-
   // Reusable Paint objects - avoids ~80+ allocations per frame.
   // Safe because painting is single-threaded; properties reset before each use.
   static final Paint _fp = Paint();
   static final Paint _sp = Paint()..style = PaintingStyle.stroke;
+  static final Path _arcPath = Path();
+  static final Path _pulsePath = Path();
+
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
 
   // Cached MaskFilter instances (const - zero allocation)
   static const MaskFilter _blur2 = MaskFilter.blur(BlurStyle.normal, 2);
@@ -639,19 +649,25 @@ class _EpicNeonButtonPainter extends CustomPainter {
 
   void _drawElectricArcs(Canvas canvas, Size size) {
     for (final arc in arcs) {
-      final path = Path();
       final startX = arc.startX * size.width;
       final startY = arc.startY * size.height;
       final endY = arc.startY == 0 ? size.height : 0;
 
+      final path = _arcPath..reset();
       path.moveTo(startX, startY);
 
       double currentX = startX;
       double currentY = startY;
       final segmentHeight = (endY - startY) / arc.segments;
+      int state = ((borderPulseProgress * 100000).toInt() ^
+              (arc.startX * 10000).toInt() ^
+              (arc.startY * 10000).toInt() ^
+              arc.segments) &
+          0x7fffffff;
 
       for (int i = 1; i <= arc.segments; i++) {
-        final jitterX = (i == arc.segments) ? 0 : (_random.nextDouble() - 0.5) * 30;
+        state = _lcgNext(state);
+        final jitterX = (i == arc.segments) ? 0 : (_lcgUnit(state) - 0.5) * 30;
         currentY = startY + segmentHeight * i;
         currentX = startX + jitterX;
         path.lineTo(currentX, currentY);
@@ -689,7 +705,7 @@ class _EpicNeonButtonPainter extends CustomPainter {
       final pulsePoints = _calculatePulsePoints(size, pulsePosition, pulseLength);
 
       if (pulsePoints.isNotEmpty) {
-        final pulsePath = Path();
+        final pulsePath = _pulsePath..reset();
         pulsePath.moveTo(pulsePoints.first.dx, pulsePoints.first.dy);
         for (int i = 1; i < pulsePoints.length; i++) {
           pulsePath.lineTo(pulsePoints[i].dx, pulsePoints[i].dy);
@@ -747,7 +763,12 @@ class _EpicNeonButtonPainter extends CustomPainter {
       remaining -= 3;
     }
 
-    return points.reversed.toList();
+    for (int i = 0, j = points.length - 1; i < j; i++, j--) {
+      final temp = points[i];
+      points[i] = points[j];
+      points[j] = temp;
+    }
+    return points;
   }
 
   void _drawEnergyRipples(Canvas canvas, Size size) {
@@ -836,9 +857,14 @@ class _EpicNeonButtonPainter extends CustomPainter {
   }
 
   void _drawGlitchEffect(Canvas canvas, Size size) {
+    int state = ((borderPulseProgress * 100000).toInt() ^
+            (glitchOffset * 1000).toInt()) &
+        0x7fffffff;
     for (int i = 0; i < 3; i++) {
-      final y = _random.nextDouble() * size.height;
-      final barHeight = 2 + _random.nextDouble() * 6;
+      state = _lcgNext(state);
+      final y = _lcgUnit(state) * size.height;
+      state = _lcgNext(state);
+      final barHeight = 2 + _lcgUnit(state) * 6;
       final xOffset = glitchOffset * (1 + i * 0.5);
 
       _fp.color = color.withOpacity(0.3);

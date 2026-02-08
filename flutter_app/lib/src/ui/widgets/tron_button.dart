@@ -37,8 +37,7 @@ class TronButton extends StatefulWidget {
   State<TronButton> createState() => _TronButtonState();
 }
 
-class _TronButtonState extends State<TronButton>
-    with TickerProviderStateMixin {
+class _TronButtonState extends State<TronButton> with TickerProviderStateMixin {
   late AnimationController _materializeController;
   late AnimationController _pulseController;
   late AnimationController _hoverController;
@@ -58,9 +57,17 @@ class _TronButtonState extends State<TronButton>
   Timer? _materializeTimer;
   Timer? _glitchTimer;
 
-  final _random = math.Random();
+  int _rngState = 0x4f6cdd1d;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
   List<_EnergyParticle> _particles = [];
-  List<_ElectricArc> _arcs = [];
+  final List<_ElectricArc> _arcs = [];
 
   @override
   void initState() {
@@ -119,23 +126,29 @@ class _TronButtonState extends State<TronButton>
       }
     });
 
-    // Start materialization after delay
-    _materializeTimer = Timer(widget.delay, () {
-      if (mounted) {
-        _materializeController.forward();
-        _pulseController.repeat(reverse: true);
-        _triggerRandomGlitch();
-      }
-    });
+    // Start materialization. When delay is zero, start immediately so
+    // single long tester pumps advance the animation as expected.
+    if (widget.delay == Duration.zero) {
+      _startMaterialization();
+    } else {
+      _materializeTimer = Timer(widget.delay, _startMaterialization);
+    }
+  }
+
+  void _startMaterialization() {
+    if (!mounted) return;
+    _materializeController.forward();
+    _pulseController.repeat(reverse: true);
+    _triggerRandomGlitch();
   }
 
   void _triggerRandomGlitch() {
     _glitchTimer?.cancel();
-    _glitchTimer = Timer(Duration(milliseconds: 3000 + _random.nextInt(5000)), () {
+    _glitchTimer = Timer(Duration(milliseconds: 3000 + _nextInt(5000)), () {
       if (mounted && _isMaterialized) {
         setState(() {
           _showGlitch = true;
-          _glitchOffset = (_random.nextDouble() - 0.5) * 6;
+          _glitchOffset = (_nextUnit() - 0.5) * 6;
         });
         _glitchController.forward(from: 0);
         _triggerRandomGlitch();
@@ -156,39 +169,41 @@ class _TronButtonState extends State<TronButton>
       });
 
       // Add new particles on hover
-      if (_isHovered && _random.nextDouble() > 0.7) {
+      if (_isHovered && _nextUnit() > 0.7) {
         _particles.add(_EnergyParticle(
-          x: _random.nextDouble(),
-          y: _random.nextDouble(),
-          vx: (_random.nextDouble() - 0.5) * 0.02,
-          vy: (_random.nextDouble() - 0.5) * 0.02,
+          x: _nextUnit(),
+          y: _nextUnit(),
+          vx: (_nextUnit() - 0.5) * 0.02,
+          vy: (_nextUnit() - 0.5) * 0.02,
           life: 1.0,
-          size: 2 + _random.nextDouble() * 3,
+          size: 2 + _nextUnit() * 3,
         ));
       }
 
       // Generate electric arcs on hover
-      if (_isHovered && _random.nextDouble() > 0.85) {
-        _arcs = List.generate(_random.nextInt(2) + 1, (_) {
-          final isHorizontal = _random.nextBool();
+      if (_isHovered && _nextUnit() > 0.85) {
+        _arcs.clear();
+        final arcCount = _nextInt(2) + 1;
+        for (int i = 0; i < arcCount; i++) {
+          final isHorizontal = _nextBool();
           if (isHorizontal) {
-            final y = _random.nextDouble();
-            return _ElectricArc(
+            final y = _nextUnit();
+            _arcs.add(_ElectricArc(
               start: Offset(0, y),
-              end: Offset(1, y + (_random.nextDouble() - 0.5) * 0.2),
-              intensity: _random.nextDouble(),
-            );
+              end: Offset(1, y + (_nextUnit() - 0.5) * 0.2),
+              intensity: _nextUnit(),
+            ));
           } else {
-            final x = _random.nextDouble();
-            return _ElectricArc(
+            final x = _nextUnit();
+            _arcs.add(_ElectricArc(
               start: Offset(x, 0),
-              end: Offset(x + (_random.nextDouble() - 0.5) * 0.2, 1),
-              intensity: _random.nextDouble(),
-            );
+              end: Offset(x + (_nextUnit() - 0.5) * 0.2, 1),
+              intensity: _nextUnit(),
+            ));
           }
-        });
+        }
       } else if (!_isHovered) {
-        _arcs = [];
+        _arcs.clear();
       }
     });
   }
@@ -225,16 +240,19 @@ class _TronButtonState extends State<TronButton>
       onEnter: (_) => _onHover(true),
       onExit: (_) => _onHover(false),
       child: GestureDetector(
+        onTap: () {
+          if (!_isMaterialized || !widget.enabled) return;
+          AudioService.instance.playButton();
+          widget.onPressed();
+        },
         onTapDown: (_) {
-          if (_isMaterialized) setState(() => _isPressed = true);
+          if (_isMaterialized && widget.enabled) {
+            setState(() => _isPressed = true);
+          }
         },
         onTapUp: (_) {
-          if (_isMaterialized) {
+          if (_isMaterialized && widget.enabled) {
             setState(() => _isPressed = false);
-            if (widget.enabled) {
-              AudioService.instance.playButton();
-              widget.onPressed();
-            }
           }
         },
         onTapCancel: () => setState(() => _isPressed = false),
@@ -247,9 +265,8 @@ class _TronButtonState extends State<TronButton>
           ]),
           builder: (context, child) {
             final materializeProgress = _materializeAnimation.value;
-            final glowIntensity = _isHovered
-                ? 1.0
-                : 0.3 + _pulseAnimation.value * 0.4;
+            final glowIntensity =
+                _isHovered ? 1.0 : 0.3 + _pulseAnimation.value * 0.4;
             final scale = _isPressed ? 0.95 : (_isHovered ? 1.04 : 1.0);
             final contentOpacity = materializeProgress.clamp(0.0, 1.0);
 
@@ -284,7 +301,8 @@ class _TronButtonState extends State<TronButton>
                         opacity: contentOpacity,
                         child: Center(
                           child: _showGlitch
-                              ? _buildGlitchedContent(effectiveColor, glowIntensity)
+                              ? _buildGlitchedContent(
+                                  effectiveColor, glowIntensity)
                               : _buildContent(effectiveColor, glowIntensity),
                         ),
                       ),
@@ -300,52 +318,58 @@ class _TronButtonState extends State<TronButton>
   }
 
   Widget _buildContent(Color color, double glowIntensity) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (widget.icon != null) ...[
-          Icon(
-            widget.icon,
-            color: color,
-            size: 22,
-            shadows: [
-              Shadow(
-                color: color.withOpacity(0.8),
-                blurRadius: 10,
-              ),
-              Shadow(
-                color: color.withOpacity(0.5),
-                blurRadius: 20,
-              ),
-            ],
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (widget.icon != null) ...[
+            Icon(
+              widget.icon,
+              color: color,
+              size: 22,
+              shadows: [
+                Shadow(
+                  color: color.withOpacity(0.8),
+                  blurRadius: 10,
+                ),
+                Shadow(
+                  color: color.withOpacity(0.5),
+                  blurRadius: 20,
+                ),
+              ],
+            ),
+            const SizedBox(width: 12),
+          ],
+          Text(
+            widget.text,
+            maxLines: 1,
+            softWrap: false,
+            overflow: TextOverflow.fade,
+            style: TextStyle(
+              fontFamily: NeonTextStyles.fontFamily,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 3,
+              color: color,
+              shadows: [
+                Shadow(
+                  color: color.withOpacity(glowIntensity),
+                  blurRadius: 8,
+                ),
+                Shadow(
+                  color: color.withOpacity(glowIntensity * 0.5),
+                  blurRadius: 16,
+                ),
+                Shadow(
+                  color: color.withOpacity(glowIntensity * 0.3),
+                  blurRadius: 24,
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 12),
         ],
-        Text(
-          widget.text,
-          style: TextStyle(
-            fontFamily: NeonTextStyles.fontFamily,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 3,
-            color: color,
-            shadows: [
-              Shadow(
-                color: color.withOpacity(glowIntensity),
-                blurRadius: 8,
-              ),
-              Shadow(
-                color: color.withOpacity(glowIntensity * 0.5),
-                blurRadius: 16,
-              ),
-              Shadow(
-                color: color.withOpacity(glowIntensity * 0.3),
-                blurRadius: 24,
-              ),
-            ],
-          ),
-        ),
-      ],
+      ),
     );
   }
 
@@ -393,7 +417,8 @@ class _ElectricArc {
   final Offset end;
   final double intensity;
 
-  _ElectricArc({required this.start, required this.end, required this.intensity});
+  _ElectricArc(
+      {required this.start, required this.end, required this.intensity});
 }
 
 class _TronButtonPainter extends CustomPainter {
@@ -421,8 +446,70 @@ class _TronButtonPainter extends CustomPainter {
   final bool showGlitch;
   final double glitchOffset;
 
+  static final Paint _bgPaint = Paint();
+  static final Paint _wireGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _wireLinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _wireTrailPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _wirePointPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _borderGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 8
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _borderGlowHoverPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 12
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _borderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _borderGradientPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.5;
+  static final Paint _cornerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _cornerAccentPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _particleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _arcGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _arcCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _energyFieldPaint = Paint();
+  static final Paint _constructionGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _constructionCorePaint = Paint();
+  static final Paint _glitchSlicePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _scanlinePaint = Paint();
+  static final Path _arcPath = Path();
+  static final Path _scanlinePath = Path();
+  static Size? _scanlineSize;
+  static final Map<int, ui.Shader> _wireTrailShaderCache = {};
+  static final Map<int, ui.Shader> _energyFieldShaderCache = {};
+
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final center = Offset(size.width / 2, size.height / 2);
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
@@ -432,9 +519,8 @@ class _TronButtonPainter extends CustomPainter {
       final bgOpacity = ((progress - 0.3) / 0.7).clamp(0.0, 1.0);
 
       // Gradient background on hover
-      final bgPaint = Paint();
       if (isHovered) {
-        bgPaint.shader = ui.Gradient.linear(
+        _bgPaint.shader = ui.Gradient.linear(
           Offset(0, 0),
           Offset(size.width, size.height),
           [
@@ -444,9 +530,11 @@ class _TronButtonPainter extends CustomPainter {
           ],
         );
       } else {
-        bgPaint.color = Colors.black.withOpacity(0.7 * bgOpacity);
+        _bgPaint
+          ..shader = null
+          ..color = Colors.black.withOpacity(0.7 * bgOpacity);
       }
-      canvas.drawRRect(rrect, bgPaint);
+      canvas.drawRRect(rrect, _bgPaint);
     }
 
     // Draw wireframe lines from center
@@ -520,53 +608,63 @@ class _TronButtonPainter extends CustomPainter {
         if (progress >= line.startTime) {
           final lineProgress = progress >= line.endTime
               ? 1.0
-              : ((progress - line.startTime) / (line.endTime - line.startTime)).clamp(0.0, 1.0);
+              : ((progress - line.startTime) / (line.endTime - line.startTime))
+                  .clamp(0.0, 1.0);
 
           final currentEnd = Offset.lerp(line.start, line.end, lineProgress)!;
 
           // Glow (fades out)
-          final glowPaint = Paint()
-            ..color = primaryColor.withOpacity(0.3 * glowIntensity * wireframeFade)
-            ..strokeWidth = 4
-            ..style = PaintingStyle.stroke
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-          canvas.drawLine(line.start, currentEnd, glowPaint);
+          _wireGlowPaint.color =
+              primaryColor.withOpacity(0.3 * glowIntensity * wireframeFade);
+          canvas.drawLine(line.start, currentEnd, _wireGlowPaint);
 
           // Main line (fades out)
-          final linePaint = Paint()
-            ..color = primaryColor.withOpacity(0.8 * wireframeFade)
-            ..strokeWidth = 1.5
-            ..style = PaintingStyle.stroke;
-          canvas.drawLine(line.start, currentEnd, linePaint);
+          _wireLinePaint.color = primaryColor.withOpacity(0.8 * wireframeFade);
+          canvas.drawLine(line.start, currentEnd, _wireLinePaint);
 
           // Light trail at the end
           if (lineProgress > 0 && lineProgress < 1) {
             const trailLength = 0.15;
             final trailStart = math.max(0.0, lineProgress - trailLength);
-            final trailStartPoint = Offset.lerp(line.start, line.end, trailStart)!;
+            final trailStartPoint =
+                Offset.lerp(line.start, line.end, trailStart)!;
 
-            final trailPaint = Paint()
-              ..shader = ui.Gradient.linear(
-                trailStartPoint,
-                currentEnd,
-                [
-                  secondaryColor.withOpacity(0),
-                  secondaryColor.withOpacity(0.8),
-                  Colors.white,
-                ],
-                [0.0, 0.6, 1.0],
-              )
-              ..strokeWidth = 3
-              ..style = PaintingStyle.stroke
-              ..strokeCap = StrokeCap.round
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-            canvas.drawLine(trailStartPoint, currentEnd, trailPaint);
+            final dx = currentEnd.dx - trailStartPoint.dx;
+            final dy = currentEnd.dy - trailStartPoint.dy;
+            final length = math.sqrt(dx * dx + dy * dy);
+            if (length > 0.01) {
+              final lenKey = (length * 4).round();
+              final shaderKey = (secondaryColor.value << 8) ^ lenKey;
+              final shader = _wireTrailShaderCache.putIfAbsent(
+                shaderKey,
+                () {
+                  if (_wireTrailShaderCache.length > 128) {
+                    _wireTrailShaderCache.clear();
+                  }
+                  return ui.Gradient.linear(
+                    const Offset(0, 0),
+                    Offset(lenKey / 4.0, 0),
+                    [
+                      secondaryColor.withOpacity(0),
+                      secondaryColor.withOpacity(0.8),
+                      Colors.white,
+                    ],
+                    [0.0, 0.6, 1.0],
+                  );
+                },
+              );
+              _wireTrailPaint.shader = shader;
+              canvas.save();
+              canvas.translate(trailStartPoint.dx, trailStartPoint.dy);
+              canvas.rotate(math.atan2(dy, dx));
+              canvas.drawLine(Offset.zero, Offset(length, 0), _wireTrailPaint);
+              canvas.restore();
+              _wireTrailPaint.shader = null;
+            }
 
             // Bright point at the front
-            final pointPaint = Paint()
-              ..color = Colors.white
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-            canvas.drawCircle(currentEnd, 3, pointPaint);
+            _wirePointPaint.color = Colors.white;
+            canvas.drawCircle(currentEnd, 3, _wirePointPaint);
           }
         }
       }
@@ -578,103 +676,94 @@ class _TronButtonPainter extends CustomPainter {
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(4));
 
     // Outer glow - more intense on hover
-    final glowRadius = isHovered ? 15.0 : 10.0;
     final glowOpacity = isHovered ? 0.6 : 0.4;
-    final glowPaint = Paint()
-      ..color = primaryColor.withOpacity(glowIntensity * glowOpacity * borderProgress)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isHovered ? 12 : 8
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, glowRadius);
+    final glowPaint = isHovered ? _borderGlowHoverPaint : _borderGlowPaint;
+    glowPaint.color =
+        primaryColor.withOpacity(glowIntensity * glowOpacity * borderProgress);
     canvas.drawRRect(rrect, glowPaint);
 
     // Border with gradient on hover
     if (isHovered && hoverProgress > 0) {
-      final gradientBorderPaint = Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(0, 0),
-          Offset(size.width, size.height),
-          [
-            primaryColor,
-            secondaryColor,
-            primaryColor,
-          ],
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5;
-      canvas.drawRRect(rrect, gradientBorderPaint);
+      _borderGradientPaint.shader = ui.Gradient.linear(
+        Offset(0, 0),
+        Offset(size.width, size.height),
+        [
+          primaryColor,
+          secondaryColor,
+          primaryColor,
+        ],
+      );
+      canvas.drawRRect(rrect, _borderGradientPaint);
     } else {
-      final borderPaint = Paint()
-        ..color = primaryColor.withOpacity(borderProgress)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawRRect(rrect, borderPaint);
+      _borderPaint.color = primaryColor.withOpacity(borderProgress);
+      canvas.drawRRect(rrect, _borderPaint);
     }
   }
 
   void _drawCorners(Canvas canvas, Size size, double cornerProgress) {
     const cornerSize = 14.0;
-    final cornerPaint = Paint()
-      ..color = primaryColor.withOpacity(cornerProgress)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final accentPaint = Paint()
-      ..color = secondaryColor.withOpacity(cornerProgress * 0.8)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+    _cornerPaint.color = primaryColor.withOpacity(cornerProgress);
+    _cornerAccentPaint.color = secondaryColor.withOpacity(cornerProgress * 0.8);
 
     // Top-left
     canvas.drawLine(
       const Offset(4, 4),
       Offset(4, 4 + cornerSize * cornerProgress),
-      cornerPaint,
+      _cornerPaint,
     );
     canvas.drawLine(
       const Offset(4, 4),
       Offset(4 + cornerSize * cornerProgress, 4),
-      cornerPaint,
+      _cornerPaint,
     );
     // Accent dot
-    canvas.drawCircle(const Offset(4, 4), 2 * cornerProgress, accentPaint);
+    canvas.drawCircle(
+        const Offset(4, 4), 2 * cornerProgress, _cornerAccentPaint);
 
     // Top-right
     canvas.drawLine(
       Offset(size.width - 4, 4),
       Offset(size.width - 4, 4 + cornerSize * cornerProgress),
-      cornerPaint,
+      _cornerPaint,
     );
     canvas.drawLine(
       Offset(size.width - 4, 4),
       Offset(size.width - 4 - cornerSize * cornerProgress, 4),
-      cornerPaint,
+      _cornerPaint,
     );
-    canvas.drawCircle(Offset(size.width - 4, 4), 2 * cornerProgress, accentPaint);
+    canvas.drawCircle(
+        Offset(size.width - 4, 4), 2 * cornerProgress, _cornerAccentPaint);
 
     // Bottom-left
     canvas.drawLine(
       Offset(4, size.height - 4),
       Offset(4, size.height - 4 - cornerSize * cornerProgress),
-      cornerPaint,
+      _cornerPaint,
     );
     canvas.drawLine(
       Offset(4, size.height - 4),
       Offset(4 + cornerSize * cornerProgress, size.height - 4),
-      cornerPaint,
+      _cornerPaint,
     );
-    canvas.drawCircle(Offset(4, size.height - 4), 2 * cornerProgress, accentPaint);
+    canvas.drawCircle(
+        Offset(4, size.height - 4), 2 * cornerProgress, _cornerAccentPaint);
 
     // Bottom-right
     canvas.drawLine(
       Offset(size.width - 4, size.height - 4),
       Offset(size.width - 4, size.height - 4 - cornerSize * cornerProgress),
-      cornerPaint,
+      _cornerPaint,
     );
     canvas.drawLine(
       Offset(size.width - 4, size.height - 4),
       Offset(size.width - 4 - cornerSize * cornerProgress, size.height - 4),
-      cornerPaint,
+      _cornerPaint,
     );
-    canvas.drawCircle(Offset(size.width - 4, size.height - 4), 2 * cornerProgress, accentPaint);
+    canvas.drawCircle(
+      Offset(size.width - 4, size.height - 4),
+      2 * cornerProgress,
+      _cornerAccentPaint,
+    );
   }
 
   void _drawParticles(Canvas canvas, Size size) {
@@ -682,55 +771,48 @@ class _TronButtonPainter extends CustomPainter {
       final pos = Offset(particle.x * size.width, particle.y * size.height);
 
       // Glow
-      final glowPaint = Paint()
-        ..color = primaryColor.withOpacity(particle.life * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(pos, particle.size * 1.5, glowPaint);
+      _particleGlowPaint.color = primaryColor.withOpacity(particle.life * 0.5);
+      canvas.drawCircle(pos, particle.size * 1.5, _particleGlowPaint);
 
       // Core
-      final corePaint = Paint()
-        ..color = Colors.white.withOpacity(particle.life);
-      canvas.drawCircle(pos, particle.size * 0.5, corePaint);
+      _particleCorePaint.color = Colors.white.withOpacity(particle.life);
+      canvas.drawCircle(pos, particle.size * 0.5, _particleCorePaint);
     }
   }
 
   void _drawElectricArcs(Canvas canvas, Size size) {
-    final random = math.Random(42);
+    int seed = 42;
 
     for (final arc in arcs) {
-      final start = Offset(arc.start.dx * size.width, arc.start.dy * size.height);
+      final start =
+          Offset(arc.start.dx * size.width, arc.start.dy * size.height);
       final end = Offset(arc.end.dx * size.width, arc.end.dy * size.height);
 
       // Draw jagged lightning path
-      final path = Path();
-      path.moveTo(start.dx, start.dy);
+      _arcPath
+        ..reset()
+        ..moveTo(start.dx, start.dy);
 
       const segments = 5;
       for (int i = 1; i <= segments; i++) {
         final t = i / segments;
         final target = Offset.lerp(start, end, t)!;
+        seed = _lcgNext(seed);
         final jitter = Offset(
-          (random.nextDouble() - 0.5) * 15 * (1 - t),
-          (random.nextDouble() - 0.5) * 8,
+          (_lcgUnit(seed) - 0.5) * 15 * (1 - t),
+          (_lcgUnit(seed = _lcgNext(seed)) - 0.5) * 8,
         );
         final current = target + jitter;
-        path.lineTo(current.dx, current.dy);
+        _arcPath.lineTo(current.dx, current.dy);
       }
 
       // Glow
-      final glowPaint = Paint()
-        ..color = primaryColor.withOpacity(0.4 * arc.intensity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-      canvas.drawPath(path, glowPaint);
+      _arcGlowPaint.color = primaryColor.withOpacity(0.4 * arc.intensity);
+      canvas.drawPath(_arcPath, _arcGlowPaint);
 
       // Core
-      final corePaint = Paint()
-        ..color = Colors.white.withOpacity(arc.intensity * 0.8)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
-      canvas.drawPath(path, corePaint);
+      _arcCorePaint.color = Colors.white.withOpacity(arc.intensity * 0.8);
+      canvas.drawPath(_arcPath, _arcCorePaint);
     }
   }
 
@@ -738,36 +820,54 @@ class _TronButtonPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
 
     // Inner energy glow
-    final paint = Paint()
-      ..shader = ui.Gradient.radial(
-        center,
-        size.width * 0.6,
-        [
-          primaryColor.withOpacity(0.15 * hoverProgress),
-          primaryColor.withOpacity(0.05 * hoverProgress),
-          Colors.transparent,
-        ],
-        [0.0, 0.5, 1.0],
-      );
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
+    final intensityLevel = (hoverProgress * 32).round().clamp(0, 32);
+    if (intensityLevel == 0) return;
+    final shaderKey =
+        Object.hash(size.width.round(), primaryColor.value, intensityLevel);
+    final shader = _energyFieldShaderCache.putIfAbsent(
+      shaderKey,
+      () {
+        if (_energyFieldShaderCache.length > 64) {
+          _energyFieldShaderCache.clear();
+        }
+        final quant = intensityLevel / 32.0;
+        return ui.Gradient.radial(
+          center,
+          size.width * 0.6,
+          [
+            primaryColor.withOpacity(0.15 * quant),
+            primaryColor.withOpacity(0.05 * quant),
+            Colors.transparent,
+          ],
+          [0.0, 0.5, 1.0],
+        );
+      },
+    );
+    _energyFieldPaint.shader = shader;
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height), _energyFieldPaint);
+    _energyFieldPaint.shader = null;
   }
 
   void _drawConstructionParticles(Canvas canvas, Size size, Offset center) {
     if (progress < 0.2 || progress > 0.8) return;
 
-    final random = math.Random(42);
+    int seed = 42;
     final particleProgress = ((progress - 0.2) / 0.6).clamp(0.0, 1.0);
 
     for (int i = 0; i < 10; i++) {
-      final spawnTime = random.nextDouble() * 0.5;
+      seed = _lcgNext(seed);
+      final spawnTime = _lcgUnit(seed) * 0.5;
       if (particleProgress < spawnTime) continue;
 
       final age = particleProgress - spawnTime;
       if (age > 0.4) continue;
 
       final alpha = (1.0 - age / 0.4).clamp(0.0, 1.0);
-      final angle = random.nextDouble() * math.pi * 2;
-      final distance = random.nextDouble() * size.width * 0.4 * (1 + age);
+      seed = _lcgNext(seed);
+      final angle = _lcgUnit(seed) * math.pi * 2;
+      seed = _lcgNext(seed);
+      final distance = _lcgUnit(seed) * size.width * 0.4 * (1 + age);
 
       final pos = Offset(
         center.dx + math.cos(angle) * distance,
@@ -775,49 +875,49 @@ class _TronButtonPainter extends CustomPainter {
       );
 
       // Glow
-      final glowPaint = Paint()
-        ..color = secondaryColor.withOpacity(alpha * 0.6)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-      canvas.drawCircle(pos, 4, glowPaint);
+      _constructionGlowPaint.color = secondaryColor.withOpacity(alpha * 0.6);
+      canvas.drawCircle(pos, 4, _constructionGlowPaint);
 
       // Core
-      final corePaint = Paint()
-        ..color = Colors.white.withOpacity(alpha);
-      canvas.drawCircle(pos, 2, corePaint);
+      _constructionCorePaint.color = Colors.white.withOpacity(alpha);
+      canvas.drawCircle(pos, 2, _constructionCorePaint);
     }
   }
 
   void _drawGlitchSlices(Canvas canvas, Size size) {
-    final random = math.Random((glitchOffset * 100).toInt());
+    int seed = (glitchOffset * 100).toInt();
 
     for (int i = 0; i < 2; i++) {
-      final y = random.nextDouble() * size.height;
-      final height = 2.0 + random.nextDouble() * 4;
-      final xOffset = (random.nextDouble() - 0.5) * glitchOffset * 3;
+      seed = _lcgNext(seed);
+      final y = _lcgUnit(seed) * size.height;
+      seed = _lcgNext(seed);
+      final height = 2.0 + _lcgUnit(seed) * 4;
+      seed = _lcgNext(seed);
+      final xOffset = (_lcgUnit(seed) - 0.5) * glitchOffset * 3;
 
-      final slicePaint = Paint()
-        ..color = secondaryColor.withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      _glitchSlicePaint.color = secondaryColor.withOpacity(0.4);
 
       canvas.drawRect(
         Rect.fromLTWH(xOffset, y, size.width, height),
-        slicePaint,
+        _glitchSlicePaint,
       );
     }
   }
 
   void _drawScanline(Canvas canvas, Size size) {
     // Subtle horizontal scanlines
-    final linePaint = Paint()
-      ..color = primaryColor.withOpacity(0.02 * glowIntensity);
+    _scanlinePaint.color = primaryColor.withOpacity(0.02 * glowIntensity);
 
-    for (double y = 0; y < size.height; y += 2) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        linePaint,
-      );
+    if (_scanlineSize != size) {
+      _scanlineSize = size;
+      _scanlinePath.reset();
+      for (double y = 0; y < size.height; y += 2) {
+        _scanlinePath
+          ..moveTo(0, y)
+          ..lineTo(size.width, y);
+      }
     }
+    canvas.drawPath(_scanlinePath, _scanlinePaint);
   }
 
   @override

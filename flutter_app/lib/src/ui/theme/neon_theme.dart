@@ -100,6 +100,23 @@ class NeonAnimations {
 
 /// Visual effects helper class
 class NeonEffects {
+  static final Paint _scanlinePaint = Paint();
+  static final Paint _glowOuterPaint = Paint();
+  static final Paint _glowMediumPaint = Paint();
+  static final Paint _glowCorePaint = Paint();
+  static final Paint _glowCenterPaint = Paint();
+  static final Paint _lineGlowPaint = Paint()..strokeCap = StrokeCap.round;
+  static final Paint _lineCorePaint = Paint()..strokeCap = StrokeCap.round;
+  static final Paint _lineCenterPaint = Paint()..strokeCap = StrokeCap.round;
+  static final Paint _cornerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _cornerGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Path _cornerPath = Path();
+
   /// Create layered glow effect paint list
   static List<Paint> createGlowLayers(Color color, {int layers = 3}) {
     final paints = <Paint>[];
@@ -131,7 +148,7 @@ class NeonEffects {
     double spacing = 3.0,
     double opacity = 0.03,
   }) {
-    final paint = Paint()..color = color.withOpacity(opacity);
+    _scanlinePaint.color = color.withOpacity(opacity);
     final lineCount = (size.height / spacing).ceil();
 
     for (int i = 0; i < lineCount; i++) {
@@ -139,7 +156,7 @@ class NeonEffects {
       canvas.drawLine(
         Offset(0, y),
         Offset(size.width, y),
-        paint,
+        _scanlinePaint,
       );
     }
   }
@@ -153,31 +170,35 @@ class NeonEffects {
     GlowIntensity glow = GlowIntensity.medium,
   }) {
     // Outer soft glow
+    _glowOuterPaint
+      ..color = color.withOpacity(0.2)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius);
     canvas.drawCircle(
       center,
       radius * 1.5,
-      Paint()
-        ..color = color.withOpacity(0.2)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius),
+      _glowOuterPaint,
     );
 
     // Medium glow
+    _glowMediumPaint
+      ..color = color.withOpacity(glow.opacity * 0.7)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.5);
     canvas.drawCircle(
       center,
       radius * 1.2,
-      Paint()
-        ..color = color.withOpacity(glow.opacity * 0.7)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, radius * 0.5),
+      _glowMediumPaint,
     );
 
     // Core
-    canvas.drawCircle(center, radius, Paint()..color = color);
+    _glowCorePaint.color = color;
+    canvas.drawCircle(center, radius, _glowCorePaint);
 
     // Bright center
+    _glowCenterPaint.color = Colors.white.withOpacity(0.8);
     canvas.drawCircle(
       center,
       radius * 0.3,
-      Paint()..color = Colors.white.withOpacity(0.8),
+      _glowCenterPaint,
     );
   }
 
@@ -191,34 +212,34 @@ class NeonEffects {
     GlowIntensity glow = GlowIntensity.medium,
   }) {
     // Outer glow
+    _lineGlowPaint
+      ..color = color.withOpacity(glow.opacity * 0.5)
+      ..strokeWidth = width + 6
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, glow.blurRadius);
     canvas.drawLine(
       start,
       end,
-      Paint()
-        ..color = color.withOpacity(glow.opacity * 0.5)
-        ..strokeWidth = width + 6
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, glow.blurRadius),
+      _lineGlowPaint,
     );
 
     // Main line
+    _lineCorePaint
+      ..color = color
+      ..strokeWidth = width;
     canvas.drawLine(
       start,
       end,
-      Paint()
-        ..color = color
-        ..strokeWidth = width
-        ..strokeCap = StrokeCap.round,
+      _lineCorePaint,
     );
 
     // Bright center
+    _lineCenterPaint
+      ..color = Colors.white.withOpacity(0.6)
+      ..strokeWidth = width * 0.3;
     canvas.drawLine(
       start,
       end,
-      Paint()
-        ..color = Colors.white.withOpacity(0.6)
-        ..strokeWidth = width * 0.3
-        ..strokeCap = StrokeCap.round,
+      _lineCenterPaint,
     );
   }
 
@@ -251,27 +272,22 @@ class NeonEffects {
     bool bottomRight = false,
     double strokeWidth = 2.0,
   }) {
-    final paint = Paint()
+    _cornerPaint
       ..color = color
-      ..strokeWidth = strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
-    final glowPaint = Paint()
+      ..strokeWidth = strokeWidth;
+    _cornerGlowPaint
       ..color = color.withOpacity(0.4)
-      ..strokeWidth = strokeWidth + 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..strokeWidth = strokeWidth + 2;
 
     void drawBracket(double hDir, double vDir) {
-      final path = Path()
+      _cornerPath
+        ..reset()
         ..moveTo(position.dx, position.dy + size * vDir)
         ..lineTo(position.dx, position.dy)
         ..lineTo(position.dx + size * hDir, position.dy);
 
-      canvas.drawPath(path, glowPaint);
-      canvas.drawPath(path, paint);
+      canvas.drawPath(_cornerPath, _cornerGlowPaint);
+      canvas.drawPath(_cornerPath, _cornerPaint);
     }
 
     if (topLeft) drawBracket(1, 1);

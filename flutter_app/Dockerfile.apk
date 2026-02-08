@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+# Flutter Android APK Build Dockerfile with direct output
+FROM ghcr.io/cirruslabs/flutter:stable AS builder
+
+# Allow running Flutter as root (required in Docker)
+ENV FLUTTER_ALLOW_ROOT=true
+
+# Install Android SDK components
+RUN sdkmanager --update
+RUN yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+RUN yes | flutter doctor --android-licenses || true
+
+WORKDIR /app
+
+# Copy pubspec files first for better caching
+COPY pubspec.yaml pubspec.lock ./
+
+# Get dependencies
+RUN flutter pub get
+
+# Copy rest of app
+COPY . .
+
+# Remove incomplete android folder and regenerate it properly
+RUN rm -rf android
+
+# Regenerate Android project files with Flutter v2 embedding
+RUN flutter create --platforms=android --project-name=bored_games --org=com.boredgames .
+
+# Accept licenses again
+RUN yes | flutter doctor --android-licenses || true
+
+# Get dependencies again after regeneration
+RUN flutter pub get
+
+# Build APK
+RUN flutter build apk --release
+
+# Create output directory and copy APK
+RUN mkdir -p /output && \
+    cp build/app/outputs/flutter-apk/app-release.apk /output/bored-games-release.apk
+
+# Also build APK split by ABI for smaller downloads
+RUN flutter build apk --split-per-abi --release || true
+RUN cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk /output/ 2>/dev/null || true
+RUN cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk /output/ 2>/dev/null || true
+RUN cp build/app/outputs/flutter-apk/app-x86_64-release.apk /output/ 2>/dev/null || true
+
+# List output files
+RUN ls -la /output/
+
+# Final stage - only contains the APKs
+FROM scratch AS export
+COPY --from=builder /output/ /

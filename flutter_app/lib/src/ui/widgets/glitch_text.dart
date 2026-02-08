@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 class GlitchText extends StatefulWidget {
@@ -24,7 +23,12 @@ class _GlitchTextState extends State<GlitchText> with SingleTickerProviderStateM
   late String _displayedText;
   late Timer _timer;
   int _charIndex = 0;
-  final _random = math.Random();
+  int _rngState = 0x1f123bb5;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
   
   // Character set for glitching
   static const _glitchChars = r'!@#$%^&*()_+-=[]{}|;:,.<>/?æøå01';
@@ -60,7 +64,7 @@ class _GlitchTextState extends State<GlitchText> with SingleTickerProviderStateM
       // Add a couple of random glitch characters at the end
       String suffix = '';
       for (int i = 0; i < 2; i++) {
-        suffix += _glitchChars[_random.nextInt(_glitchChars.length)];
+        suffix += _glitchChars[_nextInt(_glitchChars.length)];
       }
       _displayedText = baseText + suffix;
     } else {

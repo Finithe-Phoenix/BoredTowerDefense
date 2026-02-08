@@ -12,7 +12,7 @@ class ScreenEffects extends PositionComponent {
     this.enableVignette = true,
     this.enableScanlines = true,
     this.enableFlash = true,
-  }) : _random = math.Random() {
+  }) {
     _instance = this;
   }
 
@@ -25,9 +25,22 @@ class ScreenEffects extends PositionComponent {
   final bool enableVignette;
   final bool enableScanlines;
   final bool enableFlash;
-  final math.Random _random;
+  int _rngState = 0x12345678;
   bool reduceFx = false;
   bool allowBlur = true;
+
+  int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+
+  double _nextUnit() {
+    _rngState = _lcgNext(_rngState);
+    return _rngState / 0x7fffffff;
+  }
+
+  int _nextInt(int max) {
+    if (max <= 0) return 0;
+    _rngState = _lcgNext(_rngState);
+    return _rngState % max;
+  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CACHED SHADERS - Avoid per-frame gradient.createShader() allocations
@@ -39,15 +52,23 @@ class ScreenEffects extends PositionComponent {
   Shader? _cornerShader3; // bottom-right
   Size? _lastCachedSize;
 
+  // Cached scanline layer
+  Picture? _scanlineLayer;
+  double _scanlineLayerWidth = 0;
+  double _scanlineLayerHeight = 0;
+
   // Cached Paint objects for scanlines and borders
-  final Paint _scanlinePaint = Paint()..color = const Color(0x14000000); // 0.08 opacity
+  final Paint _scanlinePaint = Paint()
+    ..color = const Color(0x14000000); // 0.08 opacity
   final Paint _brightScanlinePaint = Paint()
     ..color = const Color(0x08FFFFFF) // 0.03 opacity
     ..strokeWidth = 2;
   final Paint _flickerPaint = Paint();
   final Paint _neonBorderPaint = Paint();
-  final Paint _chromaticRedPaint = Paint()..color = const Color(0x1AFF0000); // 0.1 opacity
-  final Paint _chromaticCyanPaint = Paint()..color = const Color(0x1A00FFFF); // 0.1 opacity
+  final Paint _chromaticRedPaint = Paint()
+    ..color = const Color(0x1AFF0000); // 0.1 opacity
+  final Paint _chromaticCyanPaint = Paint()
+    ..color = const Color(0x1A00FFFF); // 0.1 opacity
 
   // ═══════════════════════════════════════════════════════════════════════════
   // BIG HIT CHROMATIC SPLIT PAINTS (RGB channel separation)
@@ -142,8 +163,7 @@ class ScreenEffects extends PositionComponent {
   final Paint _neonBorderAccentPaint = Paint()
     ..strokeWidth = 2
     ..strokeCap = StrokeCap.round;
-  final Paint _neonBorderTickPaint = Paint()
-    ..strokeWidth = 1;
+  final Paint _neonBorderTickPaint = Paint()..strokeWidth = 1;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ADDITIONAL CACHED PAINTS - Avoid per-frame allocations in render methods
@@ -154,6 +174,29 @@ class ScreenEffects extends PositionComponent {
   static final Paint _flashPaint = Paint();
   static final Paint _warningFlashPaint = Paint();
 
+  // Cached border pulse shaders (avoid per-frame createShader)
+  Shader? _pulseHorizontalPrimaryShader;
+  Shader? _pulseHorizontalSecondaryShader;
+  Shader? _pulseVerticalPrimaryShader;
+  Shader? _pulseVerticalAccentShader;
+  double _pulseShaderWidth = 0;
+  double _pulseShaderThickness = 0;
+  List<double> _borderTickXs = const [];
+  List<double> _borderTickYs = const [];
+  double _borderTickWidth = 0;
+  double _borderTickHeight = 0;
+
+  // Cached damage vignette / big hit glow shaders
+  Shader? _damageVignetteShader;
+  Size? _damageVignetteSize;
+  Shader? _bigHitGlowShader;
+  Size? _bigHitGlowSize;
+  double _bigHitGlowRadius = 0;
+  static const int _bigHitVignetteLevels = 64;
+  final Map<int, Shader> _bigHitVignetteCache = {};
+  Size? _bigHitVignetteSize;
+  final Map<int, ColorFilter> _intensityFilterCache = {};
+
   void _invalidateShaderCache() {
     _vignetteShader = null;
     _cornerShader0 = null;
@@ -161,6 +204,32 @@ class ScreenEffects extends PositionComponent {
     _cornerShader2 = null;
     _cornerShader3 = null;
     _lastCachedSize = null;
+    _borderTickWidth = 0;
+    _borderTickHeight = 0;
+    _borderTickXs = const [];
+    _borderTickYs = const [];
+  }
+
+  void _ensureBorderTickCache(double w, double h) {
+    if (w == _borderTickWidth && h == _borderTickHeight) return;
+    _borderTickWidth = w;
+    _borderTickHeight = h;
+    if (w <= 0 || h <= 0) {
+      _borderTickXs = const [];
+      _borderTickYs = const [];
+      return;
+    }
+    const tickSpacing = 50.0;
+    final xs = <double>[];
+    for (double x = tickSpacing; x < w - tickSpacing; x += tickSpacing) {
+      xs.add(x);
+    }
+    final ys = <double>[];
+    for (double y = tickSpacing; y < h - tickSpacing; y += tickSpacing) {
+      ys.add(y);
+    }
+    _borderTickXs = xs;
+    _borderTickYs = ys;
   }
 
   void _ensureShadersValid(Size size) {
@@ -207,7 +276,8 @@ class ScreenEffects extends PositionComponent {
         Colors.black.withOpacity(cornerDarkness),
         Colors.transparent,
       ],
-    ).createShader(Rect.fromCircle(center: Offset(size.width, 0), radius: cornerRadius));
+    ).createShader(
+        Rect.fromCircle(center: Offset(size.width, 0), radius: cornerRadius));
 
     // Bottom-left
     _cornerShader2 = RadialGradient(
@@ -217,7 +287,8 @@ class ScreenEffects extends PositionComponent {
         Colors.black.withOpacity(cornerDarkness),
         Colors.transparent,
       ],
-    ).createShader(Rect.fromCircle(center: Offset(0, size.height), radius: cornerRadius));
+    ).createShader(
+        Rect.fromCircle(center: Offset(0, size.height), radius: cornerRadius));
 
     // Bottom-right
     _cornerShader3 = RadialGradient(
@@ -227,9 +298,142 @@ class ScreenEffects extends PositionComponent {
         Colors.black.withOpacity(cornerDarkness),
         Colors.transparent,
       ],
-    ).createShader(Rect.fromCircle(center: Offset(size.width, size.height), radius: cornerRadius));
+    ).createShader(Rect.fromCircle(
+        center: Offset(size.width, size.height), radius: cornerRadius));
 
     _lastCachedSize = size;
+  }
+
+  void _ensureScanlineLayer(Size size) {
+    if (_scanlineLayer != null &&
+        _scanlineLayerWidth == size.width &&
+        _scanlineLayerHeight == size.height) {
+      return;
+    }
+
+    final recorder = PictureRecorder();
+    final staticCanvas = Canvas(recorder);
+    final height = size.height + 4;
+    for (double y = 0; y < height; y += 4) {
+      staticCanvas.drawLine(
+        Offset(0, y),
+        Offset(size.width, y),
+        _scanlinePaint,
+      );
+    }
+
+    _scanlineLayer?.dispose();
+    _scanlineLayer = recorder.endRecording();
+    _scanlineLayerWidth = size.width;
+    _scanlineLayerHeight = size.height;
+  }
+
+  void _ensureBorderPulseShaders(Color primaryColor, Color secondaryColor,
+      Color accentColor, double pulseWidth, double thickness) {
+    if (_pulseShaderWidth == pulseWidth &&
+        _pulseShaderThickness == thickness &&
+        _pulseHorizontalPrimaryShader != null) {
+      return;
+    }
+
+    _pulseShaderWidth = pulseWidth;
+    _pulseShaderThickness = thickness;
+
+    _pulseHorizontalPrimaryShader = LinearGradient(
+      colors: [
+        Colors.transparent,
+        primaryColor.withOpacity(0.8),
+        Colors.white.withOpacity(0.9),
+        primaryColor.withOpacity(0.8),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromLTWH(0, 0, pulseWidth, thickness));
+
+    _pulseHorizontalSecondaryShader = LinearGradient(
+      colors: [
+        Colors.transparent,
+        secondaryColor.withOpacity(0.8),
+        Colors.white.withOpacity(0.9),
+        secondaryColor.withOpacity(0.8),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromLTWH(0, 0, pulseWidth, thickness));
+
+    _pulseVerticalPrimaryShader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Colors.transparent,
+        primaryColor.withOpacity(0.8),
+        Colors.white.withOpacity(0.9),
+        primaryColor.withOpacity(0.8),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromLTWH(0, 0, thickness, pulseWidth));
+
+    _pulseVerticalAccentShader = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+        Colors.transparent,
+        accentColor.withOpacity(0.8),
+        Colors.white.withOpacity(0.9),
+        accentColor.withOpacity(0.8),
+        Colors.transparent,
+      ],
+    ).createShader(Rect.fromLTWH(0, 0, thickness, pulseWidth));
+  }
+
+  ColorFilter _getIntensityFilter(double intensity) {
+    const levels = 32;
+    final level = (intensity * levels).round().clamp(0, levels);
+    return _intensityFilterCache.putIfAbsent(
+      level,
+      () => ColorFilter.mode(
+        Colors.white.withOpacity(level / levels),
+        BlendMode.modulate,
+      ),
+    );
+  }
+
+  void _ensureDamageVignetteShader(Size size) {
+    if (_damageVignetteShader != null && _damageVignetteSize == size) return;
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = math.max(size.width, size.height) * 0.6;
+
+    _damageVignetteShader = const RadialGradient(
+      colors: [
+        Colors.transparent,
+        Colors.transparent,
+        Color(0x4DFF0066), // 0.3 opacity
+        Color(0xB2FF0066), // 0.7 opacity
+      ],
+      stops: [0.0, 0.4, 0.7, 1.0],
+    ).createShader(Rect.fromCircle(center: center, radius: radius));
+
+    _damageVignetteSize = size;
+  }
+
+  void _ensureBigHitGlowShader(Size size) {
+    final radius = math.min(size.width, size.height) * 0.4;
+    if (_bigHitGlowShader != null &&
+        _bigHitGlowSize == size &&
+        _bigHitGlowRadius == radius) return;
+
+    _bigHitGlowShader = const RadialGradient(
+      colors: [
+        Color(0xFFFFFFFF),
+        Color(0x80FFFFFF),
+        Color(0x00000000),
+      ],
+      stops: [0.0, 0.4, 1.0],
+    ).createShader(Rect.fromCircle(
+      center: Offset(0, 0),
+      radius: radius,
+    ));
+
+    _bigHitGlowSize = size;
+    _bigHitGlowRadius = radius;
   }
 
   // Screen shake
@@ -305,7 +509,8 @@ class ScreenEffects extends PositionComponent {
   double get chromaticSplitOffset => _bigHitChromaticOffset;
 
   /// Whether a big hit effect is currently active
-  bool get isBigHitActive => _bigHitTimer < _bigHitDuration && _bigHitIntensity > 0;
+  bool get isBigHitActive =>
+      _bigHitTimer < _bigHitDuration && _bigHitIntensity > 0;
 
   /// Smooth ease-out function (deceleration curve)
   static double _easeOutCubic(double t) {
@@ -343,7 +548,8 @@ class ScreenEffects extends PositionComponent {
     _bigHitIntensity = 8.0 + normalizedDamage * 12.0; // 8-20 shake intensity
     _bigHitDuration = 0.25 + normalizedDamage * 0.15; // 0.25-0.4 seconds
     _bigHitTimer = 0;
-    _bigHitChromaticOffset = 4.0 + normalizedDamage * 8.0; // 4-12 pixel RGB split
+    _bigHitChromaticOffset =
+        4.0 + normalizedDamage * 8.0; // 4-12 pixel RGB split
     _bigHitFlashAlpha = 0.3 + normalizedDamage * 0.25; // Initial flash opacity
 
     // Add trauma for shader effects
@@ -397,29 +603,29 @@ class ScreenEffects extends PositionComponent {
     _shieldImpactPoint = impactPoint ?? Vector2(gameSize.x / 2, gameSize.y);
 
     // Generate shield cracks from impact point
-    _shieldCracks = List.generate(8 + _random.nextInt(6), (i) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final length = 60 + _random.nextDouble() * 120;
+    _shieldCracks = List.generate(8 + _nextInt(6), (i) {
+      final angle = _nextUnit() * math.pi * 2;
+      final length = 60 + _nextUnit() * 120;
       return _ShieldCrack(
         angle: angle,
         length: length,
-        segments: 3 + _random.nextInt(4),
-        offsetX: (_random.nextDouble() - 0.5) * 20,
-        offsetY: (_random.nextDouble() - 0.5) * 20,
+        segments: 3 + _nextInt(4),
+        offsetX: (_nextUnit() - 0.5) * 20,
+        offsetY: (_nextUnit() - 0.5) * 20,
       );
     });
 
     // Generate sparks
-    _shieldSparks = List.generate(20 + _random.nextInt(15), (i) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final speed = 100 + _random.nextDouble() * 200;
+    _shieldSparks = List.generate(20 + _nextInt(15), (i) {
+      final angle = _nextUnit() * math.pi * 2;
+      final speed = 100 + _nextUnit() * 200;
       return _ShieldSpark(
         x: _shieldImpactPoint.x,
         y: _shieldImpactPoint.y,
         vx: math.cos(angle) * speed,
         vy: math.sin(angle) * speed,
-        life: 0.3 + _random.nextDouble() * 0.4,
-        size: 2 + _random.nextDouble() * 4,
+        life: 0.3 + _nextUnit() * 0.4,
+        size: 2 + _nextUnit() * 4,
       );
     });
   }
@@ -450,9 +656,9 @@ class ScreenEffects extends PositionComponent {
       duration: duration,
       timer: 0,
       // Generate unique hexagon artifact positions along the flare axis
-      hexArtifacts: _generateHexArtifacts(position, 4 + _random.nextInt(3)),
+      hexArtifacts: _generateHexArtifacts(position, 4 + _nextInt(3)),
       // Rainbow artifact rings
-      rainbowArtifacts: _generateRainbowArtifacts(position, 3 + _random.nextInt(2)),
+      rainbowArtifacts: _generateRainbowArtifacts(position, 3 + _nextInt(2)),
     ));
   }
 
@@ -480,14 +686,14 @@ class ScreenEffects extends PositionComponent {
     for (int i = 0; i < count; i++) {
       final t = (i + 1) / (count + 1) * 1.5; // Position along flare axis
       final artifactPos = sourcePos + direction * t;
-      final size = 8 + _random.nextDouble() * 15 * (1 - t * 0.3);
-      final rotation = _random.nextDouble() * math.pi;
+      final size = 8 + _nextUnit() * 15 * (1 - t * 0.3);
+      final rotation = _nextUnit() * math.pi;
 
       artifacts.add(_HexArtifact(
         position: artifactPos,
         size: size,
         rotation: rotation,
-        opacity: 0.3 + _random.nextDouble() * 0.4,
+        opacity: 0.3 + _nextUnit() * 0.4,
       ));
     }
 
@@ -495,7 +701,8 @@ class ScreenEffects extends PositionComponent {
   }
 
   /// Generate rainbow artifact ring data for lens flare
-  List<_RainbowArtifact> _generateRainbowArtifacts(Vector2 sourcePos, int count) {
+  List<_RainbowArtifact> _generateRainbowArtifacts(
+      Vector2 sourcePos, int count) {
     final artifacts = <_RainbowArtifact>[];
     final screenCenter = Vector2(gameSize.x / 2, gameSize.y / 2);
     final direction = screenCenter - sourcePos;
@@ -503,12 +710,12 @@ class ScreenEffects extends PositionComponent {
     for (int i = 0; i < count; i++) {
       final t = 0.4 + (i / count) * 0.8;
       final artifactPos = sourcePos + direction * t;
-      final radius = 15 + _random.nextDouble() * 25;
+      final radius = 15 + _nextUnit() * 25;
 
       artifacts.add(_RainbowArtifact(
         position: artifactPos,
         radius: radius,
-        rotation: _random.nextDouble() * math.pi * 2,
+        rotation: _nextUnit() * math.pi * 2,
       ));
     }
 
@@ -519,47 +726,67 @@ class ScreenEffects extends PositionComponent {
   void update(double dt) {
     super.update(dt);
 
-    _crtTime += dt;
-    _scanlineOffset = (_scanlineOffset + dt * 50) % 4;
+    final crtActive = enableCRT && !reduceFx;
+    final scanlinesActive = enableScanlines && !reduceFx;
+    if (crtActive) {
+      _crtTime += dt;
+    }
+    if (scanlinesActive) {
+      _scanlineOffset = (_scanlineOffset + dt * 50) % 4;
+    }
+
+    final hasShake = _shakeTimer < _shakeDuration;
+    final hasBigHit = _bigHitTimer < _bigHitDuration && _bigHitIntensity > 0;
+    final hasDamageVignette = _damageVignetteTimer > 0;
+    final hasFlash = _flashTimer > 0;
+    final hasTrauma = _trauma > 0;
+    final hasShield = _shieldFlashTimer < _shieldFlashDuration;
+    final hasLens = _activeFlareSources.isNotEmpty;
+    if (!hasShake &&
+        !hasBigHit &&
+        !hasDamageVignette &&
+        !hasFlash &&
+        !hasTrauma &&
+        !hasShield &&
+        !hasLens) {
+      return;
+    }
 
     // Update screen shake with smooth ease-out decay
-    if (_shakeTimer < _shakeDuration) {
+    if (hasShake) {
       _shakeTimer += dt;
       final progress = (_shakeTimer / _shakeDuration).clamp(0.0, 1.0);
       // Use ease-out for smooth deceleration
       final decay = 1 - _easeOutCubic(progress);
-
-      _shakeOffset = Vector2(
-        (_random.nextDouble() - 0.5) * 2 * _shakeIntensity * decay,
-        (_random.nextDouble() - 0.5) * 2 * _shakeIntensity * decay,
-      );
+      final shakeX = (_nextUnit() - 0.5) * 2 * _shakeIntensity * decay;
+      final shakeY = (_nextUnit() - 0.5) * 2 * _shakeIntensity * decay;
+      _shakeOffset.setValues(shakeX, shakeY);
 
       // Add subtle rotation shake (max ~2 degrees)
-      _shakeRotation = (_random.nextDouble() - 0.5) * 0.035 * _shakeIntensity * decay / 10;
+      _shakeRotation =
+          (_nextUnit() - 0.5) * 0.035 * _shakeIntensity * decay / 10;
 
       _chromaticAberration = _shakeIntensity * 0.3 * decay;
     } else {
-      _shakeOffset = Vector2.zero();
+      _shakeOffset.setZero();
       _shakeIntensity = 0;
       _shakeRotation = 0;
       _chromaticAberration = 0;
     }
 
     // Update big hit effect (chromatic split + enhanced shake)
-    if (_bigHitTimer < _bigHitDuration && _bigHitIntensity > 0) {
+    if (hasBigHit) {
       _bigHitTimer += dt;
       final progress = (_bigHitTimer / _bigHitDuration).clamp(0.0, 1.0);
       // Use stronger ease-out quart for dramatic falloff
       final decay = 1 - _easeOutQuart(progress);
 
       // Combine with regular shake for additive effect
-      _shakeOffset += Vector2(
-        (_random.nextDouble() - 0.5) * 2 * _bigHitIntensity * decay,
-        (_random.nextDouble() - 0.5) * 2 * _bigHitIntensity * decay,
-      );
+      _shakeOffset.x += (_nextUnit() - 0.5) * 2 * _bigHitIntensity * decay;
+      _shakeOffset.y += (_nextUnit() - 0.5) * 2 * _bigHitIntensity * decay;
 
       // Stronger rotation during big hits (max ~4 degrees)
-      _bigHitRotation = (_random.nextDouble() - 0.5) * 0.07 * decay;
+      _bigHitRotation = (_nextUnit() - 0.5) * 0.07 * decay;
 
       // Update chromatic split intensity with smooth decay
       _bigHitChromaticOffset *= decay;
@@ -572,7 +799,7 @@ class ScreenEffects extends PositionComponent {
     }
 
     // Update damage vignette
-    if (_damageVignetteTimer > 0) {
+    if (hasDamageVignette) {
       _damageVignetteTimer -= dt;
       if (_damageVignetteTimer <= 0) {
         _damageVignetteIntensity = 0;
@@ -580,17 +807,17 @@ class ScreenEffects extends PositionComponent {
     }
 
     // Update flash
-    if (_flashTimer > 0) {
+    if (hasFlash) {
       _flashTimer -= dt;
     }
 
     // Decay trauma
-    if (_trauma > 0) {
+    if (hasTrauma) {
       _trauma = (_trauma - dt * _traumaDecay).clamp(0.0, 1.0);
     }
 
     // Update shield flash
-    if (_shieldFlashTimer < _shieldFlashDuration) {
+    if (hasShield) {
       _shieldFlashTimer += dt;
 
       // Update sparks
@@ -607,9 +834,11 @@ class ScreenEffects extends PositionComponent {
     }
 
     // Update lens flare sources with single-pass O(n) removal
-    if (_activeFlareSources.isNotEmpty) {
+    if (hasLens) {
       int writeIndex = 0;
-      for (int readIndex = 0; readIndex < _activeFlareSources.length; readIndex++) {
+      for (int readIndex = 0;
+          readIndex < _activeFlareSources.length;
+          readIndex++) {
         final source = _activeFlareSources[readIndex];
         source.timer += dt;
         if (source.timer < source.duration) {
@@ -628,56 +857,91 @@ class ScreenEffects extends PositionComponent {
   @override
   void render(Canvas canvas) {
     super.render(canvas);
+    if (gameSize.x <= 0 || gameSize.y <= 0) return;
+
+    final crtActive = enableCRT && !reduceFx;
+    final scanlinesActive = enableScanlines && !reduceFx;
+    final vignetteActive = enableVignette && !reduceFx;
+    final flashActive = _flashTimer > 0 && enableFlash;
+    final damageActive = _damageVignetteIntensity > 0;
+    final chromaActive = _chromaticAberration > 0 && !reduceFx;
+    final bigHitActive = _bigHitChromaticOffset > 0.1 && !reduceFx;
+    final shieldActive = _shieldFlashTimer < _shieldFlashDuration;
+    final lensActive =
+        enableLensFlare && _activeFlareSources.isNotEmpty && !reduceFx;
+
+    if (!(crtActive ||
+        scanlinesActive ||
+        vignetteActive ||
+        flashActive ||
+        damageActive ||
+        chromaActive ||
+        bigHitActive ||
+        shieldActive ||
+        lensActive)) {
+      return;
+    }
 
     final screenRect = Rect.fromLTWH(0, 0, gameSize.x, gameSize.y);
 
-    // Ensure shaders are cached for current size
-    _ensureShadersValid(Size(gameSize.x, gameSize.y));
+    // Ensure shaders are cached only when needed
+    final needsShaders = damageActive || (crtActive || vignetteActive);
+    if (needsShaders) {
+      _ensureShadersValid(Size(gameSize.x, gameSize.y));
+    }
 
     // Draw CRT effects
-    if (enableCRT && !reduceFx) {
+    if (crtActive) {
       _renderCRTEffect(canvas, screenRect);
     }
 
     // Draw scanlines
-    if (enableScanlines && !reduceFx) {
+    if (scanlinesActive && gameSize.y > 0) {
       _renderScanlines(canvas, screenRect);
     }
 
     // Draw vignette
-    if (enableVignette && !reduceFx) {
+    if (vignetteActive && gameSize.x > 0 && gameSize.y > 0) {
       _renderVignette(canvas, screenRect);
     }
 
     // Draw damage vignette
-    if (_damageVignetteIntensity > 0) {
+    if (damageActive) {
       _renderDamageVignette(canvas, screenRect);
     }
 
     // Draw flash
-    if (_flashTimer > 0 && enableFlash) {
+    if (flashActive) {
       _renderFlash(canvas, screenRect);
     }
 
     // Draw chromatic aberration hint at edges
-    if (_chromaticAberration > 0 && !reduceFx) {
+    if (chromaActive) {
       _renderChromaticHint(canvas, screenRect);
     }
 
     // Draw big hit chromatic split effect (RGB channel separation)
-    if (_bigHitChromaticOffset > 0.1 && !reduceFx) {
+    if (bigHitActive) {
       _renderBigHitChromaticSplit(canvas, screenRect);
     }
 
     // Draw energy shield flash
-    if (_shieldFlashTimer < _shieldFlashDuration) {
+    if (shieldActive) {
       _renderShieldFlash(canvas, screenRect);
     }
 
     // Draw lens flare effects from bright sources
-    if (enableLensFlare && _activeFlareSources.isNotEmpty && !reduceFx) {
+    if (lensActive) {
       _renderLensFlares(canvas, screenRect);
     }
+  }
+
+  @override
+  void onRemove() {
+    _invalidateShaderCache();
+    _scanlineLayer?.dispose();
+    _scanlineLayer = null;
+    super.onRemove();
   }
 
   void _renderCRTEffect(Canvas canvas, Rect screenRect) {
@@ -697,12 +961,14 @@ class ScreenEffects extends PositionComponent {
     // Bottom-left corner
     if (_cornerShader2 != null) {
       _cornerShaderPaint.shader = _cornerShader2;
-      canvas.drawCircle(screenRect.bottomLeft, cornerRadius, _cornerShaderPaint);
+      canvas.drawCircle(
+          screenRect.bottomLeft, cornerRadius, _cornerShaderPaint);
     }
     // Bottom-right corner
     if (_cornerShader3 != null) {
       _cornerShaderPaint.shader = _cornerShader3;
-      canvas.drawCircle(screenRect.bottomRight, cornerRadius, _cornerShaderPaint);
+      canvas.drawCircle(
+          screenRect.bottomRight, cornerRadius, _cornerShaderPaint);
     }
 
     // Subtle flicker effect - reuse cached paint
@@ -714,25 +980,39 @@ class ScreenEffects extends PositionComponent {
   }
 
   void _renderScanlines(Canvas canvas, Rect screenRect) {
-    // Draw horizontal scanlines - using cached paint
-    for (double y = _scanlineOffset; y < screenRect.height; y += 4) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(screenRect.width, y),
-        _scanlinePaint,
-      );
+    final w = screenRect.width;
+    final h = screenRect.height;
+    if (h <= 0 || w <= 0) return;
+    _ensureScanlineLayer(Size(w, h));
+    if (_scanlineLayer != null) {
+      canvas.save();
+      canvas.translate(0, -_scanlineOffset);
+      canvas.drawPicture(_scanlineLayer!);
+      canvas.restore();
+    } else {
+      // Fallback path if cache isn't ready
+      for (double y = _scanlineOffset; y < h; y += 4) {
+        canvas.drawLine(
+          Offset(0, y),
+          Offset(w, y),
+          _scanlinePaint,
+        );
+      }
     }
 
     // Occasional brighter scanline (moving) - using cached paint
-    final brightScanlineY = ((_crtTime * 30) % screenRect.height);
-    canvas.drawLine(
-      Offset(0, brightScanlineY),
-      Offset(screenRect.width, brightScanlineY),
-      _brightScanlinePaint,
-    );
+    final brightScanlineY = ((_crtTime * 30) % h);
+    if (brightScanlineY >= 0 && brightScanlineY <= h) {
+      canvas.drawLine(
+        Offset(0, brightScanlineY),
+        Offset(w, brightScanlineY),
+        _brightScanlinePaint,
+      );
+    }
   }
 
   void _renderVignette(Canvas canvas, Rect screenRect) {
+    if (screenRect.width <= 0 || screenRect.height <= 0) return;
     // Radial gradient vignette - using cached shader and paint
     if (_vignetteShader != null) {
       _vignetteShaderPaint.shader = _vignetteShader;
@@ -746,6 +1026,7 @@ class ScreenEffects extends PositionComponent {
   void _renderNeonBorder(Canvas canvas, Rect screenRect) {
     final w = screenRect.width;
     final h = screenRect.height;
+    if (w <= 0 || h <= 0) return;
     final primaryColor = const Color(0xFF00FFFF);
     final secondaryColor = const Color(0xFFFF0066);
     final accentColor = const Color(0xFF00FF88);
@@ -754,6 +1035,7 @@ class ScreenEffects extends PositionComponent {
     // LAYER 1: OUTER GLOW (wide, soft)
     // ═══════════════════════════════════════════════════════════════════════
     final outerPulse = 0.2 + math.sin(_crtTime * 1.5) * 0.1;
+    if (outerPulse <= 0.01) return;
     _neonBorderOuterGlowPaint.color = primaryColor.withOpacity(outerPulse);
 
     // Top
@@ -795,62 +1077,53 @@ class ScreenEffects extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     final pulseWidth = 60.0;
     final pulseSpeed = 200.0;
+    const pulseThickness = 6.0;
+
+    _ensureBorderPulseShaders(
+        primaryColor, secondaryColor, accentColor, pulseWidth, pulseThickness);
 
     // Top border pulse (left to right)
-    final topPulseX = ((_crtTime * pulseSpeed) % (w + pulseWidth)) - pulseWidth / 2;
-    _neonBorderTravelPaint.shader = LinearGradient(
-      colors: [
-        Colors.transparent,
-        primaryColor.withOpacity(0.8),
-        Colors.white.withOpacity(0.9),
-        primaryColor.withOpacity(0.8),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(topPulseX - pulseWidth / 2, 0, pulseWidth, 6));
-    canvas.drawRect(Rect.fromLTWH(topPulseX - pulseWidth / 2, 0, pulseWidth, 6), _neonBorderTravelPaint);
+    final topPulseX =
+        ((_crtTime * pulseSpeed) % (w + pulseWidth)) - pulseWidth / 2;
+    _neonBorderTravelPaint.shader = _pulseHorizontalPrimaryShader;
+    canvas.save();
+    canvas.translate(topPulseX - pulseWidth / 2, 0);
+    canvas.drawRect(Rect.fromLTWH(0, 0, pulseWidth, pulseThickness),
+        _neonBorderTravelPaint);
+    canvas.restore();
 
     // Bottom border pulse (right to left)
-    final bottomPulseX = w - ((_crtTime * pulseSpeed * 0.8 + 100) % (w + pulseWidth)) + pulseWidth / 2;
-    _neonBorderTravelPaint.shader = LinearGradient(
-      colors: [
-        Colors.transparent,
-        secondaryColor.withOpacity(0.8),
-        Colors.white.withOpacity(0.9),
-        secondaryColor.withOpacity(0.8),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(bottomPulseX - pulseWidth / 2, h - 6, pulseWidth, 6));
-    canvas.drawRect(Rect.fromLTWH(bottomPulseX - pulseWidth / 2, h - 6, pulseWidth, 6), _neonBorderTravelPaint);
+    final bottomPulseX = w -
+        ((_crtTime * pulseSpeed * 0.8 + 100) % (w + pulseWidth)) +
+        pulseWidth / 2;
+    _neonBorderTravelPaint.shader = _pulseHorizontalSecondaryShader;
+    canvas.save();
+    canvas.translate(bottomPulseX - pulseWidth / 2, h - pulseThickness);
+    canvas.drawRect(Rect.fromLTWH(0, 0, pulseWidth, pulseThickness),
+        _neonBorderTravelPaint);
+    canvas.restore();
 
     // Left border pulse (top to bottom)
-    final leftPulseY = ((_crtTime * pulseSpeed * 0.7 + 200) % (h + pulseWidth)) - pulseWidth / 2;
-    _neonBorderTravelPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        accentColor.withOpacity(0.8),
-        Colors.white.withOpacity(0.9),
-        accentColor.withOpacity(0.8),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(0, leftPulseY - pulseWidth / 2, 6, pulseWidth));
-    canvas.drawRect(Rect.fromLTWH(0, leftPulseY - pulseWidth / 2, 6, pulseWidth), _neonBorderTravelPaint);
+    final leftPulseY =
+        ((_crtTime * pulseSpeed * 0.7 + 200) % (h + pulseWidth)) -
+            pulseWidth / 2;
+    _neonBorderTravelPaint.shader = _pulseVerticalAccentShader;
+    canvas.save();
+    canvas.translate(0, leftPulseY - pulseWidth / 2);
+    canvas.drawRect(Rect.fromLTWH(0, 0, pulseThickness, pulseWidth),
+        _neonBorderTravelPaint);
+    canvas.restore();
 
     // Right border pulse (bottom to top)
-    final rightPulseY = h - ((_crtTime * pulseSpeed * 0.9 + 300) % (h + pulseWidth)) + pulseWidth / 2;
-    _neonBorderTravelPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        primaryColor.withOpacity(0.8),
-        Colors.white.withOpacity(0.9),
-        primaryColor.withOpacity(0.8),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(w - 6, rightPulseY - pulseWidth / 2, 6, pulseWidth));
-    canvas.drawRect(Rect.fromLTWH(w - 6, rightPulseY - pulseWidth / 2, 6, pulseWidth), _neonBorderTravelPaint);
+    final rightPulseY = h -
+        ((_crtTime * pulseSpeed * 0.9 + 300) % (h + pulseWidth)) +
+        pulseWidth / 2;
+    _neonBorderTravelPaint.shader = _pulseVerticalPrimaryShader;
+    canvas.save();
+    canvas.translate(w - pulseThickness, rightPulseY - pulseWidth / 2);
+    canvas.drawRect(Rect.fromLTWH(0, 0, pulseThickness, pulseWidth),
+        _neonBorderTravelPaint);
+    canvas.restore();
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 5: ANIMATED CORNER NODES
@@ -865,7 +1138,8 @@ class ScreenEffects extends PositionComponent {
 
       // Mid glow
       _neonBorderPulsePaint.color = color.withOpacity(cornerPulse * 0.6);
-      canvas.drawCircle(Offset(cx, cy), cornerSize * 0.6, _neonBorderPulsePaint);
+      canvas.drawCircle(
+          Offset(cx, cy), cornerSize * 0.6, _neonBorderPulsePaint);
 
       // Core
       _neonBorderCorePaint.color = Colors.white.withOpacity(cornerPulse * 0.9);
@@ -884,54 +1158,64 @@ class ScreenEffects extends PositionComponent {
     _neonBorderAccentPaint.color = primaryColor.withOpacity(0.7);
 
     // Top-left
-    canvas.drawLine(const Offset(0, 0), Offset(bracketLen, 0), _neonBorderAccentPaint);
-    canvas.drawLine(const Offset(0, 0), Offset(0, bracketLen), _neonBorderAccentPaint);
+    canvas.drawLine(
+        const Offset(0, 0), Offset(bracketLen, 0), _neonBorderAccentPaint);
+    canvas.drawLine(
+        const Offset(0, 0), Offset(0, bracketLen), _neonBorderAccentPaint);
 
     // Top-right
-    canvas.drawLine(Offset(w, 0), Offset(w - bracketLen, 0), _neonBorderAccentPaint);
-    canvas.drawLine(Offset(w, 0), Offset(w, bracketLen), _neonBorderAccentPaint);
+    canvas.drawLine(
+        Offset(w, 0), Offset(w - bracketLen, 0), _neonBorderAccentPaint);
+    canvas.drawLine(
+        Offset(w, 0), Offset(w, bracketLen), _neonBorderAccentPaint);
 
     // Bottom-left
-    canvas.drawLine(Offset(0, h), Offset(bracketLen, h), _neonBorderAccentPaint);
-    canvas.drawLine(Offset(0, h), Offset(0, h - bracketLen), _neonBorderAccentPaint);
+    canvas.drawLine(
+        Offset(0, h), Offset(bracketLen, h), _neonBorderAccentPaint);
+    canvas.drawLine(
+        Offset(0, h), Offset(0, h - bracketLen), _neonBorderAccentPaint);
 
     // Bottom-right
-    canvas.drawLine(Offset(w, h), Offset(w - bracketLen, h), _neonBorderAccentPaint);
-    canvas.drawLine(Offset(w, h), Offset(w, h - bracketLen), _neonBorderAccentPaint);
+    canvas.drawLine(
+        Offset(w, h), Offset(w - bracketLen, h), _neonBorderAccentPaint);
+    canvas.drawLine(
+        Offset(w, h), Offset(w, h - bracketLen), _neonBorderAccentPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 7: DATA TICK MARKS ALONG BORDERS
     // ═══════════════════════════════════════════════════════════════════════
-    final tickSpacing = 50.0;
-    final tickLen = 8.0;
-    _neonBorderTickPaint.color = primaryColor.withOpacity(0.3);
+    const tickLen = 8.0;
+    final tickPhase = _crtTime * 5;
+    _ensureBorderTickCache(w, h);
 
     // Top border ticks
-    for (double x = tickSpacing; x < w - tickSpacing; x += tickSpacing) {
-      final tickAlpha = 0.2 + math.sin(_crtTime * 5 + x * 0.01) * 0.15;
+    for (final x in _borderTickXs) {
+      final tickAlpha = 0.2 + math.sin(tickPhase + x * 0.01) * 0.15;
       _neonBorderTickPaint.color = primaryColor.withOpacity(tickAlpha);
       canvas.drawLine(Offset(x, 0), Offset(x, tickLen), _neonBorderTickPaint);
     }
 
     // Bottom border ticks
-    for (double x = tickSpacing; x < w - tickSpacing; x += tickSpacing) {
-      final tickAlpha = 0.2 + math.sin(_crtTime * 5 + x * 0.01 + math.pi) * 0.15;
+    for (final x in _borderTickXs) {
+      final tickAlpha = 0.2 + math.sin(tickPhase + x * 0.01 + math.pi) * 0.15;
       _neonBorderTickPaint.color = secondaryColor.withOpacity(tickAlpha);
-      canvas.drawLine(Offset(x, h), Offset(x, h - tickLen), _neonBorderTickPaint);
+      canvas.drawLine(
+          Offset(x, h), Offset(x, h - tickLen), _neonBorderTickPaint);
     }
 
     // Left border ticks
-    for (double y = tickSpacing; y < h - tickSpacing; y += tickSpacing) {
-      final tickAlpha = 0.2 + math.sin(_crtTime * 5 + y * 0.01) * 0.15;
+    for (final y in _borderTickYs) {
+      final tickAlpha = 0.2 + math.sin(tickPhase + y * 0.01) * 0.15;
       _neonBorderTickPaint.color = accentColor.withOpacity(tickAlpha);
       canvas.drawLine(Offset(0, y), Offset(tickLen, y), _neonBorderTickPaint);
     }
 
     // Right border ticks
-    for (double y = tickSpacing; y < h - tickSpacing; y += tickSpacing) {
-      final tickAlpha = 0.2 + math.sin(_crtTime * 5 + y * 0.01 + math.pi) * 0.15;
+    for (final y in _borderTickYs) {
+      final tickAlpha = 0.2 + math.sin(tickPhase + y * 0.01 + math.pi) * 0.15;
       _neonBorderTickPaint.color = primaryColor.withOpacity(tickAlpha);
-      canvas.drawLine(Offset(w, y), Offset(w - tickLen, y), _neonBorderTickPaint);
+      canvas.drawLine(
+          Offset(w, y), Offset(w - tickLen, y), _neonBorderTickPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -952,58 +1236,56 @@ class ScreenEffects extends PositionComponent {
       scanY1 = 0;
       scanX2 = math.min(scanPos + scanLen, w);
       scanY2 = 0;
-      canvas.drawLine(Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
+      canvas.drawLine(
+          Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
     } else if (scanPos < w + h) {
       // Right edge
       scanX1 = w;
       scanY1 = scanPos - w;
       scanX2 = w;
       scanY2 = math.min(scanY1 + scanLen, h);
-      canvas.drawLine(Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
+      canvas.drawLine(
+          Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
     } else if (scanPos < 2 * w + h) {
       // Bottom edge (reversed)
       scanX1 = w - (scanPos - w - h);
       scanY1 = h;
       scanX2 = math.max(scanX1 - scanLen, 0);
       scanY2 = h;
-      canvas.drawLine(Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
+      canvas.drawLine(
+          Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
     } else {
       // Left edge (reversed)
       scanX1 = 0;
       scanY1 = h - (scanPos - 2 * w - h);
       scanX2 = 0;
       scanY2 = math.max(scanY1 - scanLen, 0);
-      canvas.drawLine(Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
+      canvas.drawLine(
+          Offset(scanX1, scanY1), Offset(scanX2, scanY2), _neonBorderScanPaint);
     }
   }
 
   void _renderDamageVignette(Canvas canvas, Rect screenRect) {
-    final center = Offset(screenRect.width / 2, screenRect.height / 2);
-    final radius = math.max(screenRect.width, screenRect.height) * 0.6;
-
     final vignetteProgress = _damageVignetteTimer / 0.3;
     final intensity = _damageVignetteIntensity * vignetteProgress;
+    if (intensity <= 0) return;
 
     // Pulsing effect
     final pulse = 1 + math.sin(_crtTime * 20) * 0.1;
 
-    final gradient = RadialGradient(
-      colors: [
-        Colors.transparent,
-        Colors.transparent,
-        const Color(0xFFFF0066).withOpacity(intensity * 0.3 * pulse),
-        const Color(0xFFFF0066).withOpacity(intensity * 0.7 * pulse),
-      ],
-      stops: const [0.0, 0.4, 0.7, 1.0],
-    ).createShader(Rect.fromCircle(center: center, radius: radius));
-
-    _damageVignettePaint.shader = gradient;
-    canvas.drawRect(screenRect, _damageVignettePaint);
+    _ensureDamageVignetteShader(Size(screenRect.width, screenRect.height));
+    if (_damageVignetteShader != null) {
+      _damageVignettePaint.shader = _damageVignetteShader;
+      _damageVignettePaint.colorFilter = _getIntensityFilter(intensity * pulse);
+      canvas.drawRect(screenRect, _damageVignettePaint);
+      _damageVignettePaint.colorFilter = null;
+    }
   }
 
   void _renderFlash(Canvas canvas, Rect screenRect) {
     final flashProgress = _flashTimer / 0.1;
     final alpha = _flashIntensity * flashProgress;
+    if (alpha <= 0) return;
 
     _flashPaint.color = _flashColor.withOpacity(alpha);
     canvas.drawRect(screenRect, _flashPaint);
@@ -1012,11 +1294,14 @@ class ScreenEffects extends PositionComponent {
   void _renderChromaticHint(Canvas canvas, Rect screenRect) {
     // Draw subtle color separation at edges during shake
     final aberrationAmount = _chromaticAberration;
+    if (aberrationAmount <= 0) return;
 
     // Update cached paints with blur if allowed
     if (allowBlur) {
-      _chromaticRedPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-      _chromaticCyanPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      _chromaticRedPaint.maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 3);
+      _chromaticCyanPaint.maskFilter =
+          const MaskFilter.blur(BlurStyle.normal, 3);
     } else {
       _chromaticRedPaint.maskFilter = null;
       _chromaticCyanPaint.maskFilter = null;
@@ -1045,6 +1330,7 @@ class ScreenEffects extends PositionComponent {
   void _renderBigHitChromaticSplit(Canvas canvas, Rect screenRect) {
     final offset = _bigHitChromaticOffset;
     final flashAlpha = _bigHitFlashAlpha;
+    if (offset <= 0.01 && flashAlpha <= 0.01) return;
     final w = screenRect.width;
     final h = screenRect.height;
 
@@ -1064,7 +1350,8 @@ class ScreenEffects extends PositionComponent {
     _bigHitRedPaint.color = Color.fromRGBO(255, 0, 0, redAlpha);
 
     if (allowBlur) {
-      _bigHitRedPaint.maskFilter = MaskFilter.blur(BlurStyle.normal, offset * 0.5);
+      _bigHitRedPaint.maskFilter =
+          MaskFilter.blur(BlurStyle.normal, offset * 0.5);
     } else {
       _bigHitRedPaint.maskFilter = null;
     }
@@ -1089,7 +1376,8 @@ class ScreenEffects extends PositionComponent {
     _bigHitBluePaint.color = Color.fromRGBO(0, 100, 255, blueAlpha);
 
     if (allowBlur) {
-      _bigHitBluePaint.maskFilter = MaskFilter.blur(BlurStyle.normal, offset * 0.5);
+      _bigHitBluePaint.maskFilter =
+          MaskFilter.blur(BlurStyle.normal, offset * 0.5);
     } else {
       _bigHitBluePaint.maskFilter = null;
     }
@@ -1114,22 +1402,17 @@ class ScreenEffects extends PositionComponent {
       final centerAlpha = (offset / 20.0).clamp(0.05, 0.15);
       final glowRadius = math.min(w, h) * 0.4;
 
-      // Create radial glow from center
-      final gradient = RadialGradient(
-        colors: [
-          Colors.white.withOpacity(centerAlpha),
-          Colors.white.withOpacity(centerAlpha * 0.5),
-          Colors.transparent,
-        ],
-        stops: const [0.0, 0.4, 1.0],
-      ).createShader(Rect.fromCircle(
-        center: Offset(w / 2, h / 2),
-        radius: glowRadius,
-      ));
-
-      _bigHitGlowPaint.shader = gradient;
-      canvas.drawCircle(Offset(w / 2, h / 2), glowRadius, _bigHitGlowPaint);
-      _bigHitGlowPaint.shader = null;
+      _ensureBigHitGlowShader(Size(w, h));
+      if (_bigHitGlowShader != null) {
+        _bigHitGlowPaint.shader = _bigHitGlowShader;
+        _bigHitGlowPaint.colorFilter = _getIntensityFilter(centerAlpha);
+        canvas.save();
+        canvas.translate(w / 2, h / 2);
+        canvas.drawCircle(Offset.zero, glowRadius, _bigHitGlowPaint);
+        canvas.restore();
+        _bigHitGlowPaint.colorFilter = null;
+        _bigHitGlowPaint.shader = null;
+      }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1161,18 +1444,29 @@ class ScreenEffects extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     if (offset > 4.0) {
       final vignetteAlpha = (offset / 24.0).clamp(0.05, 0.2);
-      final center = Offset(w / 2, h / 2);
-      final radius = math.max(w, h) * 0.7;
-
-      final vignetteGradient = RadialGradient(
-        colors: [
-          Colors.transparent,
-          Colors.transparent,
-          Colors.black.withOpacity(vignetteAlpha * 0.5),
-          Colors.black.withOpacity(vignetteAlpha),
-        ],
-        stops: const [0.0, 0.5, 0.75, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: radius));
+      final size = screenRect.size;
+      if (_bigHitVignetteSize != size) {
+        _bigHitVignetteCache.clear();
+        _bigHitVignetteSize = size;
+      }
+      final level = (vignetteAlpha * _bigHitVignetteLevels)
+          .round()
+          .clamp(0, _bigHitVignetteLevels);
+      final vignetteGradient = _bigHitVignetteCache.putIfAbsent(level, () {
+        final quantAlpha =
+            (level / _bigHitVignetteLevels).clamp(0.05, 0.2).toDouble();
+        final center = Offset(size.width / 2, size.height / 2);
+        final radius = math.max(size.width, size.height) * 0.7;
+        return RadialGradient(
+          colors: [
+            Colors.transparent,
+            Colors.transparent,
+            Colors.black.withOpacity(quantAlpha * 0.5),
+            Colors.black.withOpacity(quantAlpha),
+          ],
+          stops: const [0.0, 0.5, 0.75, 1.0],
+        ).createShader(Rect.fromCircle(center: center, radius: radius));
+      });
 
       _bigHitVignettePaint.shader = vignetteGradient;
       canvas.drawRect(screenRect, _bigHitVignettePaint);
@@ -1184,6 +1478,7 @@ class ScreenEffects extends PositionComponent {
     final progress = (_shieldFlashTimer / _shieldFlashDuration).clamp(0.0, 1.0);
     final fadeOut = 1 - progress;
     final intensity = _shieldFlashIntensity * fadeOut;
+    if (intensity <= 0.01) return;
     final impactX = _shieldImpactPoint.x;
     final impactY = _shieldImpactPoint.y;
 
@@ -1191,7 +1486,8 @@ class ScreenEffects extends PositionComponent {
     // LAYER 1: IMPACT CORE FLASH
     // ═══════════════════════════════════════════════════════════════════════
     final coreRadius = 50 + progress * 150;
-    _shieldCorePaint.color = const Color(0xFF00FFFF).withOpacity(intensity * 0.6);
+    _shieldCorePaint.color =
+        const Color(0xFF00FFFF).withOpacity(intensity * 0.6);
     canvas.drawCircle(
       Offset(impactX, impactY),
       coreRadius,
@@ -1203,50 +1499,77 @@ class ScreenEffects extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     if (!reduceFx) {
       const hexSize = 35.0;
-      final hexAlpha = intensity * 0.5 * (0.5 + math.sin(_crtTime * 15) * 0.5);
+      if (intensity > 0.02) {
+        final maxDist = screenRect.width * 0.8;
+        final minFactor = 0.02 / intensity;
+        double maxActiveDist = maxDist * (1 - minFactor);
+        if (maxActiveDist < 0) {
+          maxActiveDist = 0;
+        }
 
-      for (double hy = -hexSize; hy < screenRect.height + hexSize; hy += hexSize * 1.5) {
-        for (double hx = -hexSize; hx < screenRect.width + hexSize; hx += hexSize * 1.73) {
-          final offsetX = ((hy ~/ (hexSize * 1.5)) % 2 == 0) ? 0.0 : hexSize * 0.866;
-          final hexCenterX = hx + offsetX;
-          final hexCenterY = hy;
+        final minX = math.max(-hexSize, impactX - maxActiveDist - hexSize);
+        final maxX = math.min(
+            screenRect.width + hexSize, impactX + maxActiveDist + hexSize);
+        final minY = math.max(-hexSize, impactY - maxActiveDist - hexSize);
+        final maxY = math.min(
+            screenRect.height + hexSize, impactY + maxActiveDist + hexSize);
 
-          // Calculate distance from impact for fade effect
-          final dx = hexCenterX - impactX;
-          final dy = hexCenterY - impactY;
-          final dist = math.sqrt(dx * dx + dy * dy);
-          final maxDist = screenRect.width * 0.8;
-          final distFactor = (1 - (dist / maxDist)).clamp(0.0, 1.0);
+        final stepX = hexSize * 1.73;
+        final stepY = hexSize * 1.5;
+        final startHy = ((minY + hexSize) / stepY).floor() * stepY - hexSize;
+        final startHx = ((minX + hexSize) / stepX).floor() * stepX - hexSize;
+        final hexAlpha =
+            intensity * 0.5 * (0.5 + math.sin(_crtTime * 15) * 0.5);
+        final waveRadius = progress * maxDist * 2;
+        const waveWidth = 100.0;
+        final invMaxDist = 1 / maxDist;
 
-          // Wave effect spreading from impact
-          final waveRadius = progress * maxDist * 2;
-          final waveWidth = 100.0;
-          final inWave = (dist > waveRadius - waveWidth && dist < waveRadius + waveWidth);
-          final waveIntensity = inWave ? (1 - ((dist - waveRadius).abs() / waveWidth)) : 0.0;
+        for (double hy = startHy; hy < maxY; hy += stepY) {
+          for (double hx = startHx; hx < maxX; hx += stepX) {
+            final offsetX =
+                ((hy ~/ (hexSize * 1.5)) % 2 == 0) ? 0.0 : hexSize * 0.866;
+            final hexCenterX = hx + offsetX;
+            final hexCenterY = hy;
 
-          final hexIntensity = distFactor * intensity * (0.3 + waveIntensity * 0.7);
-          if (hexIntensity < 0.02) continue;
+            // Calculate distance from impact for fade effect
+            final dx = hexCenterX - impactX;
+            final dy = hexCenterY - impactY;
+            final dist = math.sqrt(dx * dx + dy * dy);
+            final distFactor = (1 - (dist * invMaxDist)).clamp(0.0, 1.0);
 
-          _shieldPath.reset();
-          for (int i = 0; i < 6; i++) {
-            final angle = (i * 60 - 30) * math.pi / 180;
-            final px = hexCenterX + math.cos(angle) * hexSize * 0.45;
-            final py = hexCenterY + math.sin(angle) * hexSize * 0.45;
-            if (i == 0) {
-              _shieldPath.moveTo(px, py);
-            } else {
-              _shieldPath.lineTo(px, py);
+            // Wave effect spreading from impact
+            final inWave = (dist > waveRadius - waveWidth &&
+                dist < waveRadius + waveWidth);
+            final waveIntensity =
+                inWave ? (1 - ((dist - waveRadius).abs() / waveWidth)) : 0.0;
+
+            final hexIntensity =
+                distFactor * intensity * (0.3 + waveIntensity * 0.7);
+            if (hexIntensity < 0.02) continue;
+
+            _shieldPath.reset();
+            for (int i = 0; i < 6; i++) {
+              final angle = (i * 60 - 30) * math.pi / 180;
+              final px = hexCenterX + math.cos(angle) * hexSize * 0.45;
+              final py = hexCenterY + math.sin(angle) * hexSize * 0.45;
+              if (i == 0) {
+                _shieldPath.moveTo(px, py);
+              } else {
+                _shieldPath.lineTo(px, py);
+              }
             }
+            _shieldPath.close();
+
+            // Fill
+            _shieldHexFillPaint.color =
+                const Color(0xFF00FFFF).withOpacity(hexIntensity * 0.15);
+            canvas.drawPath(_shieldPath, _shieldHexFillPaint);
+
+            // Stroke
+            _shieldHexPaint.color =
+                const Color(0xFF00FFFF).withOpacity(hexIntensity * 0.6);
+            canvas.drawPath(_shieldPath, _shieldHexPaint);
           }
-          _shieldPath.close();
-
-          // Fill
-          _shieldHexFillPaint.color = const Color(0xFF00FFFF).withOpacity(hexIntensity * 0.15);
-          canvas.drawPath(_shieldPath, _shieldHexFillPaint);
-
-          // Stroke
-          _shieldHexPaint.color = const Color(0xFF00FFFF).withOpacity(hexIntensity * 0.6);
-          canvas.drawPath(_shieldPath, _shieldHexPaint);
         }
       }
     }
@@ -1256,10 +1579,12 @@ class ScreenEffects extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     for (int i = 0; i < 3; i++) {
       final rippleProgress = (progress + i * 0.15).clamp(0.0, 1.0);
-      final rippleRadius = rippleProgress * screenRect.width * 0.8;
       final rippleAlpha = (1 - rippleProgress) * intensity * 0.5;
+      if (rippleAlpha <= 0.01) continue;
 
-      _shieldRipplePaint.color = const Color(0xFF00FFFF).withOpacity(rippleAlpha);
+      final rippleRadius = rippleProgress * screenRect.width * 0.8;
+      _shieldRipplePaint.color =
+          const Color(0xFF00FFFF).withOpacity(rippleAlpha);
       canvas.drawCircle(
         Offset(impactX, impactY),
         rippleRadius,
@@ -1271,12 +1596,13 @@ class ScreenEffects extends PositionComponent {
     // LAYER 4: SHIELD CRACKS FROM IMPACT
     // ═══════════════════════════════════════════════════════════════════════
     final cracks = _shieldCracks;
-    if (cracks != null && !reduceFx) {
+    if (cracks != null && !reduceFx && intensity > 0.06) {
       for (final crack in cracks) {
         final crackProgress = (progress * 2).clamp(0.0, 1.0);
         final crackLength = crack.length * crackProgress;
 
-        _shieldCrackPaint.color = const Color(0xFFFF0066).withOpacity(intensity * 0.8);
+        _shieldCrackPaint.color =
+            const Color(0xFFFF0066).withOpacity(intensity * 0.8);
 
         var startX = impactX + crack.offsetX;
         var startY = impactY + crack.offsetY;
@@ -1286,11 +1612,12 @@ class ScreenEffects extends PositionComponent {
           final segLength = crackLength * segFraction / crack.segments;
 
           // Add jitter to crack direction
-          final jitteredAngle = crack.angle + (_random.nextDouble() - 0.5) * 0.5;
+          final jitteredAngle = crack.angle + (_nextUnit() - 0.5) * 0.5;
           final endX = startX + math.cos(jitteredAngle) * segLength;
           final endY = startY + math.sin(jitteredAngle) * segLength;
 
-          canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _shieldCrackPaint);
+          canvas.drawLine(
+              Offset(startX, startY), Offset(endX, endY), _shieldCrackPaint);
 
           startX = endX;
           startY = endY;
@@ -1302,20 +1629,23 @@ class ScreenEffects extends PositionComponent {
     // LAYER 5: FLYING SPARKS
     // ═══════════════════════════════════════════════════════════════════════
     final sparks = _shieldSparks;
-    if (sparks != null && !reduceFx) {
+    if (sparks != null && !reduceFx && intensity > 0.06) {
       for (final spark in sparks) {
         if (spark.life <= 0) continue;
 
         final sparkAlpha = (spark.life / 0.5).clamp(0.0, 1.0) * intensity;
-        _shieldSparkPaint.color = const Color(0xFF00FFFF).withOpacity(sparkAlpha);
-        canvas.drawCircle(Offset(spark.x, spark.y), spark.size, _shieldSparkPaint);
+        _shieldSparkPaint.color =
+            const Color(0xFF00FFFF).withOpacity(sparkAlpha);
+        canvas.drawCircle(
+            Offset(spark.x, spark.y), spark.size, _shieldSparkPaint);
       }
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: EDGE GLOW INTENSIFICATION
     // ═══════════════════════════════════════════════════════════════════════
-    _shieldGlowPaint.color = const Color(0xFF00FFFF).withOpacity(intensity * 0.3);
+    _shieldGlowPaint.color =
+        const Color(0xFF00FFFF).withOpacity(intensity * 0.3);
 
     // Top edge
     canvas.drawRect(
@@ -1324,7 +1654,8 @@ class ScreenEffects extends PositionComponent {
     );
     // Bottom edge
     canvas.drawRect(
-      Rect.fromLTWH(0, screenRect.height - 10 - intensity * 20, screenRect.width, 10 + intensity * 20),
+      Rect.fromLTWH(0, screenRect.height - 10 - intensity * 20,
+          screenRect.width, 10 + intensity * 20),
       _shieldGlowPaint,
     );
     // Left edge
@@ -1334,7 +1665,8 @@ class ScreenEffects extends PositionComponent {
     );
     // Right edge
     canvas.drawRect(
-      Rect.fromLTWH(screenRect.width - 10 - intensity * 20, 0, 10 + intensity * 20, screenRect.height),
+      Rect.fromLTWH(screenRect.width - 10 - intensity * 20, 0,
+          10 + intensity * 20, screenRect.height),
       _shieldGlowPaint,
     );
 
@@ -1348,14 +1680,16 @@ class ScreenEffects extends PositionComponent {
       _shieldOverlayPaint.color = Colors.red.withOpacity(intensity * 0.15);
       canvas.save();
       canvas.translate(-chromaOffset, 0);
-      canvas.drawCircle(Offset(impactX, impactY), coreRadius * 0.8, _shieldOverlayPaint);
+      canvas.drawCircle(
+          Offset(impactX, impactY), coreRadius * 0.8, _shieldOverlayPaint);
       canvas.restore();
 
       // Cyan shift
       _shieldOverlayPaint.color = Colors.cyan.withOpacity(intensity * 0.15);
       canvas.save();
       canvas.translate(chromaOffset, 0);
-      canvas.drawCircle(Offset(impactX, impactY), coreRadius * 0.8, _shieldOverlayPaint);
+      canvas.drawCircle(
+          Offset(impactX, impactY), coreRadius * 0.8, _shieldOverlayPaint);
       canvas.restore();
     }
 
@@ -1364,8 +1698,11 @@ class ScreenEffects extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     if (progress < 0.15) {
       final flashAlpha = (1 - progress / 0.15) * _shieldFlashIntensity * 0.25;
-      _warningFlashPaint.color = const Color(0xFFFF0066).withOpacity(flashAlpha);
-      canvas.drawRect(screenRect, _warningFlashPaint);
+      if (flashAlpha > 0.01) {
+        _warningFlashPaint.color =
+            const Color(0xFFFF0066).withOpacity(flashAlpha);
+        canvas.drawRect(screenRect, _warningFlashPaint);
+      }
     }
   }
 
@@ -1373,6 +1710,9 @@ class ScreenEffects extends PositionComponent {
   // LENS FLARE RENDERING - 6-Layer Cinematic Light Artifact System
   // ═══════════════════════════════════════════════════════════════════════════
   void _renderLensFlares(Canvas canvas, Rect screenRect) {
+    if (_activeFlareSources.isEmpty) return;
+    final margin = math.max(screenRect.width, screenRect.height) * 0.2;
+    final flareRect = screenRect.inflate(margin);
     for (final source in _activeFlareSources) {
       final progress = (source.timer / source.duration).clamp(0.0, 1.0);
       // Sharp attack, smooth decay envelope
@@ -1384,6 +1724,9 @@ class ScreenEffects extends PositionComponent {
       if (intensity < 0.01) continue;
 
       final sourcePos = Offset(source.position.x, source.position.y);
+      if (!flareRect.contains(sourcePos)) {
+        continue;
+      }
 
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 1: CENTRAL BRIGHT SOURCE GLOW
@@ -1393,7 +1736,8 @@ class ScreenEffects extends PositionComponent {
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 2: ANAMORPHIC STREAK (Horizontal Light Streak)
       // ═══════════════════════════════════════════════════════════════════════
-      _renderAnamorphicStreak(canvas, sourcePos, source.color, intensity, screenRect);
+      _renderAnamorphicStreak(
+          canvas, source, sourcePos, source.color, intensity, screenRect);
 
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 3: HEXAGONAL FLARE ARTIFACTS
@@ -1408,7 +1752,8 @@ class ScreenEffects extends PositionComponent {
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 5: STARBURST RAYS
       // ═══════════════════════════════════════════════════════════════════════
-      _renderStarburstRays(canvas, sourcePos, source.color, intensity, progress);
+      _renderStarburstRays(
+          canvas, sourcePos, source.color, intensity, progress);
 
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 6: BLOOM/HALO
@@ -1418,7 +1763,9 @@ class ScreenEffects extends PositionComponent {
   }
 
   /// Layer 1: Central bright source glow with hot core
-  void _renderSourceGlow(Canvas canvas, Offset pos, Color color, double intensity) {
+  void _renderSourceGlow(
+      Canvas canvas, Offset pos, Color color, double intensity) {
+    if (intensity <= 0.01) return;
     // Outer soft glow
     final outerRadius = 35 * intensity;
     _lensFlareSourceGlowPaint.color = color.withOpacity(intensity * 0.4);
@@ -1440,58 +1787,80 @@ class ScreenEffects extends PositionComponent {
   }
 
   /// Layer 2: Anamorphic horizontal light streak
-  void _renderAnamorphicStreak(
-      Canvas canvas, Offset pos, Color color, double intensity, Rect screenRect) {
+  void _renderAnamorphicStreak(Canvas canvas, _LensFlareSource source,
+      Offset pos, Color color, double intensity, Rect screenRect) {
+    if (intensity <= 0.02) return;
     final streakWidth = screenRect.width * 0.8 * intensity;
     final streakHeight = 3 + intensity * 8;
+    const streakLevels = 16;
+    final streakLevel =
+        (intensity * streakLevels).round().clamp(0, streakLevels);
 
-    // Create gradient for the streak (fades at edges)
     final streakRect = Rect.fromCenter(
       center: pos,
       width: streakWidth,
       height: streakHeight,
     );
 
-    final gradient = LinearGradient(
-      colors: [
-        Colors.transparent,
-        color.withOpacity(intensity * 0.3),
-        Colors.white.withOpacity(intensity * 0.5),
-        color.withOpacity(intensity * 0.3),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
-    ).createShader(streakRect);
+    // Cache streak shaders per source to avoid per-frame createShader
+    if (source.streakShader == null ||
+        source.streakWidth != streakWidth ||
+        source.streakHeight != streakHeight ||
+        source.streakLevel != streakLevel) {
+      source.streakWidth = streakWidth;
+      source.streakHeight = streakHeight;
+      source.streakLevel = streakLevel;
+      final q = streakLevel / streakLevels;
 
-    _lensFlareStreakPaint.shader = gradient;
-    canvas.drawRect(streakRect, _lensFlareStreakPaint);
-    _lensFlareStreakPaint.shader = null;
+      source.streakShader = LinearGradient(
+        colors: [
+          Colors.transparent,
+          color.withOpacity(q * 0.3),
+          Colors.white.withOpacity(q * 0.5),
+          color.withOpacity(q * 0.3),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, streakWidth, streakHeight));
+
+      final secondaryWidth = streakWidth * 0.6;
+      final secondaryHeight = streakHeight * 0.3;
+      source.secondaryStreakShader = LinearGradient(
+        colors: [
+          Colors.transparent,
+          Colors.white.withOpacity(q * 0.2),
+          Colors.white.withOpacity(q * 0.4),
+          Colors.white.withOpacity(q * 0.2),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, secondaryWidth, secondaryHeight));
+    }
+
+    _lensFlareStreakPaint.shader = source.streakShader;
+    canvas.save();
+    canvas.translate(streakRect.left, streakRect.top);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, streakWidth, streakHeight), _lensFlareStreakPaint);
+    canvas.restore();
 
     // Secondary thinner streak
-    final secondaryRect = Rect.fromCenter(
-      center: pos,
-      width: streakWidth * 0.6,
-      height: streakHeight * 0.3,
-    );
+    final secondaryWidth = streakWidth * 0.6;
+    final secondaryHeight = streakHeight * 0.3;
+    _lensFlareStreakPaint.shader = source.secondaryStreakShader;
+    canvas.save();
+    canvas.translate(pos.dx - secondaryWidth / 2, pos.dy - secondaryHeight / 2);
+    canvas.drawRect(Rect.fromLTWH(0, 0, secondaryWidth, secondaryHeight),
+        _lensFlareStreakPaint);
+    canvas.restore();
 
-    final secondaryGradient = LinearGradient(
-      colors: [
-        Colors.transparent,
-        Colors.white.withOpacity(intensity * 0.2),
-        Colors.white.withOpacity(intensity * 0.4),
-        Colors.white.withOpacity(intensity * 0.2),
-        Colors.transparent,
-      ],
-    ).createShader(secondaryRect);
-
-    _lensFlareStreakPaint.shader = secondaryGradient;
-    canvas.drawRect(secondaryRect, _lensFlareStreakPaint);
     _lensFlareStreakPaint.shader = null;
   }
 
   /// Layer 3: Hexagonal flare artifacts along the flare axis
-  void _renderHexagonalArtifacts(
-      Canvas canvas, _LensFlareSource source, double intensity, double progress) {
+  void _renderHexagonalArtifacts(Canvas canvas, _LensFlareSource source,
+      double intensity, double progress) {
+    if (intensity <= 0.03) return;
+    if (source.hexArtifacts.isEmpty) return;
     for (final hex in source.hexArtifacts) {
       final hexPos = Offset(hex.position.x, hex.position.y);
       final hexIntensity = intensity * hex.opacity;
@@ -1513,7 +1882,8 @@ class ScreenEffects extends PositionComponent {
       _lensFlarePath.close();
 
       // Fill with semi-transparent color
-      _lensFlareHexFillPaint.color = source.color.withOpacity(hexIntensity * 0.15);
+      _lensFlareHexFillPaint.color =
+          source.color.withOpacity(hexIntensity * 0.15);
       canvas.drawPath(_lensFlarePath, _lensFlareHexFillPaint);
 
       // Stroke outline
@@ -1540,8 +1910,10 @@ class ScreenEffects extends PositionComponent {
   }
 
   /// Layer 4: Circular rainbow artifacts (chromatic aberration rings)
-  void _renderRainbowArtifacts(
-      Canvas canvas, _LensFlareSource source, double intensity, double progress) {
+  void _renderRainbowArtifacts(Canvas canvas, _LensFlareSource source,
+      double intensity, double progress) {
+    if (intensity <= 0.03) return;
+    if (source.rainbowArtifacts.isEmpty) return;
     // Rainbow colors for chromatic aberration effect
     const rainbowColors = [
       Color(0xFFFF0000), // Red
@@ -1578,8 +1950,9 @@ class ScreenEffects extends PositionComponent {
   }
 
   /// Layer 5: Starburst rays emanating from source
-  void _renderStarburstRays(
-      Canvas canvas, Offset pos, Color color, double intensity, double progress) {
+  void _renderStarburstRays(Canvas canvas, Offset pos, Color color,
+      double intensity, double progress) {
+    if (intensity <= 0.04) return;
     const rayCount = 8;
     final rayLength = 50 + intensity * 30;
     final rayWidth = 1 + intensity * 2;
@@ -1604,7 +1977,8 @@ class ScreenEffects extends PositionComponent {
       _lensFlareStarburstPaint
         ..color = color.withOpacity(rayAlpha)
         ..strokeWidth = rayWidth;
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _lensFlareStarburstPaint);
+      canvas.drawLine(
+          Offset(startX, startY), Offset(endX, endY), _lensFlareStarburstPaint);
 
       // Brighter inner ray
       final innerEndX = pos.dx + math.cos(angle) * thisRayLength * 0.5;
@@ -1613,7 +1987,8 @@ class ScreenEffects extends PositionComponent {
       _lensFlareStarburstPaint
         ..color = Colors.white.withOpacity(rayAlpha * 0.6)
         ..strokeWidth = rayWidth * 0.5;
-      canvas.drawLine(Offset(startX, startY), Offset(innerEndX, innerEndY), _lensFlareStarburstPaint);
+      canvas.drawLine(Offset(startX, startY), Offset(innerEndX, innerEndY),
+          _lensFlareStarburstPaint);
     }
 
     // Secondary shorter rays between main rays
@@ -1629,12 +2004,15 @@ class ScreenEffects extends PositionComponent {
       _lensFlareStarburstPaint
         ..color = color.withOpacity(intensity * 0.2)
         ..strokeWidth = rayWidth * 0.6;
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _lensFlareStarburstPaint);
+      canvas.drawLine(
+          Offset(startX, startY), Offset(endX, endY), _lensFlareStarburstPaint);
     }
   }
 
   /// Layer 6: Bloom/halo effect around the source
-  void _renderBloomHalo(Canvas canvas, Offset pos, Color color, double intensity) {
+  void _renderBloomHalo(
+      Canvas canvas, Offset pos, Color color, double intensity) {
+    if (intensity <= 0.02) return;
     // Large soft outer bloom
     final outerBloomRadius = 60 * intensity;
     _lensFlareHaloPaint.color = color.withOpacity(intensity * 0.15);
@@ -1712,6 +2090,13 @@ class _LensFlareSource {
   double timer;
   final List<_HexArtifact> hexArtifacts;
   final List<_RainbowArtifact> rainbowArtifacts;
+
+  // Cached streak shaders (reduce per-frame createShader in lens flares)
+  Shader? streakShader;
+  Shader? secondaryStreakShader;
+  double streakWidth = 0;
+  double streakHeight = 0;
+  int streakLevel = -1;
 }
 
 /// Hexagonal artifact in the lens flare

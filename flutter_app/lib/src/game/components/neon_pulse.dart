@@ -21,10 +21,10 @@ class NeonPulse extends PositionComponent {
        _timer = 0,
        _currentRadius = 0,
        _particleCount = reducedFx ? 18 : 40,
-       _arcCount = reducedFx ? 4 : 8,
-       _random = math.Random() {
+       _arcCount = reducedFx ? 4 : 8 {
     position = center;
     anchor = Anchor.center;
+    _rngState = (center.hashCode ^ 0x6d2b79f5) & 0x7fffffff;
     _initializeParticles();
   }
 
@@ -117,7 +117,14 @@ class NeonPulse extends PositionComponent {
   final double expandDuration;
   final double holdDuration;
   final bool reducedFx;
-  final math.Random _random;
+  int _rngState = 0x6d2b79f5;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
 
   _PulsePhase _phase;
   double _timer;
@@ -135,14 +142,14 @@ class NeonPulse extends PositionComponent {
   void _initializeParticles() {
     // Burst particles
     for (int i = 0; i < _particleCount; i++) {
-      final angle = (i / _particleCount) * math.pi * 2 + _random.nextDouble() * 0.2;
+      final angle = (i / _particleCount) * math.pi * 2 + _nextUnit() * 0.2;
       _particles.add(_PulseParticle(
         angle: angle,
-        speed: 150 + _random.nextDouble() * 100,
-        size: 2 + _random.nextDouble() * 3,
-        lifetime: 0.4 + _random.nextDouble() * 0.3,
-        orbitRadius: _random.nextDouble() * 20,
-        orbitSpeed: (_random.nextDouble() - 0.5) * 10,
+        speed: 150 + _nextUnit() * 100,
+        size: 2 + _nextUnit() * 3,
+        lifetime: 0.4 + _nextUnit() * 0.3,
+        orbitRadius: _nextUnit() * 20,
+        orbitSpeed: (_nextUnit() - 0.5) * 10,
       ));
     }
 
@@ -150,8 +157,8 @@ class NeonPulse extends PositionComponent {
     for (int i = 0; i < _arcCount; i++) {
       _arcs.add(_ElectricArc(
         angle: (i / _arcCount) * math.pi * 2,
-        segments: 4 + _random.nextInt(4),
-        lifetime: 0.1 + _random.nextDouble() * 0.15,
+        segments: 4 + _nextInt(4),
+        lifetime: 0.1 + _nextUnit() * 0.15,
       ));
     }
   }
@@ -172,7 +179,7 @@ class NeonPulse extends PositionComponent {
       for (final arc in _arcs) {
         arc.update(dt);
         if (!arc.isAlive) {
-          arc.reset(_random);
+          arc.reset(_nextUnit, _nextInt);
         }
       }
     }
@@ -290,8 +297,8 @@ class NeonPulse extends PositionComponent {
         final cy = math.sin(angle) * dist;
 
         // Glitch offset
-        final glitchX = (_random.nextDouble() - 0.5) * 4 * (1 - distFromEdge / distortionWidth);
-        final glitchY = (_random.nextDouble() - 0.5) * 4 * (1 - distFromEdge / distortionWidth);
+        final glitchX = (_nextUnit() - 0.5) * 4 * (1 - distFromEdge / distortionWidth);
+        final glitchY = (_nextUnit() - 0.5) * 4 * (1 - distFromEdge / distortionWidth);
 
         _hexPath.reset();
         for (int i = 0; i < 6; i++) {
@@ -329,7 +336,7 @@ class NeonPulse extends PositionComponent {
       final outerR = _currentRadius;
 
       for (double r = innerR; r < outerR; r += 8) {
-        if (_random.nextDouble() > 0.7) continue;
+        if (_nextUnit() > 0.7) continue;
 
         final x1 = math.cos(angle) * r;
         final y1 = math.sin(angle) * r;
@@ -376,17 +383,17 @@ class NeonPulse extends PositionComponent {
     // Draw noise dots at the wave edge
     final noiseCount = (40 * noiseIntensity).toInt();
     for (int i = 0; i < noiseCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final dist = _currentRadius * (0.85 + _random.nextDouble() * 0.3);
+      final angle = _nextUnit() * math.pi * 2;
+      final dist = _currentRadius * (0.85 + _nextUnit() * 0.3);
 
       final nx = math.cos(angle) * dist;
       final ny = math.sin(angle) * dist;
 
-      final noiseAlpha = _random.nextDouble() * 0.6 * opacity * noiseIntensity;
-      final noiseSize = 1 + _random.nextDouble() * 2;
+      final noiseAlpha = _nextUnit() * 0.6 * opacity * noiseIntensity;
+      final noiseSize = 1 + _nextUnit() * 2;
 
       // Alternate between cyan and white
-      final noiseColor = _random.nextBool() ? NeonColors.cyan : Colors.white;
+      final noiseColor = _nextBool() ? NeonColors.cyan : Colors.white;
       _noisePaint.color = noiseColor.withOpacity(noiseAlpha);
 
       canvas.drawCircle(Offset(nx, ny), noiseSize, _noisePaint);
@@ -422,13 +429,13 @@ class NeonPulse extends PositionComponent {
     final barCount = 15;
     for (int i = 0; i < barCount; i++) {
       final angle = (i / barCount) * math.pi * 2 + _timer * 1.5;
-      final dist = _currentRadius * (0.3 + _random.nextDouble() * 0.6);
+      final dist = _currentRadius * (0.3 + _nextUnit() * 0.6);
 
       final cx = math.cos(angle) * dist;
       final cy = math.sin(angle) * dist;
 
       // Draw a short horizontal bar
-      final barWidth = 8 + _random.nextDouble() * 12;
+      final barWidth = 8 + _nextUnit() * 12;
       final barAlpha = (0.3 + math.sin(_timer * 15 + i) * 0.2) * opacity;
 
       // Random color variation
@@ -442,8 +449,8 @@ class NeonPulse extends PositionComponent {
       );
 
       // Sometimes add a perpendicular tick
-      if (_random.nextDouble() > 0.6) {
-        final tickHeight = 4 + _random.nextDouble() * 6;
+      if (_nextUnit() > 0.6) {
+        final tickHeight = 4 + _nextUnit() * 6;
         canvas.drawLine(
           Offset(cx, cy - tickHeight / 2),
           Offset(cx, cy + tickHeight / 2),
@@ -457,17 +464,17 @@ class NeonPulse extends PositionComponent {
     _noisePaint.strokeWidth = 1;
 
     for (int i = 0; i < 6; i++) {
-      final gx = (_random.nextDouble() - 0.5) * _currentRadius * 1.5;
-      final gy = (_random.nextDouble() - 0.5) * _currentRadius * 1.5;
+      final gx = (_nextUnit() - 0.5) * _currentRadius * 1.5;
+      final gy = (_nextUnit() - 0.5) * _currentRadius * 1.5;
 
       // Only draw if within radius
       if (gx * gx + gy * gy > _currentRadius * _currentRadius) continue;
 
       // Draw 3-4 short horizontal lines (simulating corrupted text)
       for (int j = 0; j < 3; j++) {
-        final lineLen = 5 + _random.nextDouble() * 10;
+        final lineLen = 5 + _nextUnit() * 10;
         final ly = gy + j * 4;
-        if (_random.nextDouble() > 0.3) {
+        if (_nextUnit() > 0.3) {
           canvas.drawLine(
             Offset(gx, ly),
             Offset(gx + lineLen, ly),
@@ -521,8 +528,8 @@ class NeonPulse extends PositionComponent {
         final baseY = endY * t;
 
         // Add random perpendicular offset
-        final perpX = -math.sin(arc.angle) * (i == arc.segments ? 0 : (_random.nextDouble() - 0.5) * 15);
-        final perpY = math.cos(arc.angle) * (i == arc.segments ? 0 : (_random.nextDouble() - 0.5) * 15);
+        final perpX = -math.sin(arc.angle) * (i == arc.segments ? 0 : (_nextUnit() - 0.5) * 15);
+        final perpY = math.cos(arc.angle) * (i == arc.segments ? 0 : (_nextUnit() - 0.5) * 15);
 
         arcPath.lineTo(baseX + perpX, baseY + perpY);
       }
@@ -690,10 +697,10 @@ class _ElectricArc {
     _time += dt;
   }
 
-  void reset(math.Random random) {
+  void reset(double Function() nextUnit, int Function(int) nextInt) {
     _time = 0;
-    angle = random.nextDouble() * math.pi * 2;
-    segments = 4 + random.nextInt(4);
-    lifetime = 0.1 + random.nextDouble() * 0.15;
+    angle = nextUnit() * math.pi * 2;
+    segments = 4 + nextInt(4);
+    lifetime = 0.1 + nextUnit() * 0.15;
   }
 }

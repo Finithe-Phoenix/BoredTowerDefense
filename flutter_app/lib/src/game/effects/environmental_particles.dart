@@ -78,7 +78,14 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
   double intensity;
 
   double _time = 0;
-  final math.Random _random = math.Random(42);
+  int _rngState = 42;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
 
   // Particle pools for each layer
   final List<_Spark> _sparks = [];
@@ -201,6 +208,7 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
   void update(double dt) {
     super.update(dt);
 
+    if (intensity <= 0.01) return;
     if (lowFx && intensity < 0.3) return;
 
     _time += dt;
@@ -310,6 +318,7 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
 
   void _spawnParticles(double dt) {
     final spawnRate = intensity * (lowFx ? 0.3 : (reduceFx ? 0.6 : 1.0));
+    if (spawnRate <= 0.0001) return;
 
     // Sparks
     final maxSparks = lowFx ? 8 : (reduceFx ? 15 : 30);
@@ -350,7 +359,7 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
       if (_electricSpawnTimer >= electricInterval / spawnRate &&
           _electricDischarges.length < 3) {
         _electricSpawnTimer = 0;
-        if (_random.nextDouble() < 0.4) {
+        if (_nextUnit() < 0.4) {
           _electricDischarges.add(_createElectricDischarge());
         }
       }
@@ -371,26 +380,26 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
 
   _Spark _createSpark() {
     return _Spark(
-      x: _random.nextDouble() * size.x,
+      x: _nextUnit() * size.x,
       y: size.y + 10,
-      velocityX: (_random.nextDouble() - 0.5) * 30,
-      velocityY: -30 - _random.nextDouble() * 50,
-      size: 1.5 + _random.nextDouble() * 2,
-      lifetime: 1.5 + _random.nextDouble() * 2,
-      brightness: 0.5 + _random.nextDouble() * 0.5,
-      color: _random.nextDouble() > 0.7 ? _palette.secondary : _palette.primary,
+      velocityX: (_nextUnit() - 0.5) * 30,
+      velocityY: -30 - _nextUnit() * 50,
+      size: 1.5 + _nextUnit() * 2,
+      lifetime: 1.5 + _nextUnit() * 2,
+      brightness: 0.5 + _nextUnit() * 0.5,
+      color: _nextUnit() > 0.7 ? _palette.secondary : _palette.primary,
     );
   }
 
   _Ember _createEmber() {
     return _Ember(
-      x: _random.nextDouble() * size.x,
-      y: size.y * (0.5 + _random.nextDouble() * 0.5),
-      velocityX: (_random.nextDouble() - 0.5) * 20,
-      velocityY: -15 - _random.nextDouble() * 25,
-      size: 2.5 + _random.nextDouble() * 3,
-      lifetime: 2.5 + _random.nextDouble() * 2,
-      pulsePhase: _random.nextDouble() * math.pi * 2,
+      x: _nextUnit() * size.x,
+      y: size.y * (0.5 + _nextUnit() * 0.5),
+      velocityX: (_nextUnit() - 0.5) * 20,
+      velocityY: -15 - _nextUnit() * 25,
+      size: 2.5 + _nextUnit() * 3,
+      lifetime: 2.5 + _nextUnit() * 2,
+      pulsePhase: _nextUnit() * math.pi * 2,
       color: _palette.accent,
       glowColor: _palette.glow,
     );
@@ -398,60 +407,60 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
 
   _MistCloud _createMistCloud() {
     return _MistCloud(
-      x: _random.nextDouble() * size.x,
-      y: size.y * (0.7 + _random.nextDouble() * 0.3),
-      velocityX: (_random.nextDouble() - 0.5) * 15,
-      size: 60 + _random.nextDouble() * 100,
-      lifetime: 6 + _random.nextDouble() * 4,
-      phase: _random.nextDouble() * math.pi * 2,
+      x: _nextUnit() * size.x,
+      y: size.y * (0.7 + _nextUnit() * 0.3),
+      velocityX: (_nextUnit() - 0.5) * 15,
+      size: 60 + _nextUnit() * 100,
+      lifetime: 6 + _nextUnit() * 4,
+      phase: _nextUnit() * math.pi * 2,
       color: _palette.mist,
     );
   }
 
   _DataFragment _createDataFragment() {
-    final shapeType = _random.nextInt(4); // 0=square, 1=triangle, 2=diamond, 3=hexagon
+    final shapeType = _nextInt(4); // 0=square, 1=triangle, 2=diamond, 3=hexagon
     return _DataFragment(
-      x: _random.nextDouble() * size.x,
+      x: _nextUnit() * size.x,
       y: -20,
-      velocityX: (_random.nextDouble() - 0.5) * 40,
-      velocityY: 20 + _random.nextDouble() * 40,
-      size: 3 + _random.nextDouble() * 5,
-      rotation: _random.nextDouble() * math.pi * 2,
-      rotationSpeed: (_random.nextDouble() - 0.5) * 3,
-      lifetime: 3 + _random.nextDouble() * 3,
+      velocityX: (_nextUnit() - 0.5) * 40,
+      velocityY: 20 + _nextUnit() * 40,
+      size: 3 + _nextUnit() * 5,
+      rotation: _nextUnit() * math.pi * 2,
+      rotationSpeed: (_nextUnit() - 0.5) * 3,
+      lifetime: 3 + _nextUnit() * 3,
       shape: shapeType,
-      color: _random.nextDouble() > 0.5 ? _palette.primary : _palette.secondary,
+      color: _nextUnit() > 0.5 ? _palette.primary : _palette.secondary,
     );
   }
 
   _ElectricDischarge _createElectricDischarge() {
     // Find two nearby particles to connect
-    final startX = _random.nextDouble() * size.x;
-    final startY = _random.nextDouble() * size.y * 0.7;
-    final angle = (_random.nextDouble() - 0.5) * math.pi * 0.8;
-    final length = 40 + _random.nextDouble() * 80;
+    final startX = _nextUnit() * size.x;
+    final startY = _nextUnit() * size.y * 0.7;
+    final angle = (_nextUnit() - 0.5) * math.pi * 0.8;
+    final length = 40 + _nextUnit() * 80;
 
     return _ElectricDischarge(
       startX: startX,
       startY: startY,
       endX: startX + math.cos(angle) * length,
       endY: startY + math.sin(angle) * length,
-      lifetime: 0.1 + _random.nextDouble() * 0.15,
-      segments: 4 + _random.nextInt(4),
+      lifetime: 0.1 + _nextUnit() * 0.15,
+      segments: 4 + _nextInt(4),
       color: _palette.primary,
     );
   }
 
   _HolographicDust _createHoloDust() {
     return _HolographicDust(
-      x: _random.nextDouble() * size.x,
-      y: _random.nextDouble() * size.y,
-      velocityX: (_random.nextDouble() - 0.5) * 10,
-      velocityY: (_random.nextDouble() - 0.5) * 10,
-      size: 1.5 + _random.nextDouble() * 2.5,
-      lifetime: 3 + _random.nextDouble() * 3,
-      colorPhase: _random.nextDouble() * math.pi * 2,
-      shimmerSpeed: 2 + _random.nextDouble() * 3,
+      x: _nextUnit() * size.x,
+      y: _nextUnit() * size.y,
+      velocityX: (_nextUnit() - 0.5) * 10,
+      velocityY: (_nextUnit() - 0.5) * 10,
+      size: 1.5 + _nextUnit() * 2.5,
+      lifetime: 3 + _nextUnit() * 3,
+      colorPhase: _nextUnit() * math.pi * 2,
+      shimmerSpeed: 2 + _nextUnit() * 3,
       baseColor: _palette.primary,
       shiftColor: _palette.secondary,
     );
@@ -466,6 +475,7 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
     super.render(canvas);
 
     if (size.isZero()) return;
+    if (intensity <= 0.01) return;
     if (lowFx && intensity < 0.3) return;
 
     final globalAlpha = intensity.clamp(0.0, 1.0);
@@ -476,22 +486,22 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
     }
 
     // Layer 1: Floating sparks
-    _renderSparks(canvas, globalAlpha);
+    if (_sparks.isNotEmpty) _renderSparks(canvas, globalAlpha);
 
     // Layer 2: Glowing embers with trails
-    _renderEmbers(canvas, globalAlpha);
+    if (_embers.isNotEmpty) _renderEmbers(canvas, globalAlpha);
 
     // Layer 4: Data fragments
-    _renderDataFragments(canvas, globalAlpha);
+    if (_dataFragments.isNotEmpty) _renderDataFragments(canvas, globalAlpha);
 
     // Layer 5: Electric discharge (occasional)
     if (!lowFx) {
-      _renderElectricDischarges(canvas, globalAlpha);
+      if (_electricDischarges.isNotEmpty) _renderElectricDischarges(canvas, globalAlpha);
     }
 
     // Layer 6: Holographic dust
     if (!reduceFx) {
-      _renderHoloDust(canvas, globalAlpha);
+      if (_holoDust.isNotEmpty) _renderHoloDust(canvas, globalAlpha);
     }
   }
 
@@ -697,7 +707,7 @@ class EnvironmentalParticles extends PositionComponent with HasGameRef<FlameGame
 
         // Add zigzag offset (except for last point)
         final offset =
-            i == discharge.segments ? 0.0 : (_random.nextDouble() - 0.5) * 15;
+            i == discharge.segments ? 0.0 : (_nextUnit() - 0.5) * 15;
 
         _reusablePath.lineTo(
           baseX + perpX * offset,
@@ -1039,3 +1049,4 @@ class _HolographicDust {
     _remainingLife -= dt;
   }
 }
+

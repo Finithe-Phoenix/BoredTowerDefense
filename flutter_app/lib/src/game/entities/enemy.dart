@@ -5,6 +5,23 @@ import '../../services/audio_service.dart';
 import '../bored_games_game.dart';
 import '../effects/damage_number_effect.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Callback types for enemy events
 typedef EnemyDeathCallback = void Function(Enemy enemy);
 typedef EnemyReachBaseCallback = void Function(Enemy enemy);
@@ -15,82 +32,322 @@ enum EnemyType {
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 1: NEON FRONTIER - Basic enemy types (tutorial)
   // ═══════════════════════════════════════════════════════════════════════════
-  runner(color: Color(0xFFFF7043), speedMult: 1.0, healthMult: 1.0, sizeMult: 1.0, isPhantom: false, world: 1),
-  overloaded(color: Color(0xFFFF0066), speedMult: 1.4, healthMult: 0.8, sizeMult: 0.9, isPhantom: false, world: 1),
-  juggernaut(color: Color(0xFF9C27B0), speedMult: 0.6, healthMult: 2.5, sizeMult: 1.4, isPhantom: false, world: 1),
-  phantom(color: Color(0xFF00FFAA), speedMult: 1.1, healthMult: 1.2, sizeMult: 0.95, isPhantom: true, world: 1),
+  runner(
+      color: Color(0xFFFF7043),
+      speedMult: 1.0,
+      healthMult: 1.0,
+      sizeMult: 1.0,
+      isPhantom: false,
+      world: 1),
+  overloaded(
+      color: Color(0xFFFF0066),
+      speedMult: 1.4,
+      healthMult: 0.8,
+      sizeMult: 0.9,
+      isPhantom: false,
+      world: 1),
+  juggernaut(
+      color: Color(0xFF9C27B0),
+      speedMult: 0.6,
+      healthMult: 2.5,
+      sizeMult: 1.4,
+      isPhantom: false,
+      world: 1),
+  phantom(
+      color: Color(0xFF00FFAA),
+      speedMult: 1.1,
+      healthMult: 1.2,
+      sizeMult: 0.95,
+      isPhantom: true,
+      world: 1),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 2: RIFT WARS - Dimensional glitch enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  glitcher(color: Color(0xFF00FFFF), speedMult: 1.2, healthMult: 0.9, sizeMult: 0.85, isPhantom: false, world: 2),
-  riftwalker(color: Color(0xFFFF00FF), speedMult: 0.8, healthMult: 1.8, sizeMult: 1.2, isPhantom: true, world: 2),
-  voidling(color: Color(0xFF6600FF), speedMult: 1.3, healthMult: 0.7, sizeMult: 0.75, isPhantom: false, world: 2),
-  dimensionBreaker(color: Color(0xFFFF3399), speedMult: 0.5, healthMult: 3.0, sizeMult: 1.5, isPhantom: false, world: 2),
+  glitcher(
+      color: Color(0xFF00FFFF),
+      speedMult: 1.2,
+      healthMult: 0.9,
+      sizeMult: 0.85,
+      isPhantom: false,
+      world: 2),
+  riftwalker(
+      color: Color(0xFFFF00FF),
+      speedMult: 0.8,
+      healthMult: 1.8,
+      sizeMult: 1.2,
+      isPhantom: true,
+      world: 2),
+  voidling(
+      color: Color(0xFF6600FF),
+      speedMult: 1.3,
+      healthMult: 0.7,
+      sizeMult: 0.75,
+      isPhantom: false,
+      world: 2),
+  dimensionBreaker(
+      color: Color(0xFFFF3399),
+      speedMult: 0.5,
+      healthMult: 3.0,
+      sizeMult: 1.5,
+      isPhantom: false,
+      world: 2),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 3: SIGNAL WASTES - Corrupted data enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  corruptedByte(color: Color(0xFF33FF33), speedMult: 1.1, healthMult: 1.0, sizeMult: 0.9, isPhantom: false, world: 3),
-  malware(color: Color(0xFFFF0000), speedMult: 0.9, healthMult: 1.5, sizeMult: 1.1, isPhantom: false, world: 3),
-  dataWorm(color: Color(0xFF99FF00), speedMult: 1.5, healthMult: 0.6, sizeMult: 0.7, isPhantom: false, world: 3),
-  virusCarrier(color: Color(0xFFCC0066), speedMult: 0.7, healthMult: 2.2, sizeMult: 1.3, isPhantom: false, world: 3),
+  corruptedByte(
+      color: Color(0xFF33FF33),
+      speedMult: 1.1,
+      healthMult: 1.0,
+      sizeMult: 0.9,
+      isPhantom: false,
+      world: 3),
+  malware(
+      color: Color(0xFFFF0000),
+      speedMult: 0.9,
+      healthMult: 1.5,
+      sizeMult: 1.1,
+      isPhantom: false,
+      world: 3),
+  dataWorm(
+      color: Color(0xFF99FF00),
+      speedMult: 1.5,
+      healthMult: 0.6,
+      sizeMult: 0.7,
+      isPhantom: false,
+      world: 3),
+  virusCarrier(
+      color: Color(0xFFCC0066),
+      speedMult: 0.7,
+      healthMult: 2.2,
+      sizeMult: 1.3,
+      isPhantom: false,
+      world: 3),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 4: ION CROWN - Electric/plasma enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  sparkDrone(color: Color(0xFFFFFF00), speedMult: 1.3, healthMult: 0.8, sizeMult: 0.8, isPhantom: false, world: 4),
-  plasmaCore(color: Color(0xFFFFAA00), speedMult: 0.7, healthMult: 2.0, sizeMult: 1.25, isPhantom: false, world: 4),
-  ionSurge(color: Color(0xFF00CCFF), speedMult: 1.6, healthMult: 0.5, sizeMult: 0.65, isPhantom: false, world: 4),
-  thunderHulk(color: Color(0xFFFF6600), speedMult: 0.4, healthMult: 3.5, sizeMult: 1.6, isPhantom: false, world: 4),
+  sparkDrone(
+      color: Color(0xFFFFFF00),
+      speedMult: 1.3,
+      healthMult: 0.8,
+      sizeMult: 0.8,
+      isPhantom: false,
+      world: 4),
+  plasmaCore(
+      color: Color(0xFFFFAA00),
+      speedMult: 0.7,
+      healthMult: 2.0,
+      sizeMult: 1.25,
+      isPhantom: false,
+      world: 4),
+  ionSurge(
+      color: Color(0xFF00CCFF),
+      speedMult: 1.6,
+      healthMult: 0.5,
+      sizeMult: 0.65,
+      isPhantom: false,
+      world: 4),
+  thunderHulk(
+      color: Color(0xFFFF6600),
+      speedMult: 0.4,
+      healthMult: 3.5,
+      sizeMult: 1.6,
+      isPhantom: false,
+      world: 4),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 5: SHARD VAULT - Crystal/mineral enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  crystalShard(color: Color(0xFF66FFFF), speedMult: 1.0, healthMult: 1.3, sizeMult: 0.95, isPhantom: false, world: 5),
-  gemCarrier(color: Color(0xFFFF66FF), speedMult: 0.8, healthMult: 1.8, sizeMult: 1.15, isPhantom: false, world: 5),
-  prismWalker(color: Color(0xFFFFFFFF), speedMult: 1.2, healthMult: 1.0, sizeMult: 0.9, isPhantom: true, world: 5),
-  diamondGolem(color: Color(0xFF00FFCC), speedMult: 0.35, healthMult: 4.0, sizeMult: 1.7, isPhantom: false, world: 5),
+  crystalShard(
+      color: Color(0xFF66FFFF),
+      speedMult: 1.0,
+      healthMult: 1.3,
+      sizeMult: 0.95,
+      isPhantom: false,
+      world: 5),
+  gemCarrier(
+      color: Color(0xFFFF66FF),
+      speedMult: 0.8,
+      healthMult: 1.8,
+      sizeMult: 1.15,
+      isPhantom: false,
+      world: 5),
+  prismWalker(
+      color: Color(0xFFFFFFFF),
+      speedMult: 1.2,
+      healthMult: 1.0,
+      sizeMult: 0.9,
+      isPhantom: true,
+      world: 5),
+  diamondGolem(
+      color: Color(0xFF00FFCC),
+      speedMult: 0.35,
+      healthMult: 4.0,
+      sizeMult: 1.7,
+      isPhantom: false,
+      world: 5),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 6: ARC FORTRESS - Mechanical/robotic enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  sentryBot(color: Color(0xFF888888), speedMult: 0.9, healthMult: 1.4, sizeMult: 1.0, isPhantom: false, world: 6),
-  droneSwarm(color: Color(0xFFCCCCCC), speedMult: 1.5, healthMult: 0.5, sizeMult: 0.6, isPhantom: false, world: 6),
-  siegeWalker(color: Color(0xFF555555), speedMult: 0.5, healthMult: 2.8, sizeMult: 1.45, isPhantom: false, world: 6),
-  cloakedAssassin(color: Color(0xFF333333), speedMult: 1.4, healthMult: 1.0, sizeMult: 0.85, isPhantom: true, world: 6),
+  sentryBot(
+      color: Color(0xFF888888),
+      speedMult: 0.9,
+      healthMult: 1.4,
+      sizeMult: 1.0,
+      isPhantom: false,
+      world: 6),
+  droneSwarm(
+      color: Color(0xFFCCCCCC),
+      speedMult: 1.5,
+      healthMult: 0.5,
+      sizeMult: 0.6,
+      isPhantom: false,
+      world: 6),
+  siegeWalker(
+      color: Color(0xFF555555),
+      speedMult: 0.5,
+      healthMult: 2.8,
+      sizeMult: 1.45,
+      isPhantom: false,
+      world: 6),
+  cloakedAssassin(
+      color: Color(0xFF333333),
+      speedMult: 1.4,
+      healthMult: 1.0,
+      sizeMult: 0.85,
+      isPhantom: true,
+      world: 6),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 7: OMEGA GRID - Digital/matrix enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  codeFragment(color: Color(0xFF00FF00), speedMult: 1.2, healthMult: 0.9, sizeMult: 0.8, isPhantom: false, world: 7),
-  matrixAgent(color: Color(0xFF009900), speedMult: 1.0, healthMult: 1.5, sizeMult: 1.05, isPhantom: false, world: 7),
-  firewallBreaker(color: Color(0xFF66FF66), speedMult: 0.6, healthMult: 2.5, sizeMult: 1.35, isPhantom: false, world: 7),
-  systemGhost(color: Color(0xFF003300), speedMult: 1.3, healthMult: 1.1, sizeMult: 0.9, isPhantom: true, world: 7),
+  codeFragment(
+      color: Color(0xFF00FF00),
+      speedMult: 1.2,
+      healthMult: 0.9,
+      sizeMult: 0.8,
+      isPhantom: false,
+      world: 7),
+  matrixAgent(
+      color: Color(0xFF009900),
+      speedMult: 1.0,
+      healthMult: 1.5,
+      sizeMult: 1.05,
+      isPhantom: false,
+      world: 7),
+  firewallBreaker(
+      color: Color(0xFF66FF66),
+      speedMult: 0.6,
+      healthMult: 2.5,
+      sizeMult: 1.35,
+      isPhantom: false,
+      world: 7),
+  systemGhost(
+      color: Color(0xFF003300),
+      speedMult: 1.3,
+      healthMult: 1.1,
+      sizeMult: 0.9,
+      isPhantom: true,
+      world: 7),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 8: STORM TOWER - Weather/elemental enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  stormRunner(color: Color(0xFF3399FF), speedMult: 1.4, healthMult: 0.85, sizeMult: 0.9, isPhantom: false, world: 8),
-  cycloneSpirit(color: Color(0xFF99CCFF), speedMult: 1.1, healthMult: 1.2, sizeMult: 1.0, isPhantom: true, world: 8),
-  thunderTitan(color: Color(0xFF0066CC), speedMult: 0.45, healthMult: 3.2, sizeMult: 1.55, isPhantom: false, world: 8),
-  lightningWraith(color: Color(0xFFCCFFFF), speedMult: 1.7, healthMult: 0.6, sizeMult: 0.7, isPhantom: false, world: 8),
+  stormRunner(
+      color: Color(0xFF3399FF),
+      speedMult: 1.4,
+      healthMult: 0.85,
+      sizeMult: 0.9,
+      isPhantom: false,
+      world: 8),
+  cycloneSpirit(
+      color: Color(0xFF99CCFF),
+      speedMult: 1.1,
+      healthMult: 1.2,
+      sizeMult: 1.0,
+      isPhantom: true,
+      world: 8),
+  thunderTitan(
+      color: Color(0xFF0066CC),
+      speedMult: 0.45,
+      healthMult: 3.2,
+      sizeMult: 1.55,
+      isPhantom: false,
+      world: 8),
+  lightningWraith(
+      color: Color(0xFFCCFFFF),
+      speedMult: 1.7,
+      healthMult: 0.6,
+      sizeMult: 0.7,
+      isPhantom: false,
+      world: 8),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 9: FINAL GATE - Void/dark enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  voidStalker(color: Color(0xFF660066), speedMult: 1.2, healthMult: 1.3, sizeMult: 1.0, isPhantom: true, world: 9),
-  abyssWalker(color: Color(0xFF330033), speedMult: 0.8, healthMult: 2.0, sizeMult: 1.2, isPhantom: false, world: 9),
-  shadowSwarm(color: Color(0xFF990099), speedMult: 1.6, healthMult: 0.7, sizeMult: 0.65, isPhantom: false, world: 9),
-  darknessTitan(color: Color(0xFF220022), speedMult: 0.4, healthMult: 3.8, sizeMult: 1.65, isPhantom: false, world: 9),
+  voidStalker(
+      color: Color(0xFF660066),
+      speedMult: 1.2,
+      healthMult: 1.3,
+      sizeMult: 1.0,
+      isPhantom: true,
+      world: 9),
+  abyssWalker(
+      color: Color(0xFF330033),
+      speedMult: 0.8,
+      healthMult: 2.0,
+      sizeMult: 1.2,
+      isPhantom: false,
+      world: 9),
+  shadowSwarm(
+      color: Color(0xFF990099),
+      speedMult: 1.6,
+      healthMult: 0.7,
+      sizeMult: 0.65,
+      isPhantom: false,
+      world: 9),
+  darknessTitan(
+      color: Color(0xFF220022),
+      speedMult: 0.4,
+      healthMult: 3.8,
+      sizeMult: 1.65,
+      isPhantom: false,
+      world: 9),
 
   // ═══════════════════════════════════════════════════════════════════════════
   // WORLD 10: OMEGA NEXUS - Ultimate hybrid enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  nexusHunter(color: Color(0xFFFF0099), speedMult: 1.3, healthMult: 1.5, sizeMult: 1.1, isPhantom: false, world: 10),
-  omegaSentinel(color: Color(0xFF9900FF), speedMult: 0.7, healthMult: 2.5, sizeMult: 1.4, isPhantom: false, world: 10),
-  realityShifter(color: Color(0xFFFFFF00), speedMult: 1.1, healthMult: 1.3, sizeMult: 1.0, isPhantom: true, world: 10),
-  apocalypseHerald(color: Color(0xFFFF3300), speedMult: 0.3, healthMult: 5.0, sizeMult: 1.8, isPhantom: false, world: 10);
+  nexusHunter(
+      color: Color(0xFFFF0099),
+      speedMult: 1.3,
+      healthMult: 1.5,
+      sizeMult: 1.1,
+      isPhantom: false,
+      world: 10),
+  omegaSentinel(
+      color: Color(0xFF9900FF),
+      speedMult: 0.7,
+      healthMult: 2.5,
+      sizeMult: 1.4,
+      isPhantom: false,
+      world: 10),
+  realityShifter(
+      color: Color(0xFFFFFF00),
+      speedMult: 1.1,
+      healthMult: 1.3,
+      sizeMult: 1.0,
+      isPhantom: true,
+      world: 10),
+  apocalypseHerald(
+      color: Color(0xFFFF3300),
+      speedMult: 0.3,
+      healthMult: 5.0,
+      sizeMult: 1.8,
+      isPhantom: false,
+      world: 10);
 
   const EnemyType({
     required this.color,
@@ -111,6 +368,22 @@ enum EnemyType {
   // HYPER-OPTIMIZED: Cached world enemies (avoids list allocation per call)
   static final Map<int, List<EnemyType>> _worldEnemiesCache = {};
 
+  static bool _isElectricEnemyType(EnemyType type) {
+    switch (type) {
+      case EnemyType.sparkDrone:
+      case EnemyType.ionSurge:
+      case EnemyType.plasmaCore:
+      case EnemyType.thunderHulk:
+      case EnemyType.lightningWraith:
+      case EnemyType.stormRunner:
+      case EnemyType.cycloneSpirit:
+      case EnemyType.thunderTitan:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   /// Get all enemy types for a specific world (cached)
   static List<EnemyType> getWorldEnemies(int worldIndex) {
     return _worldEnemiesCache.putIfAbsent(
@@ -120,7 +393,8 @@ enum EnemyType {
   }
 
   /// Get basic enemy types (for fallback/mixed waves)
-  static List<EnemyType> get basicTypes => [runner, overloaded, juggernaut, phantom];
+  static List<EnemyType> get basicTypes =>
+      [runner, overloaded, juggernaut, phantom];
 }
 
 class Enemy extends PositionComponent {
@@ -128,7 +402,7 @@ class Enemy extends PositionComponent {
       String.fromEnvironment('APP_ENV', defaultValue: 'prod');
   static const bool disablePhantomStealth =
       bool.fromEnvironment('DISABLE_PHANTOM_STEALTH', defaultValue: false) ||
-      _appEnv == 'dev';
+          _appEnv == 'dev';
   static bool lowFx = false;
   static bool forceLowFx = false;
   static bool allowBlur = true;
@@ -186,6 +460,7 @@ class Enemy extends PositionComponent {
   static final Paint _strokePaint = Paint();
   static final Paint _arcPaint = Paint();
   static final Paint _slowPaint = Paint();
+  static final Paint _slowAuraPaint = Paint();
   static final Paint _gearPaint = Paint();
   static final Paint _warnPaint = Paint();
   static final Paint _codePaint = Paint();
@@ -211,6 +486,26 @@ class Enemy extends PositionComponent {
   static final Paint _footPaint = Paint();
   static final Paint _rayPaint = Paint();
 
+  // Cached opacity filters to avoid per-frame ColorFilter allocations for shaders.
+  static const int _opacityLevels = 128;
+  static final List<ColorFilter> _opacityFilters = List<ColorFilter>.generate(
+    _opacityLevels + 1,
+    (i) => ColorFilter.mode(
+      Color.fromARGB(((i * 255) / _opacityLevels).round(), 255, 255, 255),
+      BlendMode.modulate,
+    ),
+  );
+
+  static ColorFilter _opacityFilter(double opacity) {
+    final idx = (opacity.clamp(0.0, 1.0) * _opacityLevels).round();
+    return _opacityFilters[idx];
+  }
+
+  // Reusable gradient lists to avoid per-frame allocations in health bar rendering.
+  static final List<Color> _healthGradientColors =
+      List<Color>.filled(3, Colors.white, growable: false);
+  static final List<double> _healthGradientStops = <double>[0.0, 0.5, 1.0];
+
   // ═══════════════════════════════════════════════════════════════════════
   // SPAWN/MATERIALIZE EFFECT PAINTS (Enemy teleporting into existence)
   // ═══════════════════════════════════════════════════════════════════════
@@ -226,7 +521,7 @@ class Enemy extends PositionComponent {
     ..style = PaintingStyle.stroke;
   static final Paint _spawnGlitchPaint = Paint();
   static final Path _spawnPath = Path();
-  static final math.Random _spawnRandom = math.Random();
+  static final _FastRng _spawnRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════
   // ENERGY VEIN EFFECT PAINTS (Pulsing veins of light in enemy bodies)
@@ -252,8 +547,7 @@ class Enemy extends PositionComponent {
   static final Paint _warpStreakPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeCap = StrokeCap.round;
-  static final Paint _warpDistortPaint = Paint()
-    ..style = PaintingStyle.stroke;
+  static final Paint _warpDistortPaint = Paint()..style = PaintingStyle.stroke;
   static final Paint _warpParticlePaint = Paint();
   static final Paint _warpLightningPaint = Paint()
     ..style = PaintingStyle.stroke
@@ -261,7 +555,7 @@ class Enemy extends PositionComponent {
   static final Paint _warpChromaPaint = Paint();
   static final Paint _warpFlickerPaint = Paint();
   static final Path _warpPath = Path();
-  static final math.Random _warpRandom = math.Random();
+  static final _FastRng _warpRandom = _FastRng();
   static double _warpFlickerPhase = 0;
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -293,14 +587,13 @@ class Enemy extends PositionComponent {
   static final Paint _holoBarHexPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.5;
-  static final Paint _holoBarEnergyPaint = Paint()
-    ..strokeCap = StrokeCap.round;
+  static final Paint _holoBarEnergyPaint = Paint()..strokeCap = StrokeCap.round;
   static final Paint _holoBarGlitchPaint = Paint();
   static final Paint _holoBarCornerPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.5;
   static final Path _holoBarPath = Path();
-  static final math.Random _holoBarRandom = math.Random();
+  static final _FastRng _holoBarRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════
   // LIGHTNING CHAIN EFFECT PAINTS (Between nearby enemies)
@@ -323,15 +616,15 @@ class Enemy extends PositionComponent {
   static final Paint _lightningNodePaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
   static final Path _lightningPath = Path();
-  static final math.Random _lightningRandom = math.Random();
+  static final _FastRng _lightningRandom = _FastRng();
+  static final List<Enemy> _lightningCandidates = <Enemy>[];
   static const double _lightningChainMinDistance = 30.0;
   static const double _lightningChainMaxDistance = 120.0;
 
   // ═══════════════════════════════════════════════════════════════════════
   // HOLOGRAPHIC STATUS ICON PAINTS (Above entity indicators)
   // ═══════════════════════════════════════════════════════════════════════
-  static final Paint _statusIconBasePaint = Paint()
-    ..style = PaintingStyle.fill;
+  static final Paint _statusIconBasePaint = Paint()..style = PaintingStyle.fill;
   static final Paint _statusIconGlowPaint = Paint()
     ..style = PaintingStyle.fill
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
@@ -350,11 +643,11 @@ class Enemy extends PositionComponent {
   static final Path _statusIconPath = Path();
 
   // Status icon colors
-  static const Color _slowIconColor = Color(0xFF00CCFF);    // Blue
-  static const Color _burnIconColor = Color(0xFFFF6600);    // Orange-red
-  static const Color _shieldIconColor = Color(0xFF00FFCC);  // Cyan
-  static const Color _boostIconColor = Color(0xFF00FF66);   // Green
-  static const Color _stunIconColor = Color(0xFFFFFF00);    // Yellow
+  static const Color _slowIconColor = Color(0xFF00CCFF); // Blue
+  static const Color _burnIconColor = Color(0xFFFF6600); // Orange-red
+  static const Color _shieldIconColor = Color(0xFF00FFCC); // Cyan
+  static const Color _boostIconColor = Color(0xFF00FF66); // Green
+  static const Color _stunIconColor = Color(0xFFFFFF00); // Yellow
 
   // ═══════════════════════════════════════════════════════════════════════
   // NEON TRAIL EFFECT PAINTS (Smooth movement path visualization)
@@ -375,7 +668,7 @@ class Enemy extends PositionComponent {
   static final Paint _neonTrailScanlinePaint = Paint()
     ..style = PaintingStyle.stroke;
   static final Path _neonTrailPath = Path();
-  static final math.Random _neonTrailRandom = math.Random(42);
+  static final _FastRng _neonTrailRandom = _FastRng(42);
 
   // ═══════════════════════════════════════════════════════════════════════
   // REUSABLE OFFSETS - Avoid per-loop Offset allocations (50+ per frame)
@@ -432,17 +725,26 @@ class Enemy extends PositionComponent {
     Vector2? startPosition,
     this.onDeath,
     this.onReachBase,
-  }) : _baseSpeed = speed,
-       _baseMaxHealth = maxHealth,
-       _currentTargetIndex = 0,
-       _random = math.Random() {
+    this.onMoved,
+  })  : _baseSpeed = speed,
+        _baseMaxHealth = maxHealth,
+        _currentTargetIndex = 0,
+        _random = _FastRng() {
     _animationPhase = _random.nextDouble() * math.pi * 2;
     _circuitSeed = _random.nextDouble();
-    _visualRandom = math.Random(
+    _visualRandom = _FastRng(
       (spawnIndex + 1) * 1000003 ^ (_circuitSeed * 1000000).toInt(),
     );
     _initializeCircuitry();
     _initializePhantomNoise();
+
+    _isElectricType = EnemyType._isElectricEnemyType(type);
+    _chainColor = _isElectricType
+        ? type.color
+        : Color.lerp(type.color, const Color(0xFF00FFFF), 0.5)!;
+    final chainHsl = HSLColor.fromColor(_chainColor);
+    _chainSecondaryColor =
+        chainHsl.withHue((chainHsl.hue + 30) % 360).toColor();
 
     // Apply type multipliers
     _maxHealth = _baseMaxHealth * type.healthMult * _tierHealthMult;
@@ -467,18 +769,109 @@ class Enemy extends PositionComponent {
     // Cache body shape and walk style (never changes, avoids per-frame calls)
     _cachedBodyShape = _getBodyShape();
     _cachedWalkStyle = _getWalkingStyle();
+    _buildShaderCache();
+  }
+
+  void _buildShaderCache() {
+    _baseRadius = size.x / 2;
+    _coreRadius = _baseRadius * 0.6;
+    _specularRadius = _baseRadius * 0.25;
+    _specularOffset = Offset(-_baseRadius * 0.3, -_baseRadius * 0.35);
+
+    _highlightShader = SweepGradient(
+      center: Alignment.center,
+      startAngle: -math.pi * 0.75,
+      endAngle: math.pi * 0.25,
+      colors: [
+        Colors.white.withOpacity(0.0),
+        Colors.white.withOpacity(0.45),
+        Colors.white.withOpacity(0.6),
+        Colors.white.withOpacity(0.35),
+        Colors.white.withOpacity(0.0),
+      ],
+      stops: const [0.0, 0.2, 0.35, 0.5, 1.0],
+    ).createShader(
+      Rect.fromCircle(center: Offset.zero, radius: _baseRadius),
+    );
+
+    _specularShader = RadialGradient(
+      colors: [
+        Colors.white.withOpacity(0.55),
+        Colors.white.withOpacity(0.2),
+        Colors.white.withOpacity(0.0),
+      ],
+      stops: const [0.0, 0.4, 1.0],
+    ).createShader(
+      Rect.fromCircle(center: _specularOffset, radius: _specularRadius),
+    );
+
+    _coreShader = LinearGradient(
+      colors: [
+        Colors.black.withOpacity(0.85),
+        type.color,
+        Colors.white.withOpacity(0.35),
+      ],
+      stops: const [0.0, 0.65, 1.0],
+      begin: const Alignment(-0.6, -0.6),
+      end: const Alignment(0.8, 0.8),
+    ).createShader(
+      Rect.fromCircle(center: Offset.zero, radius: _coreRadius),
+    );
+
+    _voidEyeRadius = _baseRadius * 0.15;
+    _voidEyePos1 = Offset(_baseRadius * 0.2, -_baseRadius * 0.15);
+    _voidEyePos2 = Offset(-_baseRadius * 0.15, -_baseRadius * 0.1);
+    final voidGradient = RadialGradient(
+      colors: [
+        Colors.black.withOpacity(0.95),
+        Colors.black.withOpacity(0.7),
+        type.color.withOpacity(0.2),
+      ],
+      stops: const [0.0, 0.6, 1.0],
+    );
+    _voidEyeShader1 = voidGradient.createShader(
+      Rect.fromCircle(center: _voidEyePos1, radius: _voidEyeRadius),
+    );
+    _voidEyeShader2 = voidGradient.createShader(
+      Rect.fromCircle(center: _voidEyePos2, radius: _voidEyeRadius),
+    );
+
+    _crystalEyePos = Offset(_baseRadius * 0.12, -_baseRadius * 0.1);
+    _crystalEyeRect = Rect.fromCenter(
+      center: _crystalEyePos,
+      width: _baseRadius * 0.4,
+      height: _baseRadius * 0.4,
+    );
+    _crystalEyeShader = LinearGradient(
+      colors: [
+        Colors.white.withOpacity(0.9),
+        type.color.withOpacity(0.7),
+        type.color.withOpacity(0.3),
+      ],
+    ).createShader(_crystalEyeRect);
   }
 
   final List<Vector2> path;
   final double _baseSpeed;
   final double _baseMaxHealth;
-  final math.Random _random;
-  late final math.Random _visualRandom;
+  final _FastRng _random;
+  late final _FastRng _visualRandom;
   final int goldReward;
   final EnemyType type;
   final int spawnIndex;
   final int threatTier;
   final int worldIndex;
+  final void Function(Enemy enemy)? onMoved;
+
+  late final bool _isElectricType;
+  late final Color _chainColor;
+  late final Color _chainSecondaryColor;
+  BoredGamesGame? _cachedGame;
+
+  // Index bookkeeping for O(1) removals and spatial buckets.
+  int activeIndex = -1;
+  int spatialKey = -1;
+  int spatialIndex = -1;
 
   int _currentTargetIndex;
   late double _health;
@@ -549,6 +942,22 @@ class Enemy extends PositionComponent {
   late final _BodyShape _cachedBodyShape;
   // Cached walk style - never changes per enemy (avoids _getWalkingStyle() call every frame)
   late final _WalkStyle _cachedWalkStyle;
+  // Cached shader geometry (per-enemy, avoids per-frame createShader).
+  late final double _baseRadius;
+  late final double _coreRadius;
+  late final Offset _specularOffset;
+  late final double _specularRadius;
+  late final Shader _highlightShader;
+  late final Shader _specularShader;
+  late final Shader _coreShader;
+  late final Offset _voidEyePos1;
+  late final Offset _voidEyePos2;
+  late final double _voidEyeRadius;
+  late final Shader _voidEyeShader1;
+  late final Shader _voidEyeShader2;
+  late final Offset _crystalEyePos;
+  late final Rect _crystalEyeRect;
+  late final Shader _crystalEyeShader;
 
   // Damage particles
   final List<_DamageParticle> _damageParticles = [];
@@ -572,7 +981,8 @@ class Enemy extends PositionComponent {
   double get maxHealth => _maxHealth;
 
   /// Current speed (after modifiers: slow, boost, stun)
-  double get speed => _stunDuration > 0 ? 0 : _speed * _slowFactor * _boostFactor;
+  double get speed =>
+      _stunDuration > 0 ? 0 : _speed * _slowFactor * _boostFactor;
 
   /// Health percentage (0.0 to 1.0)
   double get healthPercent => _health / _maxHealth;
@@ -629,26 +1039,67 @@ class Enemy extends PositionComponent {
   }();
   late final Color _warpTertiaryColor = () {
     final hsl = HSLColor.fromColor(type.color);
-    return hsl.withHue((hsl.hue + 90) % 360)
+    return hsl
+        .withHue((hsl.hue + 90) % 360)
         .withSaturation((hsl.saturation * 1.2).clamp(0.0, 1.0))
         .withLightness((hsl.lightness * 1.1).clamp(0.0, 1.0))
         .toColor();
   }();
+  late final Color _worldAccentColor = () {
+    switch (type.world) {
+      case 1:
+        return Color.lerp(type.color, _warpTertiaryColor, 0.45)!;
+      case 2:
+        return Color.lerp(type.color, _warpSecondaryColor, 0.65)!;
+      case 3:
+        return Color.lerp(type.color, const Color(0xFF00FF66), 0.55)!;
+      case 4:
+        return Color.lerp(type.color, const Color(0xFF66CCFF), 0.55)!;
+      case 5:
+        return Color.lerp(type.color, const Color(0xFFE8FFFF), 0.6)!;
+      case 6:
+        return Color.lerp(type.color, const Color(0xFFBFC6D1), 0.55)!;
+      case 7:
+        return Color.lerp(type.color, const Color(0xFF33FF66), 0.6)!;
+      case 8:
+        return Color.lerp(type.color, const Color(0xFF99D9FF), 0.6)!;
+      case 9:
+        return Color.lerp(type.color, const Color(0xFFB266FF), 0.5)!;
+      case 10:
+        return Color.lerp(type.color, _warpTertiaryColor, 0.7)!;
+      default:
+        return _warpTertiaryColor;
+    }
+  }();
+  late final Color _worldEdgeColor = () {
+    return Color.lerp(
+      _worldAccentColor,
+      Colors.white,
+      type.isPhantom ? 0.35 : 0.22,
+    )!;
+  }();
+  late final Color _worldGlowColor = () {
+    return Color.lerp(_worldAccentColor, type.color, 0.5)!;
+  }();
+
+  Color get worldAccentColor => _worldAccentColor;
+  Color get worldEdgeColor => _worldEdgeColor;
+  Color get worldGlowColor => _worldGlowColor;
 
   /// Whether this enemy is a fast/warp type (speedMult >= 1.3)
   /// These enemies get special dimensional phasing visual effects
   bool get isFastWarpType =>
-      type == EnemyType.overloaded ||      // 1.4 - World 1
-      type == EnemyType.voidling ||        // 1.3 - World 2
-      type == EnemyType.dataWorm ||        // 1.5 - World 3
-      type == EnemyType.sparkDrone ||      // 1.3 - World 4
-      type == EnemyType.ionSurge ||        // 1.6 - World 4
-      type == EnemyType.droneSwarm ||      // 1.5 - World 6
+      type == EnemyType.overloaded || // 1.4 - World 1
+      type == EnemyType.voidling || // 1.3 - World 2
+      type == EnemyType.dataWorm || // 1.5 - World 3
+      type == EnemyType.sparkDrone || // 1.3 - World 4
+      type == EnemyType.ionSurge || // 1.6 - World 4
+      type == EnemyType.droneSwarm || // 1.5 - World 6
       type == EnemyType.cloakedAssassin || // 1.4 - World 6
-      type == EnemyType.stormRunner ||     // 1.4 - World 8
+      type == EnemyType.stormRunner || // 1.4 - World 8
       type == EnemyType.lightningWraith || // 1.7 - World 8
-      type == EnemyType.shadowSwarm ||     // 1.6 - World 9
-      type == EnemyType.nexusHunter;       // 1.3 - World 10
+      type == EnemyType.shadowSwarm || // 1.6 - World 9
+      type == EnemyType.nexusHunter; // 1.3 - World 10
 
   /// Whether this enemy is a boss (overridden in Boss class)
   bool get isBoss => false;
@@ -682,7 +1133,8 @@ class Enemy extends PositionComponent {
   /// Whether the phantom has been revealed (damaged or detected)
   bool _isRevealed = false;
   double _revealTimer = 0;
-  static const double _revealDuration = 3.0; // Stays visible for 3 seconds after detection
+  static const double _revealDuration =
+      3.0; // Stays visible for 3 seconds after detection
 
   /// Whether the phantom is currently visible
   bool get isVisible => !isPhantom || _isRevealed || disablePhantomStealth;
@@ -733,7 +1185,8 @@ class Enemy extends PositionComponent {
     if (Enemy.lowFx || Enemy.forceLowFx || parent == null) return;
 
     // Determine damage type
-    final type = isCritical ? DamageNumberType.critical : DamageNumberType.damage;
+    final type =
+        isCritical ? DamageNumberType.critical : DamageNumberType.damage;
 
     // Spawn slightly above the enemy center - use reusable vector
     _tempSpawnPos.setFrom(position);
@@ -777,11 +1230,13 @@ class Enemy extends PositionComponent {
   void _spawnDamageParticles() {
     if (Enemy.lowFx || Enemy.forceLowFx) return;
     final random = _random;
-    
+
     // Standard sparks
     final particleCount = 2 + random.nextInt(3);
-    for (int i = 0; i < particleCount && _damageParticles.length < _maxDamageParticles; i++) {
-      _damageParticles.add(_DamageParticle(
+    for (int i = 0;
+        i < particleCount && _damageParticles.length < _maxDamageParticles;
+        i++) {
+      _damageParticles.add(_DamageParticle.obtain(
         angle: random.nextDouble() * math.pi * 2,
         speed: 30 + random.nextDouble() * 50,
         size: 2 + random.nextDouble() * 3,
@@ -792,7 +1247,7 @@ class Enemy extends PositionComponent {
     // New Data Bits - with cap to prevent memory leak
     final bitCount = 3 + random.nextInt(4);
     for (int i = 0; i < bitCount && _dataBits.length < _maxDataBits; i++) {
-      _dataBits.add(_DataBit(
+      _dataBits.add(_DataBit.obtain(
         position: Vector2.zero(),
         velocity: Vector2(
           (random.nextDouble() - 0.5) * 80,
@@ -809,10 +1264,26 @@ class Enemy extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    final offscreen = _isOffscreen();
+    if (offscreen && Enemy.throttleOffscreen) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < offscreenUpdateInterval) return;
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator != 0) {
+      _offscreenAccumulator = 0;
+    }
     final prevX = position.x;
     final prevY = position.y;
-    if (throttleOffscreen && _isOffscreen()) {
+    if (offscreen) {
+      _animationTimer += dt;
+      _animationPhase += dt * 2;
+      _walkPhase += dt * speed / 15.0;
+      _updateSpawnEffect(dt);
       _updateStatusTimers(dt);
+      if (_damageParticles.isNotEmpty) _recycleDamageParticles();
+      if (_dataBits.isNotEmpty) _recycleDataBits();
+      if (_plasmaParticles.isNotEmpty) _recyclePlasmaParticles();
       _move(dt);
       _postMoveUpdate(prevX, prevY, dt);
       return;
@@ -852,41 +1323,94 @@ class Enemy extends PositionComponent {
 
   void _updatePlasmaParticles(double dt) {
     if (Enemy.lowFx || Enemy.forceLowFx) {
-      _plasmaParticles.clear();
+      if (_plasmaParticles.isNotEmpty) {
+        _recyclePlasmaParticles();
+      }
       return;
     }
 
     // Spawn plasma smoke if health is low - with cap to prevent memory leak
-    if (healthPercent < 0.4 && _plasmaParticles.length < _maxPlasmaParticles && _random.nextDouble() < 0.15) {
-      _plasmaParticles.add(_PlasmaParticle(
+    if (healthPercent < 0.4 &&
+        _plasmaParticles.length < _maxPlasmaParticles &&
+        _random.nextDouble() < 0.15) {
+      _plasmaParticles.add(_PlasmaParticle.obtain(
         position: Vector2.zero(),
-        velocity: Vector2((_random.nextDouble() - 0.5) * 30, -30 - _random.nextDouble() * 30),
+        velocity: Vector2(
+            (_random.nextDouble() - 0.5) * 30, -30 - _random.nextDouble() * 30),
         color: type.color,
       ));
     }
 
-    for (int i = _plasmaParticles.length - 1; i >= 0; i--) {
-      _plasmaParticles[i].update(dt);
-      if (!_plasmaParticles[i].isActive) {
-        _plasmaParticles.removeAt(i);
+    var i = 0;
+    while (i < _plasmaParticles.length) {
+      final particle = _plasmaParticles[i];
+      particle.update(dt);
+      if (particle.isActive) {
+        i++;
+        continue;
       }
+      particle.recycle();
+      final lastIndex = _plasmaParticles.length - 1;
+      if (i < lastIndex) {
+        _plasmaParticles[i] = _plasmaParticles[lastIndex];
+      }
+      _plasmaParticles.removeLast();
     }
   }
 
   void _updateParticles(double dt) {
-    for (int i = _damageParticles.length - 1; i >= 0; i--) {
-      _damageParticles[i].update(dt);
-      if (!_damageParticles[i].isActive) {
-        _damageParticles.removeAt(i);
+    var i = 0;
+    while (i < _damageParticles.length) {
+      final particle = _damageParticles[i];
+      particle.update(dt);
+      if (particle.isActive) {
+        i++;
+        continue;
       }
+      particle.recycle();
+      final lastIndex = _damageParticles.length - 1;
+      if (i < lastIndex) {
+        _damageParticles[i] = _damageParticles[lastIndex];
+      }
+      _damageParticles.removeLast();
     }
 
-    for (int i = _dataBits.length - 1; i >= 0; i--) {
-      _dataBits[i].update(dt);
-      if (!_dataBits[i].isActive) {
-        _dataBits.removeAt(i);
+    i = 0;
+    while (i < _dataBits.length) {
+      final bit = _dataBits[i];
+      bit.update(dt);
+      if (bit.isActive) {
+        i++;
+        continue;
       }
+      bit.recycle();
+      final lastIndex = _dataBits.length - 1;
+      if (i < lastIndex) {
+        _dataBits[i] = _dataBits[lastIndex];
+      }
+      _dataBits.removeLast();
     }
+  }
+
+  void _recycleDamageParticles() {
+    for (final particle in _damageParticles) {
+      particle.recycle();
+    }
+    _damageParticles.clear();
+  }
+
+  void _recycleDataBits() {
+    for (final bit in _dataBits) {
+      bit.recycle();
+    }
+    _dataBits.clear();
+  }
+
+  void _recyclePlasmaParticles() {
+    for (final particle in _plasmaParticles) {
+      particle.recycle();
+    }
+    _plasmaParticles.clear();
   }
 
   void _updateStatusTimers(double dt) {
@@ -919,11 +1443,13 @@ class Enemy extends PositionComponent {
 
   void _initializeCircuitry() {
     _circuitSegments.clear();
-    final rand = math.Random((_circuitSeed * 1000).toInt());
+    final rand = _FastRng((_circuitSeed * 1000).toInt());
     for (int i = 0; i < 4; i++) {
       _circuitSegments.add(_CircuitSegment(
-        Offset((rand.nextDouble() - 0.5) * 1.4, (rand.nextDouble() - 0.5) * 1.4),
-        Offset((rand.nextDouble() - 0.5) * 1.4, (rand.nextDouble() - 0.5) * 1.4),
+        Offset(
+            (rand.nextDouble() - 0.5) * 1.4, (rand.nextDouble() - 0.5) * 1.4),
+        Offset(
+            (rand.nextDouble() - 0.5) * 1.4, (rand.nextDouble() - 0.5) * 1.4),
       ));
     }
   }
@@ -932,7 +1458,7 @@ class Enemy extends PositionComponent {
     _phantomNoise.clear();
     if (type != EnemyType.phantom) return;
 
-    final rand = math.Random(spawnIndex);
+    final rand = _FastRng(spawnIndex);
     for (int i = 0; i < 6; i++) {
       if (rand.nextDouble() < 0.6) {
         _phantomNoise.add(_NoiseBit(
@@ -957,9 +1483,13 @@ class Enemy extends PositionComponent {
       _speedIndicator = 0;
     }
     _lastPosition.setFrom(position);
+    if (dx != 0 || dy != 0) {
+      onMoved?.call(this);
+    }
 
     _trailUpdateTimer += dt;
-    if (_trailUpdateTimer >= _trailUpdateInterval && _trailPositions.isNotEmpty) {
+    if (_trailUpdateTimer >= _trailUpdateInterval &&
+        _trailPositions.isNotEmpty) {
       _trailUpdateTimer = 0;
       // CIRCULAR BUFFER: O(1) update instead of O(n) removeLast + insert
       _trailHead = (_trailHead + 1) % _maxTrailLength;
@@ -1012,7 +1542,8 @@ class Enemy extends PositionComponent {
     _bodyGlowPaint
       ..color = darkColor.withOpacity(0.5 * opacity)
       ..maskFilter = null;
-    canvas.drawCircle(Offset(radius * 0.05, radius * 0.15), radius * 0.95, _bodyGlowPaint);
+    canvas.drawCircle(
+        Offset(radius * 0.05, radius * 0.15), radius * 0.95, _bodyGlowPaint);
 
     // Main body
     _bodyGlowPaint
@@ -1024,14 +1555,16 @@ class Enemy extends PositionComponent {
     _corePaint
       ..color = Colors.white.withOpacity(0.35 * opacity)
       ..maskFilter = null;
-    canvas.drawCircle(Offset(-radius * 0.3, -radius * 0.3), radius * 0.25, _corePaint);
+    canvas.drawCircle(
+        Offset(-radius * 0.3, -radius * 0.3), radius * 0.25, _corePaint);
 
     if (threatTier > 0) {
       _circuitPaint
         ..color = _threatColor.withOpacity(0.5 * opacity)
         ..strokeWidth = 1.2
         ..maskFilter = null;
-      canvas.drawCircle(Offset.zero, radius * (1.05 + threatTier * 0.06), _circuitPaint);
+      canvas.drawCircle(
+          Offset.zero, radius * (1.05 + threatTier * 0.06), _circuitPaint);
     }
 
     // Core highlight
@@ -1051,7 +1584,7 @@ class Enemy extends PositionComponent {
 
     final reduceFx = Enemy.lowFx || Enemy.forceLowFx;
     final allowBlur = Enemy.allowBlur;
-    if (throttleOffscreen && _isOffscreen()) return;
+    if (_isOffscreen()) return;
 
     // Calculate opacity for phantom (invisible when not revealed)
     double phantomOpacity = 1.0;
@@ -1087,7 +1620,8 @@ class Enemy extends PositionComponent {
     if (hpFactor < 0.5) {
       final glitchChance = 0.1 + (0.5 - hpFactor) * 0.8;
       if (_random.nextDouble() < glitchChance) {
-        canvas.translate((_random.nextDouble() - 0.5) * 3, (_random.nextDouble() - 0.5) * 3);
+        canvas.translate(
+            (_random.nextDouble() - 0.5) * 3, (_random.nextDouble() - 0.5) * 3);
       }
     }
 
@@ -1130,7 +1664,7 @@ class Enemy extends PositionComponent {
     final glowPulse = 0.18 + math.sin(_walkPhase) * 0.05;
     final glowPath = _createBodyPath(radius * 1.05);
     _outerGlowPaint
-      ..color = type.color.withOpacity(glowPulse * phantomOpacity)
+      ..color = _worldGlowColor.withOpacity(glowPulse * phantomOpacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = radius * 0.16
       ..strokeJoin = StrokeJoin.bevel
@@ -1145,6 +1679,8 @@ class Enemy extends PositionComponent {
       ..maskFilter = _blur(allowBlur, 3);
     canvas.drawPath(bodyPath, _bodyGlowPaint);
 
+    _renderSilhouetteAccents(canvas, radius, phantomOpacity, allowBlur);
+
     // Draw Internal Circuitry
     _drawInternalCircuitry(canvas, radius, phantomOpacity);
 
@@ -1153,6 +1689,9 @@ class Enemy extends PositionComponent {
 
     // MEGA GEOMETRY: Core, Shell and Plates
     _drawMegaGeometry(canvas, radius, phantomOpacity, allowBlur);
+
+    // World identity glyph for faster visual recognition.
+    _drawWorldEmblem(canvas, radius, phantomOpacity, allowBlur);
 
     // Energy veins (pulsing light network on enemy body)
     if (!reduceFx) {
@@ -1259,7 +1798,9 @@ class Enemy extends PositionComponent {
 
     // Shadow scaling
     final heightFactor = 1.0 - (floatOffset / r02).clamp(0.0, 0.3);
-    final shadowScale = isLowFx ? 0.75 : (0.75 + math.sin(_animationPhase * 2) * 0.05) * heightFactor;
+    final shadowScale = isLowFx
+        ? 0.75
+        : (0.75 + math.sin(_animationPhase * 2) * 0.05) * heightFactor;
 
     // Shadow position and size
     final shadowOffsetX = r012;
@@ -1275,7 +1816,8 @@ class Enemy extends PositionComponent {
         ..color = Colors.black.withOpacity(0.45 * opacity)
         ..maskFilter = null;
       canvas.drawOval(
-        Rect.fromCenter(center: shadowCenter, width: shadowWidth, height: shadowHeightSize),
+        Rect.fromCenter(
+            center: shadowCenter, width: shadowWidth, height: shadowHeightSize),
         _shadowPaint,
       );
       return;
@@ -1289,7 +1831,10 @@ class Enemy extends PositionComponent {
       ..color = Colors.black.withOpacity(0.25 * opacityHeightFactor)
       ..maskFilter = _shadowBlur8;
     canvas.drawOval(
-      Rect.fromCenter(center: shadowCenter, width: shadowWidth * 1.2, height: shadowHeightSize * 1.1),
+      Rect.fromCenter(
+          center: shadowCenter,
+          width: shadowWidth * 1.2,
+          height: shadowHeightSize * 1.1),
       _shadowPaint,
     );
 
@@ -1298,7 +1843,8 @@ class Enemy extends PositionComponent {
       ..color = Colors.black.withOpacity(0.4 * opacityHeightFactor)
       ..maskFilter = _shadowBlur5;
     canvas.drawOval(
-      Rect.fromCenter(center: shadowCenter, width: shadowWidth, height: shadowHeightSize),
+      Rect.fromCenter(
+          center: shadowCenter, width: shadowWidth, height: shadowHeightSize),
       _shadowPaint,
     );
 
@@ -1307,7 +1853,10 @@ class Enemy extends PositionComponent {
       ..color = Colors.black.withOpacity(0.3 * opacityHeightFactor)
       ..maskFilter = _shadowBlur2;
     canvas.drawOval(
-      Rect.fromCenter(center: shadowCenter, width: shadowWidth * 0.5, height: shadowHeightSize * 0.4),
+      Rect.fromCenter(
+          center: shadowCenter,
+          width: shadowWidth * 0.5,
+          height: shadowHeightSize * 0.4),
       _shadowPaint,
     );
 
@@ -1319,7 +1868,8 @@ class Enemy extends PositionComponent {
 
       canvas.drawOval(
         Rect.fromCenter(
-          center: Offset(shadowOffsetX * 0.5, shadowOffsetY - shadowHeight * 0.3),
+          center:
+              Offset(shadowOffsetX * 0.5, shadowOffsetY - shadowHeight * 0.3),
           width: shadowWidth * 0.25,
           height: shadowHeightSize * 0.2,
         ),
@@ -1328,7 +1878,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderMotionBlur(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderMotionBlur(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // Create motion blur effect based on movement direction
     final direction = position - _lastPosition;
     if (direction.length < 0.5) return;
@@ -1337,7 +1888,8 @@ class Enemy extends PositionComponent {
     final blurCount = 3;
     for (int i = 1; i <= blurCount; i++) {
       final blurOffset = -direction * (i * 5.0);
-      final blurAlpha = (1 - i / (blurCount + 1)) * 0.35 * opacity * _speedIndicator;
+      final blurAlpha =
+          (1 - i / (blurCount + 1)) * 0.35 * opacity * _speedIndicator;
       final blurPath = _createBodyPath(radius * (0.9 - i * 0.08));
       _trailPaint
         ..color = type.color.withOpacity(blurAlpha)
@@ -1355,7 +1907,8 @@ class Enemy extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
   // WARP/TELEPORT EFFECT - Dimensional phasing for fast enemies
   // ═══════════════════════════════════════════════════════════════════════════
-  void _renderWarpEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderWarpEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     final t = _animationTimer;
     final direction = movementDirection;
     final warpIntensity = (type.speedMult - 1.0).clamp(0.2, 0.8);
@@ -1373,7 +1926,8 @@ class Enemy extends PositionComponent {
     final ghostCount = 4;
     for (int i = 1; i <= ghostCount; i++) {
       final ghostOffset = -direction * (i * radius * 0.6);
-      final ghostAlpha = (1 - i / (ghostCount + 1)) * 0.3 * opacity * warpIntensity;
+      final ghostAlpha =
+          (1 - i / (ghostCount + 1)) * 0.3 * opacity * warpIntensity;
       final ghostScale = 1.0 - i * 0.08;
       final phaseShift = math.sin(t * 8 + i * 0.5) * radius * 0.1;
 
@@ -1403,7 +1957,10 @@ class Enemy extends PositionComponent {
       final endX = startX - direction.x * streakLength;
       final endY = startY - direction.y * streakLength;
 
-      final streakAlpha = (1 - (i / streakCount - 0.5).abs() * 2) * 0.4 * opacity * warpIntensity;
+      final streakAlpha = (1 - (i / streakCount - 0.5).abs() * 2) *
+          0.4 *
+          opacity *
+          warpIntensity;
       _warpStreakPaint
         ..color = secondaryColor.withOpacity(streakAlpha)
         ..strokeWidth = radius * 0.08 * (1 - i / streakCount * 0.5)
@@ -1434,7 +1991,8 @@ class Enemy extends PositionComponent {
     final segments = 16;
     for (int i = 0; i <= segments; i++) {
       final angle = (i / segments) * math.pi * 2;
-      final wobble = math.sin(angle * 4 + t * 10) * radius * 0.08 * warpIntensity;
+      final wobble =
+          math.sin(angle * 4 + t * 10) * radius * 0.08 * warpIntensity;
       final r = distortRadius * 0.75 + wobble;
       final x = math.cos(angle) * r;
       final y = math.sin(angle) * r;
@@ -1462,17 +2020,21 @@ class Enemy extends PositionComponent {
       final particleT = (particlePhase % 1.0);
 
       // Spiral trajectory behind enemy
-      final spiralAngle = particleT * math.pi * 4 + i * (math.pi * 2 / particleCount);
+      final spiralAngle =
+          particleT * math.pi * 4 + i * (math.pi * 2 / particleCount);
       final spiralRadius = radius * 0.3 * (1 - particleT * 0.5);
       final trailDist = particleT * radius * 2;
 
-      final px = -direction.x * trailDist + math.cos(spiralAngle) * spiralRadius;
-      final py = -direction.y * trailDist + math.sin(spiralAngle) * spiralRadius;
+      final px =
+          -direction.x * trailDist + math.cos(spiralAngle) * spiralRadius;
+      final py =
+          -direction.y * trailDist + math.sin(spiralAngle) * spiralRadius;
       final particleSize = radius * 0.08 * (1 - particleT);
       final particleAlpha = (1 - particleT) * 0.6 * opacity * warpIntensity;
 
       _warpParticlePaint
-        ..color = (i % 2 == 0 ? type.color : secondaryColor).withOpacity(particleAlpha)
+        ..color = (i % 2 == 0 ? type.color : secondaryColor)
+            .withOpacity(particleAlpha)
         ..maskFilter = _blur(allowBlur, 3);
       canvas.drawCircle(Offset(px, py), particleSize, _warpParticlePaint);
     }
@@ -1483,7 +2045,7 @@ class Enemy extends PositionComponent {
     final arcCount = 3;
     for (int i = 0; i < arcCount; i++) {
       final arcSeed = (i * 1234 + (t * 20).toInt()) % 1000;
-      final arcRand = math.Random(arcSeed);
+      final arcRand = _FastRng(arcSeed);
 
       // Random start point around enemy
       final startAngle = arcRand.nextDouble() * math.pi * 2;
@@ -1492,7 +2054,8 @@ class Enemy extends PositionComponent {
       final startY = math.sin(startAngle) * startR;
 
       // End point further out
-      final endAngle = startAngle + (arcRand.nextDouble() - 0.5) * math.pi * 0.5;
+      final endAngle =
+          startAngle + (arcRand.nextDouble() - 0.5) * math.pi * 0.5;
       final endR = radius * (1.2 + arcRand.nextDouble() * 0.5);
       final endX = math.cos(endAngle) * endR;
       final endY = math.sin(endAngle) * endR;
@@ -1530,12 +2093,14 @@ class Enemy extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: Chromatic aberration split on the enemy
     // ═══════════════════════════════════════════════════════════════════════
-    final chromaOffset = radius * 0.08 * warpIntensity * (1 + math.sin(t * 12) * 0.3);
+    final chromaOffset =
+        radius * 0.08 * warpIntensity * (1 + math.sin(t * 12) * 0.3);
     final bodyPath = _createBodyPath(radius * 0.95);
 
     // Red channel offset
     _warpChromaPaint
-      ..color = const Color(0xFFFF0044).withOpacity(0.25 * opacity * warpIntensity)
+      ..color =
+          const Color(0xFFFF0044).withOpacity(0.25 * opacity * warpIntensity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = radius * 0.04
       ..maskFilter = _blur(allowBlur, 2);
@@ -1546,7 +2111,8 @@ class Enemy extends PositionComponent {
 
     // Cyan channel offset
     _warpChromaPaint
-      ..color = const Color(0xFF00FFFF).withOpacity(0.25 * opacity * warpIntensity);
+      ..color =
+          const Color(0xFF00FFFF).withOpacity(0.25 * opacity * warpIntensity);
     canvas.save();
     canvas.translate(chromaOffset, chromaOffset * 0.5);
     canvas.drawPath(bodyPath, _warpChromaPaint);
@@ -1556,7 +2122,7 @@ class Enemy extends PositionComponent {
     // LAYER 7: Teleport flicker effect (randomly blink visibility)
     // ═══════════════════════════════════════════════════════════════════════
     final flickerValue = math.sin(_warpFlickerPhase * 17 + spawnIndex) *
-                         math.sin(_warpFlickerPhase * 23 + spawnIndex * 0.7);
+        math.sin(_warpFlickerPhase * 23 + spawnIndex * 0.7);
     final shouldFlicker = flickerValue > 0.7 && warpIntensity > 0.3;
 
     if (shouldFlicker) {
@@ -1586,19 +2152,22 @@ class Enemy extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
   // SPAWN/MATERIALIZE EFFECT - Enemy teleporting into existence
   // ═══════════════════════════════════════════════════════════════════════════
-  void _renderSpawnEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderSpawnEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     final t = _animationTimer;
     final progress = _spawnProgress;
     final inverseProgress = 1.0 - progress;
 
     // Get secondary color for effects
     final hslColor = HSLColor.fromColor(type.color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: Ground portal/circle where enemy spawns (render first, behind)
     // ═══════════════════════════════════════════════════════════════════════
-    final portalRadius = radius * (1.8 + math.sin(t * 8) * 0.1) * (0.5 + progress * 0.5);
+    final portalRadius =
+        radius * (1.8 + math.sin(t * 8) * 0.1) * (0.5 + progress * 0.5);
     final portalY = radius * 0.5; // Slightly below center
 
     // Outer portal glow
@@ -1666,7 +2235,7 @@ class Enemy extends PositionComponent {
       for (int i = 0; i < noiseCount; i++) {
         // Use deterministic pseudo-random based on time and index
         final noiseSeed = ((t * 20).toInt() + i * 73 + spawnIndex * 17) % 1000;
-        final noiseRand = math.Random(noiseSeed);
+        final noiseRand = _FastRng(noiseSeed);
 
         final noiseAngle = noiseRand.nextDouble() * math.pi * 2;
         final noiseDist = noiseRand.nextDouble() * radius * 1.2;
@@ -1678,12 +2247,14 @@ class Enemy extends PositionComponent {
         final blockH = radius * (0.04 + noiseRand.nextDouble() * 0.08);
 
         // Random color between enemy color and white
-        final noiseColor = Color.lerp(type.color, Colors.white, noiseRand.nextDouble() * 0.5)!;
+        final noiseColor =
+            Color.lerp(type.color, Colors.white, noiseRand.nextDouble() * 0.5)!;
 
         _spawnNoisePaint
           ..color = noiseColor.withOpacity(0.5 * noiseIntensity * opacity);
         canvas.drawRect(
-          Rect.fromCenter(center: Offset(nx, ny), width: blockW, height: blockH),
+          Rect.fromCenter(
+              center: Offset(nx, ny), width: blockW, height: blockH),
           _spawnNoisePaint,
         );
       }
@@ -1702,7 +2273,8 @@ class Enemy extends PositionComponent {
       final currentDist = endDist + (startDist - endDist) * convergeFactor;
 
       // Add spiral motion
-      final spiralOffset = math.sin(t * 6 + i * 0.5) * radius * 0.2 * convergeFactor;
+      final spiralOffset =
+          math.sin(t * 6 + i * 0.5) * radius * 0.2 * convergeFactor;
       final px = math.cos(baseAngle) * (currentDist + spiralOffset);
       final py = math.sin(baseAngle) * (currentDist + spiralOffset);
 
@@ -1714,7 +2286,8 @@ class Enemy extends PositionComponent {
       _spawnParticlePaint
         ..color = type.color.withOpacity(particleAlpha * 0.5)
         ..maskFilter = _blur(allowBlur, 4);
-      canvas.drawCircle(Offset(px, py), particleSize * 1.5, _spawnParticlePaint);
+      canvas.drawCircle(
+          Offset(px, py), particleSize * 1.5, _spawnParticlePaint);
 
       // Core
       _spawnParticlePaint
@@ -1732,7 +2305,8 @@ class Enemy extends PositionComponent {
           ..color = type.color.withOpacity(0.3 * convergeFactor * opacity)
           ..strokeWidth = radius * 0.02
           ..maskFilter = _blur(allowBlur, 2);
-        canvas.drawLine(Offset(px, py), Offset(trailEndX, trailEndY), _spawnHoloPaint);
+        canvas.drawLine(
+            Offset(px, py), Offset(trailEndX, trailEndY), _spawnHoloPaint);
       }
     }
 
@@ -1756,14 +2330,16 @@ class Enemy extends PositionComponent {
 
       // Core outline
       _spawnHoloPaint
-        ..color = secondaryColor.withOpacity(0.5 * holoOpacity * flicker * opacity)
+        ..color =
+            secondaryColor.withOpacity(0.5 * holoOpacity * flicker * opacity)
         ..strokeWidth = radius * 0.04
         ..maskFilter = _blur(allowBlur, 2);
       canvas.drawPath(bodyPath, _spawnHoloPaint);
 
       // Inner bright edge
       _spawnHoloPaint
-        ..color = Colors.white.withOpacity(0.4 * holoOpacity * flicker * opacity)
+        ..color =
+            Colors.white.withOpacity(0.4 * holoOpacity * flicker * opacity)
         ..strokeWidth = radius * 0.02
         ..maskFilter = null;
       canvas.drawPath(bodyPath, _spawnHoloPaint);
@@ -1773,7 +2349,7 @@ class Enemy extends PositionComponent {
         final sliceCount = 3;
         for (int i = 0; i < sliceCount; i++) {
           final sliceSeed = ((t * 15).toInt() + i * 47) % 100;
-          final sliceRand = math.Random(sliceSeed);
+          final sliceRand = _FastRng(sliceSeed);
           final sliceY = (sliceRand.nextDouble() - 0.5) * radius * 1.6;
           final sliceHeight = radius * 0.1;
           final sliceOffset = (sliceRand.nextDouble() - 0.5) * radius * 0.3;
@@ -1805,7 +2381,8 @@ class Enemy extends PositionComponent {
       ..color = Colors.white.withOpacity(0.6 * opacity)
       ..maskFilter = _blur(allowBlur, 3);
     canvas.drawRect(
-      Rect.fromCenter(center: Offset(0, scanY), width: radius * 2.5, height: scanHeight),
+      Rect.fromCenter(
+          center: Offset(0, scanY), width: radius * 2.5, height: scanHeight),
       _spawnScanlinePaint,
     );
 
@@ -1814,7 +2391,10 @@ class Enemy extends PositionComponent {
       ..color = type.color.withOpacity(0.4 * opacity)
       ..maskFilter = _blur(allowBlur, 8);
     canvas.drawRect(
-      Rect.fromCenter(center: Offset(0, scanY), width: radius * 2.8, height: scanHeight * 2),
+      Rect.fromCenter(
+          center: Offset(0, scanY),
+          width: radius * 2.8,
+          height: scanHeight * 2),
       _spawnScanlinePaint,
     );
 
@@ -1826,7 +2406,10 @@ class Enemy extends PositionComponent {
         ..color = type.color.withOpacity(echoAlpha * opacity)
         ..maskFilter = _blur(allowBlur, 2);
       canvas.drawRect(
-        Rect.fromCenter(center: Offset(0, echoY), width: radius * 2.2, height: scanHeight * 0.5),
+        Rect.fromCenter(
+            center: Offset(0, echoY),
+            width: radius * 2.2,
+            height: scanHeight * 0.5),
         _spawnScanlinePaint,
       );
     }
@@ -1884,7 +2467,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderWalkingEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderWalkingEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // Use cached walk style (computed once in constructor)
     final style = _cachedWalkStyle;
 
@@ -1996,7 +2580,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderLegsEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderLegsEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Reuse paint, precalculate constants, cache sin/cos
     final r08 = radius * 0.8;
     final r02 = radius * 0.2;
@@ -2021,7 +2606,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderTendrilsEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderTendrilsEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Reuse paint, precalculate, cache trig
     final r08 = radius * 0.8;
     final r03 = radius * 0.3;
@@ -2045,7 +2631,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderStompEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderStompEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Precalculate, reuse paints, cache sin/cos
     final r03 = radius * 0.3;
     final r07 = radius * 0.7;
@@ -2077,7 +2664,8 @@ class Enemy extends PositionComponent {
 
       if (sinFootPhase < -0.8) {
         final impactRect = RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(footX, footY + 2), width: r06, height: r018),
+          Rect.fromCenter(
+              center: Offset(footX, footY + 2), width: r06, height: r018),
           impactRadius,
         );
         canvas.drawRRect(impactRect, _impactPaint);
@@ -2091,7 +2679,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderWispsEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderWispsEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Precalculate, cache trig, reuse paint
     final r09 = radius * 0.9;
     final r03 = radius * 0.3;
@@ -2124,13 +2713,16 @@ class Enemy extends PositionComponent {
         canvas.translate(shardX, shardY);
         canvas.rotate(rotAngle);
         _wispPaint.color = type.color.withOpacity(trailAlpha);
-        canvas.drawRect(Rect.fromCenter(center: Offset.zero, width: 4.0 - j, height: 1.5), _wispPaint);
+        canvas.drawRect(
+            Rect.fromCenter(center: Offset.zero, width: 4.0 - j, height: 1.5),
+            _wispPaint);
         canvas.restore();
       }
     }
   }
 
-  void _renderGlitchWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderGlitchWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Reuse paints, precalculate, cache trig
     final r07 = radius * 0.7;
     final r04 = radius * 0.4;
@@ -2171,13 +2763,15 @@ class Enemy extends PositionComponent {
         ..strokeWidth = 1.5
         ..maskFilter = _blur(allowBlur, 4);
       canvas.drawOval(
-        Rect.fromCenter(center: Offset.zero, width: radius * 1.8, height: radius * 0.6),
+        Rect.fromCenter(
+            center: Offset.zero, width: radius * 1.8, height: radius * 0.6),
         _riftPaint,
       );
     }
   }
 
-  void _renderElectricWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderElectricWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Reuse paints, precalculate, cache trig
     final r06 = radius * 0.6;
     final r03 = radius * 0.3;
@@ -2228,9 +2822,14 @@ class Enemy extends PositionComponent {
   }
 
   // Static ray colors for crystal effect
-  static const List<Color> _rayColors = [Color(0xFFFF0000), Color(0xFF00FF00), Color(0xFF0000FF)];
+  static const List<Color> _rayColors = [
+    Color(0xFFFF0000),
+    Color(0xFF00FF00),
+    Color(0xFF0000FF)
+  ];
 
-  void _renderCrystalWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderCrystalWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // OPTIMIZED: Reuse paints, precalculate, cache trig
     final r09 = radius * 0.9;
     final r02 = radius * 0.2;
@@ -2301,7 +2900,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderMechanicalWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderMechanicalWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // HYPER-OPTIMIZED: All calculations precached, all paints static
     final r08 = radius * 0.8;
     final r07 = radius * 0.7;
@@ -2319,7 +2919,8 @@ class Enemy extends PositionComponent {
       final animTimer20 = _animationTimer * 20;
       for (int i = 0; i < 4; i++) {
         final bladeAngle = animTimer20 + i * math.pi / 2;
-        _tempOffset1 = Offset(math.cos(bladeAngle) * r08, math.sin(bladeAngle) * r08);
+        _tempOffset1 =
+            Offset(math.cos(bladeAngle) * r08, math.sin(bladeAngle) * r08);
         canvas.drawLine(Offset.zero, _tempOffset1, _metalPaint);
       }
     } else {
@@ -2358,7 +2959,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderDigitalWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderDigitalWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // HYPER-OPTIMIZED: Precalc all, reuse paint
     final r05 = radius * 0.5;
     final r08 = radius * 0.8;
@@ -2380,7 +2982,10 @@ class Enemy extends PositionComponent {
       final bitSize = 2 + invProgress * 2;
 
       _dataPaint.color = type.color.withOpacity(invProgress * opacity06);
-      canvas.drawRect(Rect.fromCenter(center: Offset(x, y), width: bitSize, height: bitSize), _dataPaint);
+      canvas.drawRect(
+          Rect.fromCenter(
+              center: Offset(x, y), width: bitSize, height: bitSize),
+          _dataPaint);
     }
 
     if (type == EnemyType.matrixAgent || type == EnemyType.firewallBreaker) {
@@ -2393,12 +2998,15 @@ class Enemy extends PositionComponent {
       for (int i = 0; i < 4; i++) {
         final rainX = -r06 + i * r04;
         final rainY = (((animTimer2 + i * 0.3) % 1.0) - 0.5) * r2;
-        canvas.drawRect(Rect.fromCenter(center: Offset(rainX, rainY), width: 2, height: 6), _dataPaint);
+        canvas.drawRect(
+            Rect.fromCenter(center: Offset(rainX, rainY), width: 2, height: 6),
+            _dataPaint);
       }
     }
   }
 
-  void _renderStormWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderStormWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // HYPER-OPTIMIZED: All precalc, static paints
     final animTimer4 = _animationTimer * 4;
     final blurFilter3 = _blur(allowBlur, 3);
@@ -2414,7 +3022,10 @@ class Enemy extends PositionComponent {
       final spiralRadius = radius * (0.6 + i * 0.2);
       canvas.drawArc(
         Rect.fromCircle(center: Offset.zero, radius: spiralRadius),
-        spiralPhase, math.pi * 0.7, false, _windPaint,
+        spiralPhase,
+        math.pi * 0.7,
+        false,
+        _windPaint,
       );
     }
 
@@ -2428,7 +3039,8 @@ class Enemy extends PositionComponent {
           ..color = Colors.white.withOpacity(0.8 * opacity)
           ..strokeWidth = 2
           ..maskFilter = _blur(allowBlur, 4);
-        _tempOffset1 = Offset(math.cos(boltAngle) * r15, math.sin(boltAngle) * r15);
+        _tempOffset1 =
+            Offset(math.cos(boltAngle) * r15, math.sin(boltAngle) * r15);
         canvas.drawLine(Offset.zero, _tempOffset1, _sparkPaint);
       }
     }
@@ -2449,7 +3061,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderVoidWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderVoidWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // HYPER-OPTIMIZED: All precalc, static paints
     final r08 = radius * 0.8;
     final r03 = radius * 0.3;
@@ -2504,7 +3117,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderOmegaWalkEffect(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderOmegaWalkEffect(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // HYPER-OPTIMIZED: All precalc, static paints
     final blurFilter3 = _blur(allowBlur, 3);
     final blurFilter2 = _blur(allowBlur, 2);
@@ -2526,7 +3140,10 @@ class Enemy extends PositionComponent {
       canvas.rotate(ringPhase);
       canvas.drawArc(
         Rect.fromCircle(center: Offset.zero, radius: ringRadius),
-        0, math.pi * 1.5, false, _omegaPaint,
+        0,
+        math.pi * 1.5,
+        false,
+        _omegaPaint,
       );
       canvas.restore();
     }
@@ -2564,7 +3181,8 @@ class Enemy extends PositionComponent {
           ..maskFilter = _blur(allowBlur, 8);
         canvas.drawCircle(
           Offset(math.sin(distortPhase3) * 5, math.cos(distortPhase3) * 5),
-          radius * 0.8, _auraPaint,
+          radius * 0.8,
+          _auraPaint,
         );
       }
     }
@@ -2575,15 +3193,22 @@ class Enemy extends PositionComponent {
         final flamePhase = _animationTimer * 6 + i;
         final flameY = -radius * 0.5 - math.sin(flamePhase) * radius * 0.3;
         final flameX = (i - 1.5) * radius * 0.4;
+        _flamePaint
+          ..color = const Color(0xFFFF3300).withOpacity(0.4 * opacity)
+          ..maskFilter = _blur(allowBlur, 5);
         canvas.drawOval(
-          Rect.fromCenter(center: Offset(flameX, flameY), width: radius * 0.2, height: radius * 0.4),
-          Paint()..color = const Color(0xFFFF3300).withOpacity(0.4 * opacity)..maskFilter = _blur(allowBlur, 5),
+          Rect.fromCenter(
+              center: Offset(flameX, flameY),
+              width: radius * 0.2,
+              height: radius * 0.4),
+          _flamePaint,
         );
       }
     }
   }
 
-  void _renderHitFlash(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderHitFlash(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     final flashProgress = _hitFlashTimer / _hitFlashDuration;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2594,21 +3219,26 @@ class Enemy extends PositionComponent {
     _shieldGlowPaint
       ..color = type.color.withOpacity(flashProgress * 0.25 * opacity)
       ..maskFilter = _blur(allowBlur, 12);
-    canvas.drawCircle(Offset.zero, radius * (1.4 + (1 - flashProgress) * 0.6), _shieldGlowPaint);
+    canvas.drawCircle(Offset.zero, radius * (1.4 + (1 - flashProgress) * 0.6),
+        _shieldGlowPaint);
 
     // Secondary magenta glow
     _shieldGlowPaint
-      ..color = const Color(0xFFFF0066).withOpacity(flashProgress * 0.15 * opacity)
+      ..color =
+          const Color(0xFFFF0066).withOpacity(flashProgress * 0.15 * opacity)
       ..maskFilter = _blur(allowBlur, 8);
-    canvas.drawCircle(Offset.zero, radius * (1.2 + (1 - flashProgress) * 0.4), _shieldGlowPaint);
+    canvas.drawCircle(Offset.zero, radius * (1.2 + (1 - flashProgress) * 0.4),
+        _shieldGlowPaint);
 
     // LAYER 2: Multiple hexagonal shield rings expanding outward
     for (int ring = 0; ring < 3; ring++) {
       final ringDelay = ring * 0.15;
-      final ringProgress = ((flashProgress - ringDelay) / (1 - ringDelay)).clamp(0.0, 1.0);
+      final ringProgress =
+          ((flashProgress - ringDelay) / (1 - ringDelay)).clamp(0.0, 1.0);
       if (ringProgress <= 0) continue;
 
-      final hexRadius = radius * (1.1 + (1 - ringProgress) * (0.4 + ring * 0.2));
+      final hexRadius =
+          radius * (1.1 + (1 - ringProgress) * (0.4 + ring * 0.2));
       final hexRotation = _animationPhase + ring * math.pi / 6;
 
       // Create hexagon path
@@ -2627,14 +3257,16 @@ class Enemy extends PositionComponent {
 
       // Hexagon glow
       _shieldHexPaint
-        ..color = type.color.withOpacity(ringProgress * 0.4 * opacity * (1 - ring * 0.25))
+        ..color = type.color
+            .withOpacity(ringProgress * 0.4 * opacity * (1 - ring * 0.25))
         ..strokeWidth = 2.5 - ring * 0.5
         ..maskFilter = _blur(allowBlur, 4);
       canvas.drawPath(_reusableShieldPath, _shieldHexPaint);
 
       // Hexagon core line
       _shieldHexPaint
-        ..color = Colors.white.withOpacity(ringProgress * 0.5 * opacity * (1 - ring * 0.2))
+        ..color = Colors.white
+            .withOpacity(ringProgress * 0.5 * opacity * (1 - ring * 0.2))
         ..strokeWidth = 1.5 - ring * 0.3
         ..maskFilter = null;
       canvas.drawPath(_reusableShieldPath, _shieldHexPaint);
@@ -2647,13 +3279,16 @@ class Enemy extends PositionComponent {
         final nodePhase = math.sin(_animationPhase * 4 + i);
 
         if (nodePhase > 0.3) {
-          _shieldCorePaint.color = Colors.white.withOpacity(ringProgress * 0.7 * opacity);
-          canvas.drawCircle(Offset(nodeX, nodeY), 2.5 - ring * 0.5, _shieldCorePaint);
+          _shieldCorePaint.color =
+              Colors.white.withOpacity(ringProgress * 0.7 * opacity);
+          canvas.drawCircle(
+              Offset(nodeX, nodeY), 2.5 - ring * 0.5, _shieldCorePaint);
 
           _shieldGlowPaint
             ..color = type.color.withOpacity(ringProgress * 0.4 * opacity)
             ..maskFilter = _blur(allowBlur, 4);
-          canvas.drawCircle(Offset(nodeX, nodeY), 4 - ring * 0.5, _shieldGlowPaint);
+          canvas.drawCircle(
+              Offset(nodeX, nodeY), 4 - ring * 0.5, _shieldGlowPaint);
         }
       }
     }
@@ -2661,14 +3296,16 @@ class Enemy extends PositionComponent {
     // LAYER 3: Energy ripple waves
     for (int i = 0; i < 4; i++) {
       final rippleDelay = i * 0.1;
-      final rippleProgress = ((flashProgress - rippleDelay) / (1 - rippleDelay)).clamp(0.0, 1.0);
+      final rippleProgress =
+          ((flashProgress - rippleDelay) / (1 - rippleDelay)).clamp(0.0, 1.0);
       if (rippleProgress <= 0) continue;
 
       final rippleRadius = radius * (0.9 + rippleProgress * 0.8);
       final rippleAlpha = (1 - rippleProgress) * flashProgress * 0.35;
 
       _shieldRipplePaint
-        ..color = (i % 2 == 0 ? type.color : const Color(0xFFFF0066)).withOpacity(rippleAlpha * opacity)
+        ..color = (i % 2 == 0 ? type.color : const Color(0xFFFF0066))
+            .withOpacity(rippleAlpha * opacity)
         ..strokeWidth = 1.5 * (1 - rippleProgress * 0.5)
         ..maskFilter = _blur(allowBlur, 2);
       canvas.drawCircle(Offset.zero, rippleRadius, _shieldRipplePaint);
@@ -2687,12 +3324,20 @@ class Enemy extends PositionComponent {
       final endY = math.sin(bandAngle) * (bandRadius + bandLength * 0.5);
 
       _shieldInterferencePaint
-        ..color = (i % 3 == 0 ? const Color(0xFF00FFFF) : i % 3 == 1 ? const Color(0xFFFF00FF) : type.color)
-            .withOpacity(flashProgress * 0.2 * opacity * math.sin(_animationPhase * 3 + i).abs())
+        ..color = (i % 3 == 0
+                ? const Color(0xFF00FFFF)
+                : i % 3 == 1
+                    ? const Color(0xFFFF00FF)
+                    : type.color)
+            .withOpacity(flashProgress *
+                0.2 *
+                opacity *
+                math.sin(_animationPhase * 3 + i).abs())
         ..strokeWidth = 1
         ..strokeCap = StrokeCap.round
         ..maskFilter = _blur(allowBlur, 1);
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _shieldInterferencePaint);
+      canvas.drawLine(
+          Offset(startX, startY), Offset(endX, endY), _shieldInterferencePaint);
     }
 
     // LAYER 5: Data fragment scatter
@@ -2703,8 +3348,10 @@ class Enemy extends PositionComponent {
       final fragmentX = math.cos(fragmentAngle) * fragmentDist;
       final fragmentY = math.sin(fragmentAngle) * fragmentDist;
 
-      final fragmentAlpha = flashProgress * 0.6 * (1 - (1 - flashProgress) * 0.7);
-      _shieldFragmentPaint.color = (i % 2 == 0 ? type.color : Colors.white).withOpacity(fragmentAlpha * opacity);
+      final fragmentAlpha =
+          flashProgress * 0.6 * (1 - (1 - flashProgress) * 0.7);
+      _shieldFragmentPaint.color = (i % 2 == 0 ? type.color : Colors.white)
+          .withOpacity(fragmentAlpha * opacity);
 
       // Small rectangles as data fragments
       canvas.save();
@@ -2726,16 +3373,20 @@ class Enemy extends PositionComponent {
       final arcStartX = math.cos(arcAngle) * arcStartRadius;
       final arcStartY = math.sin(arcAngle) * arcStartRadius;
 
-      final arcPath = Path()..moveTo(arcStartX, arcStartY);
+      _reusableOverlayPath.reset();
+      _reusableOverlayPath.moveTo(arcStartX, arcStartY);
       final segments = 4;
       for (int s = 1; s <= segments; s++) {
         final t = s / segments;
-        final currentRadius = arcStartRadius + (arcEndRadius - arcStartRadius) * t;
+        final currentRadius =
+            arcStartRadius + (arcEndRadius - arcStartRadius) * t;
         final jitter = (s < segments) ? (_random.nextDouble() - 0.5) * 6 : 0.0;
         final perpAngle = arcAngle + math.pi / 2;
-        final x = math.cos(arcAngle) * currentRadius + math.cos(perpAngle) * jitter;
-        final y = math.sin(arcAngle) * currentRadius + math.sin(perpAngle) * jitter;
-        arcPath.lineTo(x, y);
+        final x =
+            math.cos(arcAngle) * currentRadius + math.cos(perpAngle) * jitter;
+        final y =
+            math.sin(arcAngle) * currentRadius + math.sin(perpAngle) * jitter;
+        _reusableOverlayPath.lineTo(x, y);
       }
 
       // Arc glow
@@ -2744,14 +3395,14 @@ class Enemy extends PositionComponent {
         ..strokeWidth = 3
         ..strokeCap = StrokeCap.round
         ..maskFilter = _blur(allowBlur, 3);
-      canvas.drawPath(arcPath, _shieldHexPaint);
+      canvas.drawPath(_reusableOverlayPath, _shieldHexPaint);
 
       // Arc core
       _shieldHexPaint
         ..color = Colors.white.withOpacity(flashProgress * 0.7 * opacity)
         ..strokeWidth = 1
         ..maskFilter = null;
-      canvas.drawPath(arcPath, _shieldHexPaint);
+      canvas.drawPath(_reusableOverlayPath, _shieldHexPaint);
     }
 
     // LAYER 7: Central flash overlay
@@ -2784,7 +3435,8 @@ class Enemy extends PositionComponent {
 
     // LAYER 9: Energy pulse core
     final pulseRadius = radius * 0.3 * flashProgress;
-    _shieldCorePaint.color = Colors.white.withOpacity(flashProgress * 0.8 * opacity);
+    _shieldCorePaint.color =
+        Colors.white.withOpacity(flashProgress * 0.8 * opacity);
     canvas.drawCircle(Offset.zero, pulseRadius, _shieldCorePaint);
 
     _shieldGlowPaint
@@ -2798,7 +3450,8 @@ class Enemy extends PositionComponent {
       final arcRadius = radius * 1.15;
 
       _shieldRipplePaint
-        ..color = (i % 2 == 0 ? type.color : const Color(0xFFFF0066)).withOpacity(flashProgress * 0.4 * opacity)
+        ..color = (i % 2 == 0 ? type.color : const Color(0xFFFF0066))
+            .withOpacity(flashProgress * 0.4 * opacity)
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round
         ..maskFilter = _blur(allowBlur, 2);
@@ -2832,7 +3485,8 @@ class Enemy extends PositionComponent {
         ..style = PaintingStyle.fill
         ..maskFilter = null;
       canvas.drawRect(
-        Rect.fromCenter(center: Offset.zero, width: shardLength, height: shardWidth),
+        Rect.fromCenter(
+            center: Offset.zero, width: shardLength, height: shardWidth),
         _particlePaint,
       );
 
@@ -2867,13 +3521,16 @@ class Enemy extends PositionComponent {
         Rect.fromCenter(center: Offset.zero, width: bit.size, height: bit.size),
         _particlePaint,
       );
-      
+
       if (allowBlur) {
         _particlePaint
           ..color = bit.color.withOpacity(bit.alpha * 0.5)
           ..maskFilter = _blur(true, 2);
         canvas.drawRect(
-          Rect.fromCenter(center: Offset.zero, width: bit.size * 1.5, height: bit.size * 1.5),
+          Rect.fromCenter(
+              center: Offset.zero,
+              width: bit.size * 1.5,
+              height: bit.size * 1.5),
           _particlePaint,
         );
       }
@@ -2901,8 +3558,10 @@ class Enemy extends PositionComponent {
 
     // Get HSL color for secondary/tertiary colors
     final hslColor = HSLColor.fromColor(type.color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 60) % 360)
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final tertiaryColor = hslColor
+        .withHue((hslColor.hue + 60) % 360)
         .withSaturation((hslColor.saturation * 0.8).clamp(0.0, 1.0))
         .withLightness((hslColor.lightness * 1.2).clamp(0.0, 1.0))
         .toColor();
@@ -3011,14 +3670,16 @@ class Enemy extends PositionComponent {
     for (int i = 0; i < particleCount; i++) {
       // Distribute particles along trail with animation offset
       final particleProgress = (i / particleCount + t * 0.5) % 1.0;
-      final trailIndex = (particleProgress * (_trailPositions.length - 1)).floor();
+      final trailIndex =
+          (particleProgress * (_trailPositions.length - 1)).floor();
       if (trailIndex >= _trailPositions.length - 1) continue;
 
       final physIdxA = _getTrailPhysicalIndex(trailIndex);
       final physIdxB = _getTrailPhysicalIndex(trailIndex + 1);
       final posA = _trailPositions[physIdxA] - position;
       final posB = _trailPositions[physIdxB] - position;
-      final lerpT = (particleProgress * (_trailPositions.length - 1)) - trailIndex;
+      final lerpT =
+          (particleProgress * (_trailPositions.length - 1)) - trailIndex;
 
       final particleX = posA.x + (posB.x - posA.x) * lerpT;
       final particleY = posA.y + (posB.y - posA.y) * lerpT;
@@ -3100,13 +3761,15 @@ class Enemy extends PositionComponent {
     // LAYER 6: Scanline effect along trail
     // ═══════════════════════════════════════════════════════════════════════
     final scanlineOffset = (t * 2) % 1.0;
-    final scanlineIndex = (scanlineOffset * (_trailPositions.length - 1)).floor();
+    final scanlineIndex =
+        (scanlineOffset * (_trailPositions.length - 1)).floor();
     if (scanlineIndex < _trailPositions.length - 1) {
       final scanPhysIdxA = _getTrailPhysicalIndex(scanlineIndex);
       final scanPhysIdxB = _getTrailPhysicalIndex(scanlineIndex + 1);
       final scanPosA = _trailPositions[scanPhysIdxA] - position;
       final scanPosB = _trailPositions[scanPhysIdxB] - position;
-      final scanLerp = (scanlineOffset * (_trailPositions.length - 1)) - scanlineIndex;
+      final scanLerp =
+          (scanlineOffset * (_trailPositions.length - 1)) - scanlineIndex;
 
       final scanX = scanPosA.x + (scanPosB.x - scanPosA.x) * scanLerp;
       final scanY = scanPosA.y + (scanPosB.y - scanPosA.y) * scanLerp;
@@ -3145,7 +3808,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderTypeEffects(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderTypeEffects(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     final t = _animationTimer;
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -3164,7 +3828,8 @@ class Enemy extends PositionComponent {
     _renderWorldTerrorEffects(canvas, radius, opacity, allowBlur, t);
   }
 
-  void _renderDemonicEyes(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderDemonicEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     final t = _animationTimer;
     final eyeStyle = _getEyeStyle();
 
@@ -3206,21 +3871,33 @@ class Enemy extends PositionComponent {
 
   _EyeStyle _getEyeStyle() {
     switch (type.world) {
-      case 1: return _EyeStyle.predator;
-      case 2: return _EyeStyle.void_;
-      case 3: return _EyeStyle.corrupted;
-      case 4: return _EyeStyle.burning;
-      case 5: return _EyeStyle.crystal;
-      case 6: return _EyeStyle.mechanical;
-      case 7: return _EyeStyle.corrupted;
-      case 8: return _EyeStyle.burning;
-      case 9: return _EyeStyle.abyssal;
-      case 10: return _EyeStyle.hive;
-      default: return _EyeStyle.predator;
+      case 1:
+        return _EyeStyle.predator;
+      case 2:
+        return _EyeStyle.void_;
+      case 3:
+        return _EyeStyle.corrupted;
+      case 4:
+        return _EyeStyle.burning;
+      case 5:
+        return _EyeStyle.crystal;
+      case 6:
+        return _EyeStyle.mechanical;
+      case 7:
+        return _EyeStyle.corrupted;
+      case 8:
+        return _EyeStyle.burning;
+      case 9:
+        return _EyeStyle.abyssal;
+      case 10:
+        return _EyeStyle.hive;
+      default:
+        return _EyeStyle.predator;
     }
   }
 
-  void _renderPredatorEye(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderPredatorEye(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // HYPER-OPTIMIZED: Static paints, precalculated values
     final r015 = radius * 0.15;
     final r01 = radius * 0.1;
@@ -3234,24 +3911,31 @@ class Enemy extends PositionComponent {
 
     // Main eye socket
     _socketPaint.color = Colors.black.withOpacity(0.8 * opacity);
-    canvas.drawOval(Rect.fromCenter(center: eyeCenter, width: r05, height: r035), _socketPaint);
+    canvas.drawOval(
+        Rect.fromCenter(center: eyeCenter, width: r05, height: r035),
+        _socketPaint);
 
     // Glowing iris
     final pulse = 0.7 + 0.3 * math.sin(t * 4);
     _irisPaint
       ..color = type.color.withOpacity(0.9 * opacity * pulse)
       ..maskFilter = _blur(allowBlur, 4);
-    canvas.drawOval(Rect.fromCenter(center: eyeCenter, width: r035, height: r025), _irisPaint);
+    canvas.drawOval(
+        Rect.fromCenter(center: eyeCenter, width: r035, height: r025),
+        _irisPaint);
 
     // Slit pupil
     final t2 = t * 2;
     final pupilWidth = radius * 0.06 * (0.8 + 0.4 * math.sin(t2));
     _pupilPaint.color = Colors.black.withOpacity(0.95 * opacity);
-    canvas.drawOval(Rect.fromCenter(center: eyeCenter, width: pupilWidth, height: r02), _pupilPaint);
+    canvas.drawOval(
+        Rect.fromCenter(center: eyeCenter, width: pupilWidth, height: r02),
+        _pupilPaint);
 
     // Evil glint
     _corePaint.color = Colors.white.withOpacity(0.8 * opacity);
-    canvas.drawCircle(Offset(radius * 0.08, -radius * 0.18), radius * 0.04, _corePaint);
+    canvas.drawCircle(
+        Offset(radius * 0.08, -radius * 0.18), radius * 0.04, _corePaint);
 
     // Blood vessel streaks
     _veinPaint
@@ -3271,7 +3955,8 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderHiveEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderHiveEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // OPTIMIZED: Uses static _hiveEyePositions list, cached sin, reusable paints
     final t3 = t * 3;
     final baseSize = radius * 0.08;
@@ -3305,57 +3990,71 @@ class Enemy extends PositionComponent {
         canvas.drawCircle(_tempOffset1, size * 0.3, _pupilPaint);
       }
     }
+    _eyePaint.maskFilter = null;
   }
 
-  void _renderVoidEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderVoidEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Empty sockets that seem to go forever
-    final socketPositions = [
-      Offset(radius * 0.2, -radius * 0.15),
-      Offset(-radius * 0.15, -radius * 0.1),
-    ];
+    final opacityFilter = _opacityFilter(opacity);
 
-    for (final pos in socketPositions) {
-      // Deep black void
-      final voidGradient = RadialGradient(
-        colors: [
-          Colors.black.withOpacity(0.95 * opacity),
-          Colors.black.withOpacity(0.7 * opacity),
-          type.color.withOpacity(0.2 * opacity),
-        ],
-        stops: const [0.0, 0.6, 1.0],
-      );
+    _voidPaint
+      ..shader = _voidEyeShader1
+      ..colorFilter = opacityFilter;
+    canvas.drawCircle(_voidEyePos1, _voidEyeRadius, _voidPaint);
 
+    _voidPaint
+      ..shader = _voidEyeShader2
+      ..colorFilter = opacityFilter;
+    canvas.drawCircle(_voidEyePos2, _voidEyeRadius, _voidPaint);
+
+    _voidPaint
+      ..shader = null
+      ..colorFilter = null;
+
+    // Swirling darkness inside
+    _swirlPaint
+      ..color = type.color.withOpacity(0.3 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final swirlRadius = _baseRadius * 0.08;
+    canvas.drawArc(
+      Rect.fromCircle(center: _voidEyePos1, radius: swirlRadius),
+      t * 2,
+      math.pi,
+      false,
+      _swirlPaint,
+    );
+    canvas.drawArc(
+      Rect.fromCircle(center: _voidEyePos2, radius: swirlRadius),
+      t * 2,
+      math.pi,
+      false,
+      _swirlPaint,
+    );
+
+    // Occasional glimmer from the depths
+    if (math.sin(t * 5) > 0.8) {
+      _sparkPaint.color = type.color.withOpacity(0.6 * opacity);
       canvas.drawCircle(
-        pos,
-        radius * 0.15,
-        Paint()..shader = voidGradient.createShader(Rect.fromCircle(center: pos, radius: radius * 0.15)),
+        _voidEyePos1 +
+            Offset(math.sin(t * 3) * _baseRadius * 0.03,
+                math.cos(t * 3) * _baseRadius * 0.03),
+        _baseRadius * 0.02,
+        _sparkPaint,
       );
-
-      // Swirling darkness inside
-      final swirlPaint = Paint()
-        ..color = type.color.withOpacity(0.3 * opacity)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1;
-      canvas.drawArc(
-        Rect.fromCircle(center: pos, radius: radius * 0.08),
-        t * 2,
-        math.pi,
-        false,
-        swirlPaint,
+      canvas.drawCircle(
+        _voidEyePos2 +
+            Offset(math.sin(t * 3) * _baseRadius * 0.03,
+                math.cos(t * 3) * _baseRadius * 0.03),
+        _baseRadius * 0.02,
+        _sparkPaint,
       );
-
-      // Occasional glimmer from the depths
-      if (math.sin(t * 5) > 0.8) {
-        canvas.drawCircle(
-          pos + Offset(math.sin(t * 3) * radius * 0.03, math.cos(t * 3) * radius * 0.03),
-          radius * 0.02,
-          Paint()..color = type.color.withOpacity(0.6 * opacity),
-        );
-      }
     }
   }
 
-  void _renderBurningEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderBurningEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // OPTIMIZED: Cached calculations, reusable paints, reduced allocations
     final eyePosX = radius * 0.15;
     final eyePosY = -radius * 0.1;
@@ -3413,13 +4112,15 @@ class Enemy extends PositionComponent {
       final x = eyePosX + (i - 1) * r008;
       final height = radius * (0.15 + 0.1 * math.sin(t8 + i * 2));
       final tipX = x + math.sin(t6 + i) * radius * 0.05;
-      canvas.drawLine(Offset(x, baseY), Offset(tipX, baseY - height), _sparkPaint);
+      canvas.drawLine(
+          Offset(x, baseY), Offset(tipX, baseY - height), _sparkPaint);
     }
   }
 
-  void _renderCrystalEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderCrystalEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Faceted gem-like eyes
-    final eyePos = Offset(radius * 0.12, -radius * 0.1);
+    final eyePos = _crystalEyePos;
 
     // Outer facets
     _reusableOverlayPath.reset();
@@ -3429,26 +4130,24 @@ class Enemy extends PositionComponent {
       final r = radius * 0.18;
       final x = eyePos.dx + math.cos(angle) * r;
       final y = eyePos.dy + math.sin(angle) * r;
-      if (i == 0) _reusableOverlayPath.moveTo(x, y);
-      else _reusableOverlayPath.lineTo(x, y);
+      if (i == 0)
+        _reusableOverlayPath.moveTo(x, y);
+      else
+        _reusableOverlayPath.lineTo(x, y);
     }
     _reusableOverlayPath.close();
 
     // Fill with gradient
-    canvas.drawPath(
-      _reusableOverlayPath,
-      Paint()
-        ..shader = LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.9 * opacity),
-            type.color.withOpacity(0.7 * opacity),
-            type.color.withOpacity(0.3 * opacity),
-          ],
-        ).createShader(Rect.fromCenter(center: eyePos, width: radius * 0.4, height: radius * 0.4)),
-    );
+    _crystalPaint
+      ..shader = _crystalEyeShader
+      ..colorFilter = _opacityFilter(opacity);
+    canvas.drawPath(_reusableOverlayPath, _crystalPaint);
+    _crystalPaint
+      ..shader = null
+      ..colorFilter = null;
 
     // Facet lines
-    final facetPaint = Paint()
+    _facetPaint
       ..color = Colors.white.withOpacity(0.6 * opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
@@ -3456,8 +4155,10 @@ class Enemy extends PositionComponent {
       final angle = (i / facets) * math.pi * 2 + t * 0.5;
       canvas.drawLine(
         eyePos,
-        eyePos + Offset(math.cos(angle) * radius * 0.15, math.sin(angle) * radius * 0.15),
-        facetPaint,
+        eyePos +
+            Offset(math.cos(angle) * radius * 0.15,
+                math.sin(angle) * radius * 0.15),
+        _facetPaint,
       );
     }
 
@@ -3465,56 +4166,68 @@ class Enemy extends PositionComponent {
     canvas.drawCircle(
       eyePos + Offset(-radius * 0.04, -radius * 0.04),
       radius * 0.03,
-      Paint()..color = Colors.white.withOpacity(0.95 * opacity),
+      _corePaint..color = Colors.white.withOpacity(0.95 * opacity),
     );
 
     // Prismatic refraction
     if (allowBlur) {
+      const prismColors = [
+        Color(0xFFFF0000),
+        Color(0xFF00FF00),
+        Color(0xFF0000FF),
+      ];
       for (int i = 0; i < 3; i++) {
         final angle = t * 2 + i * math.pi * 2 / 3;
-        final color = [const Color(0xFFFF0000), const Color(0xFF00FF00), const Color(0xFF0000FF)][i];
+        final color = prismColors[i];
         canvas.drawLine(
           eyePos,
-          eyePos + Offset(math.cos(angle) * radius * 0.25, math.sin(angle) * radius * 0.25),
-          Paint()
+          eyePos +
+              Offset(math.cos(angle) * radius * 0.25,
+                  math.sin(angle) * radius * 0.25),
+          _sparkPaint
             ..color = color.withOpacity(0.2 * opacity)
             ..strokeWidth = 2
             ..maskFilter = _blur(true, 4),
         );
       }
+      _sparkPaint.maskFilter = null;
     }
   }
 
-  void _renderMechanicalEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderMechanicalEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Cold robotic sensor eye
     final eyePos = Offset(radius * 0.15, -radius * 0.08);
 
     // Metal housing
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: eyePos, width: radius * 0.4, height: radius * 0.25),
+        Rect.fromCenter(
+            center: eyePos, width: radius * 0.4, height: radius * 0.25),
         Radius.circular(radius * 0.04),
       ),
-      Paint()..color = const Color(0xFF333333).withOpacity(0.9 * opacity),
+      _metalPaint..color = const Color(0xFF333333).withOpacity(0.9 * opacity),
     );
 
     // Lens
     canvas.drawCircle(
       eyePos,
       radius * 0.1,
-      Paint()..color = Colors.black.withOpacity(0.95 * opacity),
+      _socketPaint..color = Colors.black.withOpacity(0.95 * opacity),
     );
 
     // Scanning laser
     final scanAngle = (t * 3) % (math.pi * 2);
-    final scanPaint = Paint()
+    _scanPaint
       ..color = const Color(0xFFFF0000).withOpacity(0.8 * opacity)
       ..strokeWidth = 2
       ..maskFilter = _blur(allowBlur, 3);
     canvas.drawLine(
       eyePos,
-      eyePos + Offset(math.cos(scanAngle) * radius * 0.08, math.sin(scanAngle) * radius * 0.08),
-      scanPaint,
+      eyePos +
+          Offset(math.cos(scanAngle) * radius * 0.08,
+              math.sin(scanAngle) * radius * 0.08),
+      _scanPaint,
     );
 
     // LED indicators
@@ -3523,23 +4236,30 @@ class Enemy extends PositionComponent {
       canvas.drawCircle(
         eyePos + Offset(radius * (-0.12 + i * 0.12), radius * 0.15),
         radius * 0.02,
-        Paint()..color = (ledOn ? type.color : const Color(0xFF333333)).withOpacity(0.8 * opacity),
+        _sparkPaint
+          ..color = (ledOn ? type.color : const Color(0xFF333333))
+              .withOpacity(0.8 * opacity),
       );
     }
 
     // Targeting reticle
-    final reticlePaint = Paint()
+    _reticlePaint
       ..color = type.color.withOpacity(0.5 * opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8;
-    canvas.drawCircle(eyePos, radius * 0.06, reticlePaint);
-    canvas.drawLine(eyePos + Offset(-radius * 0.1, 0), eyePos + Offset(-radius * 0.03, 0), reticlePaint);
-    canvas.drawLine(eyePos + Offset(radius * 0.03, 0), eyePos + Offset(radius * 0.1, 0), reticlePaint);
-    canvas.drawLine(eyePos + Offset(0, -radius * 0.08), eyePos + Offset(0, -radius * 0.03), reticlePaint);
-    canvas.drawLine(eyePos + Offset(0, radius * 0.03), eyePos + Offset(0, radius * 0.08), reticlePaint);
+    canvas.drawCircle(eyePos, radius * 0.06, _reticlePaint);
+    canvas.drawLine(eyePos + Offset(-radius * 0.1, 0),
+        eyePos + Offset(-radius * 0.03, 0), _reticlePaint);
+    canvas.drawLine(eyePos + Offset(radius * 0.03, 0),
+        eyePos + Offset(radius * 0.1, 0), _reticlePaint);
+    canvas.drawLine(eyePos + Offset(0, -radius * 0.08),
+        eyePos + Offset(0, -radius * 0.03), _reticlePaint);
+    canvas.drawLine(eyePos + Offset(0, radius * 0.03),
+        eyePos + Offset(0, radius * 0.08), _reticlePaint);
   }
 
-  void _renderCorruptedEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderCorruptedEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Glitching digital eyes
     final eyePos = Offset(radius * 0.15, -radius * 0.1);
     final glitchOffset = Offset(
@@ -3551,30 +4271,38 @@ class Enemy extends PositionComponent {
     canvas.drawCircle(
       eyePos + glitchOffset + Offset(-radius * 0.02, 0),
       radius * 0.12,
-      Paint()..color = const Color(0xFFFF0000).withOpacity(0.4 * opacity),
+      _chromaPaint
+        ..color = const Color(0xFFFF0000).withOpacity(0.4 * opacity)
+        ..style = PaintingStyle.fill
+        ..maskFilter = null,
     );
     canvas.drawCircle(
       eyePos + glitchOffset + Offset(radius * 0.02, 0),
       radius * 0.12,
-      Paint()..color = const Color(0xFF00FFFF).withOpacity(0.4 * opacity),
+      _chromaPaint
+        ..color = const Color(0xFF00FFFF).withOpacity(0.4 * opacity)
+        ..style = PaintingStyle.fill
+        ..maskFilter = null,
     );
 
     // Main eye with corruption
     canvas.drawCircle(
       eyePos + glitchOffset,
       radius * 0.1,
-      Paint()..color = type.color.withOpacity(0.8 * opacity),
+      _eyePaint
+        ..color = type.color.withOpacity(0.8 * opacity)
+        ..maskFilter = null,
     );
 
     // Glitch bars
     if (math.sin(t * 15) > 0.6) {
-      final barPaint = Paint()..color = type.color.withOpacity(0.6 * opacity);
+      _barPaint.color = type.color.withOpacity(0.6 * opacity);
       for (int i = 0; i < 3; i++) {
         final y = eyePos.dy - radius * 0.15 + i * radius * 0.1;
         final width = radius * (0.1 + _random.nextDouble() * 0.2);
         canvas.drawRect(
           Rect.fromLTWH(eyePos.dx - width / 2, y, width, radius * 0.02),
-          barPaint,
+          _barPaint,
         );
       }
     }
@@ -3584,19 +4312,19 @@ class Enemy extends PositionComponent {
     canvas.drawCircle(
       eyePos + glitchOffset,
       radius * 0.04,
-      Paint()..color = (inverted ? type.color : Colors.black).withOpacity(0.9 * opacity),
+      _pupilPaint
+        ..color =
+            (inverted ? type.color : Colors.black).withOpacity(0.9 * opacity),
     );
   }
 
-  void _renderAbyssalEyes(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderAbyssalEyes(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Infinite depth void eyes
-    final eyePositions = [
-      Offset(radius * 0.18, -radius * 0.12),
-      Offset(-radius * 0.12, -radius * 0.08),
-    ];
-
-    for (int e = 0; e < eyePositions.length; e++) {
-      final pos = eyePositions[e];
+    final eyePos1 = Offset(radius * 0.18, -radius * 0.12);
+    final eyePos2 = Offset(-radius * 0.12, -radius * 0.08);
+    for (int e = 0; e < 2; e++) {
+      final pos = e == 0 ? eyePos1 : eyePos2;
 
       // Concentric rings going into infinity
       for (int i = 4; i >= 0; i--) {
@@ -3605,13 +4333,14 @@ class Enemy extends PositionComponent {
         canvas.drawCircle(
           pos,
           ringRadius,
-          Paint()
-            ..color = Color.lerp(type.color, Colors.black, darkness)!.withOpacity(0.8 * opacity),
+          _voidPaint
+            ..color = Color.lerp(type.color, Colors.black, darkness)!
+                .withOpacity(0.8 * opacity),
         );
       }
 
       // Swirling abyss
-      final swirlPaint = Paint()
+      _swirlPaint
         ..color = type.color.withOpacity(0.3 * opacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1;
@@ -3621,7 +4350,7 @@ class Enemy extends PositionComponent {
           t * 3 + i * math.pi / 3,
           math.pi * 0.8,
           false,
-          swirlPaint,
+          _swirlPaint,
         );
       }
 
@@ -3631,15 +4360,17 @@ class Enemy extends PositionComponent {
         canvas.drawCircle(
           Offset(pos.dx, soulY),
           radius * 0.015,
-          Paint()
+          _sparkPaint
             ..color = Colors.white.withOpacity((1 - (t % 1.0)) * 0.5 * opacity)
             ..maskFilter = _blur(allowBlur, 2),
         );
+        _sparkPaint.maskFilter = null;
       }
     }
   }
 
-  void _renderCorruptionTendrils(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderCorruptionTendrils(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // Skip for low-fx mode
     if (Enemy.lowFx || Enemy.forceLowFx) return;
 
@@ -3647,7 +4378,7 @@ class Enemy extends PositionComponent {
     final tendrilCount = type.world >= 5 ? 6 : 4;
     final tendrilLength = radius * (0.8 + type.world * 0.1);
 
-    final tendrilPaint = Paint()
+    _tendrilPaint
       ..color = type.color.withOpacity(0.5 * opacity)
       ..strokeWidth = 2
       ..strokeCap = StrokeCap.round
@@ -3663,31 +4394,31 @@ class Enemy extends PositionComponent {
 
       for (int s = 0; s < segments; s++) {
         final segProgress = s / segments;
-        final wave = math.sin(t * 4 + i * 0.8 + s * 0.5) * radius * 0.15 * segProgress;
+        final wave =
+            math.sin(t * 4 + i * 0.8 + s * 0.5) * radius * 0.15 * segProgress;
         final segLength = tendrilLength / segments;
         final angle = baseAngle + wave * 0.1;
 
-        currentPos = currentPos + Offset(
-          math.cos(angle) * segLength,
-          math.sin(angle) * segLength + wave * 0.3,
-        );
+        currentPos = currentPos +
+            Offset(
+              math.cos(angle) * segLength,
+              math.sin(angle) * segLength + wave * 0.3,
+            );
         _reusableOverlayPath.lineTo(currentPos.dx, currentPos.dy);
       }
 
       // Main tendril
-      canvas.drawPath(_reusableOverlayPath, tendrilPaint);
+      canvas.drawPath(_reusableOverlayPath, _tendrilPaint);
 
       // Glow effect
       if (allowBlur) {
-        canvas.drawPath(
-          _reusableOverlayPath,
-          Paint()
-            ..color = type.color.withOpacity(0.2 * opacity)
-            ..strokeWidth = 4
-            ..strokeCap = StrokeCap.round
-            ..style = PaintingStyle.stroke
-            ..maskFilter = _blur(true, 4),
-        );
+        _auraPaint
+          ..color = type.color.withOpacity(0.2 * opacity)
+          ..strokeWidth = 4
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke
+          ..maskFilter = _blur(true, 4);
+        canvas.drawPath(_reusableOverlayPath, _auraPaint);
       }
 
       // Tendril tip - barb or claw
@@ -3701,15 +4432,14 @@ class Enemy extends PositionComponent {
       _reusableOverlayPath.lineTo(radius * 0.08, 0);
       _reusableOverlayPath.lineTo(0, radius * 0.04);
       _reusableOverlayPath.close();
-      canvas.drawPath(
-        _reusableOverlayPath,
-        Paint()..color = Colors.white.withOpacity(0.7 * opacity),
-      );
+      _corePaint.color = Colors.white.withOpacity(0.7 * opacity);
+      canvas.drawPath(_reusableOverlayPath, _corePaint);
       canvas.restore();
     }
   }
 
-  void _renderWorldTerrorEffects(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderWorldTerrorEffects(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     switch (type.world) {
       case 1:
         _renderNeonTerror(canvas, radius, opacity, allowBlur, t);
@@ -3744,18 +4474,19 @@ class Enemy extends PositionComponent {
     }
   }
 
-  void _renderNeonTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderNeonTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Neon blade and predator markings
-    final bladePaint = Paint()..color = Colors.white.withOpacity(0.8 * opacity);
+    _bladePaint.color = Colors.white.withOpacity(0.8 * opacity);
     _reusableOverlayPath.reset();
     _reusableOverlayPath.moveTo(radius * 0.9, 0);
     _reusableOverlayPath.lineTo(radius * 0.4, -radius * 0.15);
     _reusableOverlayPath.lineTo(radius * 0.4, radius * 0.15);
     _reusableOverlayPath.close();
-    canvas.drawPath(_reusableOverlayPath, bladePaint);
+    canvas.drawPath(_reusableOverlayPath, _bladePaint);
 
     // War paint stripes
-    final stripePaint = Paint()
+    _stripePaint
       ..color = type.color.withOpacity(0.6 * opacity)
       ..strokeWidth = 2;
     for (int i = 0; i < 3; i++) {
@@ -3763,14 +4494,15 @@ class Enemy extends PositionComponent {
       canvas.drawLine(
         Offset(-radius * 0.3, y),
         Offset(-radius * 0.6, y + radius * 0.1),
-        stripePaint,
+        _stripePaint,
       );
     }
   }
 
-  void _renderRiftTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderRiftTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Dimensional tears and reality fractures
-    final tearPaint = Paint()
+    _tearPaint
       ..color = const Color(0xFFFF00FF).withOpacity(0.5 * opacity)
       ..strokeWidth = 2
       ..maskFilter = _blur(allowBlur, 4);
@@ -3782,24 +4514,29 @@ class Enemy extends PositionComponent {
       canvas.drawLine(
         Offset.zero,
         Offset(math.cos(angle) * len, math.sin(angle) * len),
-        tearPaint,
+        _tearPaint,
       );
     }
 
     // Dimensional portal behind
     if (allowBlur) {
+      _riftPaint
+        ..color = const Color(0xFF6600FF).withOpacity(0.2 * opacity)
+        ..maskFilter = _blur(true, 8);
       canvas.drawOval(
-        Rect.fromCenter(center: Offset.zero, width: radius * 1.5, height: radius * 0.5),
-        Paint()
-          ..color = const Color(0xFF6600FF).withOpacity(0.2 * opacity)
-          ..maskFilter = _blur(true, 8),
+        Rect.fromCenter(
+            center: Offset.zero, width: radius * 1.5, height: radius * 0.5),
+        _riftPaint,
       );
     }
   }
 
-  void _renderCorruptionTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderCorruptionTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Glitch corruption and data rot
-    final corruptPaint = Paint()..color = const Color(0xFF00FF00).withOpacity(0.6 * opacity);
+    _corruptPaint
+      ..color = const Color(0xFF00FF00).withOpacity(0.6 * opacity)
+      ..maskFilter = null;
 
     // Corruption blocks
     for (int i = 0; i < 6; i++) {
@@ -3808,33 +4545,37 @@ class Enemy extends PositionComponent {
         final y = (i ~/ 3 - 0.5) * radius * 0.4;
         canvas.drawRect(
           Rect.fromLTWH(x, y, radius * 0.15, radius * 0.08),
-          corruptPaint,
+          _corruptPaint,
         );
       }
     }
 
     // Error text simulation
-    final errorPaint = Paint()
+    _errorPaint
       ..color = const Color(0xFFFF0000).withOpacity(0.4 * opacity)
-      ..strokeWidth = 1;
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke
+      ..maskFilter = null;
     if (math.sin(t * 8) > 0.7) {
       for (int i = 0; i < 4; i++) {
         final y = -radius * 0.4 + i * radius * 0.2;
         canvas.drawLine(
           Offset(-radius * 0.4, y),
           Offset(-radius * 0.4 + _random.nextDouble() * radius * 0.5, y),
-          errorPaint,
+          _errorPaint,
         );
       }
     }
   }
 
-  void _renderPlasmaTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderPlasmaTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Electric arcs and plasma discharge
-    final arcPaint = Paint()
+    _arcPaint
       ..color = type.color.withOpacity(0.7 * opacity)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
     for (int i = 0; i < 5; i++) {
       if (math.sin(t * 12 + i * 1.5) > 0.4) {
@@ -3843,26 +4584,31 @@ class Enemy extends PositionComponent {
         final endR = radius * (0.9 + _random.nextDouble() * 0.3);
 
         // Jagged lightning
-        final start = Offset(math.cos(angle) * startR, math.sin(angle) * startR);
+        final start =
+            Offset(math.cos(angle) * startR, math.sin(angle) * startR);
         final mid = Offset(
-          math.cos(angle + 0.2) * (startR + endR) / 2 + _random.nextDouble() * radius * 0.2,
-          math.sin(angle + 0.2) * (startR + endR) / 2 + _random.nextDouble() * radius * 0.2,
+          math.cos(angle + 0.2) * (startR + endR) / 2 +
+              _random.nextDouble() * radius * 0.2,
+          math.sin(angle + 0.2) * (startR + endR) / 2 +
+              _random.nextDouble() * radius * 0.2,
         );
         final end = Offset(math.cos(angle) * endR, math.sin(angle) * endR);
 
-        canvas.drawLine(start, mid, arcPaint);
-        canvas.drawLine(mid, end, arcPaint);
+        canvas.drawLine(start, mid, _arcPaint);
+        canvas.drawLine(mid, end, _arcPaint);
 
         if (allowBlur) {
-          arcPaint.maskFilter = _blur(true, 4);
-          canvas.drawLine(start, mid, arcPaint..color = type.color.withOpacity(0.3 * opacity));
-          arcPaint.maskFilter = null;
+          _arcPaint.maskFilter = _blur(true, 4);
+          canvas.drawLine(start, mid,
+              _arcPaint..color = type.color.withOpacity(0.3 * opacity));
+          _arcPaint.maskFilter = null;
         }
       }
     }
   }
 
-  void _renderCrystalTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderCrystalTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Floating crystal shards
     for (int i = 0; i < 5; i++) {
       final angle = (i / 5) * math.pi * 2 + t * 0.8;
@@ -3882,27 +4628,26 @@ class Enemy extends PositionComponent {
       _reusableOverlayPath.lineTo(-size * 0.5, 0);
       _reusableOverlayPath.close();
 
-      canvas.drawPath(
-        _reusableOverlayPath,
-        Paint()..color = type.color.withOpacity(0.6 * opacity),
-      );
-      canvas.drawPath(
-        _reusableOverlayPath,
-        Paint()
-          ..color = Colors.white.withOpacity(0.4 * opacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
-      );
+      _shardPaint.color = type.color.withOpacity(0.6 * opacity);
+      canvas.drawPath(_reusableOverlayPath, _shardPaint);
+
+      _strokePaint
+        ..color = Colors.white.withOpacity(0.4 * opacity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..maskFilter = null;
+      canvas.drawPath(_reusableOverlayPath, _strokePaint);
       canvas.restore();
     }
   }
 
-  void _renderMechTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderMechTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Mechanical gears and warning lights
     // Rotating gear
     canvas.save();
     canvas.rotate(t * 2);
-    final gearPaint = Paint()
+    _gearPaint
       ..color = const Color(0xFF666666).withOpacity(0.5 * opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -3911,27 +4656,33 @@ class Enemy extends PositionComponent {
       final angle = (i / teeth) * math.pi * 2;
       canvas.drawLine(
         Offset(math.cos(angle) * radius * 0.6, math.sin(angle) * radius * 0.6),
-        Offset(math.cos(angle) * radius * 0.75, math.sin(angle) * radius * 0.75),
-        gearPaint,
+        Offset(
+            math.cos(angle) * radius * 0.75, math.sin(angle) * radius * 0.75),
+        _gearPaint,
       );
     }
     canvas.restore();
 
     // Warning stripes
-    final warnPaint = Paint()
-      ..color = const Color(0xFFFFCC00).withOpacity(math.sin(t * 8) > 0 ? 0.6 : 0.2 * opacity);
+    _warnPaint
+      ..color = const Color(0xFFFFCC00)
+          .withOpacity(math.sin(t * 8) > 0 ? 0.6 : 0.2 * opacity)
+      ..style = PaintingStyle.fill;
     for (int i = 0; i < 3; i++) {
       final x = -radius * 0.4 + i * radius * 0.2;
       canvas.drawRect(
         Rect.fromLTWH(x, radius * 0.5, radius * 0.1, radius * 0.15),
-        warnPaint,
+        _warnPaint,
       );
     }
   }
 
-  void _renderMatrixTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderMatrixTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Matrix code rain
-    final codePaint = Paint()..color = const Color(0xFF00FF00).withOpacity(0.5 * opacity);
+    _codePaint
+      ..color = const Color(0xFF00FF00).withOpacity(0.5 * opacity)
+      ..style = PaintingStyle.fill;
     for (int i = 0; i < 6; i++) {
       final x = -radius * 0.6 + i * radius * 0.25;
       final yOffset = ((t * 3 + i * 0.4) % 2.0) * radius;
@@ -3940,16 +4691,24 @@ class Enemy extends PositionComponent {
         if (y > -radius && y < radius) {
           canvas.drawRect(
             Rect.fromLTWH(x, y, radius * 0.08, radius * 0.06),
-            codePaint..color = const Color(0xFF00FF00).withOpacity((0.3 + j * 0.15) * opacity),
+            _codePaint
+              ..color = const Color(0xFF00FF00)
+                  .withOpacity((0.3 + j * 0.15) * opacity),
           );
         }
       }
     }
   }
 
-  void _renderStormTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderStormTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Storm clouds and lightning
     // Swirling cloud
+    _windPaint
+      ..color = const Color(0xFF336699).withOpacity(0.3 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3
+      ..maskFilter = _blur(allowBlur, 4);
     for (int i = 0; i < 3; i++) {
       final cloudAngle = t * (3 + i * 0.5);
       canvas.drawArc(
@@ -3957,29 +4716,31 @@ class Enemy extends PositionComponent {
         cloudAngle,
         math.pi * 0.6,
         false,
-        Paint()
-          ..color = const Color(0xFF336699).withOpacity(0.3 * opacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3
-          ..maskFilter = _blur(allowBlur, 4),
+        _windPaint,
       );
     }
 
     // Lightning flash
     if (math.sin(t * 15) > 0.9) {
+      _pulsePaint
+        ..color = Colors.white.withOpacity(0.3 * opacity)
+        ..style = PaintingStyle.fill
+        ..maskFilter = _blur(allowBlur, 10);
       canvas.drawCircle(
         Offset.zero,
         radius * 1.2,
-        Paint()
-          ..color = Colors.white.withOpacity(0.3 * opacity)
-          ..maskFilter = _blur(allowBlur, 10),
+        _pulsePaint,
       );
     }
   }
 
-  void _renderVoidTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderVoidTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Consuming darkness and soul drain
     // Darkness tendrils reaching inward
+    _voidPaint
+      ..color = type.color.withOpacity(0.4 * opacity)
+      ..maskFilter = _blur(allowBlur, 3);
     for (int i = 0; i < 6; i++) {
       final angle = (i / 6) * math.pi * 2 + t * 0.3;
       final startR = radius * 1.3;
@@ -3990,26 +4751,28 @@ class Enemy extends PositionComponent {
       canvas.drawCircle(
         Offset(math.cos(angle) * currentR, math.sin(angle) * currentR),
         radius * 0.05,
-        Paint()
-          ..color = type.color.withOpacity(0.4 * opacity)
-          ..maskFilter = _blur(allowBlur, 3),
+        _voidPaint,
       );
     }
+    _voidPaint.maskFilter = null;
 
     // Central void
+    _shadowPaint
+      ..color = Colors.black.withOpacity(0.7 * opacity)
+      ..maskFilter = _blur(allowBlur, 5);
     canvas.drawCircle(
       Offset.zero,
       radius * 0.25,
-      Paint()
-        ..color = Colors.black.withOpacity(0.7 * opacity)
-        ..maskFilter = _blur(allowBlur, 5),
+      _shadowPaint,
     );
+    _shadowPaint.maskFilter = null;
   }
 
-  void _renderOmegaTerror(Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
+  void _renderOmegaTerror(
+      Canvas canvas, double radius, double opacity, bool allowBlur, double t) {
     // Ultimate terror - all effects combined
     // Omega symbol aura
-    final omegaPaint = Paint()
+    _omegaPaint
       ..color = type.color.withOpacity(0.6 * opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
@@ -4020,22 +4783,28 @@ class Enemy extends PositionComponent {
       canvas.save();
       canvas.rotate(t * (2 + i) * (i.isEven ? 1 : -1));
       canvas.drawOval(
-        Rect.fromCenter(center: Offset.zero, width: radius * (1.2 + i * 0.15), height: radius * (0.6 + i * 0.1)),
-        omegaPaint,
+        Rect.fromCenter(
+            center: Offset.zero,
+            width: radius * (1.2 + i * 0.15),
+            height: radius * (0.6 + i * 0.1)),
+        _omegaPaint,
       );
       canvas.restore();
     }
 
     // Reality distortion waves
+    _pulsePaint
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..maskFilter = null;
     for (int i = 0; i < 4; i++) {
       final waveR = radius * (0.8 + ((t * 2 + i * 0.5) % 1.0) * 0.5);
+      _pulsePaint.color = type.color
+          .withOpacity((1 - ((t * 2 + i * 0.5) % 1.0)) * 0.3 * opacity);
       canvas.drawCircle(
         Offset.zero,
         waveR,
-        Paint()
-          ..color = type.color.withOpacity((1 - ((t * 2 + i * 0.5) % 1.0)) * 0.3 * opacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+        _pulsePaint,
       );
     }
 
@@ -4043,22 +4812,24 @@ class Enemy extends PositionComponent {
     for (int i = 0; i < 5; i++) {
       final flameX = (i - 2) * radius * 0.2;
       final flameH = radius * (0.3 + math.sin(t * 8 + i) * 0.1);
+      _flamePaint
+        ..color = const Color(0xFFFF3300).withOpacity(0.5 * opacity)
+        ..maskFilter = _blur(allowBlur, 4);
       canvas.drawOval(
         Rect.fromCenter(
           center: Offset(flameX, -radius * 0.7 - flameH / 2),
           width: radius * 0.12,
           height: flameH,
         ),
-        Paint()
-          ..color = const Color(0xFFFF3300).withOpacity(0.5 * opacity)
-          ..maskFilter = _blur(allowBlur, 4),
+        _flamePaint,
       );
     }
   }
 
   /// Renders pulsing energy veins across the enemy body
   /// Creates a cyberpunk aesthetic with glowing vein network
-  void _renderEnergyVeins(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderEnergyVeins(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     // HYPER-OPTIMIZED: Precalculated values, reuse static paints
     final t = _animationTimer;
     final walkT = _walkPhase;
@@ -4073,7 +4844,8 @@ class Enemy extends PositionComponent {
     final movementPulse = math.sin(walkT * 2) * 0.3 + 0.7;
 
     // Combined intensity
-    final baseIntensity = (heartbeatIntensity * 0.6 + movementPulse * 0.4) * opacity;
+    final baseIntensity =
+        (heartbeatIntensity * 0.6 + movementPulse * 0.4) * opacity;
 
     // Precalculate common radius multipliers
     final r02 = radius * 0.2;
@@ -4156,7 +4928,8 @@ class Enemy extends PositionComponent {
 
     // Center node (heart)
     final centerPulse = 1.0 + heartbeatIntensity * 0.3;
-    canvas.drawCircle(Offset.zero, r02 * 0.4 * centerPulse, _energyVeinNodePaint);
+    canvas.drawCircle(
+        Offset.zero, r02 * 0.4 * centerPulse, _energyVeinNodePaint);
 
     // Junction nodes at branch points
     for (int i = 0; i < 6; i++) {
@@ -4169,7 +4942,8 @@ class Enemy extends PositionComponent {
 
       // End node
       final endDist = r06 + math.sin(t * 3 + i * 0.8) * 0.1 * radius;
-      _tempOffset2 = Offset(math.cos(angle) * endDist, math.sin(angle) * endDist);
+      _tempOffset2 =
+          Offset(math.cos(angle) * endDist, math.sin(angle) * endDist);
       canvas.drawCircle(_tempOffset2, 1.5 * nodePulse, _energyVeinNodePaint);
     }
 
@@ -4195,7 +4969,8 @@ class Enemy extends PositionComponent {
         // Fade in/out at ends
         final dotOpacity = math.sin(travelPhase * math.pi);
         if (dotOpacity > 0.1) {
-          _energyVeinDotPaint.color = Colors.white.withOpacity(0.85 * baseIntensity * dotOpacity);
+          _energyVeinDotPaint.color =
+              Colors.white.withOpacity(0.85 * baseIntensity * dotOpacity);
           _tempOffset1 = Offset(cosAngle * dotDist, sinAngle * dotDist);
           canvas.drawCircle(_tempOffset1, 1.5, _energyVeinDotPaint);
         }
@@ -4220,7 +4995,8 @@ class Enemy extends PositionComponent {
       final arcRadius = r04 * arcPulse;
 
       _tempOffset1 = Offset(math.cos(angle1) * r03, math.sin(angle1) * r03);
-      _tempOffset2 = Offset(math.cos(midAngle) * arcRadius, math.sin(midAngle) * arcRadius);
+      _tempOffset2 = Offset(
+          math.cos(midAngle) * arcRadius, math.sin(midAngle) * arcRadius);
       _tempOffset3 = Offset(math.cos(angle2) * r03, math.sin(angle2) * r03);
 
       // Draw as two line segments forming an arc approximation
@@ -4229,8 +5005,10 @@ class Enemy extends PositionComponent {
 
       // Inner ring micro-veins
       final innerAngle = midAngle + math.pi / 12;
-      _tempOffset1 = Offset(math.cos(innerAngle) * r02, math.sin(innerAngle) * r02);
-      _tempOffset2 = Offset(math.cos(innerAngle) * r03, math.sin(innerAngle) * r03);
+      _tempOffset1 =
+          Offset(math.cos(innerAngle) * r02, math.sin(innerAngle) * r02);
+      _tempOffset2 =
+          Offset(math.cos(innerAngle) * r03, math.sin(innerAngle) * r03);
       canvas.drawLine(_tempOffset1, _tempOffset2, _energyVeinMicroPaint);
     }
 
@@ -4239,7 +5017,8 @@ class Enemy extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     // Only render on strong heartbeat pulses
     if (heartbeatIntensity > 0.7) {
-      final pulseExpand = (heartbeatIntensity - 0.7) / 0.3; // 0 to 1 during pulse
+      final pulseExpand =
+          (heartbeatIntensity - 0.7) / 0.3; // 0 to 1 during pulse
       final pulseRadius = r02 + pulseExpand * r06;
       final pulseOpacity = (1.0 - pulseExpand) * 0.4 * opacity;
 
@@ -4254,24 +5033,28 @@ class Enemy extends PositionComponent {
       // Inner bright flash
       if (pulseExpand < 0.3) {
         _energyVeinHeartbeatPaint
-          ..color = Colors.white.withOpacity(0.6 * opacity * (1.0 - pulseExpand / 0.3))
+          ..color = Colors.white
+              .withOpacity(0.6 * opacity * (1.0 - pulseExpand / 0.3))
           ..style = PaintingStyle.fill
           ..maskFilter = _blur(allowBlur, 6);
-        canvas.drawCircle(Offset.zero, r02 * 0.5 * (1.0 - pulseExpand), _energyVeinHeartbeatPaint);
+        canvas.drawCircle(Offset.zero, r02 * 0.5 * (1.0 - pulseExpand),
+            _energyVeinHeartbeatPaint);
       }
     }
   }
 
-  void _renderCorruptionAura(Canvas canvas, double radius, double opacity, bool allowBlur) {
-    final corruption =
-        ((1 - healthPercent) * 0.7 + threatTier * 0.08 + (isPhantom ? 0.2 : 0.0))
-            .clamp(0.2, 1.0);
+  void _renderCorruptionAura(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
+    final corruption = ((1 - healthPercent) * 0.7 +
+            threatTier * 0.08 +
+            (isPhantom ? 0.2 : 0.0))
+        .clamp(0.2, 1.0);
     final pulse = 0.6 + math.sin(_animationTimer * 8) * 0.2;
     final intensity = (corruption * pulse).clamp(0.2, 1.0);
-    final auraColor =
-        Color.lerp(type.color, const Color(0xFFFF005A), 0.45 + corruption * 0.3)!;
+    final auraColor = Color.lerp(
+        type.color, const Color(0xFFFF005A), 0.45 + corruption * 0.3)!;
 
-    final bracePaint = Paint()
+    _bracePaint
       ..color = auraColor.withOpacity(0.28 * opacity * intensity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4
@@ -4288,16 +5071,18 @@ class Enemy extends PositionComponent {
       canvas.drawLine(
         Offset(-radius * 0.12, 0),
         Offset(radius * 0.12, 0),
-        bracePaint,
+        _bracePaint,
       );
       canvas.restore();
     }
 
     final spikeCount = 6 + (corruption * 6).round();
-    final spikePaint = Paint()
+    _spikePaint
       ..color = auraColor.withOpacity(0.35 * opacity * intensity)
       ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.square;
+      ..strokeCap = StrokeCap.square
+      ..style = PaintingStyle.stroke
+      ..maskFilter = null;
     for (int i = 0; i < spikeCount; i++) {
       final angle = (i / spikeCount) * math.pi * 2 + _animationTimer * 0.7;
       final inner = radius * 1.02;
@@ -4305,12 +5090,13 @@ class Enemy extends PositionComponent {
       canvas.drawLine(
         Offset(math.cos(angle) * inner, math.sin(angle) * inner),
         Offset(math.cos(angle) * outer, math.sin(angle) * outer),
-        spikePaint,
+        _spikePaint,
       );
     }
   }
 
-  void _renderGlitchOverlay(Canvas canvas, double radius, double opacity, bool allowBlur) {
+  void _renderGlitchOverlay(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
     final rand = _visualRandom;
     final hpFactor = 1 - healthPercent;
     final baseIntensity =
@@ -4321,49 +5107,46 @@ class Enemy extends PositionComponent {
     final trigger = rand.nextDouble() < (0.35 + baseIntensity * 0.4);
     if (!trigger) return;
 
-    final glitchColor =
-        Color.lerp(type.color, const Color(0xFFFF004C), 0.6)!;
-    final scanColor =
-        Color.lerp(type.color, const Color(0xFF33CCFF), 0.55)!;
+    final glitchColor = Color.lerp(type.color, const Color(0xFFFF004C), 0.6)!;
+    final scanColor = Color.lerp(type.color, const Color(0xFF33CCFF), 0.55)!;
 
     final bodyPath = _createBodyPath(radius);
     final offset = (math.sin(_animationTimer * 20) * 0.6 +
             (rand.nextDouble() - 0.5) * 0.5) *
         intensity;
 
-    final chromaPaintA = Paint()
-      ..color = const Color(0xFFFF3355).withOpacity(0.25 * opacity * intensity)
+    _chromaPaint
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    final chromaPaintB = Paint()
-      ..color = const Color(0xFF33CCFF).withOpacity(0.22 * opacity * intensity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0;
-    if (allowBlur) {
-      chromaPaintA.maskFilter = _blur(true, 2);
-      chromaPaintB.maskFilter = _blur(true, 2);
-    }
+      ..strokeWidth = 1.0
+      ..maskFilter = allowBlur ? _blur(true, 2) : null
+      ..color = const Color(0xFFFF3355).withOpacity(0.25 * opacity * intensity);
 
     canvas.save();
     canvas.translate(-offset, 0);
-    canvas.drawPath(bodyPath, chromaPaintA);
+    canvas.drawPath(bodyPath, _chromaPaint);
     canvas.restore();
     canvas.save();
     canvas.translate(offset, 0);
-    canvas.drawPath(bodyPath, chromaPaintB);
+    _chromaPaint.color =
+        const Color(0xFF33CCFF).withOpacity(0.22 * opacity * intensity);
+    canvas.drawPath(bodyPath, _chromaPaint);
     canvas.restore();
+    _chromaPaint
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
 
     canvas.save();
     canvas.clipPath(bodyPath);
 
-    final slicePaint = Paint()
-      ..color = glitchColor.withOpacity(0.18 * opacity * intensity);
-    if (allowBlur) {
-      slicePaint.maskFilter = _blur(true, 2);
-    }
-    final scanPaint = Paint()
+    _slicePaint
+      ..color = glitchColor.withOpacity(0.18 * opacity * intensity)
+      ..style = PaintingStyle.fill
+      ..maskFilter = allowBlur ? _blur(true, 2) : null;
+    _scanPaint
       ..color = scanColor.withOpacity(0.12 * opacity * intensity)
-      ..strokeWidth = 1.0;
+      ..strokeWidth = 1.0
+      ..style = PaintingStyle.stroke
+      ..maskFilter = null;
     final sliceCount = 3 + (baseIntensity * 3).round();
     for (int i = 0; i < sliceCount; i++) {
       final sliceH = radius * (0.08 + rand.nextDouble() * 0.14);
@@ -4371,7 +5154,7 @@ class Enemy extends PositionComponent {
       final xShift = (rand.nextDouble() - 0.5) * radius * 0.35 * intensity;
       canvas.drawRect(
         Rect.fromLTWH(-radius * 1.4 + xShift, y, radius * 2.8, sliceH),
-        slicePaint,
+        _slicePaint,
       );
     }
 
@@ -4393,23 +5176,24 @@ class Enemy extends PositionComponent {
 
     for (int i = 0; i < 4; i++) {
       final y = -radius + (radius * 2) * ((pulse * 0.6 + i / 4) % 1.0);
-      canvas.drawLine(Offset(-radius * 1.2, y), Offset(radius * 1.2, y), scanPaint);
+      canvas.drawLine(
+          Offset(-radius * 1.2, y), Offset(radius * 1.2, y), _scanPaint);
     }
     canvas.restore();
 
-    final shardPaint = Paint()
-      ..color = glitchColor.withOpacity(0.5 * opacity * intensity);
+    _shardPaint.color = glitchColor.withOpacity(0.5 * opacity * intensity);
     for (int i = 0; i < 4; i++) {
       final bx = (rand.nextDouble() - 0.5) * radius * 2.4;
       final by = (rand.nextDouble() - 0.5) * radius * 2.4;
       final w = 2 + rand.nextDouble() * 3;
-      canvas.drawRect(Rect.fromLTWH(bx, by, w, 1.5), shardPaint);
+      canvas.drawRect(Rect.fromLTWH(bx, by, w, 1.5), _shardPaint);
     }
+    _slicePaint.maskFilter = null;
   }
 
   void _applyWorldVisuals(Canvas canvas) {
     canvas.save();
-    
+
     final t = _animationTimer;
 
     switch (worldIndex) {
@@ -4432,7 +5216,7 @@ class Enemy extends PositionComponent {
         break;
       case 5: // Shard Vault - Sharp Jumps
         if ((t * 2).toInt() % 2 == 0) {
-           canvas.scale(1.02);
+          canvas.scale(1.02);
         }
         break;
       default:
@@ -4443,7 +5227,7 @@ class Enemy extends PositionComponent {
 
   void _drawInternalCircuitry(Canvas canvas, double radius, double opacity) {
     if (Enemy.lowFx || Enemy.forceLowFx) return;
-    
+
     _circuitPaint
       ..color = type.color.withOpacity(0.2 * opacity)
       ..style = PaintingStyle.stroke
@@ -4457,7 +5241,8 @@ class Enemy extends PositionComponent {
       ..style = PaintingStyle.fill;
 
     for (final segment in _circuitSegments) {
-      final start = Offset(segment.start.dx * radius, segment.start.dy * radius);
+      final start =
+          Offset(segment.start.dx * radius, segment.start.dy * radius);
       final end = Offset(segment.end.dx * radius, segment.end.dy * radius);
       canvas.drawLine(start, end, _circuitPaint);
       const dotSize = 1.6;
@@ -4521,8 +5306,10 @@ class Enemy extends PositionComponent {
           final angle = i * math.pi / points + _animationTimer * 1.6;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
-          if (i == 0) _reusableBodyPath.moveTo(x, y);
-          else _reusableBodyPath.lineTo(x, y);
+          if (i == 0)
+            _reusableBodyPath.moveTo(x, y);
+          else
+            _reusableBodyPath.lineTo(x, y);
         }
         break;
 
@@ -4533,8 +5320,10 @@ class Enemy extends PositionComponent {
           final pulse = 1.0 + math.sin(_animationTimer * 2 + i) * 0.05;
           final x = math.cos(angle) * radius * pulse;
           final y = math.sin(angle) * radius * pulse;
-          if (i == 0) _reusableBodyPath.moveTo(x, y);
-          else _reusableBodyPath.lineTo(x, y);
+          if (i == 0)
+            _reusableBodyPath.moveTo(x, y);
+          else
+            _reusableBodyPath.lineTo(x, y);
         }
         break;
 
@@ -4556,12 +5345,15 @@ class Enemy extends PositionComponent {
         const spikes = 8;
         for (int i = 0; i < spikes * 2; i++) {
           final angle = (i / (spikes * 2)) * math.pi * 2;
-          final jitter = math.sin(_animationTimer * 12 + i * 0.5) * radius * 0.08;
+          final jitter =
+              math.sin(_animationTimer * 12 + i * 0.5) * radius * 0.08;
           final r = i.isEven ? radius * 0.95 + jitter : radius * 0.6;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
-          if (i == 0) _reusableBodyPath.moveTo(x, y);
-          else _reusableBodyPath.lineTo(x, y);
+          if (i == 0)
+            _reusableBodyPath.moveTo(x, y);
+          else
+            _reusableBodyPath.lineTo(x, y);
         }
         break;
 
@@ -4574,8 +5366,10 @@ class Enemy extends PositionComponent {
           final r = radius * (0.7 + (i % 2) * 0.25) + wobble;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
-          if (i == 0) _reusableBodyPath.moveTo(x, y);
-          else _reusableBodyPath.lineTo(x, y);
+          if (i == 0)
+            _reusableBodyPath.moveTo(x, y);
+          else
+            _reusableBodyPath.lineTo(x, y);
         }
         break;
 
@@ -4584,12 +5378,15 @@ class Enemy extends PositionComponent {
         const voidPoints = 7;
         for (int i = 0; i < voidPoints; i++) {
           final angle = (i / voidPoints) * math.pi * 2;
-          final pulse = math.sin(_animationTimer * 1.5 + i * 0.8) * radius * 0.15;
+          final pulse =
+              math.sin(_animationTimer * 1.5 + i * 0.8) * radius * 0.15;
           final r = radius * (0.75 + (i % 2) * 0.2) + pulse;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
-          if (i == 0) _reusableBodyPath.moveTo(x, y);
-          else _reusableBodyPath.lineTo(x, y);
+          if (i == 0)
+            _reusableBodyPath.moveTo(x, y);
+          else
+            _reusableBodyPath.lineTo(x, y);
         }
         break;
 
@@ -4598,13 +5395,19 @@ class Enemy extends PositionComponent {
         const omegaPoints = 10;
         for (int i = 0; i < omegaPoints; i++) {
           final angle = (i / omegaPoints) * math.pi * 2;
-          final layer = (i % 3 == 0) ? 1.0 : (i % 3 == 1) ? 0.8 : 0.9;
+          final layer = (i % 3 == 0)
+              ? 1.0
+              : (i % 3 == 1)
+                  ? 0.8
+                  : 0.9;
           final pulse = math.sin(_animationTimer * 3 + i) * radius * 0.08;
           final r = radius * layer + pulse;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
-          if (i == 0) _reusableBodyPath.moveTo(x, y);
-          else _reusableBodyPath.lineTo(x, y);
+          if (i == 0)
+            _reusableBodyPath.moveTo(x, y);
+          else
+            _reusableBodyPath.lineTo(x, y);
         }
         break;
     }
@@ -4710,20 +5513,23 @@ class Enemy extends PositionComponent {
     }
     _reusableCrownPath.close();
 
-    final fillPaint = Paint()
-      ..color = color.withOpacity((reduceFx ? 0.3 : 0.45) * opacity);
-    final strokePaint = Paint()
+    _fillPaint
+      ..color = color.withOpacity((reduceFx ? 0.3 : 0.45) * opacity)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
+    _strokePaint
       ..color = color.withOpacity(0.7 * opacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = reduceFx ? 1.0 : 1.6
       ..maskFilter = _blur(allowBlur, reduceFx ? 2 : 4);
 
-    canvas.drawPath(_reusableCrownPath, fillPaint);
-    canvas.drawPath(_reusableCrownPath, strokePaint);
+    canvas.drawPath(_reusableCrownPath, _fillPaint);
+    canvas.drawPath(_reusableCrownPath, _strokePaint);
+    _strokePaint.maskFilter = null;
 
     if (threatTier >= 2) {
       final eyeRadius = radius * (0.12 + threatTier * 0.03);
-      final eyePaint = Paint()
+      _eyePaint
         ..color = color.withOpacity(0.9 * opacity)
         ..maskFilter = _blur(allowBlur, 4);
       _reusableOverlayPath.reset();
@@ -4732,11 +5538,12 @@ class Enemy extends PositionComponent {
       _reusableOverlayPath.lineTo(0, eyeRadius);
       _reusableOverlayPath.lineTo(-eyeRadius, 0);
       _reusableOverlayPath.close();
-      canvas.drawPath(_reusableOverlayPath, eyePaint);
+      canvas.drawPath(_reusableOverlayPath, _eyePaint);
+      _eyePaint.maskFilter = null;
     }
 
     if (!reduceFx && threatTier >= 3) {
-      final arcPaint = Paint()
+      _arcPaint
         ..color = color.withOpacity(0.4 * opacity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.2
@@ -4749,14 +5556,15 @@ class Enemy extends PositionComponent {
           start,
           math.pi / 3,
           false,
-          arcPaint,
+          _arcPaint,
         );
       }
+      _arcPaint.maskFilter = null;
     }
   }
 
   void _renderSlowEffect(Canvas canvas, double radius, bool allowBlur) {
-    final slowPaint = Paint()
+    _slowPaint
       ..color = const Color(0xFF00FFFF).withOpacity(0.4)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
@@ -4769,11 +5577,11 @@ class Enemy extends PositionComponent {
       final y1 = math.sin(angle) * radius * 0.9;
       final x2 = math.cos(angle) * radius * 1.3;
       final y2 = math.sin(angle) * radius * 1.3;
-      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), slowPaint);
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _slowPaint);
     }
 
     // Cold aura
-    final auraPaint = Paint()
+    _slowAuraPaint
       ..color = const Color(0xFF00FFFF).withOpacity(0.15)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2
@@ -4785,7 +5593,7 @@ class Enemy extends PositionComponent {
     _reusableOverlayPath.lineTo(0, chillSize);
     _reusableOverlayPath.lineTo(-chillSize, 0);
     _reusableOverlayPath.close();
-    canvas.drawPath(_reusableOverlayPath, auraPaint);
+    canvas.drawPath(_reusableOverlayPath, _slowAuraPaint);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -4795,86 +5603,86 @@ class Enemy extends PositionComponent {
     // Safely check if game reference is available
     if (!isMounted) return;
 
-    List<Enemy> enemies;
-    try {
-      final game = findGame() as BoredGamesGame?;
-      if (game == null) return;
-      enemies = game.enemyManager.activeEnemies;
-    } catch (_) {
-      return; // Game not fully mounted yet
-    }
+    final game = _cachedGame ?? findGame();
+    if (game is! BoredGamesGame) return;
+    _cachedGame = game;
+    final enemies = game.enemyManager.activeEnemies;
 
     // Get this enemy's index to only draw chains to enemies with higher index
     // This prevents drawing the same chain twice
-    final myIndex = enemies.indexOf(this);
-    if (myIndex < 0) return;
+    var myIndex = activeIndex;
+    if (myIndex < 0 ||
+        myIndex >= enemies.length ||
+        !identical(enemies[myIndex], this)) {
+      return;
+    }
 
     final myCenter = position;
     final animPhase = _animationPhase;
 
     // Determine chain intensity based on health and type
     final healthFactor = 1.0 - healthPercent; // More chains when damaged
-    final isElectricType = type == EnemyType.sparkDrone ||
-        type == EnemyType.ionSurge ||
-        type == EnemyType.plasmaCore ||
-        type == EnemyType.thunderHulk ||
-        type == EnemyType.lightningWraith ||
-        type == EnemyType.stormRunner ||
-        type == EnemyType.cycloneSpirit ||
-        type == EnemyType.thunderTitan;
-    final typeBonus = isElectricType ? 0.6 : 0.0;
+    final typeBonus = _isElectricType ? 0.6 : 0.0;
     final chainIntensity = (healthFactor * 0.5 + typeBonus).clamp(0.0, 1.0);
 
     // Skip if no chain intensity
     if (chainIntensity < 0.1) return;
 
     // Electric chain colors
-    final chainColor = isElectricType
-        ? type.color
-        : Color.lerp(type.color, const Color(0xFF00FFFF), 0.5)!;
-    final hslColor = HSLColor.fromColor(chainColor);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
+    final chainColor = _chainColor;
+    final secondaryColor = _chainSecondaryColor;
+    final minDistance = _lightningChainMinDistance;
+    final maxDistance = _lightningChainMaxDistance;
+    final minDistanceSq = minDistance * minDistance;
+    final maxDistanceSq = maxDistance * maxDistance;
 
-    for (int i = myIndex + 1; i < enemies.length; i++) {
-      final otherEnemy = enemies[i];
+    final candidates = _lightningCandidates;
+    game.enemyManager.queryEnemiesInRange(myCenter, maxDistance, candidates);
+
+    for (int i = 0; i < candidates.length; i++) {
+      final otherEnemy = candidates[i];
+      if (identical(otherEnemy, this)) continue;
+      final otherIndex = otherEnemy.activeIndex;
+      if (otherIndex < 0 || otherIndex <= myIndex) continue;
       final otherCenter = otherEnemy.position;
-      final distance = myCenter.distanceTo(otherCenter);
+      final dx = otherCenter.x - myCenter.x;
+      final dy = otherCenter.y - myCenter.y;
+      final distanceSq = (dx * dx) + (dy * dy);
 
       // Check if within chain range
-      if (distance < _lightningChainMinDistance || distance > _lightningChainMaxDistance) continue;
+      if (distanceSq < minDistanceSq || distanceSq > maxDistanceSq) continue;
+      final distance = math.sqrt(distanceSq);
+      if (distance <= 0) continue;
+      final invDistance = 1.0 / distance;
+      final dirX = dx * invDistance;
+      final dirY = dy * invDistance;
+      final perpX = -dirY;
+      final perpY = dirX;
 
       // Calculate combined chain probability
       final otherHealthFactor = 1.0 - otherEnemy.healthPercent;
-      final otherIsElectric = otherEnemy.type == EnemyType.sparkDrone ||
-          otherEnemy.type == EnemyType.ionSurge ||
-          otherEnemy.type == EnemyType.plasmaCore ||
-          otherEnemy.type == EnemyType.thunderHulk ||
-          otherEnemy.type == EnemyType.lightningWraith ||
-          otherEnemy.type == EnemyType.stormRunner ||
-          otherEnemy.type == EnemyType.cycloneSpirit ||
-          otherEnemy.type == EnemyType.thunderTitan;
-      final otherTypeBonus = otherIsElectric ? 0.6 : 0.0;
-      final otherIntensity = (otherHealthFactor * 0.5 + otherTypeBonus).clamp(0.0, 1.0);
+      final otherTypeBonus = otherEnemy._isElectricType ? 0.6 : 0.0;
+      final otherIntensity =
+          (otherHealthFactor * 0.5 + otherTypeBonus).clamp(0.0, 1.0);
 
-      final combinedIntensity = ((chainIntensity + otherIntensity) / 2).clamp(0.0, 1.0);
+      final combinedIntensity =
+          ((chainIntensity + otherIntensity) / 2).clamp(0.0, 1.0);
 
       // Distance falloff
-      final distanceFactor = 1.0 - ((distance - _lightningChainMinDistance) /
-          (_lightningChainMaxDistance - _lightningChainMinDistance));
+      final distanceFactor =
+          1.0 - ((distance - minDistance) / (maxDistance - minDistance));
       final chainOpacity = combinedIntensity * distanceFactor * opacity * 0.7;
 
       if (chainOpacity < 0.1) continue;
 
       // Random flicker (chains appear and disappear)
-      final flickerSeed = (animPhase * 5 + myIndex * 7 + i * 13).floor();
       if (_lightningRandom.nextDouble() > chainOpacity + 0.3) continue;
 
       // Calculate start and end points (in local coordinates)
-      final direction = otherCenter - myCenter;
-      final startX = direction.x * 0.0; // Start from this enemy's center
-      final startY = direction.y * 0.0;
-      final endX = direction.x;
-      final endY = direction.y;
+      const startX = 0.0; // Start from this enemy's center
+      const startY = 0.0;
+      final endX = dx;
+      final endY = dy;
 
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 1: Outer glow (wide blur)
@@ -4915,12 +5723,20 @@ class Enemy extends PositionComponent {
           final branchY = startY + (endY - startY) * t;
 
           // Branch direction (perpendicular with random angle)
-          final mainAngle = math.atan2(endY - startY, endX - startX);
-          final branchAngle = mainAngle + (math.pi / 2) * (_lightningRandom.nextBool() ? 1 : -1) +
-              (_lightningRandom.nextDouble() - 0.5) * 0.8;
-          final branchLength = distance * 0.15 * (0.5 + _lightningRandom.nextDouble() * 0.5);
-          final branchEndX = branchX + math.cos(branchAngle) * branchLength;
-          final branchEndY = branchY + math.sin(branchAngle) * branchLength;
+          final branchLength =
+              distance * 0.15 * (0.5 + _lightningRandom.nextDouble() * 0.5);
+          final branchSign = _lightningRandom.nextBool() ? 1.0 : -1.0;
+          final jitter = (_lightningRandom.nextDouble() - 0.5) * 0.8;
+          var branchDirX = perpX * branchSign + dirX * jitter;
+          var branchDirY = perpY * branchSign + dirY * jitter;
+          final branchDirLen =
+              math.sqrt(branchDirX * branchDirX + branchDirY * branchDirY);
+          if (branchDirLen > 0) {
+            branchDirX /= branchDirLen;
+            branchDirY /= branchDirLen;
+          }
+          final branchEndX = branchX + branchDirX * branchLength;
+          final branchEndY = branchY + branchDirY * branchLength;
 
           _lightningPath.reset();
           _generateLightningBolt(
@@ -4932,7 +5748,8 @@ class Enemy extends PositionComponent {
             animPhase * 12 + b,
           );
 
-          _lightningCorePaint.color = secondaryColor.withOpacity(chainOpacity * 0.5);
+          _lightningCorePaint.color =
+              secondaryColor.withOpacity(chainOpacity * 0.5);
           canvas.drawPath(_lightningPath, _lightningCorePaint);
         }
       }
@@ -4943,12 +5760,16 @@ class Enemy extends PositionComponent {
       final sparkPulse = math.sin(animPhase * 8) * 0.3 + 0.7;
 
       // Spark at start
-      _lightningNodePaint.color = Colors.white.withOpacity(chainOpacity * 0.8 * sparkPulse);
-      canvas.drawCircle(Offset(startX, startY), 4 * sparkPulse, _lightningNodePaint);
+      _lightningNodePaint.color =
+          Colors.white.withOpacity(chainOpacity * 0.8 * sparkPulse);
+      canvas.drawCircle(
+          Offset(startX, startY), 4 * sparkPulse, _lightningNodePaint);
 
       // Spark at end
-      _lightningNodePaint.color = chainColor.withOpacity(chainOpacity * 0.6 * sparkPulse);
-      canvas.drawCircle(Offset(endX, endY), 5 * sparkPulse, _lightningNodePaint);
+      _lightningNodePaint.color =
+          chainColor.withOpacity(chainOpacity * 0.6 * sparkPulse);
+      canvas.drawCircle(
+          Offset(endX, endY), 5 * sparkPulse, _lightningNodePaint);
 
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 6: Electric sparks along the chain
@@ -4959,15 +5780,16 @@ class Enemy extends PositionComponent {
           final t = _lightningRandom.nextDouble();
           final sparkX = startX + (endX - startX) * t;
           final sparkY = startY + (endY - startY) * t;
-          final sparkOffset = (_lightningRandom.nextDouble() - 0.5) * distance * 0.1;
-          final perpAngle = math.atan2(endY - startY, endX - startX) + math.pi / 2;
-          final finalSparkX = sparkX + math.cos(perpAngle) * sparkOffset;
-          final finalSparkY = sparkY + math.sin(perpAngle) * sparkOffset;
+          final sparkOffset =
+              (_lightningRandom.nextDouble() - 0.5) * distance * 0.1;
+          final finalSparkX = sparkX + perpX * sparkOffset;
+          final finalSparkY = sparkY + perpY * sparkOffset;
 
           final sparkAlpha = math.sin(animPhase * 15 + s * 2) * 0.5 + 0.5;
           if (sparkAlpha < 0.3) continue;
 
-          _lightningSparkPaint.color = Colors.white.withOpacity(chainOpacity * sparkAlpha * 0.9);
+          _lightningSparkPaint.color =
+              Colors.white.withOpacity(chainOpacity * sparkAlpha * 0.9);
           canvas.drawCircle(
             Offset(finalSparkX, finalSparkY),
             1.5 + sparkAlpha * 1.5,
@@ -4981,8 +5803,10 @@ class Enemy extends PositionComponent {
   /// Generates a jagged lightning bolt path between two points
   void _generateLightningBolt(
     Path path,
-    double startX, double startY,
-    double endX, double endY,
+    double startX,
+    double startY,
+    double endX,
+    double endY,
     int segments,
     double displacement,
     double seed,
@@ -4997,9 +5821,6 @@ class Enemy extends PositionComponent {
     final normPerpX = perpLen > 0 ? perpX / perpLen : 0;
     final normPerpY = perpLen > 0 ? perpY / perpLen : 0;
 
-    double prevX = startX;
-    double prevY = startY;
-
     for (int i = 1; i < segments; i++) {
       final t = i / segments;
       final baseX = startX + dx * t;
@@ -5007,13 +5828,13 @@ class Enemy extends PositionComponent {
 
       // Add random displacement perpendicular to the line
       final dispSeed = seed + i * 3.7;
-      final dispAmount = math.sin(dispSeed) * displacement * (1 - math.pow(t * 2 - 1, 2));
+      final centered = t * 2 - 1;
+      final falloff = 1 - (centered * centered);
+      final dispAmount = math.sin(dispSeed) * displacement * falloff;
       final pointX = baseX + normPerpX * dispAmount;
       final pointY = baseY + normPerpY * dispAmount;
 
       path.lineTo(pointX, pointY);
-      prevX = pointX;
-      prevY = pointY;
     }
 
     path.lineTo(endX, endY);
@@ -5089,16 +5910,23 @@ class Enemy extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     if (!reduceFx) {
       canvas.save();
-      canvas.clipRRect(RRect.fromRectAndRadius(frameRect, const Radius.circular(1)));
+      canvas.clipRRect(
+          RRect.fromRectAndRadius(frameRect, const Radius.circular(1)));
 
       const hexSize = 4.0;
       final hexPhase = animPhase * 0.5;
       _holoBarHexPaint
         ..color = const Color(0xFF00FFFF).withOpacity(0.12 * baseOpacity);
 
-      for (double hx = frameRect.left; hx < frameRect.right; hx += hexSize * 1.5) {
-        for (double hy = frameRect.top; hy < frameRect.bottom; hy += hexSize * 1.73) {
-          final offsetX = ((hy - frameRect.top) ~/ (hexSize * 1.73)) % 2 == 0 ? 0.0 : hexSize * 0.75;
+      for (double hx = frameRect.left;
+          hx < frameRect.right;
+          hx += hexSize * 1.5) {
+        for (double hy = frameRect.top;
+            hy < frameRect.bottom;
+            hy += hexSize * 1.73) {
+          final offsetX = ((hy - frameRect.top) ~/ (hexSize * 1.73)) % 2 == 0
+              ? 0.0
+              : hexSize * 0.75;
           final pulse = math.sin(hexPhase + hx * 0.2 + hy * 0.15) * 0.5 + 0.5;
           if (pulse > 0.6) {
             _holoBarPath.reset();
@@ -5127,7 +5955,8 @@ class Enemy extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     if (!reduceFx) {
       canvas.save();
-      canvas.clipRRect(RRect.fromRectAndRadius(frameRect, const Radius.circular(1)));
+      canvas.clipRRect(
+          RRect.fromRectAndRadius(frameRect, const Radius.circular(1)));
 
       _holoBarScanlinePaint
         ..color = const Color(0xFF000000).withOpacity(0.15 * baseOpacity)
@@ -5135,7 +5964,9 @@ class Enemy extends PositionComponent {
         ..style = PaintingStyle.stroke;
 
       final scanOffset = (animPhase * 15) % 3;
-      for (double sy = frameRect.top + scanOffset; sy < frameRect.bottom; sy += 3) {
+      for (double sy = frameRect.top + scanOffset;
+          sy < frameRect.bottom;
+          sy += 3) {
         canvas.drawLine(
           Offset(frameRect.left, sy),
           Offset(frameRect.right, sy),
@@ -5159,13 +5990,20 @@ class Enemy extends PositionComponent {
     // Animated gradient fill
     final gradientPhase = animPhase * 2;
     final energyShift = math.sin(gradientPhase) * 0.1;
+    _healthGradientColors[0] =
+        healthColor.withOpacity((0.9 + energyShift) * baseOpacity);
+    _healthGradientColors[1] = Color.lerp(
+      healthColor,
+      const Color(0xFFFFFFFF),
+      0.3,
+    )!
+        .withOpacity((0.7 + energyShift) * baseOpacity);
+    _healthGradientColors[2] =
+        healthColor.withOpacity((0.85 - energyShift) * baseOpacity);
+    _healthGradientStops[1] = 0.5 + math.sin(gradientPhase * 0.7) * 0.2;
     final healthGradient = LinearGradient(
-      colors: [
-        healthColor.withOpacity((0.9 + energyShift) * baseOpacity),
-        Color.lerp(healthColor, const Color(0xFFFFFFFF), 0.3)!.withOpacity((0.7 + energyShift) * baseOpacity),
-        healthColor.withOpacity((0.85 - energyShift) * baseOpacity),
-      ],
-      stops: [0.0, 0.5 + math.sin(gradientPhase * 0.7) * 0.2, 1.0],
+      colors: _healthGradientColors,
+      stops: _healthGradientStops,
     ).createShader(fillRect);
 
     _holoBarDataPaint
@@ -5195,8 +6033,7 @@ class Enemy extends PositionComponent {
     // Layer 5: Glow on health bar
     // ═══════════════════════════════════════════════════════════════════════
     if (allowBlur) {
-      _holoBarGlowPaint
-        ..color = healthColor.withOpacity(0.5 * baseOpacity);
+      _holoBarGlowPaint..color = healthColor.withOpacity(0.5 * baseOpacity);
       canvas.drawRRect(
         RRect.fromRectAndRadius(fillRect, const Radius.circular(1)),
         _holoBarGlowPaint,
@@ -5275,7 +6112,8 @@ class Enemy extends PositionComponent {
 
     // Health percentage with animated flicker
     final healthPct = (healthPercent * 100).toInt();
-    final flickerIntensity = reduceFx ? 1.0 : (math.sin(animPhase * 8) * 0.1 + 0.9);
+    final flickerIntensity =
+        reduceFx ? 1.0 : (math.sin(animPhase * 8) * 0.1 + 0.9);
 
     // Draw percentage digits
     _drawHoloDigits(
@@ -5289,7 +6127,8 @@ class Enemy extends PositionComponent {
 
     // Percent symbol
     _holoBarDataPaint
-      ..color = const Color(0xFF00FFFF).withOpacity(0.6 * baseOpacity * flickerIntensity)
+      ..color = const Color(0xFF00FFFF)
+          .withOpacity(0.6 * baseOpacity * flickerIntensity)
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(dataX + 11, dataY - 4), 1, _holoBarDataPaint);
     canvas.drawCircle(Offset(dataX + 14, dataY), 1, _holoBarDataPaint);
@@ -5311,8 +6150,13 @@ class Enemy extends PositionComponent {
 
       _holoBarDataPaint
         ..color = (barActive
-          ? (i < 2 ? const Color(0xFF00FF88) : i < 4 ? const Color(0xFFFFFF00) : const Color(0xFFFF0066))
-          : const Color(0xFF333333)).withOpacity(baseOpacity * (barActive ? flickerIntensity : 0.5));
+                ? (i < 2
+                    ? const Color(0xFF00FF88)
+                    : i < 4
+                        ? const Color(0xFFFFFF00)
+                        : const Color(0xFFFF0066))
+                : const Color(0xFF333333))
+            .withOpacity(baseOpacity * (barActive ? flickerIntensity : 0.5));
       canvas.drawRect(
         Rect.fromLTWH(threatX, threatY - barH / 2, 2, barH),
         _holoBarDataPaint,
@@ -5326,21 +6170,24 @@ class Enemy extends PositionComponent {
       final glitchChance = _holoBarRandom.nextDouble();
       if (glitchChance < 0.03 && healthPercent < 0.5) {
         // Random horizontal slice displacement
-        final sliceY = frameRect.top + _holoBarRandom.nextDouble() * frameRect.height;
+        final sliceY =
+            frameRect.top + _holoBarRandom.nextDouble() * frameRect.height;
         final sliceH = 1.0 + _holoBarRandom.nextDouble() * 2;
         final sliceOffset = (_holoBarRandom.nextDouble() - 0.5) * 4;
 
         _holoBarGlitchPaint
           ..color = const Color(0xFFFF0066).withOpacity(0.4 * baseOpacity);
         canvas.drawRect(
-          Rect.fromLTWH(frameRect.left + sliceOffset, sliceY, frameRect.width * 0.5, sliceH),
+          Rect.fromLTWH(frameRect.left + sliceOffset, sliceY,
+              frameRect.width * 0.5, sliceH),
           _holoBarGlitchPaint,
         );
 
         _holoBarGlitchPaint
           ..color = const Color(0xFF00FFFF).withOpacity(0.3 * baseOpacity);
         canvas.drawRect(
-          Rect.fromLTWH(frameRect.left - sliceOffset, sliceY + sliceH, frameRect.width * 0.3, sliceH),
+          Rect.fromLTWH(frameRect.left - sliceOffset, sliceY + sliceH,
+              frameRect.width * 0.3, sliceH),
           _holoBarGlitchPaint,
         );
       }
@@ -5352,7 +6199,8 @@ class Enemy extends PositionComponent {
     if (healthPercent < 0.25) {
       final warningPulse = math.sin(animPhase * 6) * 0.5 + 0.5;
       _holoBarGlitchPaint
-        ..color = const Color(0xFFFF0066).withOpacity(0.2 * warningPulse * baseOpacity);
+        ..color = const Color(0xFFFF0066)
+            .withOpacity(0.2 * warningPulse * baseOpacity);
       canvas.drawRRect(
         RRect.fromRectAndRadius(frameRect, const Radius.circular(1)),
         _holoBarGlitchPaint,
@@ -5361,7 +6209,8 @@ class Enemy extends PositionComponent {
       // Warning border flash
       if (!reduceFx) {
         _holoBarFramePaint
-          ..color = const Color(0xFFFF0066).withOpacity(0.8 * warningPulse * baseOpacity)
+          ..color = const Color(0xFFFF0066)
+              .withOpacity(0.8 * warningPulse * baseOpacity)
           ..strokeWidth = 1.5;
         canvas.drawRRect(
           RRect.fromRectAndRadius(frameRect, const Radius.circular(1)),
@@ -5458,7 +6307,8 @@ class Enemy extends PositionComponent {
     if (activeEffects.isEmpty) return;
 
     // Calculate total width for centering
-    final totalWidth = activeEffects.length * iconSpacing - (iconSpacing - iconSize);
+    final totalWidth =
+        activeEffects.length * iconSpacing - (iconSpacing - iconSize);
     final startX = -totalWidth / 2 + iconSize / 2;
 
     for (int i = 0; i < activeEffects.length; i++) {
@@ -5500,16 +6350,14 @@ class Enemy extends PositionComponent {
     // Layer 1: Outer glow effect
     // ═══════════════════════════════════════════════════════════════════════
     if (allowBlur) {
-      _statusIconGlowPaint
-        ..color = effect.color.withOpacity(0.4 * opacity);
+      _statusIconGlowPaint..color = effect.color.withOpacity(0.4 * opacity);
       canvas.drawCircle(center, halfSize * 1.3, _statusIconGlowPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // Layer 2: Holographic base shape
     // ═══════════════════════════════════════════════════════════════════════
-    _statusIconBasePaint
-      ..color = effect.color.withOpacity(0.15 * opacity);
+    _statusIconBasePaint..color = effect.color.withOpacity(0.15 * opacity);
     canvas.drawCircle(center, halfSize, _statusIconBasePaint);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5519,8 +6367,7 @@ class Enemy extends PositionComponent {
       final progress = (effect.duration / effect.maxDuration).clamp(0.0, 1.0);
       final sweepAngle = progress * math.pi * 2;
 
-      _statusIconTimerPaint
-        ..color = effect.color.withOpacity(0.6 * opacity);
+      _statusIconTimerPaint..color = effect.color.withOpacity(0.6 * opacity);
       canvas.drawArc(
         Rect.fromCircle(center: center, radius: halfSize * 0.85),
         -math.pi / 2, // Start from top
@@ -5534,17 +6381,17 @@ class Enemy extends PositionComponent {
     // Layer 4: Icon shape (type-specific)
     // ═══════════════════════════════════════════════════════════════════════
     _statusIconPath.reset();
-    _statusIconStrokePaint
-      ..color = effect.color.withOpacity(0.9 * opacity);
-    _statusIconBasePaint
-      ..color = effect.color.withOpacity(0.7 * opacity);
+    _statusIconStrokePaint..color = effect.color.withOpacity(0.9 * opacity);
+    _statusIconBasePaint..color = effect.color.withOpacity(0.7 * opacity);
 
     switch (effect.type) {
       case _StatusIconType.slow:
-        _drawSnowflakeIcon(canvas, center, halfSize * 0.7, opacity, effect.color);
+        _drawSnowflakeIcon(
+            canvas, center, halfSize * 0.7, opacity, effect.color);
         break;
       case _StatusIconType.burn:
-        _drawFlameIcon(canvas, center, halfSize * 0.7, opacity, effect.color, animPhase);
+        _drawFlameIcon(
+            canvas, center, halfSize * 0.7, opacity, effect.color, animPhase);
         break;
       case _StatusIconType.shield:
         _drawHexagonIcon(canvas, center, halfSize * 0.7, opacity, effect.color);
@@ -5553,7 +6400,8 @@ class Enemy extends PositionComponent {
         _drawArrowIcon(canvas, center, halfSize * 0.7, opacity, effect.color);
         break;
       case _StatusIconType.stun:
-        _drawLightningIcon(canvas, center, halfSize * 0.7, opacity, effect.color, animPhase);
+        _drawLightningIcon(
+            canvas, center, halfSize * 0.7, opacity, effect.color, animPhase);
         break;
     }
 
@@ -5575,7 +6423,8 @@ class Enemy extends PositionComponent {
   }
 
   /// Draws a snowflake icon for slow effect
-  void _drawSnowflakeIcon(Canvas canvas, Offset center, double size, double opacity, Color color) {
+  void _drawSnowflakeIcon(
+      Canvas canvas, Offset center, double size, double opacity, Color color) {
     _statusIconStrokePaint
       ..color = color.withOpacity(0.9 * opacity)
       ..strokeWidth = 1.2;
@@ -5610,13 +6459,13 @@ class Enemy extends PositionComponent {
     }
 
     // Center dot
-    _statusIconBasePaint
-      ..color = color.withOpacity(0.8 * opacity);
+    _statusIconBasePaint..color = color.withOpacity(0.8 * opacity);
     canvas.drawCircle(center, size * 0.15, _statusIconBasePaint);
   }
 
   /// Draws a flame icon for burn effect
-  void _drawFlameIcon(Canvas canvas, Offset center, double size, double opacity, Color color, double animPhase) {
+  void _drawFlameIcon(Canvas canvas, Offset center, double size, double opacity,
+      Color color, double animPhase) {
     // Animated flame flicker
     final flicker = math.sin(animPhase * 8) * 0.1;
 
@@ -5651,8 +6500,7 @@ class Enemy extends PositionComponent {
     _statusIconPath.close();
 
     // Gradient-like effect with multiple layers
-    _statusIconBasePaint
-      ..color = color.withOpacity(0.7 * opacity);
+    _statusIconBasePaint..color = color.withOpacity(0.7 * opacity);
     canvas.drawPath(_statusIconPath, _statusIconBasePaint);
 
     _statusIconStrokePaint
@@ -5671,7 +6519,8 @@ class Enemy extends PositionComponent {
   }
 
   /// Draws a hexagon icon for shield effect
-  void _drawHexagonIcon(Canvas canvas, Offset center, double size, double opacity, Color color) {
+  void _drawHexagonIcon(
+      Canvas canvas, Offset center, double size, double opacity, Color color) {
     _statusIconPath.reset();
 
     for (int i = 0; i < 6; i++) {
@@ -5687,8 +6536,7 @@ class Enemy extends PositionComponent {
     _statusIconPath.close();
 
     // Fill with semi-transparent color
-    _statusIconBasePaint
-      ..color = color.withOpacity(0.4 * opacity);
+    _statusIconBasePaint..color = color.withOpacity(0.4 * opacity);
     canvas.drawPath(_statusIconPath, _statusIconBasePaint);
 
     // Stroke outline
@@ -5719,22 +6567,24 @@ class Enemy extends PositionComponent {
   }
 
   /// Draws an upward arrow icon for boost effect
-  void _drawArrowIcon(Canvas canvas, Offset center, double size, double opacity, Color color) {
+  void _drawArrowIcon(
+      Canvas canvas, Offset center, double size, double opacity, Color color) {
     _statusIconPath.reset();
 
     // Arrow pointing up
     _statusIconPath.moveTo(center.dx, center.dy - size); // Top point
     _statusIconPath.lineTo(center.dx + size * 0.6, center.dy); // Right wing
     _statusIconPath.lineTo(center.dx + size * 0.25, center.dy); // Right indent
-    _statusIconPath.lineTo(center.dx + size * 0.25, center.dy + size * 0.8); // Right bottom
-    _statusIconPath.lineTo(center.dx - size * 0.25, center.dy + size * 0.8); // Left bottom
+    _statusIconPath.lineTo(
+        center.dx + size * 0.25, center.dy + size * 0.8); // Right bottom
+    _statusIconPath.lineTo(
+        center.dx - size * 0.25, center.dy + size * 0.8); // Left bottom
     _statusIconPath.lineTo(center.dx - size * 0.25, center.dy); // Left indent
     _statusIconPath.lineTo(center.dx - size * 0.6, center.dy); // Left wing
     _statusIconPath.close();
 
     // Fill
-    _statusIconBasePaint
-      ..color = color.withOpacity(0.6 * opacity);
+    _statusIconBasePaint..color = color.withOpacity(0.6 * opacity);
     canvas.drawPath(_statusIconPath, _statusIconBasePaint);
 
     // Stroke
@@ -5755,7 +6605,8 @@ class Enemy extends PositionComponent {
   }
 
   /// Draws a lightning bolt icon for stun effect
-  void _drawLightningIcon(Canvas canvas, Offset center, double size, double opacity, Color color, double animPhase) {
+  void _drawLightningIcon(Canvas canvas, Offset center, double size,
+      double opacity, Color color, double animPhase) {
     // Flicker effect for lightning
     final flicker = (math.sin(animPhase * 12) > 0.3) ? 1.0 : 0.7;
 
@@ -5771,8 +6622,7 @@ class Enemy extends PositionComponent {
     _statusIconPath.close();
 
     // Fill with flicker
-    _statusIconBasePaint
-      ..color = color.withOpacity(0.7 * opacity * flicker);
+    _statusIconBasePaint..color = color.withOpacity(0.7 * opacity * flicker);
     canvas.drawPath(_statusIconPath, _statusIconBasePaint);
 
     // Bright stroke
@@ -5783,8 +6633,7 @@ class Enemy extends PositionComponent {
 
     // Electric sparks around
     if (flicker > 0.9) {
-      _statusIconBasePaint
-        ..color = Colors.white.withOpacity(0.6 * opacity);
+      _statusIconBasePaint..color = Colors.white.withOpacity(0.6 * opacity);
       canvas.drawCircle(
         Offset(center.dx - size * 0.5, center.dy - size * 0.3),
         size * 0.1,
@@ -5799,7 +6648,8 @@ class Enemy extends PositionComponent {
   }
 
   /// Draws holographic-style digits for data readouts
-  void _drawHoloDigits(Canvas canvas, String text, Offset pos, Color color, double opacity, double scale) {
+  void _drawHoloDigits(Canvas canvas, String text, Offset pos, Color color,
+      double opacity, double scale) {
     // Simplified 7-segment style digit rendering
     final segmentWidth = 1.5 * scale;
     final digitWidth = 3.0 * scale;
@@ -5820,25 +6670,43 @@ class Enemy extends PositionComponent {
       for (final seg in segments) {
         switch (seg) {
           case 'top':
-            canvas.drawRect(Rect.fromLTWH(dx, dy, digitWidth, segmentWidth), _holoBarDataPaint);
+            canvas.drawRect(Rect.fromLTWH(dx, dy, digitWidth, segmentWidth),
+                _holoBarDataPaint);
             break;
           case 'mid':
-            canvas.drawRect(Rect.fromLTWH(dx, dy + digitHeight / 2 - segmentWidth / 2, digitWidth, segmentWidth), _holoBarDataPaint);
+            canvas.drawRect(
+                Rect.fromLTWH(dx, dy + digitHeight / 2 - segmentWidth / 2,
+                    digitWidth, segmentWidth),
+                _holoBarDataPaint);
             break;
           case 'bot':
-            canvas.drawRect(Rect.fromLTWH(dx, dy + digitHeight - segmentWidth, digitWidth, segmentWidth), _holoBarDataPaint);
+            canvas.drawRect(
+                Rect.fromLTWH(dx, dy + digitHeight - segmentWidth, digitWidth,
+                    segmentWidth),
+                _holoBarDataPaint);
             break;
           case 'tl':
-            canvas.drawRect(Rect.fromLTWH(dx, dy, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            canvas.drawRect(
+                Rect.fromLTWH(dx, dy, segmentWidth, digitHeight / 2),
+                _holoBarDataPaint);
             break;
           case 'tr':
-            canvas.drawRect(Rect.fromLTWH(dx + digitWidth - segmentWidth, dy, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            canvas.drawRect(
+                Rect.fromLTWH(dx + digitWidth - segmentWidth, dy, segmentWidth,
+                    digitHeight / 2),
+                _holoBarDataPaint);
             break;
           case 'bl':
-            canvas.drawRect(Rect.fromLTWH(dx, dy + digitHeight / 2, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            canvas.drawRect(
+                Rect.fromLTWH(
+                    dx, dy + digitHeight / 2, segmentWidth, digitHeight / 2),
+                _holoBarDataPaint);
             break;
           case 'br':
-            canvas.drawRect(Rect.fromLTWH(dx + digitWidth - segmentWidth, dy + digitHeight / 2, segmentWidth, digitHeight / 2), _holoBarDataPaint);
+            canvas.drawRect(
+                Rect.fromLTWH(dx + digitWidth - segmentWidth,
+                    dy + digitHeight / 2, segmentWidth, digitHeight / 2),
+                _holoBarDataPaint);
             break;
         }
       }
@@ -5848,22 +6716,34 @@ class Enemy extends PositionComponent {
   /// Returns segments to draw for a digit character
   List<String> _getDigitSegments(String char) {
     switch (char) {
-      case '0': return ['top', 'bot', 'tl', 'tr', 'bl', 'br'];
-      case '1': return ['tr', 'br'];
-      case '2': return ['top', 'mid', 'bot', 'tr', 'bl'];
-      case '3': return ['top', 'mid', 'bot', 'tr', 'br'];
-      case '4': return ['mid', 'tl', 'tr', 'br'];
-      case '5': return ['top', 'mid', 'bot', 'tl', 'br'];
-      case '6': return ['top', 'mid', 'bot', 'tl', 'bl', 'br'];
-      case '7': return ['top', 'tr', 'br'];
-      case '8': return ['top', 'mid', 'bot', 'tl', 'tr', 'bl', 'br'];
-      case '9': return ['top', 'mid', 'bot', 'tl', 'tr', 'br'];
-      default: return [];
+      case '0':
+        return ['top', 'bot', 'tl', 'tr', 'bl', 'br'];
+      case '1':
+        return ['tr', 'br'];
+      case '2':
+        return ['top', 'mid', 'bot', 'tr', 'bl'];
+      case '3':
+        return ['top', 'mid', 'bot', 'tr', 'br'];
+      case '4':
+        return ['mid', 'tl', 'tr', 'br'];
+      case '5':
+        return ['top', 'mid', 'bot', 'tl', 'br'];
+      case '6':
+        return ['top', 'mid', 'bot', 'tl', 'bl', 'br'];
+      case '7':
+        return ['top', 'tr', 'br'];
+      case '8':
+        return ['top', 'mid', 'bot', 'tl', 'tr', 'bl', 'br'];
+      case '9':
+        return ['top', 'mid', 'bot', 'tl', 'tr', 'br'];
+      default:
+        return [];
     }
   }
 
-  void _drawMegaGeometry(Canvas canvas, double radius, double phantomOpacity, bool allowBlur) {
-    final color = type.color.withOpacity(phantomOpacity);
+  void _drawMegaGeometry(
+      Canvas canvas, double radius, double phantomOpacity, bool allowBlur) {
+    final color = type.color;
 
     // 3D Extrusion Layer (drawn first, behind everything)
     _draw3DExtrusion(canvas, radius, color, phantomOpacity, allowBlur);
@@ -5872,7 +6752,7 @@ class Enemy extends PositionComponent {
     _drawHull(canvas, radius, color, phantomOpacity, allowBlur);
 
     // Core Layer
-    _drawCore(canvas, radius, color, phantomOpacity);
+    _drawCore(canvas, phantomOpacity);
 
     // Shell Layer (Semi-transparent)
     _drawShell(canvas, radius, color, phantomOpacity, allowBlur);
@@ -5885,7 +6765,8 @@ class Enemy extends PositionComponent {
   }
 
   /// Draws 3D extrusion layers below the enemy body for depth perception
-  void _draw3DExtrusion(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+  void _draw3DExtrusion(Canvas canvas, double radius, Color color,
+      double opacity, bool allowBlur) {
     // Extrusion depth based on enemy size
     final extrusionDepth = radius * 0.35 * type.sizeMult.clamp(0.8, 1.5);
 
@@ -5909,7 +6790,8 @@ class Enemy extends PositionComponent {
 
       final extrusionPath = _createBodyPath(radius * (0.92 - i * 0.02));
 
-      _extrusionPaint.color = layerColor.withOpacity(opacity * (0.6 - i * 0.08));
+      _extrusionPaint.color =
+          layerColor.withOpacity(opacity * (0.6 - i * 0.08));
       _extrusionPaint.style = PaintingStyle.fill;
 
       canvas.drawPath(extrusionPath, _extrusionPaint);
@@ -5924,14 +6806,17 @@ class Enemy extends PositionComponent {
     _bottomGlowPaint.color = Colors.black.withOpacity(opacity * 0.4);
     _bottomGlowPaint.style = PaintingStyle.stroke;
     _bottomGlowPaint.strokeWidth = 2.5;
-    _bottomGlowPaint.maskFilter = (allowBlur && !Enemy.lowFx) ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+    _bottomGlowPaint.maskFilter = (allowBlur && !Enemy.lowFx)
+        ? const MaskFilter.blur(BlurStyle.normal, 4)
+        : null;
 
     canvas.drawPath(bottomGlowPath, _bottomGlowPaint);
     canvas.restore();
   }
 
   /// Draws 3D highlight rim on the top edge for lighting effect
-  void _draw3DHighlight(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+  void _draw3DHighlight(Canvas canvas, double radius, Color color,
+      double opacity, bool allowBlur) {
     final highlightPath = _createBodyPath(radius * 0.93);
 
     // In lowFx mode, draw simplified highlight (just specular spot)
@@ -5947,40 +6832,32 @@ class Enemy extends PositionComponent {
     }
 
     // Full quality: Top-left highlight (simulates light source)
-    _highlightPaint.shader = SweepGradient(
-      center: Alignment.center,
-      startAngle: -math.pi * 0.75,
-      endAngle: math.pi * 0.25,
-      colors: [
-        Colors.white.withOpacity(0.0),
-        Colors.white.withOpacity(opacity * 0.45),
-        Colors.white.withOpacity(opacity * 0.6),
-        Colors.white.withOpacity(opacity * 0.35),
-        Colors.white.withOpacity(0.0),
-      ],
-      stops: const [0.0, 0.2, 0.35, 0.5, 1.0],
-    ).createShader(Rect.fromCircle(center: Offset.zero, radius: radius));
-    _highlightPaint.style = PaintingStyle.stroke;
-    _highlightPaint.strokeWidth = 1.8;
-    _highlightPaint.strokeCap = StrokeCap.round;
-    _highlightPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+    _highlightPaint
+      ..shader = _highlightShader
+      ..colorFilter = _opacityFilter(opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.8
+      ..strokeCap = StrokeCap.round
+      ..maskFilter =
+          allowBlur ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
 
     canvas.drawPath(highlightPath, _highlightPaint);
 
     // Inner specular highlight (small bright spot)
-    final specularRadius = radius * 0.25;
-    final specularOffset = Offset(-radius * 0.3, -radius * 0.35);
+    final specularRadius = _specularRadius;
+    final specularOffset = _specularOffset;
 
-    _specularPaint.shader = RadialGradient(
-      colors: [
-        Colors.white.withOpacity(opacity * 0.55),
-        Colors.white.withOpacity(opacity * 0.2),
-        Colors.white.withOpacity(0.0),
-      ],
-      stops: const [0.0, 0.4, 1.0],
-    ).createShader(Rect.fromCircle(center: specularOffset, radius: specularRadius));
+    _specularPaint
+      ..shader = _specularShader
+      ..colorFilter = _opacityFilter(opacity);
 
     canvas.drawCircle(specularOffset, specularRadius, _specularPaint);
+    _highlightPaint
+      ..shader = null
+      ..colorFilter = null;
+    _specularPaint
+      ..shader = null
+      ..colorFilter = null;
 
     // Animated energy pulse on edge (gives life to 3D effect)
     final pulsePhase = _animationTimer * 2;
@@ -5990,42 +6867,41 @@ class Enemy extends PositionComponent {
       _pulsePaint.color = color.withOpacity(pulseAlpha);
       _pulsePaint.style = PaintingStyle.stroke;
       _pulsePaint.strokeWidth = 1.2;
-      _pulsePaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
+      _pulsePaint.maskFilter =
+          allowBlur ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
 
       canvas.drawPath(highlightPath, _pulsePaint);
     }
   }
 
-  void _drawHull(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+  void _drawHull(Canvas canvas, double radius, Color color, double opacity,
+      bool allowBlur) {
     final hullPath = _createBodyPath(radius * 0.95);
     final baseColor = Color.lerp(color.withOpacity(1), Colors.black, 0.45)!;
     _hullPaint.color = baseColor.withOpacity(opacity * 0.65);
     _hullPaint.style = PaintingStyle.fill;
     canvas.drawPath(hullPath, _hullPaint);
 
-    _outlinePaint.color = color.withOpacity(opacity * 0.85);
+    _outlinePaint.color = _worldEdgeColor.withOpacity(opacity * 0.85);
     _outlinePaint.style = PaintingStyle.stroke;
     _outlinePaint.strokeWidth = 1.4;
     _outlinePaint.strokeCap = StrokeCap.square;
-    _outlinePaint.maskFilter = (allowBlur && !Enemy.lowFx) ? _blur(true, 3) : null;
+    _outlinePaint.maskFilter =
+        (allowBlur && !Enemy.lowFx) ? _blur(true, 3) : null;
     canvas.drawPath(hullPath, _outlinePaint);
   }
 
-  void _drawCore(Canvas canvas, double radius, Color color, double opacity) {
-    final coreRadius = radius * 0.6;
-    _corePaint.shader = LinearGradient(
-      colors: [
-        Colors.black.withOpacity(opacity * 0.85),
-        color.withOpacity(opacity),
-        Colors.white.withOpacity(opacity * 0.35),
-      ],
-      stops: const [0.0, 0.65, 1.0],
-      begin: const Alignment(-0.6, -0.6),
-      end: const Alignment(0.8, 0.8),
-    ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadius));
+  void _drawCore(Canvas canvas, double opacity) {
+    final coreRadius = _coreRadius;
+    _corePaint
+      ..shader = _coreShader
+      ..colorFilter = _opacityFilter(opacity);
 
     final corePath = _createTypeLayerPath(coreRadius, 0);
     canvas.drawPath(corePath, _corePaint);
+    _corePaint
+      ..shader = null
+      ..colorFilter = null;
 
     _slashPaint.color = Colors.white.withOpacity(0.45 * opacity);
     _slashPaint.strokeWidth = coreRadius * 0.18;
@@ -6044,33 +6920,205 @@ class Enemy extends PositionComponent {
       Offset(slashLen * 0.4, slashLen * 0.05),
       _slashPaint,
     );
+    _drawCoreGlyph(canvas, coreRadius, opacity);
     canvas.restore();
   }
 
-  void _drawShell(Canvas canvas, double radius, Color color, double opacity, bool allowBlur) {
+  void _drawCoreGlyph(Canvas canvas, double coreRadius, double opacity) {
+    final pulse =
+        0.5 + 0.5 * math.sin(_animationTimer * 2.4 + type.world * 0.4);
+    final accent = _worldAccentColor;
+    final alpha = (0.28 + 0.28 * pulse) * opacity;
+
+    _strokePaint
+      ..color = accent.withOpacity(alpha)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = coreRadius * 0.12
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = null;
+    _fillPaint
+      ..color = accent.withOpacity(alpha * 0.6)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
+
+    switch (type.world) {
+      case 1:
+        canvas.drawLine(
+          Offset(-coreRadius * 0.35, coreRadius * 0.05),
+          Offset(0, coreRadius * 0.35),
+          _strokePaint,
+        );
+        canvas.drawLine(
+          Offset(0, coreRadius * 0.35),
+          Offset(coreRadius * 0.35, coreRadius * 0.05),
+          _strokePaint,
+        );
+        canvas.drawCircle(
+          Offset(0, -coreRadius * 0.1),
+          coreRadius * 0.08,
+          _fillPaint,
+        );
+        break;
+      case 2:
+        final ring =
+            Rect.fromCircle(center: Offset.zero, radius: coreRadius * 0.55);
+        canvas.drawArc(
+            ring, _animationTimer * 0.7, math.pi * 0.6, false, _strokePaint);
+        canvas.drawArc(
+          ring,
+          _animationTimer * 0.7 + math.pi,
+          math.pi * 0.35,
+          false,
+          _strokePaint,
+        );
+        break;
+      case 3:
+        for (int i = -1; i <= 1; i++) {
+          final x = i * coreRadius * 0.22;
+          canvas.drawRect(
+            Rect.fromCenter(
+              center: Offset(x, coreRadius * 0.1),
+              width: coreRadius * 0.14,
+              height: coreRadius * 0.14,
+            ),
+            _fillPaint,
+          );
+        }
+        break;
+      case 4:
+        _reusableOverlayPath
+          ..reset()
+          ..moveTo(-coreRadius * 0.1, -coreRadius * 0.5)
+          ..lineTo(coreRadius * 0.12, -coreRadius * 0.05)
+          ..lineTo(-coreRadius * 0.02, -coreRadius * 0.05)
+          ..lineTo(coreRadius * 0.2, coreRadius * 0.5);
+        canvas.drawPath(_reusableOverlayPath, _strokePaint);
+        break;
+      case 5:
+        _reusableOverlayPath
+          ..reset()
+          ..moveTo(0, -coreRadius * 0.55)
+          ..lineTo(coreRadius * 0.4, 0)
+          ..lineTo(0, coreRadius * 0.55)
+          ..lineTo(-coreRadius * 0.4, 0)
+          ..close();
+        canvas.drawPath(_reusableOverlayPath, _strokePaint);
+        break;
+      case 6:
+        final r = coreRadius * 0.5;
+        canvas.drawLine(Offset(-r, -r), Offset(-r * 0.4, -r), _strokePaint);
+        canvas.drawLine(Offset(-r, -r), Offset(-r, -r * 0.4), _strokePaint);
+        canvas.drawLine(Offset(r, -r), Offset(r * 0.4, -r), _strokePaint);
+        canvas.drawLine(Offset(r, -r), Offset(r, -r * 0.4), _strokePaint);
+        canvas.drawLine(Offset(-r, r), Offset(-r * 0.4, r), _strokePaint);
+        canvas.drawLine(Offset(-r, r), Offset(-r, r * 0.4), _strokePaint);
+        canvas.drawLine(Offset(r, r), Offset(r * 0.4, r), _strokePaint);
+        canvas.drawLine(Offset(r, r), Offset(r, r * 0.4), _strokePaint);
+        break;
+      case 7:
+        canvas.drawLine(
+          Offset(-coreRadius * 0.5, 0),
+          Offset(coreRadius * 0.5, 0),
+          _strokePaint,
+        );
+        canvas.drawLine(
+          Offset(0, -coreRadius * 0.5),
+          Offset(0, coreRadius * 0.5),
+          _strokePaint,
+        );
+        canvas.drawRect(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: coreRadius * 0.35,
+            height: coreRadius * 0.35,
+          ),
+          _fillPaint,
+        );
+        break;
+      case 8:
+        final ring =
+            Rect.fromCircle(center: Offset.zero, radius: coreRadius * 0.55);
+        canvas.drawArc(
+          ring,
+          _animationTimer * 0.9,
+          math.pi * 0.8,
+          false,
+          _strokePaint,
+        );
+        canvas.drawArc(
+          ring,
+          _animationTimer * 0.9 + math.pi,
+          math.pi * 0.45,
+          false,
+          _strokePaint,
+        );
+        break;
+      case 9:
+        canvas.drawCircle(Offset.zero, coreRadius * 0.5, _strokePaint);
+        canvas.drawCircle(
+          Offset(coreRadius * 0.18, -coreRadius * 0.05),
+          coreRadius * 0.12,
+          _fillPaint,
+        );
+        break;
+      case 10:
+        for (int i = 0; i < 3; i++) {
+          final angle = _animationTimer * 0.3 + (i / 3) * math.pi * 2;
+          final tip = Offset(
+            math.cos(angle) * coreRadius * 0.55,
+            math.sin(angle) * coreRadius * 0.55,
+          );
+          final left = Offset(
+            math.cos(angle + 0.6) * coreRadius * 0.2,
+            math.sin(angle + 0.6) * coreRadius * 0.2,
+          );
+          final right = Offset(
+            math.cos(angle - 0.6) * coreRadius * 0.2,
+            math.sin(angle - 0.6) * coreRadius * 0.2,
+          );
+          _reusableOverlayPath
+            ..reset()
+            ..moveTo(tip.dx, tip.dy)
+            ..lineTo(left.dx, left.dy)
+            ..lineTo(right.dx, right.dy)
+            ..close();
+          canvas.drawPath(_reusableOverlayPath, _strokePaint);
+        }
+        break;
+    }
+  }
+
+  void _drawShell(Canvas canvas, double radius, Color color, double opacity,
+      bool allowBlur) {
     _shellPaint.color = color.withOpacity(opacity * 0.3);
     _shellPaint.style = PaintingStyle.stroke;
     _shellPaint.strokeWidth = 2;
-    _shellPaint.maskFilter = (allowBlur && !Enemy.lowFx) ? _blur(true, 5) : null;
+    _shellPaint.maskFilter =
+        (allowBlur && !Enemy.lowFx) ? _blur(true, 5) : null;
 
     final shellPath = _createTypeLayerPath(radius * 0.9, 1);
     canvas.drawPath(shellPath, _shellPaint);
   }
 
-  void _drawArmorPlates(Canvas canvas, double radius, Color color, double opacity) {
+  void _drawArmorPlates(
+      Canvas canvas, double radius, Color color, double opacity) {
     // Determine plate alpha based on speed (fast = less armor, slow = more armor)
-    final plateAlpha = type.speedMult > 1.2 ? 0.45 : (type.healthMult > 2.0 ? 0.95 : 0.6);
+    final plateAlpha =
+        type.speedMult > 1.2 ? 0.45 : (type.healthMult > 2.0 ? 0.95 : 0.6);
     _platePaint.color = color.withOpacity(opacity * plateAlpha);
     _platePaint.style = PaintingStyle.fill;
 
     // Plate count based on size/health
-    final plateCount = type.healthMult > 2.5 ? 6 : (type.healthMult > 1.5 ? 5 : 4);
+    final plateCount =
+        type.healthMult > 2.5 ? 6 : (type.healthMult > 1.5 ? 5 : 4);
 
     // Plate distance based on size
     final plateDist = radius * (0.85 + type.sizeMult * 0.1);
 
     // Plate size based on health multiplier
-    final plateSize = radius * (0.18 + type.healthMult * 0.05).clamp(0.18, 0.35);
+    final plateSize =
+        radius * (0.18 + type.healthMult * 0.05).clamp(0.18, 0.35);
 
     for (int i = 0; i < plateCount; i++) {
       canvas.save();
@@ -6091,7 +7139,8 @@ class Enemy extends PositionComponent {
         ));
       } else if (type.speedMult > 1.2) {
         // Fast enemies get pointed/aggressive plates
-        final jag = plateSize * (0.25 + 0.1 * math.sin(_animationTimer * 6 + i));
+        final jag =
+            plateSize * (0.25 + 0.1 * math.sin(_animationTimer * 6 + i));
         _reusableOverlayPath.moveTo(plateDist, -plateSize);
         _reusableOverlayPath.lineTo(plateDist + plateSize * 0.6, -jag);
         _reusableOverlayPath.lineTo(plateDist + plateSize * 0.9, 0);
@@ -6117,26 +7166,303 @@ class Enemy extends PositionComponent {
     }
   }
 
+  void _renderSilhouetteAccents(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
+    if (Enemy.lowFx || Enemy.forceLowFx) return;
+
+    final accent = _worldEdgeColor;
+    _strokePaint
+      ..color = accent.withOpacity(0.25 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.05
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = _blur(allowBlur, 2);
+
+    if (type.isPhantom) {
+      final ring = Rect.fromCircle(center: Offset.zero, radius: radius * 0.75);
+      final base = _animationTimer * 0.8;
+      for (int i = 0; i < 3; i++) {
+        canvas.drawArc(
+            ring, base + i * 2.1, math.pi * 0.6, false, _strokePaint);
+      }
+      _strokePaint.maskFilter = null;
+      return;
+    }
+
+    if (type.healthMult >= 2.0) {
+      _fillPaint
+        ..color = accent.withOpacity(0.16 * opacity)
+        ..style = PaintingStyle.fill
+        ..maskFilter = null;
+      final plateW = radius * 0.34;
+      final plateH = radius * 0.7;
+      final plateR = Radius.circular(radius * 0.12);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(-radius * 0.72, 0),
+            width: plateW,
+            height: plateH,
+          ),
+          plateR,
+        ),
+        _fillPaint,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(
+            center: Offset(radius * 0.72, 0),
+            width: plateW,
+            height: plateH,
+          ),
+          plateR,
+        ),
+        _fillPaint,
+      );
+      canvas.drawLine(
+        Offset(-radius * 0.85, -radius * 0.35),
+        Offset(-radius * 0.55, -radius * 0.15),
+        _strokePaint,
+      );
+      canvas.drawLine(
+        Offset(radius * 0.85, -radius * 0.35),
+        Offset(radius * 0.55, -radius * 0.15),
+        _strokePaint,
+      );
+      _strokePaint.maskFilter = null;
+      return;
+    }
+
+    if (type.speedMult >= 1.3) {
+      final dir = movementDirection;
+      final angle = math.atan2(dir.y, dir.x);
+      final finLen = radius * 0.9;
+      final finWidth = radius * 0.22;
+      canvas.save();
+      canvas.rotate(angle);
+
+      _reusableOverlayPath
+        ..reset()
+        ..moveTo(-radius * 0.1, -finWidth)
+        ..lineTo(finLen, 0)
+        ..lineTo(-radius * 0.1, finWidth)
+        ..close();
+      canvas.drawPath(_reusableOverlayPath, _strokePaint);
+
+      _reusableOverlayPath
+        ..reset()
+        ..moveTo(-radius * 0.3, -finWidth * 0.6)
+        ..lineTo(finLen * 0.65, 0)
+        ..lineTo(-radius * 0.3, finWidth * 0.6)
+        ..close();
+      canvas.drawPath(_reusableOverlayPath, _strokePaint);
+
+      canvas.restore();
+      _strokePaint.maskFilter = null;
+      return;
+    }
+
+    _strokePaint.maskFilter = null;
+  }
+
+  void _drawWorldEmblem(
+      Canvas canvas, double radius, double opacity, bool allowBlur) {
+    final world = type.world;
+    final pulse = 0.5 + 0.5 * math.sin(_animationTimer * 2.2 + world * 0.35);
+    final accent = _worldAccentColor;
+    final alpha = (0.2 + 0.22 * pulse) * opacity;
+    final sigilRadius = radius * 0.42;
+
+    _strokePaint
+      ..color = accent.withOpacity(alpha)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.06
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..maskFilter = _blur(allowBlur && !Enemy.lowFx, 2);
+    _fillPaint
+      ..color = accent.withOpacity(alpha * 0.28)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
+
+    switch (world) {
+      case 1:
+        canvas.drawLine(
+          Offset(-sigilRadius * 0.8, sigilRadius * 0.2),
+          Offset(0, sigilRadius * 0.5),
+          _strokePaint,
+        );
+        canvas.drawLine(
+          Offset(0, sigilRadius * 0.5),
+          Offset(sigilRadius * 0.8, sigilRadius * 0.2),
+          _strokePaint,
+        );
+        break;
+      case 2:
+        final arcRect =
+            Rect.fromCircle(center: Offset.zero, radius: sigilRadius);
+        for (int i = 0; i < 3; i++) {
+          canvas.drawArc(
+            arcRect,
+            _animationTimer * 0.6 + i * 2.05,
+            math.pi / 2.8,
+            false,
+            _strokePaint,
+          );
+        }
+        break;
+      case 3:
+        for (int i = -1; i <= 1; i++) {
+          final y = i * sigilRadius * 0.35;
+          canvas.drawLine(
+            Offset(-sigilRadius * 0.9, y),
+            Offset(sigilRadius * 0.9, y),
+            _strokePaint,
+          );
+        }
+        canvas.drawRect(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: sigilRadius * 0.35,
+            height: sigilRadius * 0.35,
+          ),
+          _fillPaint,
+        );
+        break;
+      case 4:
+        _reusableOverlayPath
+          ..reset()
+          ..moveTo(-sigilRadius * 0.1, -sigilRadius * 0.9)
+          ..lineTo(sigilRadius * 0.18, -sigilRadius * 0.18)
+          ..lineTo(sigilRadius * 0.02, -sigilRadius * 0.18)
+          ..lineTo(sigilRadius * 0.25, sigilRadius * 0.85);
+        canvas.drawPath(_reusableOverlayPath, _strokePaint);
+        break;
+      case 5:
+        _reusableOverlayPath
+          ..reset()
+          ..moveTo(0, -sigilRadius * 0.95)
+          ..lineTo(sigilRadius * 0.65, 0)
+          ..lineTo(0, sigilRadius * 0.95)
+          ..lineTo(-sigilRadius * 0.65, 0)
+          ..close();
+        canvas.drawPath(_reusableOverlayPath, _strokePaint);
+        canvas.drawLine(
+          Offset(0, -sigilRadius * 0.95),
+          Offset(0, sigilRadius * 0.95),
+          _strokePaint,
+        );
+        break;
+      case 6:
+        final r = sigilRadius * 0.9;
+        final c = sigilRadius * 0.38;
+        canvas.drawLine(Offset(-r, -r), Offset(-c, -r), _strokePaint);
+        canvas.drawLine(Offset(-r, -r), Offset(-r, -c), _strokePaint);
+        canvas.drawLine(Offset(r, -r), Offset(c, -r), _strokePaint);
+        canvas.drawLine(Offset(r, -r), Offset(r, -c), _strokePaint);
+        canvas.drawLine(Offset(-r, r), Offset(-c, r), _strokePaint);
+        canvas.drawLine(Offset(-r, r), Offset(-r, c), _strokePaint);
+        canvas.drawLine(Offset(r, r), Offset(c, r), _strokePaint);
+        canvas.drawLine(Offset(r, r), Offset(r, c), _strokePaint);
+        break;
+      case 7:
+        canvas.drawLine(
+          Offset(-sigilRadius * 0.95, 0),
+          Offset(sigilRadius * 0.95, 0),
+          _strokePaint,
+        );
+        canvas.drawLine(
+          Offset(0, -sigilRadius * 0.95),
+          Offset(0, sigilRadius * 0.95),
+          _strokePaint,
+        );
+        canvas.drawRect(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: sigilRadius * 1.05,
+            height: sigilRadius * 1.05,
+          ),
+          _strokePaint,
+        );
+        break;
+      case 8:
+        final arcRect =
+            Rect.fromCircle(center: Offset.zero, radius: sigilRadius);
+        final baseAngle = _animationTimer * 0.7;
+        canvas.drawArc(arcRect, baseAngle, math.pi * 0.95, false, _strokePaint);
+        canvas.drawArc(
+            arcRect, baseAngle + math.pi, math.pi * 0.55, false, _strokePaint);
+        break;
+      case 9:
+        canvas.drawCircle(Offset.zero, sigilRadius * 0.78, _strokePaint);
+        _hullPaint
+          ..color = Colors.black.withOpacity(alpha * 0.7)
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(
+          Offset(sigilRadius * 0.28, -sigilRadius * 0.03),
+          sigilRadius * 0.5,
+          _hullPaint,
+        );
+        break;
+      case 10:
+        final spin = _animationTimer * 0.28;
+        for (int i = 0; i < 3; i++) {
+          final angle = spin + (i / 3) * math.pi * 2;
+          final tip = Offset(
+            math.cos(angle) * sigilRadius * 0.95,
+            math.sin(angle) * sigilRadius * 0.95,
+          );
+          final left = Offset(
+            math.cos(angle + 0.55) * sigilRadius * 0.35,
+            math.sin(angle + 0.55) * sigilRadius * 0.35,
+          );
+          final right = Offset(
+            math.cos(angle - 0.55) * sigilRadius * 0.35,
+            math.sin(angle - 0.55) * sigilRadius * 0.35,
+          );
+          _reusableOverlayPath
+            ..reset()
+            ..moveTo(tip.dx, tip.dy)
+            ..lineTo(left.dx, left.dy)
+            ..lineTo(right.dx, right.dy)
+            ..close();
+          canvas.drawPath(_reusableOverlayPath, _strokePaint);
+        }
+        break;
+    }
+
+    _strokePaint.maskFilter = null;
+  }
+
   void _drawDataAura(Canvas canvas, double radius, double opacity) {
     final t = _animationTimer;
-    final bitPaint = Paint()..color = type.color.withOpacity(opacity * 0.6);
-    
+    _bitPaint
+      ..color = type.color.withOpacity(opacity * 0.6)
+      ..style = PaintingStyle.fill
+      ..maskFilter = null;
+    _circuitPaint
+      ..color = type.color.withOpacity(opacity * 0.1)
+      ..strokeWidth = 0.5
+      ..style = PaintingStyle.stroke
+      ..maskFilter = null;
+
     for (int i = 0; i < 4; i++) {
       final angle = (i * math.pi / 2) - _orbitalRotation;
       final dist = radius * 1.4 + 4 * math.sin(t * 3 + i);
       final bitPos = Offset(math.cos(angle) * dist, math.sin(angle) * dist);
-      
+
       canvas.drawRect(
         Rect.fromCenter(center: bitPos, width: 3, height: 3),
-        bitPaint,
+        _bitPaint,
       );
-      
+
       // Connect to center with thin line
       if (healthPercent > 0.8) {
         canvas.drawLine(
-          Offset.zero, 
-          bitPos, 
-          Paint()..color = type.color.withOpacity(opacity * 0.1)..strokeWidth = 0.5
+          Offset.zero,
+          bitPos,
+          _circuitPaint,
         );
       }
     }
@@ -6145,7 +7471,9 @@ class Enemy extends PositionComponent {
   void _renderPlasmaSmoke(Canvas canvas, double radius, double opacity) {
     for (final particle in _plasmaParticles) {
       final size = particle.size * 1.4;
-      final angle = (_animationTimer * 0.8 + particle.position.x * 0.02 + particle.position.y * 0.02);
+      final angle = (_animationTimer * 0.8 +
+          particle.position.x * 0.02 +
+          particle.position.y * 0.02);
       canvas.save();
       canvas.translate(particle.position.x, particle.position.y);
       canvas.rotate(angle);
@@ -6154,7 +7482,8 @@ class Enemy extends PositionComponent {
         ..style = PaintingStyle.fill
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
       canvas.drawRect(
-        Rect.fromCenter(center: Offset.zero, width: size * 1.2, height: size * 0.5),
+        Rect.fromCenter(
+            center: Offset.zero, width: size * 1.2, height: size * 0.5),
         _particlePaint,
       );
       canvas.restore();
@@ -6185,9 +7514,12 @@ class Enemy extends PositionComponent {
       for (int i = 0; i < sides; i++) {
         final angle = (i * 2 * math.pi / sides) + (layer * math.pi / sides);
         final scale = 1.0 + (i.isEven ? wobble : -wobble);
-        final point = Offset(math.cos(angle) * radius * scale, math.sin(angle) * radius * scale);
-        if (i == 0) _reusableLayerPath.moveTo(point.dx, point.dy);
-        else _reusableLayerPath.lineTo(point.dx, point.dy);
+        final point = Offset(
+            math.cos(angle) * radius * scale, math.sin(angle) * radius * scale);
+        if (i == 0)
+          _reusableLayerPath.moveTo(point.dx, point.dy);
+        else
+          _reusableLayerPath.lineTo(point.dx, point.dy);
       }
       _reusableLayerPath.close();
     } else if (type.isPhantom) {
@@ -6197,9 +7529,12 @@ class Enemy extends PositionComponent {
         final r = i.isEven ? radius : radius * 0.6;
         final drift = math.sin(_animationTimer * 2 + i) * radius * 0.05;
         final angle = i * math.pi / points + _animationTimer * 0.8;
-        final point = Offset(math.cos(angle) * (r + drift), math.sin(angle) * (r + drift));
-        if (i == 0) _reusableLayerPath.moveTo(point.dx, point.dy);
-        else _reusableLayerPath.lineTo(point.dx, point.dy);
+        final point = Offset(
+            math.cos(angle) * (r + drift), math.sin(angle) * (r + drift));
+        if (i == 0)
+          _reusableLayerPath.moveTo(point.dx, point.dy);
+        else
+          _reusableLayerPath.lineTo(point.dx, point.dy);
       }
       _reusableLayerPath.close();
     } else {
@@ -6233,59 +7568,67 @@ class Enemy extends PositionComponent {
     }
 
     final target = path[_currentTargetIndex];
-    final direction = target - position;
-    final distance = direction.length;
     final moveDist = speed * dt;
+    final dx = target.x - position.x;
+    final dy = target.y - position.y;
+    final distanceSq = (dx * dx) + (dy * dy);
+    if (distanceSq <= 0.000001) {
+      position.setFrom(target);
+      _currentTargetIndex++;
+      return;
+    }
 
-    if (moveDist >= distance) {
-      position = target;
+    if ((moveDist * moveDist) >= distanceSq) {
+      position.setFrom(target);
       _currentTargetIndex++;
     } else {
-      position += direction.normalized() * moveDist;
+      final invDistance = 1.0 / math.sqrt(distanceSq);
+      position.x += dx * invDistance * moveDist;
+      position.y += dy * invDistance * moveDist;
     }
   }
 }
 
 /// Walking visual style categories for different enemy types
 enum _WalkStyle {
-  legs,      // Runner-style fast legs
-  tendrils,  // Energy tendrils
-  stomp,     // Heavy footsteps
-  wisps,     // Ghostly wisps
-  glitch,    // Dimensional glitch effects
-  electric,  // Electric arcs and sparks
-  crystal,   // Floating crystal shards
-  mechanical,// Mechanical pistons
-  digital,   // Binary data streams
-  storm,     // Wind and lightning
-  void_,     // Dark void tendrils
-  omega,     // Ultimate combined effects
+  legs, // Runner-style fast legs
+  tendrils, // Energy tendrils
+  stomp, // Heavy footsteps
+  wisps, // Ghostly wisps
+  glitch, // Dimensional glitch effects
+  electric, // Electric arcs and sparks
+  crystal, // Floating crystal shards
+  mechanical, // Mechanical pistons
+  digital, // Binary data streams
+  storm, // Wind and lightning
+  void_, // Dark void tendrils
+  omega, // Ultimate combined effects
 }
 
 /// Body shape categories for different enemy types
 enum _BodyShape {
-  dart,       // Aerodynamic dart (fast types)
-  fractured,  // Fractured polygon (glitchy types)
-  armored,    // Beveled armor (tank types)
-  star,       // Phase-shifted star (phantom types)
-  hexagon,    // Hexagonal (crystal types)
+  dart, // Aerodynamic dart (fast types)
+  fractured, // Fractured polygon (glitchy types)
+  armored, // Beveled armor (tank types)
+  star, // Phase-shifted star (phantom types)
+  hexagon, // Hexagonal (crystal types)
   mechanical, // Mechanical box (robot types)
-  electric,   // Spiky electric (plasma types)
-  storm,      // Swirling storm shape
-  void_,      // Irregular dark shape
-  omega,      // Complex ultimate shape
+  electric, // Spiky electric (plasma types)
+  storm, // Swirling storm shape
+  void_, // Irregular dark shape
+  omega, // Complex ultimate shape
 }
 
 /// Eye style categories for terrifying enemy visuals
 enum _EyeStyle {
-  predator,   // Single menacing slit eye
-  hive,       // Multiple compound eyes
-  void_,      // Empty sockets of darkness
-  burning,    // Eyes of flame
-  crystal,    // Faceted gem eyes
+  predator, // Single menacing slit eye
+  hive, // Multiple compound eyes
+  void_, // Empty sockets of darkness
+  burning, // Eyes of flame
+  crystal, // Faceted gem eyes
   mechanical, // Cold robotic sensors
-  corrupted,  // Glitching digital eyes
-  abyssal,    // Infinite depth void eyes
+  corrupted, // Glitching digital eyes
+  abyssal, // Infinite depth void eyes
 }
 
 class _CircuitSegment {
@@ -6309,18 +7652,65 @@ class _NoiseBit {
 
 /// Particle emitted when enemy takes damage
 class _DamageParticle {
-  _DamageParticle({
+  static const int _maxPoolSize = 200;
+  static final List<_DamageParticle> _pool = [];
+
+  static _DamageParticle obtain({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+  }) {
+    if (_pool.isNotEmpty) {
+      final particle = _pool.removeLast();
+      particle.reset(
+        angle: angle,
+        speed: speed,
+        size: size,
+        lifetime: lifetime,
+      );
+      return particle;
+    }
+    return _DamageParticle._internal(
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+    );
+  }
+
+  _DamageParticle._internal({
     required this.angle,
     required this.speed,
     required this.size,
     required this.lifetime,
-  }) : distance = 0,
-       _timer = 0;
+  })  : distance = 0,
+        _timer = 0;
 
-  final double angle;
-  final double speed;
-  final double size;
-  final double lifetime;
+  void reset({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+  }) {
+    this.angle = angle;
+    this.speed = speed;
+    this.size = size;
+    this.lifetime = lifetime;
+    distance = 0;
+    _timer = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPoolSize) {
+      _pool.add(this);
+    }
+  }
+
+  double angle;
+  double speed;
+  double size;
+  double lifetime;
 
   double distance;
   double _timer;
@@ -6336,22 +7726,80 @@ class _DamageParticle {
 }
 
 class _DataBit {
-  _DataBit({
-    required this.position,
-    required this.velocity,
+  static const int _maxPoolSize = 200;
+  static final List<_DataBit> _pool = [];
+
+  static _DataBit obtain({
+    required Vector2 position,
+    required Vector2 velocity,
+    required Color color,
+    required double size,
+    required double rotation,
+    required double lifetime,
+  }) {
+    if (_pool.isNotEmpty) {
+      final bit = _pool.removeLast();
+      bit.reset(
+        position: position,
+        velocity: velocity,
+        color: color,
+        size: size,
+        rotation: rotation,
+        lifetime: lifetime,
+      );
+      return bit;
+    }
+    return _DataBit._internal(
+      position: position,
+      velocity: velocity,
+      color: color,
+      size: size,
+      rotation: rotation,
+      lifetime: lifetime,
+    );
+  }
+
+  _DataBit._internal({
+    required Vector2 position,
+    required Vector2 velocity,
     required this.color,
     required this.size,
     required this.rotation,
     required this.lifetime,
-  });
+  })  : position = position.clone(),
+        velocity = velocity.clone(),
+        _timer = 0;
+
+  void reset({
+    required Vector2 position,
+    required Vector2 velocity,
+    required Color color,
+    required double size,
+    required double rotation,
+    required double lifetime,
+  }) {
+    this.position.setFrom(position);
+    this.velocity.setFrom(velocity);
+    this.color = color;
+    this.size = size;
+    this.rotation = rotation;
+    this.lifetime = lifetime;
+    _timer = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPoolSize) {
+      _pool.add(this);
+    }
+  }
 
   final Vector2 position;
   final Vector2 velocity;
-  final Color color;
-  final double size;
-  final double rotation;
-  final double lifetime;
-  double _timer = 0;
+  Color color;
+  double size;
+  double rotation;
+  double lifetime;
+  double _timer;
 
   bool get isActive => _timer < lifetime;
   double get alpha => (1 - _timer / lifetime).clamp(0.0, 1.0);
@@ -6364,15 +7812,59 @@ class _DataBit {
 }
 
 class _PlasmaParticle {
-  _PlasmaParticle({
-    required this.position,
-    required this.velocity,
+  static const int _maxPoolSize = 120;
+  static final List<_PlasmaParticle> _pool = [];
+
+  static _PlasmaParticle obtain({
+    required Vector2 position,
+    required Vector2 velocity,
+    required Color color,
+  }) {
+    if (_pool.isNotEmpty) {
+      final particle = _pool.removeLast();
+      particle.reset(
+        position: position,
+        velocity: velocity,
+        color: color,
+      );
+      return particle;
+    }
+    return _PlasmaParticle._internal(
+      position: position,
+      velocity: velocity,
+      color: color,
+    );
+  }
+
+  _PlasmaParticle._internal({
+    required Vector2 position,
+    required Vector2 velocity,
     required this.color,
-  });
+  })  : position = position.clone(),
+        velocity = velocity.clone();
+
+  void reset({
+    required Vector2 position,
+    required Vector2 velocity,
+    required Color color,
+  }) {
+    this.position.setFrom(position);
+    this.velocity.setFrom(velocity);
+    this.color = color;
+    isActive = true;
+    opacity = 0.8;
+    size = 4.0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPoolSize) {
+      _pool.add(this);
+    }
+  }
 
   Vector2 position;
   final Vector2 velocity;
-  final Color color;
+  Color color;
   bool isActive = true;
   double opacity = 0.8;
   double size = 4.0;
@@ -6406,11 +7898,11 @@ class _SpawnParticle {
 
 /// Types of status icons that can be displayed above enemies
 enum _StatusIconType {
-  slow,   // Snowflake - blue
-  burn,   // Flame - orange/red
+  slow, // Snowflake - blue
+  burn, // Flame - orange/red
   shield, // Hexagon - cyan
-  boost,  // Arrow up - green
-  stun,   // Lightning - yellow
+  boost, // Arrow up - green
+  stun, // Lightning - yellow
 }
 
 /// Data container for status icon rendering

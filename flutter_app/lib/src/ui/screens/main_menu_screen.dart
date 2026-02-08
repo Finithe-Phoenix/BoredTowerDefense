@@ -7,6 +7,23 @@ import '../widgets/tron_button.dart';
 import '../widgets/tron_dialog.dart';
 import '../../services/procedural_music_service.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 class MainMenuScreen extends StatefulWidget {
   const MainMenuScreen({super.key});
 
@@ -338,7 +355,7 @@ class _GlitchIntroOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-    final random = math.Random(42);
+    final random = _FastRng(42);
 
     return IgnorePointer(
       child: CustomPaint(
@@ -356,15 +373,21 @@ class _GlitchIntroPainter extends CustomPainter {
   _GlitchIntroPainter({required this.progress, required this.random});
 
   final double progress;
-  final math.Random random;
+  final _FastRng random;
+  static final Paint _overlayPaint = Paint();
+  static final Paint _barPaint = Paint();
+  static final Paint _barAccentPaint = Paint();
+  static final Paint _scanlinePaint = Paint();
+  static final Paint _flashPaint = Paint();
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Fading black overlay
     final overlayOpacity = (1.0 - progress).clamp(0.0, 1.0);
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..color = Colors.black.withOpacity(overlayOpacity * 0.9),
+      _overlayPaint..color = Colors.black.withOpacity(overlayOpacity * 0.9),
     );
 
     // Glitch horizontal bars
@@ -375,25 +398,26 @@ class _GlitchIntroPainter extends CustomPainter {
         final height = 2.0 + random.nextDouble() * 20;
         final xOffset = (random.nextDouble() - 0.5) * 50 * (1.0 - progress);
 
+        _barPaint.color = NeonColors.cyan.withOpacity(0.3 * (1.0 - progress));
         canvas.drawRect(
           Rect.fromLTWH(xOffset, y, size.width, height),
-          Paint()..color = NeonColors.cyan.withOpacity(0.3 * (1.0 - progress)),
+          _barPaint,
         );
 
         // Magenta offset
+        _barAccentPaint.color = NeonColors.magenta.withOpacity(0.2 * (1.0 - progress));
         canvas.drawRect(
           Rect.fromLTWH(-xOffset, y + 2, size.width, height * 0.5),
-          Paint()..color = NeonColors.magenta.withOpacity(0.2 * (1.0 - progress)),
+          _barAccentPaint,
         );
       }
     }
 
     // Scanlines
     if (progress < 0.9) {
-      final scanlinePaint = Paint()
-        ..color = Colors.white.withOpacity(0.05 * (1.0 - progress));
+      _scanlinePaint.color = Colors.white.withOpacity(0.05 * (1.0 - progress));
       for (double y = 0; y < size.height; y += 2) {
-        canvas.drawLine(Offset(0, y), Offset(size.width, y), scanlinePaint);
+        canvas.drawLine(Offset(0, y), Offset(size.width, y), _scanlinePaint);
       }
     }
 
@@ -403,7 +427,7 @@ class _GlitchIntroPainter extends CustomPainter {
       final flashOpacity = math.sin(flashProgress * math.pi) * 0.3;
       canvas.drawRect(
         Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = NeonColors.cyan.withOpacity(flashOpacity),
+        _flashPaint..color = NeonColors.cyan.withOpacity(flashOpacity),
       );
     }
   }
@@ -461,35 +485,39 @@ class _DecorativeLinePainter extends CustomPainter {
   final double progress;
   final Color color;
   final bool reverse;
+  static final Paint _linePaint = Paint()
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke;
+  static final Paint _glowPaint = Paint()
+    ..strokeWidth = 6
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _dotPaint = Paint();
+  static final Paint _diamondPaint = Paint();
+  static final Path _diamondPath = Path();
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (progress <= 0.01) return;
     final center = size.width / 2;
     final lineWidth = size.width * 0.8 * progress;
 
     // Main line
-    final linePaint = Paint()
-      ..color = color.withOpacity(progress)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+    _linePaint.color = color.withOpacity(progress);
 
     canvas.drawLine(
       Offset(center - lineWidth / 2, size.height / 2),
       Offset(center + lineWidth / 2, size.height / 2),
-      linePaint,
+      _linePaint,
     );
 
     // Glow
-    final glowPaint = Paint()
-      ..color = color.withOpacity(0.3 * progress)
-      ..strokeWidth = 6
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    _glowPaint.color = color.withOpacity(0.3 * progress);
 
     canvas.drawLine(
       Offset(center - lineWidth / 2, size.height / 2),
       Offset(center + lineWidth / 2, size.height / 2),
-      glowPaint,
+      _glowPaint,
     );
 
     // End decorations
@@ -514,23 +542,24 @@ class _DecorativeLinePainter extends CustomPainter {
       );
 
       // Center accent
+      _dotPaint.color = color.withOpacity(decorProgress);
       canvas.drawCircle(
         Offset(center, size.height / 2),
         3 * decorProgress,
-        Paint()..color = color.withOpacity(decorProgress),
+        _dotPaint,
       );
     }
   }
 
   void _drawDiamond(Canvas canvas, Offset center, double size, Color color) {
-    final path = Path()
-      ..moveTo(center.dx, center.dy - size)
-      ..lineTo(center.dx + size, center.dy)
-      ..lineTo(center.dx, center.dy + size)
-      ..lineTo(center.dx - size, center.dy)
-      ..close();
-
-    canvas.drawPath(path, Paint()..color = color);
+    _diamondPath.reset();
+    _diamondPath.moveTo(center.dx, center.dy - size);
+    _diamondPath.lineTo(center.dx + size, center.dy);
+    _diamondPath.lineTo(center.dx, center.dy + size);
+    _diamondPath.lineTo(center.dx - size, center.dy);
+    _diamondPath.close();
+    _diamondPaint.color = color;
+    canvas.drawPath(_diamondPath, _diamondPaint);
   }
 
   @override
@@ -558,7 +587,7 @@ class _CornerDecorationState extends State<_CornerDecoration>
   late AnimationController _particleController;
 
   final List<_CornerParticle> _particles = [];
-  final math.Random _random = math.Random();
+  final _FastRng _random = _FastRng();
 
   // Simulated data values
   double _powerLevel = 0.75;
@@ -690,15 +719,67 @@ class _EpicCornerDecorationPainter extends CustomPainter {
   final double powerLevel;
   final double systemLoad;
   final double networkPing;
+  static final Paint _outerGlowPaint = Paint();
+  static final Paint _outerGlowPaint2 = Paint();
+  static final Paint _outerGlowPaint3 = Paint();
+  static final Paint _outerGlowPaint4 = Paint();
+  static final Paint _particleGlowPaint = Paint();
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _mainGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.square;
+  static final Paint _mainPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.square;
+  static final Paint _tickPaint = Paint();
+  static final Paint _bracketPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _bracket2Paint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _barBgPaint = Paint();
+  static final Paint _barFillPaint = Paint();
+  static final Paint _barGlowPaint = Paint();
+  static final Paint _dataBarPaint = Paint();
+  static final Paint _pingPaint = Paint();
+  static final Paint _outerArcPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _innerArcPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round;
+  static final Paint _coreGlowPaint = Paint();
+  static final Paint _coreGlowPaint2 = Paint();
+  static final Paint _coreGlowPaint3 = Paint();
+  static final Paint _coreRingPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _coreCenterPaint = Paint();
+  static final Paint _corePulsePaint = Paint();
+  static final Paint _pulseGlowPaint = Paint();
+  static final Paint _pulseCorePaint = Paint();
+  static final Paint _hexPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _hexDotPaint = Paint();
+  static final Paint _arcPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _arcGlowPaint = Paint()
+    ..style = PaintingStyle.stroke;
+  static final Paint _indicatorPaint = Paint();
+  static final Paint _indicatorGlowPaint = Paint();
+  static final Paint _dataLinePaint = Paint();
+  static final Paint _dataPointPaint = Paint();
+  static final Path _hexPath = Path();
+  static final Path _arcPath = Path();
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final color = NeonColors.cyan;
     final secondaryColor = NeonColors.magenta;
     final accentColor = const Color(0xFFFF6600);
     final warningColor = NeonColors.yellow;
 
     final baseOpacity = 0.5 + pulseValue * 0.3;
+    if (baseOpacity <= 0.01) return;
 
     // Determine corner position and direction
     late Offset cornerPos;
@@ -766,15 +847,25 @@ class _EpicCornerDecorationPainter extends CustomPainter {
 
   void _drawOuterGlow(Canvas canvas, Offset pos, Color color, double opacity) {
     // Multi-layered glow
-    for (int i = 4; i >= 1; i--) {
-      canvas.drawCircle(
-        pos,
-        12.0 * i + pulseValue * 4,
-        Paint()
-          ..color = color.withOpacity(opacity * 0.05 * (5 - i) / 4)
-          ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6.0 * i),
-      );
-    }
+    _outerGlowPaint
+      ..color = color.withOpacity(opacity * 0.05)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 24);
+    canvas.drawCircle(pos, 12.0 * 4 + pulseValue * 4, _outerGlowPaint);
+
+    _outerGlowPaint2
+      ..color = color.withOpacity(opacity * 0.1)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18);
+    canvas.drawCircle(pos, 12.0 * 3 + pulseValue * 4, _outerGlowPaint2);
+
+    _outerGlowPaint3
+      ..color = color.withOpacity(opacity * 0.2)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
+    canvas.drawCircle(pos, 12.0 * 2 + pulseValue * 4, _outerGlowPaint3);
+
+    _outerGlowPaint4
+      ..color = color.withOpacity(opacity * 0.3)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawCircle(pos, 12.0 * 1 + pulseValue * 4, _outerGlowPaint4);
   }
 
   void _drawOrbitalParticles(Canvas canvas, Offset pos, Color color, Color secondary, double opacity) {
@@ -783,20 +874,18 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       final y = pos.dy + math.sin(particle.angle) * particle.radius;
 
       // Particle glow
+      _particleGlowPaint
+        ..color = (particle.opacity > 0.5 ? color : secondary).withOpacity(particle.opacity * opacity * 0.3)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
       canvas.drawCircle(
         Offset(x, y),
         particle.size * 2,
-        Paint()
-          ..color = (particle.opacity > 0.5 ? color : secondary).withOpacity(particle.opacity * opacity * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        _particleGlowPaint,
       );
 
       // Particle core
-      canvas.drawCircle(
-        Offset(x, y),
-        particle.size,
-        Paint()..color = Colors.white.withOpacity(particle.opacity * opacity * 0.6),
-      );
+      _particleCorePaint.color = Colors.white.withOpacity(particle.opacity * opacity * 0.6);
+      canvas.drawCircle(Offset(x, y), particle.size, _particleCorePaint);
     }
   }
 
@@ -805,30 +894,27 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     const mainLength = 40.0;
     const thickness = 2.5;
 
-    final glowPaint = Paint()
+    _mainGlowPaint
       ..color = color.withOpacity(opacity * 0.4)
       ..strokeWidth = thickness + 4
-      ..style = PaintingStyle.stroke
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
 
-    final mainPaint = Paint()
+    _mainPaint
       ..color = color.withOpacity(opacity)
-      ..strokeWidth = thickness
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.square;
+      ..strokeWidth = thickness;
 
     // Horizontal line
     final hEnd = Offset(pos.dx + mainLength * xDir, pos.dy);
-    canvas.drawLine(pos, hEnd, glowPaint);
-    canvas.drawLine(pos, hEnd, mainPaint);
+    canvas.drawLine(pos, hEnd, _mainGlowPaint);
+    canvas.drawLine(pos, hEnd, _mainPaint);
 
     // Vertical line
     final vEnd = Offset(pos.dx, pos.dy + mainLength * yDir);
-    canvas.drawLine(pos, vEnd, glowPaint);
-    canvas.drawLine(pos, vEnd, mainPaint);
+    canvas.drawLine(pos, vEnd, _mainGlowPaint);
+    canvas.drawLine(pos, vEnd, _mainPaint);
 
     // Tick marks
-    final tickPaint = Paint()
+    _tickPaint
       ..color = color.withOpacity(opacity * 0.6)
       ..strokeWidth = 1;
 
@@ -840,14 +926,14 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       canvas.drawLine(
         Offset(pos.dx + dist * xDir, pos.dy),
         Offset(pos.dx + dist * xDir, pos.dy + tickLength * yDir),
-        tickPaint,
+        _tickPaint,
       );
 
       // Vertical ticks
       canvas.drawLine(
         Offset(pos.dx, pos.dy + dist * yDir),
         Offset(pos.dx + tickLength * xDir, pos.dy + dist * yDir),
-        tickPaint,
+        _tickPaint,
       );
     }
   }
@@ -859,24 +945,22 @@ class _EpicCornerDecorationPainter extends CustomPainter {
 
     final innerPos = Offset(pos.dx + inset * xDir, pos.dy + inset * yDir);
 
-    final bracketPaint = Paint()
+    _bracketPaint
       ..color = accent.withOpacity(opacity * 0.7)
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 1.5;
 
     // L-bracket
-    canvas.drawLine(innerPos, Offset(innerPos.dx + length * xDir, innerPos.dy), bracketPaint);
-    canvas.drawLine(innerPos, Offset(innerPos.dx, innerPos.dy + length * yDir), bracketPaint);
+    canvas.drawLine(innerPos, Offset(innerPos.dx + length * xDir, innerPos.dy), _bracketPaint);
+    canvas.drawLine(innerPos, Offset(innerPos.dx, innerPos.dy + length * yDir), _bracketPaint);
 
     // Second inner bracket
     final innerPos2 = Offset(pos.dx + inset * 1.8 * xDir, pos.dy + inset * 1.8 * yDir);
-    final bracket2Paint = Paint()
+    _bracket2Paint
       ..color = color.withOpacity(opacity * 0.4)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 1;
 
-    canvas.drawLine(innerPos2, Offset(innerPos2.dx + 12 * xDir, innerPos2.dy), bracket2Paint);
-    canvas.drawLine(innerPos2, Offset(innerPos2.dx, innerPos2.dy + 12 * yDir), bracket2Paint);
+    canvas.drawLine(innerPos2, Offset(innerPos2.dx + 12 * xDir, innerPos2.dy), _bracket2Paint);
+    canvas.drawLine(innerPos2, Offset(innerPos2.dx, innerPos2.dy + 12 * yDir), _bracket2Paint);
   }
 
   void _drawEnergyBars(Canvas canvas, Offset pos, double xDir, double yDir,
@@ -888,6 +972,7 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     const barHeight = 4.0;
 
     // Bar background
+    _barBgPaint.color = color.withOpacity(opacity * 0.2);
     canvas.drawRect(
       Rect.fromLTWH(
         xDir > 0 ? barStartX : barStartX - barWidth,
@@ -895,12 +980,13 @@ class _EpicCornerDecorationPainter extends CustomPainter {
         barWidth,
         barHeight,
       ),
-      Paint()..color = color.withOpacity(opacity * 0.2),
+      _barBgPaint,
     );
 
     // Bar fill
     final fillWidth = barWidth * powerLevel;
     final barColor = powerLevel < 0.6 ? warning : color;
+    _barFillPaint.color = barColor.withOpacity(opacity * 0.8);
     canvas.drawRect(
       Rect.fromLTWH(
         xDir > 0 ? barStartX : barStartX - fillWidth,
@@ -908,10 +994,13 @@ class _EpicCornerDecorationPainter extends CustomPainter {
         fillWidth,
         barHeight,
       ),
-      Paint()..color = barColor.withOpacity(opacity * 0.8),
+      _barFillPaint,
     );
 
     // Bar glow
+    _barGlowPaint
+      ..color = barColor.withOpacity(opacity * 0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
     canvas.drawRect(
       Rect.fromLTWH(
         xDir > 0 ? barStartX : barStartX - fillWidth,
@@ -919,9 +1008,7 @@ class _EpicCornerDecorationPainter extends CustomPainter {
         fillWidth,
         barHeight,
       ),
-      Paint()
-        ..color = barColor.withOpacity(opacity * 0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      _barGlowPaint,
     );
   }
 
@@ -936,9 +1023,10 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       final barX = xDir > 0 ? dataX + i * 4 : dataX - i * 4 - 3;
       final barYStart = yDir > 0 ? dataY : dataY - barHeight;
 
+      _dataBarPaint.color = (i == 2 ? secondary : color).withOpacity(opacity * 0.6);
       canvas.drawRect(
         Rect.fromLTWH(barX, barYStart, 3, barHeight),
-        Paint()..color = (i == 2 ? secondary : color).withOpacity(opacity * 0.6),
+        _dataBarPaint,
       );
     }
 
@@ -947,22 +1035,17 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     final pingY = pos.dy + 30 * yDir;
     final pingActive = (rotationValue * 4).floor() % 2 == 0;
 
-    canvas.drawCircle(
-      Offset(pingX, pingY),
-      3,
-      Paint()
-        ..color = (pingActive ? color : color.withOpacity(0.3)).withOpacity(opacity)
-        ..maskFilter = pingActive ? const MaskFilter.blur(BlurStyle.normal, 2) : null,
-    );
+    _pingPaint
+      ..color = (pingActive ? color : color.withOpacity(0.3)).withOpacity(opacity)
+      ..maskFilter = pingActive ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+    canvas.drawCircle(Offset(pingX, pingY), 3, _pingPaint);
   }
 
   void _drawRotatingRings(Canvas canvas, Offset pos, Color color, Color secondary, double opacity) {
     // Outer rotating ring
-    final outerArcPaint = Paint()
+    _outerArcPaint
       ..color = color.withOpacity(opacity * 0.5)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 1.5;
 
     final outerAngle = rotationValue * math.pi * 2;
     canvas.drawArc(
@@ -970,22 +1053,20 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       outerAngle,
       math.pi * 0.4,
       false,
-      outerArcPaint,
+      _outerArcPaint,
     );
     canvas.drawArc(
       Rect.fromCircle(center: pos, radius: 22),
       outerAngle + math.pi,
       math.pi * 0.4,
       false,
-      outerArcPaint,
+      _outerArcPaint,
     );
 
     // Inner counter-rotating ring
-    final innerArcPaint = Paint()
+    _innerArcPaint
       ..color = secondary.withOpacity(opacity * 0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..strokeCap = StrokeCap.round;
+      ..strokeWidth = 1;
 
     final innerAngle = -rotationValue * math.pi * 2 * 1.5;
     canvas.drawArc(
@@ -993,21 +1074,21 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       innerAngle,
       math.pi * 0.3,
       false,
-      innerArcPaint,
+      _innerArcPaint,
     );
     canvas.drawArc(
       Rect.fromCircle(center: pos, radius: 15),
       innerAngle + math.pi * 0.67,
       math.pi * 0.3,
       false,
-      innerArcPaint,
+      _innerArcPaint,
     );
     canvas.drawArc(
       Rect.fromCircle(center: pos, radius: 15),
       innerAngle + math.pi * 1.33,
       math.pi * 0.3,
       false,
-      innerArcPaint,
+      _innerArcPaint,
     );
   }
 
@@ -1015,32 +1096,36 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     final coreRadius = 4 + pulseValue * 2;
 
     // Outer glow layers
-    canvas.drawCircle(pos, coreRadius + 8, Paint()
+    _coreGlowPaint
       ..color = color.withOpacity(opacity * 0.1)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10));
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+    canvas.drawCircle(pos, coreRadius + 8, _coreGlowPaint);
 
-    canvas.drawCircle(pos, coreRadius + 5, Paint()
+    _coreGlowPaint2
       ..color = color.withOpacity(opacity * 0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    canvas.drawCircle(pos, coreRadius + 5, _coreGlowPaint2);
 
-    canvas.drawCircle(pos, coreRadius + 2, Paint()
+    _coreGlowPaint3
       ..color = color.withOpacity(opacity * 0.4)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    canvas.drawCircle(pos, coreRadius + 2, _coreGlowPaint3);
 
     // Core ring
-    canvas.drawCircle(pos, coreRadius, Paint()
+    _coreRingPaint
       ..color = color.withOpacity(opacity * 0.7)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5);
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(pos, coreRadius, _coreRingPaint);
 
     // Core center
-    canvas.drawCircle(pos, 3, Paint()
-      ..color = Colors.white.withOpacity(opacity * 0.9));
+    _coreCenterPaint.color = Colors.white.withOpacity(opacity * 0.9);
+    canvas.drawCircle(pos, 3, _coreCenterPaint);
 
     // Inner pulse
-    canvas.drawCircle(pos, 2, Paint()
+    _corePulsePaint
       ..color = color.withOpacity(opacity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    canvas.drawCircle(pos, 2, _corePulsePaint);
   }
 
   void _drawEnergyPulses(Canvas canvas, Offset pos, double xDir, double yDir,
@@ -1053,14 +1138,14 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(hPulseX, pos.dy),
       3,
-      Paint()
+      _pulseGlowPaint
         ..color = accent.withOpacity(opacity * 0.7)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
     canvas.drawCircle(
       Offset(hPulseX, pos.dy),
       1.5,
-      Paint()..color = Colors.white.withOpacity(opacity * 0.9),
+      _pulseCorePaint..color = Colors.white.withOpacity(opacity * 0.9),
     );
 
     // Vertical pulse (offset timing)
@@ -1069,14 +1154,14 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(pos.dx, vPulseY),
       3,
-      Paint()
+      _pulseGlowPaint
         ..color = color.withOpacity(opacity * 0.7)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
     );
     canvas.drawCircle(
       Offset(pos.dx, vPulseY),
       1.5,
-      Paint()..color = Colors.white.withOpacity(opacity * 0.9),
+      _pulseCorePaint..color = Colors.white.withOpacity(opacity * 0.9),
     );
   }
 
@@ -1085,13 +1170,12 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     final hexCenter = Offset(pos.dx + 35 * xDir, pos.dy + 35 * yDir);
     const hexSize = 8.0;
 
-    final hexPaint = Paint()
+    _hexPaint
       ..color = color.withOpacity(opacity * 0.25)
-      ..strokeWidth = 0.8
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 0.8;
 
     // Draw small hexagon
-    final path = Path();
+    final path = _hexPath..reset();
     for (int i = 0; i < 6; i++) {
       final angle = (i * 60 - 30) * math.pi / 180;
       final point = Offset(
@@ -1105,7 +1189,7 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       }
     }
     path.close();
-    canvas.drawPath(path, hexPaint);
+    canvas.drawPath(path, _hexPaint);
 
     // Animated fill segment
     final fillAngle = rotationValue * math.pi * 2;
@@ -1113,8 +1197,8 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       hexCenter.dx + hexSize * 0.6 * math.cos(fillAngle),
       hexCenter.dy + hexSize * 0.6 * math.sin(fillAngle),
     );
-    canvas.drawCircle(fillPoint, 2, Paint()
-      ..color = color.withOpacity(opacity * 0.5));
+    _hexDotPaint.color = color.withOpacity(opacity * 0.5);
+    canvas.drawCircle(fillPoint, 2, _hexDotPaint);
   }
 
   void _drawElectricArcs(Canvas canvas, Offset pos, double xDir, double yDir,
@@ -1122,26 +1206,25 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     // Small electric arc effect near corner
     if (pulseValue > 0.7) {
       final arcOpacity = (pulseValue - 0.7) / 0.3;
-      final arcPaint = Paint()
+      _arcPaint
         ..color = color.withOpacity(arcOpacity * opacity * 0.6)
         ..strokeWidth = 1
-        ..style = PaintingStyle.stroke
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1);
 
-      final path = Path();
+      final path = _arcPath..reset();
       path.moveTo(pos.dx + 8 * xDir, pos.dy + 2 * yDir);
       path.lineTo(pos.dx + 12 * xDir, pos.dy + 5 * yDir);
       path.lineTo(pos.dx + 10 * xDir, pos.dy + 8 * yDir);
       path.lineTo(pos.dx + 14 * xDir, pos.dy + 12 * yDir);
 
-      canvas.drawPath(path, arcPaint);
+      canvas.drawPath(path, _arcPaint);
 
       // Arc glow
-      canvas.drawPath(path, Paint()
+      _arcGlowPaint
         ..color = Colors.white.withOpacity(arcOpacity * opacity * 0.3)
         ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      canvas.drawPath(path, _arcGlowPaint);
     }
   }
 
@@ -1157,17 +1240,19 @@ class _EpicCornerDecorationPainter extends CustomPainter {
       final isActive = phase < 0.5;
       final indicatorColor = i == 0 ? secondary : color;
 
+      _indicatorPaint.color = indicatorColor.withOpacity(isActive ? opacity * 0.8 : opacity * 0.2);
       canvas.drawRect(
         Rect.fromCenter(center: Offset(indicatorX, indicatorY), width: 4, height: 4),
-        Paint()..color = indicatorColor.withOpacity(isActive ? opacity * 0.8 : opacity * 0.2),
+        _indicatorPaint,
       );
 
       if (isActive) {
+        _indicatorGlowPaint
+          ..color = indicatorColor.withOpacity(opacity * 0.4)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
         canvas.drawRect(
           Rect.fromCenter(center: Offset(indicatorX, indicatorY), width: 4, height: 4),
-          Paint()
-            ..color = indicatorColor.withOpacity(opacity * 0.4)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+          _indicatorGlowPaint,
         );
       }
     }
@@ -1177,21 +1262,19 @@ class _EpicCornerDecorationPainter extends CustomPainter {
     final lineStart = pos.dx + 10 * xDir;
     final lineEnd = pos.dx + 50 * xDir;
 
+    _dataLinePaint
+      ..color = color.withOpacity(opacity * 0.3)
+      ..strokeWidth = 1;
     canvas.drawLine(
       Offset(lineStart, lineY),
       Offset(lineEnd, lineY),
-      Paint()
-        ..color = color.withOpacity(opacity * 0.3)
-        ..strokeWidth = 1,
+      _dataLinePaint,
     );
 
     // Moving data point on line
     final dataPointX = lineStart + (lineEnd - lineStart) * ((rotationValue * 3) % 1.0);
-    canvas.drawCircle(
-      Offset(dataPointX, lineY),
-      2,
-      Paint()..color = secondary.withOpacity(opacity * 0.8),
-    );
+    _dataPointPaint.color = secondary.withOpacity(opacity * 0.8);
+    canvas.drawCircle(Offset(dataPointX, lineY), 2, _dataPointPaint);
   }
 
   @override
@@ -1401,3 +1484,4 @@ class _CreditsContent extends StatelessWidget {
     );
   }
 }
+

@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 
 import '../entities/enemy.dart';
 import '../effects/explosion_effect.dart';
-import '../../ui/theme/neon_theme.dart';
 
 /// Mine states
 enum MineState { arming, armed, triggered, exploded }
@@ -22,10 +21,11 @@ class NeonMine extends PositionComponent {
   }) : _state = MineState.arming,
        _timer = 0,
        _pulseTimer = 0,
-       _random = math.Random() {
+       _rngState = 0x4c957f2d {
     this.position = position;
     anchor = Anchor.center;
     size = Vector2.all(24);
+    _rngState = (position.hashCode ^ 0x4c957f2d) & 0x7fffffff;
     _initializeParticles();
   }
 
@@ -38,7 +38,12 @@ class NeonMine extends PositionComponent {
   MineState _state;
   double _timer;
   double _pulseTimer;
-  final math.Random _random;
+  int _rngState = 0x4c957f2d;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
 
   // Orbiting particles
   final List<_OrbitParticle> _orbitParticles = [];
@@ -79,6 +84,8 @@ class NeonMine extends PositionComponent {
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
   static final Paint _hexGlowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _hexStrokePaint = Paint()
+    ..style = PaintingStyle.stroke;
   static final Paint _triFillPaint = Paint()
     ..style = PaintingStyle.fill;
   static final Paint _triGlowPaint = Paint()
@@ -100,6 +107,20 @@ class NeonMine extends PositionComponent {
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
   static final Paint _dangerZoneFlashPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final TextStyle _progressTextStyle = TextStyle(
+    color: Color(0xCCFFDD00),
+    fontSize: 8,
+    fontWeight: FontWeight.bold,
+    fontFamily: 'monospace',
+  );
+
+  final TextPainter _progressPainter = TextPainter(textDirection: TextDirection.ltr);
+  final TextPainter _statusPainter = TextPainter(textDirection: TextDirection.ltr);
+  int _progressPercent = -1;
+  String _statusText = '';
+  int _statusColorValue = 0;
+  final Path _trianglePath = Path();
+  final Path _hexPath = Path();
 
   MineState get state => _state;
   bool get isArmed => _state == MineState.armed;
@@ -108,9 +129,9 @@ class NeonMine extends PositionComponent {
     for (int i = 0; i < _particleCount; i++) {
       _orbitParticles.add(_OrbitParticle(
         angle: (i / _particleCount) * math.pi * 2,
-        radius: 18 + _random.nextDouble() * 4,
-        speed: 1.5 + _random.nextDouble() * 0.5,
-        size: 1.5 + _random.nextDouble(),
+        radius: 18 + _nextUnit() * 4,
+        speed: 1.5 + _nextUnit() * 0.5,
+        size: 1.5 + _nextUnit(),
       ));
     }
   }
@@ -236,45 +257,37 @@ class NeonMine extends PositionComponent {
     _renderHazardStripes(canvas, center, progress);
 
     // Pulsing outer ring (incomplete)
-    final ringPaint = Paint()
-      ..color = _hazardYellow.withOpacity(0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    _ringPaint.color = _hazardYellow.withOpacity(0.6);
 
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: 12),
       -math.pi / 2,
       math.pi * 2 * progress,
       false,
-      ringPaint,
+      _ringPaint,
     );
 
     // Arming progress ring glow
+    _ringGlowPaint.color = _hazardYellow.withOpacity(0.3);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: 12),
       -math.pi / 2,
       math.pi * 2 * progress,
       false,
-      Paint()
-        ..color = _hazardYellow.withOpacity(0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 6
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      _ringGlowPaint,
     );
 
     // Core (dim, pulsing)
     final pulseIntensity = 0.3 + progress * 0.4 + math.sin(_pulseTimer * 10) * 0.1;
-    final corePaint = Paint()
-      ..color = _secondaryColor.withOpacity(pulseIntensity)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    canvas.drawCircle(center, 6, corePaint);
+    _corePaint.color = _secondaryColor.withOpacity(pulseIntensity);
+    canvas.drawCircle(center, 6, _corePaint);
 
     // Inner dot
+    _innerDotPaint.color = _hazardYellow.withOpacity(0.7 * progress);
     canvas.drawCircle(
       center,
       3,
-      Paint()..color = _hazardYellow.withOpacity(0.7 * progress),
+      _innerDotPaint,
     );
 
     // Percentage text
@@ -290,6 +303,7 @@ class NeonMine extends PositionComponent {
 
     // Draw 8 hazard segments
     const segments = 8;
+    _hazardPaint.color = _hazardYellow.withOpacity(opacity * 0.5);
     for (int i = 0; i < segments; i++) {
       if (i % 2 == 0) {
         final startAngle = (i / segments) * math.pi * 2;
@@ -300,7 +314,7 @@ class NeonMine extends PositionComponent {
           startAngle,
           sweepAngle,
           true,
-          Paint()..color = _hazardYellow.withOpacity(opacity * 0.5),
+          _hazardPaint,
         );
       }
     }
@@ -312,21 +326,16 @@ class NeonMine extends PositionComponent {
     if (opacity <= 0) return;
 
     // Danger zone radius indicator
-    final dangerPaint = Paint()
-      ..color = _primaryColor.withOpacity(opacity * 0.1)
-      ..style = PaintingStyle.fill;
+    _dangerFillPaint.color = _primaryColor.withOpacity(opacity * 0.1);
 
     canvas.drawCircle(
       center,
       explosionRadius,
-      dangerPaint,
+      _dangerFillPaint,
     );
 
     // Danger zone border
-    final borderPaint = Paint()
-      ..color = _primaryColor.withOpacity(opacity * 0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    _dangerBorderPaint.color = _primaryColor.withOpacity(opacity * 0.3);
 
     // Dashed border effect
     const dashCount = 24;
@@ -338,7 +347,7 @@ class NeonMine extends PositionComponent {
           startAngle,
           math.pi / dashCount,
           false,
-          borderPaint,
+          _dangerBorderPaint,
         );
       }
     }
@@ -346,22 +355,15 @@ class NeonMine extends PositionComponent {
 
   void _renderProgressText(Canvas canvas, Offset center, double progress) {
     final percentage = (progress * 100).toInt();
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '$percentage%',
-        style: TextStyle(
-          color: _hazardYellow.withOpacity(0.8),
-          fontSize: 8,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+    if (_progressPercent != percentage) {
+      _progressPercent = percentage;
+      _progressPainter.text = TextSpan(text: '$percentage%', style: _progressTextStyle);
+      _progressPainter.layout();
+    }
 
-    textPainter.paint(
+    _progressPainter.paint(
       canvas,
-      Offset(center.dx - textPainter.width / 2, center.dy + 16),
+      Offset(center.dx - _progressPainter.width / 2, center.dy + 16),
     );
   }
 
@@ -373,13 +375,11 @@ class NeonMine extends PositionComponent {
     _renderDangerZone(canvas, center, 0.3);
 
     // Detection radius indicator (very subtle)
-    final detectionPaint = Paint()
-      ..color = _armedColor.withOpacity(0.05 + pulse * 0.05)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-    canvas.drawCircle(center, 20, detectionPaint);
+    _detectionPaint.color = _armedColor.withOpacity(0.05 + pulse * 0.05);
+    canvas.drawCircle(center, 20, _detectionPaint);
 
     // Orbiting particles
+    _orbitPaint.color = _armedColor.withOpacity(0.7);
     for (final particle in _orbitParticles) {
       final px = center.dx + math.cos(particle.angle) * particle.radius;
       final py = center.dy + math.sin(particle.angle) * particle.radius;
@@ -387,17 +387,13 @@ class NeonMine extends PositionComponent {
       canvas.drawCircle(
         Offset(px, py),
         particle.size,
-        Paint()
-          ..color = _armedColor.withOpacity(0.7)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        _orbitPaint,
       );
     }
 
     // Outer glow
-    final glowPaint = Paint()
-      ..color = _armedColor.withOpacity(0.2 * pulse)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawCircle(center, 14, glowPaint);
+    _glowPaint.color = _armedColor.withOpacity(0.2 * pulse);
+    canvas.drawCircle(center, 14, _glowPaint);
 
     // Hexagon body with glow
     _drawHexagon(canvas, center, 10, _armedColor.withOpacity(0.7), 2);
@@ -408,39 +404,34 @@ class NeonMine extends PositionComponent {
     canvas.translate(center.dx, center.dy);
     canvas.rotate(triRotation);
 
-    final trianglePath = Path();
     const triSize = 5.0;
-    trianglePath.moveTo(0, -triSize);
-    trianglePath.lineTo(-triSize * 0.866, triSize * 0.5);
-    trianglePath.lineTo(triSize * 0.866, triSize * 0.5);
-    trianglePath.close();
+    _trianglePath
+      ..reset()
+      ..moveTo(0, -triSize)
+      ..lineTo(-triSize * 0.866, triSize * 0.5)
+      ..lineTo(triSize * 0.866, triSize * 0.5)
+      ..close();
 
     // Triangle glow
+    _triGlowPaint.color = _armedColor.withOpacity(0.3);
     canvas.drawPath(
-      trianglePath,
-      Paint()
-        ..color = _armedColor.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      _trianglePath,
+      _triGlowPaint,
     );
 
     // Triangle fill
+    _triFillPaint.color = _armedColor.withOpacity(pulse);
     canvas.drawPath(
-      trianglePath,
-      Paint()
-        ..color = _armedColor.withOpacity(pulse)
-        ..style = PaintingStyle.fill,
+      _trianglePath,
+      _triFillPaint,
     );
 
     canvas.restore();
 
     // Pulsing ring
     final ringRadius = 12 + pulse * 3;
-    final ringPaint = Paint()
-      ..color = _armedColor.withOpacity(0.4)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawCircle(center, ringRadius, ringPaint);
+    _pulsingRingPaint.color = _armedColor.withOpacity(0.4);
+    canvas.drawCircle(center, ringRadius, _pulsingRingPaint);
 
     // "ARMED" status indicator
     _renderStatusText(canvas, center, 'ARMED', _armedColor);
@@ -459,16 +450,16 @@ class NeonMine extends PositionComponent {
     canvas.drawLine(
       center,
       Offset(endX, endY),
-      Paint()
-        ..color = _armedColor.withOpacity(0.3)
-        ..strokeWidth = 1
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      _scanLinePaint..color = _armedColor.withOpacity(0.3),
     );
   }
 
   void _renderStatusText(Canvas canvas, Offset center, String text, Color color) {
-    final textPainter = TextPainter(
-      text: TextSpan(
+    final colorValue = color.value;
+    if (_statusText != text || _statusColorValue != colorValue) {
+      _statusText = text;
+      _statusColorValue = colorValue;
+      _statusPainter.text = TextSpan(
         text: text,
         style: TextStyle(
           color: color.withOpacity(0.6),
@@ -477,13 +468,13 @@ class NeonMine extends PositionComponent {
           fontFamily: 'monospace',
           letterSpacing: 1,
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+      );
+      _statusPainter.layout();
+    }
 
-    textPainter.paint(
+    _statusPainter.paint(
       canvas,
-      Offset(center.dx - textPainter.width / 2, center.dy + 18),
+      Offset(center.dx - _statusPainter.width / 2, center.dy + 18),
     );
   }
 
@@ -492,25 +483,21 @@ class NeonMine extends PositionComponent {
     final flash = math.sin(_timer * 80) > 0 ? 1.0 : 0.3;
 
     // Danger zone flash
+    _dangerZoneFlashPaint.color =
+        _primaryColor.withOpacity((0.2 - _timer).clamp(0.0, 1.0) * flash);
     canvas.drawCircle(
       center,
       explosionRadius * (0.3 + _timer * 2),
-      Paint()
-        ..color = _primaryColor.withOpacity((0.2 - _timer).clamp(0.0, 1.0) * flash)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      _dangerZoneFlashPaint,
     );
 
     // Rapid flash effect
-    final flashPaint = Paint()
-      ..color = _primaryColor.withOpacity(flash)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-    canvas.drawCircle(center, 18, flashPaint);
+    _flashPaint.color = _primaryColor.withOpacity(flash);
+    canvas.drawCircle(center, 18, _flashPaint);
 
     // Core - intense white
-    final corePaint = Paint()
-      ..color = Colors.white.withOpacity(flash)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-    canvas.drawCircle(center, 10, corePaint);
+    _triggerCorePaint.color = Colors.white.withOpacity(flash);
+    canvas.drawCircle(center, 10, _triggerCorePaint);
 
     // Expanding warning rings
     for (int i = 0; i < 3; i++) {
@@ -519,14 +506,11 @@ class NeonMine extends PositionComponent {
       final warningAlpha = (0.5 - ringProgress) * 0.8;
 
       if (warningAlpha > 0) {
+        _warningRingPaint.color = _primaryColor.withOpacity(warningAlpha);
         canvas.drawCircle(
           center,
           warningRadius,
-          Paint()
-            ..color = _primaryColor.withOpacity(warningAlpha)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 2
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+          _warningRingPaint,
         );
       }
     }
@@ -536,25 +520,36 @@ class NeonMine extends PositionComponent {
   }
 
   void _drawHexagon(Canvas canvas, Offset center, double radius, Color color, double strokeWidth) {
-    final path = NeonEffects.createHexagonPath(center, radius);
+    _hexPath.reset();
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60 - 30) * math.pi / 180;
+      final x = center.dx + radius * math.cos(angle);
+      final y = center.dy + radius * math.sin(angle);
+      if (i == 0) {
+        _hexPath.moveTo(x, y);
+      } else {
+        _hexPath.lineTo(x, y);
+      }
+    }
+    _hexPath.close();
 
     // Glow
+    _hexGlowPaint
+      ..color = color.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth + 3;
     canvas.drawPath(
-      path,
-      Paint()
-        ..color = color.withOpacity(0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth + 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      _hexPath,
+      _hexGlowPaint,
     );
 
     // Main stroke
+    _hexStrokePaint
+      ..color = color
+      ..strokeWidth = strokeWidth;
     canvas.drawPath(
-      path,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = strokeWidth,
+      _hexPath,
+      _hexStrokePaint,
     );
   }
 }

@@ -113,6 +113,26 @@ flutter build web --release --web-renderer canvaskit --base-href "/your-base-pat
 # Deploy the contents of flutter_app/build/web/
 ```
 
+### Build Android APK (Docker)
+
+Build the APK using Docker without needing Android Studio or local Flutter SDK:
+
+```powershell
+cd flutter_app
+docker build -f Dockerfile.apk --output build-output .
+```
+
+Los APKs se generan en la carpeta `build-output/`:
+
+| Archivo | Descripcion |
+|---------|-------------|
+| `bored-games-release.apk` | APK universal (todos los dispositivos) |
+| `app-arm64-v8a-release.apk` | ARM 64-bit (telefonos modernos) |
+| `app-armeabi-v7a-release.apk` | ARM 32-bit (telefonos antiguos) |
+| `app-x86_64-release.apk` | x86_64 (emuladores) |
+
+> **Nota**: El primer build tarda ~15 minutos. Los siguientes son mas rapidos gracias al cache de Docker.
+
 ## Development Guide
 
 See [Guide.md](Guide.md) for the complete development roadmap and phase documentation.

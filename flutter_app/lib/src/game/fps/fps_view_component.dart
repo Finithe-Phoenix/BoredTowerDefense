@@ -16,6 +16,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     required this.tower,
   }) : super(priority: 500) {
     _initializeForTowerType();
+    _rngState = 0x6d2b79f5 ^ tower.hashCode;
     
     // Initialize 3D camera
     _camera = Camera3D(
@@ -48,6 +49,35 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   double _boostFlash = 0;
   final List<_BoostParticle> _boostParticles = [];
   final List<_DataParticle> _dataParticles = [];
+  int _rngState = 0x6d2b79f5;
+
+  Picture? _scanlineLayer;
+  Size? _scanlineLayerSize;
+  Shader? _metalShader;
+  Size? _metalShaderSize;
+  Shader? _deckShader;
+  Size? _deckShaderSize;
+  int _deckShaderColorValue = 0;
+  TextPainter? _hoverHintPainter;
+  Color? _hoverHintColor;
+  TextPainter? _towerNamePainter;
+  String _towerNameText = '';
+  double _towerNameAlpha = -1;
+  TextPainter? _weaponPainter;
+  String _weaponText = '';
+  final List<TextPainter> _statPainters = [];
+  final List<String> _statTexts = [];
+  double _statAlpha = -1;
+  TextPainter? _reloadReadyPainter;
+  TextPainter? _reloadLoadingPainter;
+  TextPainter? _targetLockPainter;
+  double _targetLockAlpha = -1;
+  TextPainter? _overdrivePainter;
+  String _overdriveText = '';
+  int _overdriveColorValue = 0;
+  TextPainter? _boostPainter;
+  double _boostPulse = -1;
+  int _boostColorValue = 0;
   
   // Cockpit visual effects
   double _glitchTimer = 0;
@@ -194,6 +224,19 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   static final Paint _targetLockBracketPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
+  static final Paint _monitorFillPaint = Paint();
+  static final Paint _monitorBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+
+  final Path _bowPath = Path();
+  final Path _wingPath = Path();
+  final Path _crystalPath = Path();
+  final Path _leftPillarPath = Path();
+  final Path _rightPillarPath = Path();
+  final Path _leftNeonPath = Path();
+  final Path _rightNeonPath = Path();
+  final Path _deckPath = Path();
 
   void _initializeForTowerType() {
     switch (tower.type) {
@@ -259,6 +302,20 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     super.onGameResize(size);
     position = Vector2.zero();
     this.size = size.clone();
+    _scanlineLayer?.dispose();
+    _scanlineLayer = null;
+    _scanlineLayerSize = null;
+    _metalShader = null;
+    _metalShaderSize = null;
+    _deckShader = null;
+    _deckShaderSize = null;
+  }
+
+  @override
+  void onRemove() {
+    _scanlineLayer?.dispose();
+    _scanlineLayer = null;
+    super.onRemove();
   }
 
   @override
@@ -284,9 +341,9 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
 
     // Cockpit Glitch effect
-    if (math.Random().nextDouble() < 0.005) {
+    if (_nextUnit() < 0.005) {
       _isGlitching = true;
-      _glitchTimer = 0.05 + math.Random().nextDouble() * 0.1;
+      _glitchTimer = 0.05 + _nextUnit() * 0.1;
     }
     if (_isGlitching) {
       _glitchTimer -= dt;
@@ -328,7 +385,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
        final spawnChance = gameRef.reduceFx ? 0.05 : 0.3;
        final maxParticles = gameRef.reduceFx ? 20 : 100;
        
-       if (math.Random().nextDouble() < spawnChance) {
+       if (_nextUnit() < spawnChance) {
           if (_dataParticles.length < maxParticles) {
             _dataParticles.add(_DataParticle());
           }
@@ -387,18 +444,18 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
   void _spawnBoostParticles(double dt) {
     // Spawn rate increases with boost intensity
-    if (math.Random().nextDouble() < dt * 30 * _boostIntensity) {
+    if (_nextUnit() < dt * 30 * _boostIntensity) {
       _boostParticles.add(_BoostParticle(
         position: Vector2(
-          math.Random().nextDouble() * size.x,
+          _nextUnit() * size.x,
           size.y,
         ),
         velocity: Vector2(
-          (math.Random().nextDouble() - 0.5) * 100,
-          -100 - math.Random().nextDouble() * 200,
+          (_nextUnit() - 0.5) * 100,
+          -100 - _nextUnit() * 200,
         ),
         color: _primaryColor,
-        size: 2 + math.Random().nextDouble() * 4,
+        size: 2 + _nextUnit() * 4,
       ));
     }
 
@@ -702,33 +759,33 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
   void _renderPulseArcherWeapon(Canvas canvas) {
     // Energy Bow design
-    final bowPaint = Paint()
+    _bowPaint
       ..color = _primaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
 
     // Bow arc
-    final bowPath = Path()
+    _bowPath
+      ..reset()
       ..moveTo(-60, -20)
       ..quadraticBezierTo(-70, 0, -60, 20);
 
-    canvas.drawPath(bowPath, bowPaint);
+    canvas.drawPath(_bowPath, _bowPaint);
 
     // Energy string
-    final stringPaint = Paint()
+    _stringPaint
       ..color = _primaryColor.withOpacity(0.6 + _crosshairPulse * 0.4)
-      ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      ..strokeWidth = 2;
 
     canvas.drawLine(
       const Offset(-60, -20),
       const Offset(-60, 20),
-      stringPaint,
+      _stringPaint,
     );
 
     // Charged arrow (when ready to fire)
     if (_reloadProgress >= 1.0) {
-      final arrowPaint = Paint()
+      _arrowPaint
         ..color = Colors.white.withOpacity(0.8)
         ..strokeWidth = 3
         ..strokeCap = StrokeCap.round;
@@ -736,41 +793,40 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawLine(
         const Offset(-55, 0),
         const Offset(0, 0),
-        arrowPaint,
+        _arrowPaint,
       );
 
       // Arrow glow
-      final glowPaint = Paint()
-        ..color = _primaryColor.withOpacity(_crosshairPulse * 0.6)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      _arrowGlowPaint.color = _primaryColor.withOpacity(_crosshairPulse * 0.6);
 
       canvas.drawLine(
         const Offset(-55, 0),
         const Offset(0, 0),
-        glowPaint,
+        _arrowGlowPaint,
       );
     }
 
     // BOOST mode: Energy wings
     if (_boostIntensity > 0) {
-      final wingPaint = Paint()
+      _wingPaint
         ..color = _primaryColor.withOpacity(0.3 * _boostIntensity)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2;
 
       for (int i = 0; i < 3; i++) {
         final offset = i * 10.0;
-        final wingPath = Path()
+        _wingPath
+          ..reset()
           ..moveTo(-60 - offset, -20 - offset)
           ..quadraticBezierTo(-70 - offset, 0, -60 - offset, 20 + offset);
-        canvas.drawPath(wingPath, wingPaint);
+        canvas.drawPath(_wingPath, _wingPaint);
       }
     }
   }
 
   void _renderCircuitCannonWeapon(Canvas canvas) {
     // Heavy cannon barrel
-    final barrelPaint = Paint()
+    _barrelPaint
       ..color = _primaryColor
       ..style = PaintingStyle.fill;
 
@@ -779,10 +835,10 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       const Radius.circular(5),
     );
 
-    canvas.drawRRect(barrelRect, barrelPaint);
+    canvas.drawRRect(barrelRect, _barrelPaint);
 
     // Barrel segments
-    final segmentPaint = Paint()
+    _segmentPaint
       ..color = _secondaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -792,30 +848,26 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawLine(
         Offset(-15, y),
         Offset(15, y),
-        segmentPaint,
+        _segmentPaint,
       );
     }
 
     // Charging indicator (when reloading)
     if (_reloadProgress < 1.0) {
-      final chargePaint = Paint()
-        ..color = _primaryColor.withOpacity(0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+      _chargePaint.color = _primaryColor.withOpacity(0.5);
 
       final chargeHeight = 80 * _reloadProgress;
       canvas.drawRect(
         Rect.fromLTWH(-15, 40 - chargeHeight, 30, chargeHeight),
-        chargePaint,
+        _chargePaint,
       );
     }
 
     // Muzzle flash when ready
     if (_reloadProgress >= 1.0) {
-      final flashPaint = Paint()
-        ..color = Colors.white.withOpacity(_crosshairPulse * 0.8)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+      _muzzleFlashPaint.color = Colors.white.withOpacity(_crosshairPulse * 0.8);
 
-      canvas.drawCircle(const Offset(0, -40), 15, flashPaint);
+      canvas.drawCircle(const Offset(0, -40), 15, _muzzleFlashPaint);
     }
 
     // BOOST mode: Energy coils
@@ -826,18 +878,18 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         final x = math.cos(angle) * radius;
         final y = math.sin(angle) * radius * 0.3;
 
-        final coilPaint = Paint()
+        _coilPaint
           ..color = _secondaryColor.withOpacity(0.6 * _boostIntensity)
           ..strokeWidth = 3;
 
-        canvas.drawCircle(Offset(x, y), 5, coilPaint);
+        canvas.drawCircle(Offset(x, y), 5, _coilPaint);
       }
     }
   }
 
   void _renderPhaseMageWeapon(Canvas canvas) {
     // Arcane staff with crystal
-    final staffPaint = Paint()
+    _staffPaint
       ..color = _primaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4
@@ -847,38 +899,36 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.drawLine(
       const Offset(0, 40),
       const Offset(0, -60),
-      staffPaint,
+      _staffPaint,
     );
 
     // Floating crystal
     final crystalY = -60 + math.sin(_animationTime * 2) * 5;
 
     // Crystal glow
-    final glowPaint = Paint()
-      ..color = _primaryColor.withOpacity(0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+    _crystalGlowPaint.color = _primaryColor.withOpacity(0.3);
 
-    canvas.drawCircle(Offset(0, crystalY), 20, glowPaint);
+    canvas.drawCircle(Offset(0, crystalY), 20, _crystalGlowPaint);
 
     // Crystal core
-    final crystalPath = Path();
+    _crystalPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = (i / 6) * math.pi * 2 + _animationTime;
       final x = math.cos(angle) * 12;
       final y = crystalY + math.sin(angle) * 12;
       if (i == 0) {
-        crystalPath.moveTo(x, y);
+        _crystalPath.moveTo(x, y);
       } else {
-        crystalPath.lineTo(x, y);
+        _crystalPath.lineTo(x, y);
       }
     }
-    crystalPath.close();
+    _crystalPath.close();
 
-    final crystalPaint = Paint()
+    _crystalPaint
       ..color = _primaryColor
       ..style = PaintingStyle.fill;
 
-    canvas.drawPath(crystalPath, crystalPaint);
+    canvas.drawPath(_crystalPath, _crystalPaint);
 
     // Energy particles orbiting crystal
     for (int i = 0; i < 4; i++) {
@@ -887,11 +937,9 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       final x = math.cos(angle) * radius;
       final y = crystalY + math.sin(angle) * radius;
 
-      final particlePaint = Paint()
-        ..color = _secondaryColor.withOpacity(0.8)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      _orbParticlePaint.color = _secondaryColor.withOpacity(0.8);
 
-      canvas.drawCircle(Offset(x, y), 3, particlePaint);
+      canvas.drawCircle(Offset(x, y), 3, _orbParticlePaint);
     }
 
     // BOOST mode: Phase rift effect
@@ -902,14 +950,14 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         final x = math.cos(angle) * dist;
         final y = crystalY + math.sin(angle) * dist;
 
-        final riftPaint = Paint()
+        _riftPaint
           ..color = _primaryColor.withOpacity(0.4 * _boostIntensity)
           ..strokeWidth = 2;
 
         canvas.drawLine(
           Offset(0, crystalY),
           Offset(x, y),
-          riftPaint,
+          _riftPaint,
         );
       }
     }
@@ -922,25 +970,20 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       final y = -20 + math.sin(_animationTime * 3 + i) * 10;
 
       // Emitter glow
-      final glowPaint = Paint()
-        ..color = _primaryColor.withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+      _emitterGlowPaint.color = _primaryColor.withOpacity(0.4);
 
-      canvas.drawCircle(Offset(x, y), 12, glowPaint);
+      canvas.drawCircle(Offset(x, y), 12, _emitterGlowPaint);
 
       // Emitter core
-      final corePaint = Paint()
-        ..color = _primaryColor;
+      _emitterCorePaint.color = _primaryColor;
 
-      canvas.drawCircle(Offset(x, y), 6, corePaint);
+      canvas.drawCircle(Offset(x, y), 6, _emitterCorePaint);
 
       // Rainbow shimmer effect
       final hue = (i / 5 * 360 + _animationTime * 50) % 360;
-      final shimmerPaint = Paint()
-        ..color = HSVColor.fromAHSV(0.6, hue, 1.0, 1.0).toColor()
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      _shimmerPaint.color = HSVColor.fromAHSV(0.6, hue, 1.0, 1.0).toColor();
 
-      canvas.drawCircle(Offset(x, y), 8, shimmerPaint);
+      canvas.drawCircle(Offset(x, y), 8, _shimmerPaint);
     }
 
     // Energy beams when ready
@@ -949,15 +992,14 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         final x = (i - 2) * 25.0;
         final y = -20 + math.sin(_animationTime * 3 + i) * 10;
 
-        final beamPaint = Paint()
+        _beamPaint
           ..color = Colors.white.withOpacity(_crosshairPulse * 0.6)
-          ..strokeWidth = 2
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+          ..strokeWidth = 2;
 
         canvas.drawLine(
           Offset(x, y),
           Offset(x, y - 100),
-          beamPaint,
+          _beamPaint,
         );
       }
     }
@@ -972,11 +1014,10 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           final y = math.sin(angle) * ringRadius;
 
           final hue = (i / 12 * 360) % 360;
-          final burstPaint = Paint()
-            ..color = HSVColor.fromAHSV(0.4 * _boostIntensity, hue, 1.0, 1.0).toColor()
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+          _burstPaint.color =
+              HSVColor.fromAHSV(0.4 * _boostIntensity, hue, 1.0, 1.0).toColor();
 
-          canvas.drawCircle(Offset(x, y), 4, burstPaint);
+          canvas.drawCircle(Offset(x, y), 4, _burstPaint);
         }
       }
     }
@@ -1044,42 +1085,48 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
        visibleChars = (fullText.length * progress).floor();
     }
     
-    final namePainter = TextPainter(
-      text: TextSpan(
-        text: fullText.substring(0, visibleChars),
-        style: TextStyle(
-          color: _primaryColor.withOpacity(alpha),
-          fontSize: 24,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 2,
-          shadows: [
-            Shadow(
-              color: _primaryColor.withOpacity(0.8),
-              blurRadius: 8,
-            ),
-          ],
+    final nameText = fullText.substring(0, visibleChars);
+    if (_towerNamePainter == null || _towerNameText != nameText || _towerNameAlpha != alpha) {
+      _towerNameText = nameText;
+      _towerNameAlpha = alpha;
+      _towerNamePainter = TextPainter(
+        text: TextSpan(
+          text: nameText,
+          style: TextStyle(
+            color: _primaryColor.withOpacity(alpha),
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 2,
+            shadows: [
+              Shadow(
+                color: _primaryColor.withOpacity(0.8),
+                blurRadius: 8,
+              ),
+            ],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    namePainter.layout();
-    namePainter.paint(canvas, const Offset(20, 20));
+    _towerNamePainter!.paint(canvas, const Offset(20, 20));
 
-    final weaponPainter = TextPainter(
-      text: TextSpan(
-        text: _weaponType,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.7),
-          fontSize: 14,
-          letterSpacing: 1,
+    if (_weaponPainter == null || _weaponText != _weaponType) {
+      _weaponText = _weaponType;
+      _weaponPainter = TextPainter(
+        text: TextSpan(
+          text: _weaponType,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 14,
+            letterSpacing: 1,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    weaponPainter.layout();
-    weaponPainter.paint(canvas, const Offset(20, 50));
+    _weaponPainter!.paint(canvas, const Offset(20, 50));
   }
 
   void _renderStats(Canvas canvas, double alpha) {
@@ -1090,6 +1137,13 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     ];
 
     double y = 20;
+    if (_statPainters.length < stats.length) {
+      for (int i = _statPainters.length; i < stats.length; i++) {
+        _statPainters.add(TextPainter(textDirection: TextDirection.ltr));
+        _statTexts.add('');
+      }
+    }
+
     for (int i = 0; i < stats.length; i++) {
       // Staggered entry for stats
       if (!_introComplete) {
@@ -1098,22 +1152,23 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       }
       
       final stat = stats[i];
-      final painter = TextPainter(
-        text: TextSpan(
+      if (_statTexts[i] != stat || _statAlpha != alpha) {
+        _statTexts[i] = stat;
+        _statPainters[i].text = TextSpan(
           text: stat,
-           style: TextStyle(
+          style: TextStyle(
             color: Colors.white.withOpacity(0.8 * alpha),
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
+        );
+        _statPainters[i].layout();
+      }
 
-      painter.layout();
-      painter.paint(canvas, Offset(size.x - painter.width - 20, y));
+      _statPainters[i].paint(canvas, Offset(size.x - _statPainters[i].width - 20, y));
       y += 25;
     }
+    _statAlpha = alpha;
   }
 
   void _renderReloadIndicator(Canvas canvas, double alpha) {
@@ -1123,31 +1178,29 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     final barY = size.y - 60;
 
     // Background
-    final bgPaint = Paint()
-      ..color = Colors.black.withOpacity(0.6);
+    _reloadBgPaint.color = Colors.black.withOpacity(0.6);
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(barX, barY, barWidth, barHeight),
         const Radius.circular(5),
       ),
-      bgPaint,
+      _reloadBgPaint,
     );
 
     // Reload fill
-    final fillPaint = Paint()
-      ..color = _reloadProgress >= 1.0 ? Colors.green : _primaryColor;
+    _reloadFillPaint.color = _reloadProgress >= 1.0 ? Colors.green : _primaryColor;
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
         Rect.fromLTWH(barX, barY, barWidth * _reloadProgress, barHeight),
         const Radius.circular(5),
       ),
-      fillPaint,
+      _reloadFillPaint,
     );
 
     // Border
-    final borderPaint = Paint()
+    _reloadBorderPaint
       ..color = _primaryColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -1157,24 +1210,38 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         Rect.fromLTWH(barX, barY, barWidth, barHeight),
         const Radius.circular(5),
       ),
-      borderPaint,
+      _reloadBorderPaint,
     );
 
     // Text
     final text = _reloadProgress >= 1.0 ? 'READY' : 'RELOADING';
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: text,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
+    if (_reloadReadyPainter == null || _reloadLoadingPainter == null) {
+      _reloadReadyPainter = TextPainter(
+        text: const TextSpan(
+          text: 'READY',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
 
-    textPainter.layout();
+      _reloadLoadingPainter = TextPainter(
+        text: const TextSpan(
+          text: 'RELOADING',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+
+    final textPainter = text == 'READY' ? _reloadReadyPainter! : _reloadLoadingPainter!;
     textPainter.paint(
       canvas,
       Offset(barX + barWidth / 2 - textPainter.width / 2, barY + 7),
@@ -1186,44 +1253,50 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     final y = size.y - 80;
 
     // BOOST text with pulsing glow
-    final boostPainter = TextPainter(
-      text: TextSpan(
-        text: 'BOOST MODE',
-        style: TextStyle(
-          color: _primaryColor,
-          fontSize: 28,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 3,
-          shadows: [
-            Shadow(
-              color: _primaryColor.withOpacity(_crosshairPulse),
-              blurRadius: 15,
-            ),
-          ],
+    final boostColorValue = _primaryColor.value;
+    if (_boostPainter == null ||
+        _boostPulse != _crosshairPulse ||
+        _boostColorValue != boostColorValue) {
+      _boostPulse = _crosshairPulse;
+      _boostColorValue = boostColorValue;
+      _boostPainter = TextPainter(
+        text: TextSpan(
+          text: 'BOOST MODE',
+          style: TextStyle(
+            color: _primaryColor,
+            fontSize: 28,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 3,
+            shadows: [
+              Shadow(
+                color: _primaryColor.withOpacity(_crosshairPulse),
+                blurRadius: 15,
+              ),
+            ],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    boostPainter.layout();
-    boostPainter.paint(canvas, Offset(x, y));
+    _boostPainter!.paint(canvas, Offset(x, y));
 
     // Warning brackets
-    final bracketPaint = Paint()
+    _bracketPaint
       ..color = _primaryColor.withOpacity(0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
 
     // Left bracket
-    canvas.drawLine(Offset(x - 10, y), Offset(x - 20, y), bracketPaint);
-    canvas.drawLine(Offset(x - 20, y), Offset(x - 20, y + 30), bracketPaint);
-    canvas.drawLine(Offset(x - 20, y + 30), Offset(x - 10, y + 30), bracketPaint);
+    canvas.drawLine(Offset(x - 10, y), Offset(x - 20, y), _bracketPaint);
+    canvas.drawLine(Offset(x - 20, y), Offset(x - 20, y + 30), _bracketPaint);
+    canvas.drawLine(Offset(x - 20, y + 30), Offset(x - 10, y + 30), _bracketPaint);
 
     // Right bracket
-    final rightX = x + boostPainter.width;
-    canvas.drawLine(Offset(rightX + 10, y), Offset(rightX + 20, y), bracketPaint);
-    canvas.drawLine(Offset(rightX + 20, y), Offset(rightX + 20, y + 30), bracketPaint);
-    canvas.drawLine(Offset(rightX + 20, y + 30), Offset(rightX + 10, y + 30), bracketPaint);
+    final rightX = x + _boostPainter!.width;
+    canvas.drawLine(Offset(rightX + 10, y), Offset(rightX + 20, y), _bracketPaint);
+    canvas.drawLine(Offset(rightX + 20, y), Offset(rightX + 20, y + 30), _bracketPaint);
+    canvas.drawLine(Offset(rightX + 20, y + 30), Offset(rightX + 10, y + 30), _bracketPaint);
   }
 
   void _renderCrosshair(Canvas canvas) {
@@ -1323,22 +1396,24 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.drawLine(Offset(centerX + 40 - bracketSize, y + 20), Offset(centerX + 40, y + 20), _targetLockBracketPaint);
 
     // Target info
-    final targetPainter = TextPainter(
-      text: TextSpan(
-        text: 'TARGET LOCKED',
-        style: TextStyle(
-          color: Colors.red.withOpacity(_targetLockProgress),
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
+    if (_targetLockPainter == null || _targetLockAlpha != _targetLockProgress) {
+      _targetLockAlpha = _targetLockProgress;
+      _targetLockPainter = TextPainter(
+        text: TextSpan(
+          text: 'TARGET LOCKED',
+          style: TextStyle(
+            color: Colors.red.withOpacity(_targetLockProgress),
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    targetPainter.layout();
-    targetPainter.paint(
+    _targetLockPainter!.paint(
       canvas,
-      Offset(centerX - targetPainter.width / 2, y - 35),
+      Offset(centerX - _targetLockPainter!.width / 2, y - 35),
     );
   }
 
@@ -1374,34 +1449,60 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     );
 
     // Indicator Text
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: 'OVERDRIVE: ${_remainingOverdriveTime.toStringAsFixed(1)}s',
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.5,
+    final text = 'OVERDRIVE: ${_remainingOverdriveTime.toStringAsFixed(1)}s';
+    final colorValue = color.value;
+    if (_overdrivePainter == null ||
+        _overdriveText != text ||
+        _overdriveColorValue != colorValue) {
+      _overdriveText = text;
+      _overdriveColorValue = colorValue;
+      _overdrivePainter = TextPainter(
+        text: TextSpan(
+          text: text,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.5,
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.layout();
-    textPainter.paint(canvas, Offset(centerX - textPainter.width/2, y - 20));
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
+    _overdrivePainter!.paint(canvas, Offset(centerX - _overdrivePainter!.width / 2, y - 20));
   }
 
   void _renderScanlines(Canvas canvas) {
-    _scanlinePaint.color = Colors.black.withOpacity(0.05);
+    _ensureScanlineLayer();
 
-    for (double y = 0; y < size.y; y += 4) {
-      canvas.drawLine(Offset(0, y), Offset(size.x, y), _scanlinePaint);
+    if (_scanlineLayer != null) {
+      canvas.drawPicture(_scanlineLayer!);
     }
 
     if (_isGlitching) {
       _glitchPaint.color = _primaryColor.withOpacity(0.1);
-      final glitchY = math.Random().nextDouble() * size.y;
+      final glitchY = _nextUnit() * size.y;
       canvas.drawRect(Rect.fromLTWH(0, glitchY, size.x, 20), _glitchPaint);
     }
+  }
+
+  void _ensureScanlineLayer() {
+    final currentSize = Size(size.x, size.y);
+    if (_scanlineLayer != null && _scanlineLayerSize == currentSize) {
+      return;
+    }
+
+    _scanlineLayer?.dispose();
+    final recorder = PictureRecorder();
+    final scanCanvas = Canvas(recorder);
+    _scanlinePaint.color = Colors.black.withOpacity(0.05);
+
+    for (double y = 0; y < currentSize.height; y += 4) {
+      scanCanvas.drawLine(Offset(0, y), Offset(currentSize.width, y), _scanlinePaint);
+    }
+
+    _scanlineLayer = recorder.endRecording();
+    _scanlineLayerSize = currentSize;
   }
 
   void _renderBoostFlash(Canvas canvas) {
@@ -1428,21 +1529,12 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     
     // --- 1. SOLID PILLARS (The Structure) ---
     final pillarWidth = w * 0.22;
-    
-    // Gradient for "Dark Industrial Metal"
-    final metalGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-         const Color(0xFF080815), // Deep dark blue-black
-         const Color(0xFF15152A), // Lighter metallic
-         const Color(0xFF05050A), // Black base
-      ],
-      stops: const [0.0, 0.4, 1.0],
-    );
+
+    _ensureMetalShader(w, h);
     
     // Left Pillar Shape (Angular Cyberpunk)
-    final leftPillar = Path()
+    _leftPillarPath
+      ..reset()
       ..moveTo(0, 0)
       ..lineTo(pillarWidth * entranceScale, 0)
       ..lineTo(pillarWidth * 0.8 * entranceScale, h * 0.4)
@@ -1451,7 +1543,8 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       ..close();
       
     // Right Pillar Shape
-    final rightPillar = Path()
+    _rightPillarPath
+       ..reset()
        ..moveTo(w, 0)
        ..lineTo(w - pillarWidth * entranceScale, 0)
        ..lineTo(w - pillarWidth * 0.8 * entranceScale, h * 0.4)
@@ -1459,47 +1552,42 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
        ..lineTo(w, h)
        ..close();
        
-    final metalPaint = Paint()..shader = metalGradient.createShader(Rect.fromLTWH(0,0,w,h));
-    
     // Draw Pillars
-    canvas.drawPath(leftPillar, metalPaint);
-    canvas.drawPath(rightPillar, metalPaint);
+    _metalPaint
+      ..shader = _metalShader
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(_leftPillarPath, _metalPaint);
+    canvas.drawPath(_rightPillarPath, _metalPaint);
     
     // Pillar Edges (Neon Highlight)
-    final edgePaint = Paint()
-      ..color = _primaryColor.withOpacity(0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.solid, 2); // Subtle glow
+    _edgePaint.color = _primaryColor.withOpacity(0.6);
     
-    canvas.drawPath(leftPillar, edgePaint);
-    canvas.drawPath(rightPillar, edgePaint);
+    canvas.drawPath(_leftPillarPath, _edgePaint);
+    canvas.drawPath(_rightPillarPath, _edgePaint);
     
     // --- 2. NEON CORES (The Power) ---
     // Only show if fully materialized
     if (_introTime > _phaseWireframe) {
-        final neonPaint = Paint()
-          ..color = _primaryColor
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10); // STRONG BLUR
-          
-        final corePaint = Paint()
-           ..color = Colors.white
-           ..style = PaintingStyle.stroke
-           ..strokeWidth = 2;
+        _neonPaint.color = _primaryColor;
+        _corePaint.color = Colors.white;
 
         // Vertical Neon Flow in Pillars
-        final leftLine = Path()..moveTo(pillarWidth * 0.4 * entranceScale, h * 0.2)..lineTo(pillarWidth * 0.5 * entranceScale, h * 0.8);
-        final rightLine = Path()..moveTo(w - pillarWidth * 0.4 * entranceScale, h * 0.2)..lineTo(w - pillarWidth * 0.5 * entranceScale, h * 0.8);
+        _leftNeonPath
+          ..reset()
+          ..moveTo(pillarWidth * 0.4 * entranceScale, h * 0.2)
+          ..lineTo(pillarWidth * 0.5 * entranceScale, h * 0.8);
+        _rightNeonPath
+          ..reset()
+          ..moveTo(w - pillarWidth * 0.4 * entranceScale, h * 0.2)
+          ..lineTo(w - pillarWidth * 0.5 * entranceScale, h * 0.8);
         
         // Render Glows
-        canvas.drawPath(leftLine, neonPaint);
-        canvas.drawPath(rightLine, neonPaint);
+        canvas.drawPath(_leftNeonPath, _neonPaint);
+        canvas.drawPath(_rightNeonPath, _neonPaint);
         
         // Render Cores
-        canvas.drawPath(leftLine, corePaint);
-        canvas.drawPath(rightLine, corePaint);
+        canvas.drawPath(_leftNeonPath, _corePaint);
+        canvas.drawPath(_rightNeonPath, _corePaint);
     }
     
     // --- 3. GLASS CONTROL DECKS (The Interface) ---
@@ -1513,56 +1601,58 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       final h = size.y;
       
       // Bottom Center Curved Deck
-      final deckPath = Path()
+      _deckPath
+         ..reset()
          ..moveTo(w * 0.2, h)
          ..lineTo(w * 0.25, h * 0.85)
          ..quadraticBezierTo(w * 0.5, h * 0.82, w * 0.75, h * 0.85) // Curve up
          ..lineTo(w * 0.8, h)
          ..close();
          
-      // Glass Shader (Reflective)
-      final glassGrad = LinearGradient(
-         begin: Alignment.topCenter,
-         end: Alignment.bottomCenter,
-         colors: [
-            _primaryColor.withOpacity(0.1),
-            _primaryColor.withOpacity(0.2),
-         ],
-      );
-      
-      canvas.drawPath(deckPath, Paint()..shader = glassGrad.createShader(Rect.fromLTWH(0, h*0.8, w, h*0.2)));
+      _ensureDeckShader(w, h);
+      _deckPaint
+        ..shader = _deckShader
+        ..style = PaintingStyle.fill;
+      canvas.drawPath(_deckPath, _deckPaint);
       
       // Deck Rim
-      canvas.drawPath(deckPath, Paint()..color = _primaryColor.withOpacity(0.8)..style=PaintingStyle.stroke..strokeWidth=2);
+      _deckRimPaint
+        ..color = _primaryColor.withOpacity(0.8)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawPath(_deckPath, _deckRimPaint);
       
       // Holographic Graph Elements
-      final graphPaint = Paint()..color = _secondaryColor.withOpacity(0.8)..strokeWidth=2;
+      _graphPaint
+        ..color = _secondaryColor.withOpacity(0.8)
+        ..strokeWidth = 2;
       double gx = w * 0.3;
       double gy = h * 0.95;
       for(int i=0; i<15; i++) {
-         double hBar = 5.0 + math.Random().nextDouble() * 25.0; // Dynamic data
+         double hBar = 5.0 + _nextUnit() * 25.0; // Dynamic data
          // Mirror effect
-         canvas.drawLine(Offset(gx + i * 15, gy), Offset(gx + i * 15, gy - hBar), graphPaint);
-         canvas.drawLine(Offset(w - (gx + i * 15), gy), Offset(w - (gx + i * 15), gy - hBar), graphPaint);
+         canvas.drawLine(Offset(gx + i * 15, gy), Offset(gx + i * 15, gy - hBar), _graphPaint);
+         canvas.drawLine(Offset(w - (gx + i * 15), gy), Offset(w - (gx + i * 15), gy - hBar), _graphPaint);
       }
   }
   
   void _renderMonitor(Canvas canvas, Rect rect, String label) {
-     final paint = Paint()
+     _monitorFillPaint
        ..color = _primaryColor.withOpacity(0.1)
        ..style = PaintingStyle.fill;
      
-     final border = Paint()
+     _monitorBorderPaint
        ..color = _primaryColor.withOpacity(0.5)
-       ..style = PaintingStyle.stroke;
+       ..style = PaintingStyle.stroke
+       ..strokeWidth = 1;
        
-     canvas.drawRect(rect, paint);
-     canvas.drawRect(rect, border);
+     canvas.drawRect(rect, _monitorFillPaint);
+     canvas.drawRect(rect, _monitorBorderPaint);
      
      // Scanline inside monitor
-     final lineP = Paint()..color = _primaryColor.withOpacity(0.2);
+     _scanlinePaint.color = _primaryColor.withOpacity(0.2);
      for(double y = rect.top; y < rect.bottom; y+= 5) {
-        canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), lineP);
+        canvas.drawLine(Offset(rect.left, y), Offset(rect.right, y), _scanlinePaint);
      }
   }
   
@@ -1572,11 +1662,11 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     final center = size / 2;
     for (final p in _dataParticles) {
        if (p.z <= 0.05) continue;
-       final paint = Paint()..color = Colors.white.withOpacity(p.life * 0.7);
+       _dataParticlePaint.color = Colors.white.withOpacity(p.life * 0.7);
        // Perspective scale
        final scale = p.z * 3.0;
        // Radial expansion
-       canvas.drawCircle(Offset(center.x + p.x * p.z, center.y + p.y * p.z), scale, paint);
+       canvas.drawCircle(Offset(center.x + p.x * p.z, center.y + p.y * p.z), scale, _dataParticlePaint);
     }
   }
 
@@ -1639,40 +1729,32 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Simple shape based on enemy type
     if (enemy3d.enemy.type.isPhantom) {
       // Ghost-like transparent circle
-      canvas.drawCircle(
-        center,
-        renderSize * 0.5,
-        Paint()..color = color.withOpacity(0.3),
-      );
+      _simpleFillPaint
+        ..color = color.withOpacity(0.3)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(center, renderSize * 0.5, _simpleFillPaint);
     } else {
       // Solid circle
-      canvas.drawCircle(
-        center,
-        renderSize * 0.5,
-        Paint()..color = color.withOpacity(0.7),
-      );
+      _simpleFillPaint
+        ..color = color.withOpacity(0.7)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(center, renderSize * 0.5, _simpleFillPaint);
     }
 
     // Outline
-    canvas.drawCircle(
-      center,
-      renderSize * 0.5,
-      Paint()
-        ..color = color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1,
-    );
+    _simpleStrokePaint
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    canvas.drawCircle(center, renderSize * 0.5, _simpleStrokePaint);
 
     // Target indicator if targeted
     if (enemy3d.isTargeted) {
-      canvas.drawCircle(
-        center,
-        renderSize * 0.7,
-        Paint()
-          ..color = Colors.red
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
+      _targetReticlePaint
+        ..color = Colors.red
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawCircle(center, renderSize * 0.7, _targetReticlePaint);
     }
   }
 
@@ -1687,20 +1769,60 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Simple circle without gradients or shadows
     final center = Offset(screenPos.x, screenPos.y);
     
-    canvas.drawCircle(
-      center,
-      renderSize * 0.5,
-      Paint()..color = tower3d.tower.color.withOpacity(0.6),
-    );
+    _simpleFillPaint
+      ..color = tower3d.tower.color.withOpacity(0.6)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, renderSize * 0.5, _simpleFillPaint);
     
-    canvas.drawCircle(
-      center,
-      renderSize * 0.5,
-      Paint()
-        ..color = tower3d.tower.color
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+    _simpleStrokePaint
+      ..color = tower3d.tower.color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(center, renderSize * 0.5, _simpleStrokePaint);
+  }
+
+  void _ensureMetalShader(double w, double h) {
+    final currentSize = Size(w, h);
+    if (_metalShader != null && _metalShaderSize == currentSize) {
+      return;
+    }
+
+    final metalGradient = LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: [
+         const Color(0xFF080815), // Deep dark blue-black
+         const Color(0xFF15152A), // Lighter metallic
+         const Color(0xFF05050A), // Black base
+      ],
+      stops: const [0.0, 0.4, 1.0],
     );
+
+    _metalShader = metalGradient.createShader(Rect.fromLTWH(0, 0, w, h));
+    _metalShaderSize = currentSize;
+  }
+
+  void _ensureDeckShader(double w, double h) {
+    final currentSize = Size(w, h);
+    final colorValue = _primaryColor.value;
+    if (_deckShader != null &&
+        _deckShaderSize == currentSize &&
+        _deckShaderColorValue == colorValue) {
+      return;
+    }
+
+    final glassGrad = LinearGradient(
+       begin: Alignment.topCenter,
+       end: Alignment.bottomCenter,
+       colors: [
+          _primaryColor.withOpacity(0.1),
+          _primaryColor.withOpacity(0.2),
+       ],
+    );
+
+    _deckShader = glassGrad.createShader(Rect.fromLTWH(0, h * 0.8, w, h * 0.2));
+    _deckShaderSize = currentSize;
+    _deckShaderColorValue = colorValue;
   }
 
   /// Render targeting reticle for selected tower
@@ -1713,7 +1835,7 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
     // Animated crosshair
     final pulse = math.sin(_animationTime * 4) * 0.5 + 0.5;
-    final crosshairPaint = Paint()
+    _crosshairPaint
       ..color = color.withOpacity(0.8)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
@@ -1722,21 +1844,21 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.drawLine(
       Offset(center.dx - 20, center.dy),
       Offset(center.dx + 20, center.dy),
-      crosshairPaint,
+      _crosshairPaint,
     );
 
     // Vertical line
     canvas.drawLine(
       Offset(center.dx, center.dy - 20),
       Offset(center.dx, center.dy + 20),
-      crosshairPaint,
+      _crosshairPaint,
     );
 
     // Pulsing outer circle
     canvas.drawCircle(
       center,
       15 + pulse * 5,
-      Paint()
+      _targetReticlePaint
         ..color = color.withOpacity(0.4 + pulse * 0.3)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2,
@@ -1744,47 +1866,64 @@ class FpsViewComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
     // Target lock text
     if (tower3d.isHovered) {
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: 'Selecciona una torre para armarla.',
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            shadows: [
-              Shadow(
-                color: Colors.black.withOpacity(0.8),
-                blurRadius: 4,
-              ),
-            ],
+      if (_hoverHintPainter == null || _hoverHintColor != color) {
+        _hoverHintColor = color;
+        _hoverHintPainter = TextPainter(
+          text: TextSpan(
+            text: 'Selecciona una torre para armarla.',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withOpacity(0.8),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
           ),
-        ),
-        textDirection: TextDirection.ltr,
-      );
+          textDirection: TextDirection.ltr,
+        )..layout();
+      }
 
-      textPainter.layout();
-      textPainter.paint(
+      _hoverHintPainter!.paint(
         canvas,
         Offset(
-          center.dx - textPainter.width / 2,
+          center.dx - _hoverHintPainter!.width / 2,
           center.dy + 40,
         ),
       );
     }
   }
+
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
 }
 
 class _DataParticle {
+  static int _rngState = 0x6d2b79f5;
+
+  static int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  static double _nextUnit() => _lcgNext() / 0x7fffffff;
   double x, y, z; 
   double life;
   double speed;
   
   _DataParticle() 
-     : x = (math.Random().nextDouble() - 0.5) * 5000, // Wide spread
-       y = (math.Random().nextDouble() - 0.5) * 2000,
+     : x = (_nextUnit() - 0.5) * 5000, // Wide spread
+       y = (_nextUnit() - 0.5) * 2000,
        z = 0.001,
        life = 0.0, // Fade in
-       speed = 0.2 + math.Random().nextDouble() * 0.5;
+       speed = 0.2 + _nextUnit() * 0.5;
        
   void update(double dt) {
      z += dt * speed; // Move towards camera
@@ -1822,4 +1961,3 @@ class _BoostParticle {
     velocity.y -= 50 * dt; // Gravity
   }
 }
-

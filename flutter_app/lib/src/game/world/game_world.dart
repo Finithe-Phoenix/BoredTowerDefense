@@ -53,7 +53,8 @@ class GameWorld extends Component {
     final map = tiled.tileMap.map;
     mapWidth = map.width;
     mapHeight = map.height;
-    isBuildable = List.generate(mapHeight, (_) => List<bool>.filled(mapWidth, true));
+    isBuildable =
+        List.generate(mapHeight, (_) => List<bool>.filled(mapWidth, true));
     tileTypes = List.generate(mapHeight, (_) => List<int>.filled(mapWidth, 0));
 
     for (final layer in map.layers) {
@@ -178,7 +179,8 @@ class GameWorld extends Component {
     }
 
     if (kDebugMode) {
-      debugPrint('[GameWorld] Ensured starting build zone around $startCell ($safeCells)');
+      debugPrint(
+          '[GameWorld] Ensured starting build zone around $startCell ($safeCells)');
     }
   }
 }
@@ -191,9 +193,33 @@ class _WorldRenderer extends PositionComponent {
   ui.Picture? _staticTiles;
   bool _cacheReady = false;
   Path? _pathOverlay;
+  ui.Picture? _pathStaticLayer;
+  bool _pathStaticDirty = true;
+  bool _lastReduceFx = false;
+  bool _lastAllowBlur = true;
   double _pathLength = 0;
   final List<double> _segmentLengths = [];
   int _cachedWaypointCount = -1;
+  double _cachedWorldWidth = 0;
+  double _cachedWorldHeight = 0;
+  bool _veinCacheDirty = true;
+  final List<List<Offset>> _veinPaths = [];
+  final List<double> _veinPathLengths = [];
+  final List<List<double>> _veinSegmentLengths = [];
+  final List<List<double>> _veinSegmentStarts = [];
+  final List<Offset> _veinNodes = [];
+  final List<Path> _veinPathCache = [];
+  bool _hexCacheDirty = true;
+  double _hexCachedWorldWidth = 0;
+  double _hexCachedWorldHeight = 0;
+  final List<Path> _hexPaths = [];
+  final List<int> _hexHighlightIndices = [];
+  final List<double> _hexHighlightPhaseSeeds = [];
+  final List<Offset> _hexCornerCenters = [];
+  final List<Path> _hexAccentPaths = [];
+  final Path _hexGridPath = Path();
+  final Path _hexCornerPath = Path();
+  final Path _hexAccentPath = Path();
 
   // ===== STATIC PAINT OBJECTS FOR PER-FRAME RENDERING =====
   // Path overlay paints
@@ -227,15 +253,13 @@ class _WorldRenderer extends PositionComponent {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
 
-  static final Paint _nodeCorePaint = Paint()
-    ..color = const Color(0xFFFF0066);
+  static final Paint _nodeCorePaint = Paint()..color = const Color(0xFFFF0066);
 
   // Energy pulse paints
   static final Paint _pulseGlowPaint = Paint()
     ..color = const Color(0xFFFF0066).withOpacity(0.9);
 
-  static final Paint _pulseCorePaint = Paint()
-    ..color = Colors.white;
+  static final Paint _pulseCorePaint = Paint()..color = Colors.white;
 
   static final Paint _pulseTrailPaint = Paint();
 
@@ -292,7 +316,6 @@ class _WorldRenderer extends PositionComponent {
     ..strokeCap = StrokeCap.round;
   static final Paint _hexGridAuraPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-  static final Path _hexGridPath = Path();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PULSING ENERGY VEINS PAINTS
@@ -318,7 +341,6 @@ class _WorldRenderer extends PositionComponent {
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
   static final Paint _veinSparkPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-  static final Path _veinPath = Path();
 
   // Spawn portal paints
   static final Paint _portalRingPaint = Paint()
@@ -371,6 +393,88 @@ class _WorldRenderer extends PositionComponent {
     ..strokeWidth = 2
     ..strokeCap = StrokeCap.round;
 
+  // Blocked/buildable tile paints
+  static final Paint _cyberBasePaint = Paint()..color = const Color(0xFF0a0a18);
+  static final Paint _cyberTopPaint = Paint()..color = const Color(0xFF181828);
+  static final Paint _cyberMainPaint = Paint()..color = const Color(0xFF101020);
+  static final Paint _cyberWindowGlowPaint = Paint()..maskFilter = _blur2;
+  static final Paint _cyberWindowPaint = Paint()
+    ..color = const Color(0xFF00DDFF);
+  static final Paint _cyberAntennaPaint = Paint()..strokeWidth = 1;
+  static final Paint _cyberBlinkPaint = Paint()..maskFilter = _blur4;
+  static final Paint _cyberEdgePaint = Paint()
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+
+  static final Paint _serverBasePaint = Paint()
+    ..color = const Color(0xFF080812);
+  static final Paint _serverFramePaint = Paint()
+    ..color = const Color(0xFF1a1a2e)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _serverSlotPaint = Paint()
+    ..color = const Color(0xFF0d0d1a);
+  static final Paint _serverLedPaint = Paint();
+  static final Paint _serverVentPaint = Paint()..strokeWidth = 1;
+
+  static final Paint _energyBasePaint = Paint()
+    ..color = const Color(0xFF050510);
+  static final Paint _energyRingPaint = Paint()
+    ..color = const Color(0xFF1a1a2e)
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _energyGlowPaint = Paint()..maskFilter = _blur8;
+  static final Paint _energyCorePaint = Paint()
+    ..color = const Color(0xFFFF44FF);
+  static final Paint _energyCenterPaint = Paint()..color = Colors.white;
+  static final Paint _energyArcPaint = Paint()
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+  static final Paint _energyBracketPaint = Paint()..strokeWidth = 1;
+
+  static final Paint _dataBasePaint = Paint()..color = const Color(0xFF0a0a14);
+  static final Paint _dataHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _dataDisplayBgPaint = Paint()
+    ..color = const Color(0xFF001122);
+  static final Paint _dataDisplayGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..maskFilter = _blur2;
+  static final Paint _dataLinePaint = Paint()..strokeWidth = 1;
+  static final Paint _dataIndicatorPaint = Paint()..maskFilter = _blur2;
+
+  static final Paint _pathTileBasePaint = Paint()
+    ..color = const Color(0xFF050012);
+  static final Paint _pathTileGradientPaint = Paint();
+  static Shader? _pathTileGradientShader;
+  static Size? _pathTileGradientSize;
+
+  static final Paint _buildableBasePaint = Paint()
+    ..color = const Color(0xFF0a0a16);
+  static final Paint _buildableGridPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _buildableAnchorGlowPaint = Paint()..maskFilter = _blur2;
+  static final Paint _buildableAnchorCorePaint = Paint();
+  static final Paint _buildableFlickerPaint = Paint()..maskFilter = _blur4;
+  static final Paint _buildableTracePaint = Paint()
+    ..strokeWidth = 0.8
+    ..style = PaintingStyle.stroke;
+  static final Paint _buildableNodePaint = Paint();
+  static final Paint _buildableHexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _buildableDiamondPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.5;
+  static final Paint _buildableDiamondInnerPaint = Paint()
+    ..style = PaintingStyle.fill;
+  static final Paint _buildableCrossPaint = Paint()..strokeWidth = 0.5;
+  static final Path _buildableDiamondPath = Path();
+  static final Path _buildableDiamondInnerPath = Path();
+
   // Cached MaskFilters
   static const MaskFilter _blur2 = MaskFilter.blur(BlurStyle.normal, 2);
   static const MaskFilter _blur4 = MaskFilter.blur(BlurStyle.normal, 4);
@@ -421,6 +525,7 @@ class _WorldRenderer extends PositionComponent {
   @override
   void onRemove() {
     _staticTiles?.dispose();
+    _pathStaticLayer?.dispose();
     super.onRemove();
   }
 
@@ -428,6 +533,11 @@ class _WorldRenderer extends PositionComponent {
     _cacheReady = false;
     _staticTiles?.dispose();
     _staticTiles = null;
+    _pathStaticLayer?.dispose();
+    _pathStaticLayer = null;
+    _pathStaticDirty = true;
+    _veinCacheDirty = true;
+    _hexCacheDirty = true;
     _rebuildPathCache();
   }
 
@@ -442,6 +552,9 @@ class _WorldRenderer extends PositionComponent {
     _pathOverlay = null;
     _pathLength = 0;
     _segmentLengths.clear();
+    _pathStaticDirty = true;
+    _pathStaticLayer?.dispose();
+    _pathStaticLayer = null;
 
     if (world.waypoints.length < 2) return;
 
@@ -449,11 +562,237 @@ class _WorldRenderer extends PositionComponent {
     path.moveTo(world.waypoints.first.x, world.waypoints.first.y);
     for (int i = 1; i < world.waypoints.length; i++) {
       path.lineTo(world.waypoints[i].x, world.waypoints[i].y);
-      final segmentLength = (world.waypoints[i] - world.waypoints[i - 1]).length;
+      final segmentLength =
+          (world.waypoints[i] - world.waypoints[i - 1]).length;
       _segmentLengths.add(segmentLength);
       _pathLength += segmentLength;
     }
     _pathOverlay = path;
+  }
+
+  void _ensureVeinCache() {
+    final worldWidth = world.tileSize * world.mapWidth.toDouble();
+    final worldHeight = world.tileSize * world.mapHeight.toDouble();
+    if (!_veinCacheDirty &&
+        _cachedWorldWidth == worldWidth &&
+        _cachedWorldHeight == worldHeight) {
+      return;
+    }
+
+    _cachedWorldWidth = worldWidth;
+    _cachedWorldHeight = worldHeight;
+    _veinPaths.clear();
+    _veinPathLengths.clear();
+    _veinSegmentLengths.clear();
+    _veinSegmentStarts.clear();
+    _veinNodes.clear();
+    _veinPathCache.clear();
+
+    // Main horizontal veins
+    _veinPaths.add([
+      Offset(0, worldHeight * 0.2),
+      Offset(worldWidth * 0.15, worldHeight * 0.22),
+      Offset(worldWidth * 0.35, worldHeight * 0.18),
+      Offset(worldWidth * 0.5, worldHeight * 0.25),
+      Offset(worldWidth * 0.7, worldHeight * 0.2),
+      Offset(worldWidth * 0.85, worldHeight * 0.23),
+      Offset(worldWidth, worldHeight * 0.2),
+    ]);
+
+    _veinPaths.add([
+      Offset(0, worldHeight * 0.5),
+      Offset(worldWidth * 0.2, worldHeight * 0.48),
+      Offset(worldWidth * 0.4, worldHeight * 0.52),
+      Offset(worldWidth * 0.6, worldHeight * 0.47),
+      Offset(worldWidth * 0.8, worldHeight * 0.53),
+      Offset(worldWidth, worldHeight * 0.5),
+    ]);
+
+    _veinPaths.add([
+      Offset(0, worldHeight * 0.8),
+      Offset(worldWidth * 0.25, worldHeight * 0.78),
+      Offset(worldWidth * 0.45, worldHeight * 0.82),
+      Offset(worldWidth * 0.65, worldHeight * 0.77),
+      Offset(worldWidth * 0.9, worldHeight * 0.8),
+      Offset(worldWidth, worldHeight * 0.8),
+    ]);
+
+    // Main vertical veins
+    _veinPaths.add([
+      Offset(worldWidth * 0.2, 0),
+      Offset(worldWidth * 0.22, worldHeight * 0.3),
+      Offset(worldWidth * 0.18, worldHeight * 0.6),
+      Offset(worldWidth * 0.2, worldHeight),
+    ]);
+
+    _veinPaths.add([
+      Offset(worldWidth * 0.5, 0),
+      Offset(worldWidth * 0.48, worldHeight * 0.25),
+      Offset(worldWidth * 0.52, worldHeight * 0.5),
+      Offset(worldWidth * 0.48, worldHeight * 0.75),
+      Offset(worldWidth * 0.5, worldHeight),
+    ]);
+
+    _veinPaths.add([
+      Offset(worldWidth * 0.8, 0),
+      Offset(worldWidth * 0.78, worldHeight * 0.35),
+      Offset(worldWidth * 0.82, worldHeight * 0.7),
+      Offset(worldWidth * 0.8, worldHeight),
+    ]);
+
+    // Diagonal connector veins
+    _veinPaths.add([
+      Offset(worldWidth * 0.1, worldHeight * 0.1),
+      Offset(worldWidth * 0.3, worldHeight * 0.35),
+      Offset(worldWidth * 0.4, worldHeight * 0.6),
+    ]);
+
+    _veinPaths.add([
+      Offset(worldWidth * 0.9, worldHeight * 0.1),
+      Offset(worldWidth * 0.7, worldHeight * 0.4),
+      Offset(worldWidth * 0.6, worldHeight * 0.65),
+    ]);
+
+    for (int pathIndex = 0; pathIndex < _veinPaths.length; pathIndex++) {
+      final path = _veinPaths[pathIndex];
+      final segmentLengths = <double>[];
+      final segmentStarts = <double>[];
+      double totalLength = 0;
+      for (int i = 1; i < path.length; i++) {
+        final dx = path[i].dx - path[i - 1].dx;
+        final dy = path[i].dy - path[i - 1].dy;
+        final segmentLength = math.sqrt(dx * dx + dy * dy);
+        segmentStarts.add(totalLength);
+        segmentLengths.add(segmentLength);
+        totalLength += segmentLength;
+      }
+      _veinPathLengths.add(totalLength);
+      _veinSegmentLengths.add(segmentLengths);
+      _veinSegmentStarts.add(segmentStarts);
+
+      final cachedPath = Path();
+      cachedPath.moveTo(path.first.dx, path.first.dy);
+      for (int i = 1; i < path.length; i++) {
+        cachedPath.lineTo(path[i].dx, path[i].dy);
+      }
+      _veinPathCache.add(cachedPath);
+    }
+
+    _veinNodes.addAll([
+      Offset(worldWidth * 0.2, worldHeight * 0.2),
+      Offset(worldWidth * 0.5, worldHeight * 0.25),
+      Offset(worldWidth * 0.8, worldHeight * 0.2),
+      Offset(worldWidth * 0.2, worldHeight * 0.5),
+      Offset(worldWidth * 0.5, worldHeight * 0.5),
+      Offset(worldWidth * 0.8, worldHeight * 0.5),
+      Offset(worldWidth * 0.2, worldHeight * 0.8),
+      Offset(worldWidth * 0.5, worldHeight * 0.75),
+      Offset(worldWidth * 0.8, worldHeight * 0.8),
+    ]);
+
+    _veinCacheDirty = false;
+  }
+
+  void _ensureHexCache() {
+    final worldWidth = world.tileSize * world.mapWidth.toDouble();
+    final worldHeight = world.tileSize * world.mapHeight.toDouble();
+    if (!_hexCacheDirty &&
+        _hexCachedWorldWidth == worldWidth &&
+        _hexCachedWorldHeight == worldHeight) {
+      return;
+    }
+
+    _hexCachedWorldWidth = worldWidth;
+    _hexCachedWorldHeight = worldHeight;
+
+    const hexRadius = 25.0;
+    const angles = <double>[
+      -math.pi / 6,
+      math.pi / 6,
+      math.pi / 2,
+      5 * math.pi / 6,
+      -5 * math.pi / 6,
+      -math.pi / 2,
+    ];
+    final hexWidth = hexRadius * 2;
+    final hexHeight = hexRadius * math.sqrt(3);
+    final horizontalSpacing = hexWidth * 0.75;
+    final verticalSpacing = hexHeight;
+
+    final colCount = (worldWidth / horizontalSpacing).ceil() + 1;
+    final rowCount = (worldHeight / verticalSpacing).ceil() + 1;
+
+    _hexPaths.clear();
+    _hexHighlightIndices.clear();
+    _hexHighlightPhaseSeeds.clear();
+    _hexCornerCenters.clear();
+    _hexAccentPaths.clear();
+    _hexGridPath.reset();
+    _hexCornerPath.reset();
+    _hexAccentPath.reset();
+
+    for (int row = 0; row < rowCount; row++) {
+      final offsetX = (row % 2) * horizontalSpacing * 0.5;
+      for (int col = 0; col < colCount; col++) {
+        final centerX = col * horizontalSpacing + offsetX;
+        final centerY = row * verticalSpacing;
+        final center = Offset(centerX, centerY);
+
+        final path = Path();
+        for (int i = 0; i < 6; i++) {
+          final angle = angles[i];
+          final px = centerX + math.cos(angle) * hexRadius;
+          final py = centerY + math.sin(angle) * hexRadius;
+          if (i == 0) {
+            path.moveTo(px, py);
+          } else {
+            path.lineTo(px, py);
+          }
+        }
+        path.close();
+
+        final index = _hexPaths.length;
+        _hexPaths.add(path);
+        _hexGridPath.addPath(path, Offset.zero);
+        if (row % 3 == 0 && col % 3 == 0) {
+          _hexHighlightIndices.add(index);
+          _hexHighlightPhaseSeeds.add(row * 0.3 + col * 0.4);
+        }
+
+        if (row % 2 == 0 && col % 2 == 0) {
+          _hexCornerCenters.add(center);
+          _hexCornerPath.addOval(
+            Rect.fromCircle(center: center, radius: 1.5),
+          );
+        }
+      }
+    }
+
+    final accentRadius = hexRadius * 0.6;
+    for (int row = 1; row < rowCount; row += 5) {
+      final offsetX = (row % 2) * horizontalSpacing * 0.5;
+      for (int col = 1; col < colCount; col += 5) {
+        final centerX = col * horizontalSpacing + offsetX;
+        final centerY = row * verticalSpacing;
+
+        final path = Path();
+        for (int i = 0; i < 6; i++) {
+          final angle = angles[i];
+          final px = centerX + math.cos(angle) * accentRadius;
+          final py = centerY + math.sin(angle) * accentRadius;
+          if (i == 0) {
+            path.moveTo(px, py);
+          } else {
+            path.lineTo(px, py);
+          }
+        }
+        path.close();
+        _hexAccentPaths.add(path);
+        _hexAccentPath.addPath(path, Offset.zero);
+      }
+    }
+
+    _hexCacheDirty = false;
   }
 
   void _buildStaticCache() {
@@ -524,29 +863,25 @@ class _WorldRenderer extends PositionComponent {
 
   void _drawCyberpunkBuilding(Canvas canvas, Rect rect, int x, int y) {
     // Dark metallic base
-    final basePaint = Paint()..color = const Color(0xFF0a0a18);
-    canvas.drawRect(rect, basePaint);
+    canvas.drawRect(rect, _cyberBasePaint);
 
     // Building structure with 3D effect
     final buildingRect = rect.deflate(2);
 
     // Top face (lighter)
-    final topPaint = Paint()..color = const Color(0xFF181828);
     canvas.drawRect(
-      Rect.fromLTRB(buildingRect.left, buildingRect.top, buildingRect.right, buildingRect.top + 6),
-      topPaint,
+      Rect.fromLTRB(buildingRect.left, buildingRect.top, buildingRect.right,
+          buildingRect.top + 6),
+      _cyberTopPaint,
     );
 
     // Main face
-    final mainPaint = Paint()..color = const Color(0xFF101020);
-    canvas.drawRect(buildingRect, mainPaint);
+    canvas.drawRect(buildingRect, _cyberMainPaint);
 
     // Windows - glowing cyan
-    final windowGlow = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.4 + math.sin(_time * 2 + x * 0.5) * 0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-
-    final windowPaint = Paint()..color = const Color(0xFF00DDFF).withOpacity(0.8);
+    _cyberWindowGlowPaint.color = const Color(0xFF00FFFF)
+        .withOpacity(0.4 + math.sin(_time * 2 + x * 0.5) * 0.2);
+    _cyberWindowPaint.color = const Color(0xFF00DDFF).withOpacity(0.8);
 
     // Window grid pattern
     final windowSize = 4.0;
@@ -557,7 +892,8 @@ class _WorldRenderer extends PositionComponent {
     for (int wy = 0; wy < 2; wy++) {
       for (int wx = 0; wx < 3; wx++) {
         // Some windows are lit, some are dark
-        final isLit = ((x + wx) * 3 + (y + wy) * 7 + (_time * 0.5).floor()) % 5 != 0;
+        final isLit =
+            ((x + wx) * 3 + (y + wy) * 7 + (_time * 0.5).floor()) % 5 != 0;
         if (isLit) {
           final windowRect = Rect.fromLTWH(
             startX + wx * windowSpacing,
@@ -565,50 +901,39 @@ class _WorldRenderer extends PositionComponent {
             windowSize,
             windowSize - 1,
           );
-          canvas.drawRect(windowRect, windowGlow);
-          canvas.drawRect(windowRect, windowPaint);
+          canvas.drawRect(windowRect, _cyberWindowGlowPaint);
+          canvas.drawRect(windowRect, _cyberWindowPaint);
         }
       }
     }
 
     // Rooftop antenna/structure
     if ((x + y) % 4 == 0) {
-      final antennaPaint = Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(0.6)
-        ..strokeWidth = 1;
+      _cyberAntennaPaint.color = const Color(0xFF00FFFF).withOpacity(0.6);
       canvas.drawLine(
         Offset(rect.center.dx, rect.top + 2),
         Offset(rect.center.dx, rect.top - 4),
-        antennaPaint,
+        _cyberAntennaPaint,
       );
       // Blinking light
       if (math.sin(_time * 4 + x) > 0) {
-        final blinkPaint = Paint()
-          ..color = const Color(0xFFFF0044)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-        canvas.drawCircle(Offset(rect.center.dx, rect.top - 4), 2, blinkPaint);
+        _cyberBlinkPaint.color = const Color(0xFFFF0044);
+        canvas.drawCircle(
+            Offset(rect.center.dx, rect.top - 4), 2, _cyberBlinkPaint);
       }
     }
 
     // Neon edge trim
-    final edgePaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.3)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-    canvas.drawRect(buildingRect, edgePaint);
+    _cyberEdgePaint.color = const Color(0xFF00FFFF).withOpacity(0.3);
+    canvas.drawRect(buildingRect, _cyberEdgePaint);
   }
 
   void _drawServerRack(Canvas canvas, Rect rect, int x, int y) {
     // Dark base
-    final basePaint = Paint()..color = const Color(0xFF080812);
-    canvas.drawRect(rect, basePaint);
+    canvas.drawRect(rect, _serverBasePaint);
 
     // Rack frame
-    final framePaint = Paint()
-      ..color = const Color(0xFF1a1a2e)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
-    canvas.drawRect(rect.deflate(3), framePaint);
+    canvas.drawRect(rect.deflate(3), _serverFramePaint);
 
     // Server slots with blinking lights
     final slotHeight = 5.0;
@@ -618,10 +943,9 @@ class _WorldRenderer extends PositionComponent {
       final slotY = startY + i * slotHeight;
 
       // Slot background
-      final slotPaint = Paint()..color = const Color(0xFF0d0d1a);
       canvas.drawRect(
         Rect.fromLTWH(rect.left + 5, slotY, rect.width - 10, slotHeight - 1),
-        slotPaint,
+        _serverSlotPaint,
       );
 
       // LED indicators
@@ -630,68 +954,53 @@ class _WorldRenderer extends PositionComponent {
         final ledColor = ledActive
             ? (led == 0 ? const Color(0xFF00FF00) : const Color(0xFF00FFFF))
             : const Color(0xFF333344);
-        final ledPaint = Paint()
-          ..color = ledColor.withOpacity(ledActive ? 0.9 : 0.3);
-        if (ledActive) {
-          ledPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-        }
+        _serverLedPaint
+          ..color = ledColor.withOpacity(ledActive ? 0.9 : 0.3)
+          ..maskFilter = ledActive ? _blur2 : null;
         canvas.drawCircle(
           Offset(rect.left + 8 + led * 4, slotY + slotHeight / 2),
           1.5,
-          ledPaint,
+          _serverLedPaint,
         );
       }
     }
 
     // Ventilation grille at bottom
-    final ventPaint = Paint()
-      ..color = const Color(0xFF2a2a44).withOpacity(0.5)
-      ..strokeWidth = 1;
+    _serverVentPaint.color = const Color(0xFF2a2a44).withOpacity(0.5);
     for (int v = 0; v < 5; v++) {
       canvas.drawLine(
         Offset(rect.left + 6 + v * 4, rect.bottom - 4),
         Offset(rect.left + 6 + v * 4, rect.bottom - 2),
-        ventPaint,
+        _serverVentPaint,
       );
     }
   }
 
   void _drawEnergyCore(Canvas canvas, Rect rect, int x, int y) {
     // Dark containment base
-    final basePaint = Paint()..color = const Color(0xFF050510);
-    canvas.drawRect(rect, basePaint);
+    canvas.drawRect(rect, _energyBasePaint);
 
     // Containment ring
-    final ringPaint = Paint()
-      ..color = const Color(0xFF1a1a2e)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    canvas.drawCircle(rect.center, rect.width * 0.35, ringPaint);
+    canvas.drawCircle(rect.center, rect.width * 0.35, _energyRingPaint);
 
     // Energy core - pulsing
     final pulseScale = 0.8 + math.sin(_time * 4 + x + y) * 0.2;
     final coreRadius = rect.width * 0.2 * pulseScale;
 
     // Core glow
-    final glowPaint = Paint()
-      ..color = const Color(0xFFFF00FF).withOpacity(0.4)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    canvas.drawCircle(rect.center, coreRadius * 2, glowPaint);
+    _energyGlowPaint.color = const Color(0xFFFF00FF).withOpacity(0.4);
+    canvas.drawCircle(rect.center, coreRadius * 2, _energyGlowPaint);
 
     // Core inner
-    final corePaint = Paint()
-      ..color = const Color(0xFFFF44FF).withOpacity(0.9);
-    canvas.drawCircle(rect.center, coreRadius, corePaint);
+    _energyCorePaint.color = const Color(0xFFFF44FF).withOpacity(0.9);
+    canvas.drawCircle(rect.center, coreRadius, _energyCorePaint);
 
     // Core bright center
-    final centerPaint = Paint()..color = Colors.white.withOpacity(0.8);
-    canvas.drawCircle(rect.center, coreRadius * 0.4, centerPaint);
+    _energyCenterPaint.color = Colors.white.withOpacity(0.8);
+    canvas.drawCircle(rect.center, coreRadius * 0.4, _energyCenterPaint);
 
     // Energy arcs
-    final arcPaint = Paint()
-      ..color = const Color(0xFFFF00FF).withOpacity(0.6)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
+    _energyArcPaint.color = const Color(0xFFFF00FF).withOpacity(0.6);
 
     for (int a = 0; a < 4; a++) {
       final angle = _time * 2 + a * math.pi / 2;
@@ -703,32 +1012,26 @@ class _WorldRenderer extends PositionComponent {
         rect.center.dx + math.cos(angle) * rect.width * 0.35,
         rect.center.dy + math.sin(angle) * rect.width * 0.35,
       );
-      canvas.drawLine(arcStart, arcEnd, arcPaint);
+      canvas.drawLine(arcStart, arcEnd, _energyArcPaint);
     }
 
     // Corner brackets
-    final bracketPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.5)
-      ..strokeWidth = 1;
-    _drawCornerBrackets(canvas, rect, 6, bracketPaint);
+    _energyBracketPaint.color = const Color(0xFF00FFFF).withOpacity(0.5);
+    _drawCornerBrackets(canvas, rect, 6, _energyBracketPaint);
   }
 
   void _drawDataNode(Canvas canvas, Rect rect, int x, int y) {
     // Dark base
-    final basePaint = Paint()..color = const Color(0xFF0a0a14);
-    canvas.drawRect(rect, basePaint);
+    canvas.drawRect(rect, _dataBasePaint);
 
     // Hexagonal pattern overlay
-    final hexPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
+    _dataHexPaint.color = const Color(0xFF00FFFF).withOpacity(0.1);
 
     // Draw hex grid pattern
     final hexSize = 8.0;
     for (double hx = rect.left; hx < rect.right; hx += hexSize * 1.5) {
       for (double hy = rect.top; hy < rect.bottom; hy += hexSize * 0.866) {
-        _drawHexagon(canvas, Offset(hx, hy), hexSize * 0.4, hexPaint);
+        _drawHexagon(canvas, Offset(hx, hy), hexSize * 0.4, _dataHexPaint);
       }
     }
 
@@ -740,21 +1043,15 @@ class _WorldRenderer extends PositionComponent {
     );
 
     // Display background
-    final displayBg = Paint()..color = const Color(0xFF001122);
-    canvas.drawRect(displayRect, displayBg);
+    canvas.drawRect(displayRect, _dataDisplayBgPaint);
 
     // Display border glow
-    final displayGlow = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.4 + math.sin(_time * 3) * 0.2)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawRect(displayRect, displayGlow);
+    _dataDisplayGlowPaint.color =
+        const Color(0xFF00FFFF).withOpacity(0.4 + math.sin(_time * 3) * 0.2);
+    canvas.drawRect(displayRect, _dataDisplayGlowPaint);
 
     // Scrolling data lines
-    final dataPaint = Paint()
-      ..color = const Color(0xFF00FF88).withOpacity(0.6)
-      ..strokeWidth = 1;
+    _dataLinePaint.color = const Color(0xFF00FF88).withOpacity(0.6);
 
     final dataOffset = (_time * 20) % 8;
     for (int line = 0; line < 3; line++) {
@@ -764,21 +1061,21 @@ class _WorldRenderer extends PositionComponent {
         canvas.drawLine(
           Offset(displayRect.left + 2, lineY),
           Offset(displayRect.left + 2 + lineWidth, lineY),
-          dataPaint,
+          _dataLinePaint,
         );
       }
     }
 
     // Status indicators on corners
-    final indicatorPaint = Paint()
-      ..color = const Color(0xFF00FF00).withOpacity(0.8)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawCircle(Offset(rect.left + 4, rect.top + 4), 2, indicatorPaint);
-    canvas.drawCircle(Offset(rect.right - 4, rect.top + 4), 2, indicatorPaint);
+    _dataIndicatorPaint.color = const Color(0xFF00FF00).withOpacity(0.8);
+    canvas.drawCircle(
+        Offset(rect.left + 4, rect.top + 4), 2, _dataIndicatorPaint);
+    canvas.drawCircle(
+        Offset(rect.right - 4, rect.top + 4), 2, _dataIndicatorPaint);
   }
 
   void _drawHexagon(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path();
+    _circuitPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = i * math.pi / 3 - math.pi / 6;
       final point = Offset(
@@ -786,51 +1083,67 @@ class _WorldRenderer extends PositionComponent {
         center.dy + radius * math.sin(angle),
       );
       if (i == 0) {
-        path.moveTo(point.dx, point.dy);
+        _circuitPath.moveTo(point.dx, point.dy);
       } else {
-        path.lineTo(point.dx, point.dy);
+        _circuitPath.lineTo(point.dx, point.dy);
       }
     }
-    path.close();
-    canvas.drawPath(path, paint);
+    _circuitPath.close();
+    canvas.drawPath(_circuitPath, paint);
   }
 
   void _drawCornerBrackets(Canvas canvas, Rect rect, double size, Paint paint) {
     // Top-left
-    canvas.drawLine(Offset(rect.left, rect.top + size), Offset(rect.left, rect.top), paint);
-    canvas.drawLine(Offset(rect.left, rect.top), Offset(rect.left + size, rect.top), paint);
+    canvas.drawLine(
+        Offset(rect.left, rect.top + size), Offset(rect.left, rect.top), paint);
+    canvas.drawLine(
+        Offset(rect.left, rect.top), Offset(rect.left + size, rect.top), paint);
     // Top-right
-    canvas.drawLine(Offset(rect.right - size, rect.top), Offset(rect.right, rect.top), paint);
-    canvas.drawLine(Offset(rect.right, rect.top), Offset(rect.right, rect.top + size), paint);
+    canvas.drawLine(Offset(rect.right - size, rect.top),
+        Offset(rect.right, rect.top), paint);
+    canvas.drawLine(Offset(rect.right, rect.top),
+        Offset(rect.right, rect.top + size), paint);
     // Bottom-left
-    canvas.drawLine(Offset(rect.left, rect.bottom - size), Offset(rect.left, rect.bottom), paint);
-    canvas.drawLine(Offset(rect.left, rect.bottom), Offset(rect.left + size, rect.bottom), paint);
+    canvas.drawLine(Offset(rect.left, rect.bottom - size),
+        Offset(rect.left, rect.bottom), paint);
+    canvas.drawLine(Offset(rect.left, rect.bottom),
+        Offset(rect.left + size, rect.bottom), paint);
     // Bottom-right
-    canvas.drawLine(Offset(rect.right - size, rect.bottom), Offset(rect.right, rect.bottom), paint);
-    canvas.drawLine(Offset(rect.right, rect.bottom), Offset(rect.right, rect.bottom - size), paint);
+    canvas.drawLine(Offset(rect.right - size, rect.bottom),
+        Offset(rect.right, rect.bottom), paint);
+    canvas.drawLine(Offset(rect.right, rect.bottom),
+        Offset(rect.right, rect.bottom - size), paint);
   }
 
   void _drawPathTile(Canvas canvas, Rect rect, int x, int y) {
+    final tilePhase = x * 0.7 + y * 0.5;
     final cx = rect.center.dx;
     final cy = rect.center.dy;
-    final tilePhase = x * 0.7 + y * 0.5;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: DARK TECH BASE WITH GRADIENT
     // ═══════════════════════════════════════════════════════════════════════
-    final basePaint = Paint()..color = const Color(0xFF050012);
-    canvas.drawRect(rect, basePaint);
+    canvas.drawRect(rect, _pathTileBasePaint);
 
-    // Subtle radial gradient from center
-    final baseGradient = ui.Gradient.radial(
-      Offset(cx, cy),
-      rect.width * 0.7,
-      [
-        const Color(0xFF100025),
-        const Color(0xFF050010),
-      ],
-    );
-    canvas.drawRect(rect, Paint()..shader = baseGradient);
+    // Subtle radial gradient from center (cached per tile size)
+    final tileSize = Size(rect.width, rect.height);
+    if (_pathTileGradientSize != tileSize || _pathTileGradientShader == null) {
+      _pathTileGradientSize = tileSize;
+      _pathTileGradientShader = ui.Gradient.radial(
+        Offset(tileSize.width / 2, tileSize.height / 2),
+        tileSize.width * 0.7,
+        [
+          const Color(0xFF100025),
+          const Color(0xFF050010),
+        ],
+      );
+    }
+    _pathTileGradientPaint.shader = _pathTileGradientShader;
+    canvas.save();
+    canvas.translate(rect.left, rect.top);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, rect.width, rect.height), _pathTileGradientPaint);
+    canvas.restore();
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 2: ANIMATED CIRCUIT TRACE PATTERNS (reduced intensity)
@@ -842,26 +1155,40 @@ class _WorldRenderer extends PositionComponent {
     // Draw circuit traces based on pattern type
     if (circuitPattern == 0) {
       // Horizontal main trace with vertical branches
-      canvas.drawLine(Offset(rect.left + 3, cy), Offset(rect.right - 3, cy), _circuitTracePaint);
-      canvas.drawLine(Offset(cx - 6, cy), Offset(cx - 6, rect.top + 5), _circuitTracePaint);
-      canvas.drawLine(Offset(cx + 6, cy), Offset(cx + 6, rect.bottom - 5), _circuitTracePaint);
-      canvas.drawLine(Offset(cx - 6, rect.top + 5), Offset(cx - 2, rect.top + 5), _circuitTracePaint);
-      canvas.drawLine(Offset(cx + 6, rect.bottom - 5), Offset(cx + 2, rect.bottom - 5), _circuitTracePaint);
+      canvas.drawLine(Offset(rect.left + 3, cy), Offset(rect.right - 3, cy),
+          _circuitTracePaint);
+      canvas.drawLine(
+          Offset(cx - 6, cy), Offset(cx - 6, rect.top + 5), _circuitTracePaint);
+      canvas.drawLine(Offset(cx + 6, cy), Offset(cx + 6, rect.bottom - 5),
+          _circuitTracePaint);
+      canvas.drawLine(Offset(cx - 6, rect.top + 5),
+          Offset(cx - 2, rect.top + 5), _circuitTracePaint);
+      canvas.drawLine(Offset(cx + 6, rect.bottom - 5),
+          Offset(cx + 2, rect.bottom - 5), _circuitTracePaint);
     } else if (circuitPattern == 1) {
       // Vertical main trace with horizontal branches
-      canvas.drawLine(Offset(cx, rect.top + 3), Offset(cx, rect.bottom - 3), _circuitTracePaint);
-      canvas.drawLine(Offset(cx, cy - 6), Offset(rect.left + 5, cy - 6), _circuitTracePaint);
-      canvas.drawLine(Offset(cx, cy + 6), Offset(rect.right - 5, cy + 6), _circuitTracePaint);
+      canvas.drawLine(Offset(cx, rect.top + 3), Offset(cx, rect.bottom - 3),
+          _circuitTracePaint);
+      canvas.drawLine(Offset(cx, cy - 6), Offset(rect.left + 5, cy - 6),
+          _circuitTracePaint);
+      canvas.drawLine(Offset(cx, cy + 6), Offset(rect.right - 5, cy + 6),
+          _circuitTracePaint);
     } else if (circuitPattern == 2) {
       // L-shaped traces from corners
-      canvas.drawLine(Offset(rect.left + 4, rect.top + 4), Offset(rect.left + 4, cy), _circuitTracePaint);
-      canvas.drawLine(Offset(rect.left + 4, cy), Offset(cx, cy), _circuitTracePaint);
-      canvas.drawLine(Offset(rect.right - 4, rect.bottom - 4), Offset(rect.right - 4, cy), _circuitTracePaint);
-      canvas.drawLine(Offset(rect.right - 4, cy), Offset(cx, cy), _circuitTracePaint);
+      canvas.drawLine(Offset(rect.left + 4, rect.top + 4),
+          Offset(rect.left + 4, cy), _circuitTracePaint);
+      canvas.drawLine(
+          Offset(rect.left + 4, cy), Offset(cx, cy), _circuitTracePaint);
+      canvas.drawLine(Offset(rect.right - 4, rect.bottom - 4),
+          Offset(rect.right - 4, cy), _circuitTracePaint);
+      canvas.drawLine(
+          Offset(rect.right - 4, cy), Offset(cx, cy), _circuitTracePaint);
     } else {
       // Cross pattern
-      canvas.drawLine(Offset(rect.left + 4, rect.top + 4), Offset(rect.right - 4, rect.bottom - 4), _circuitTracePaint);
-      canvas.drawLine(Offset(rect.right - 4, rect.top + 4), Offset(rect.left + 4, rect.bottom - 4), _circuitTracePaint);
+      canvas.drawLine(Offset(rect.left + 4, rect.top + 4),
+          Offset(rect.right - 4, rect.bottom - 4), _circuitTracePaint);
+      canvas.drawLine(Offset(rect.right - 4, rect.top + 4),
+          Offset(rect.left + 4, rect.bottom - 4), _circuitTracePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -871,11 +1198,13 @@ class _WorldRenderer extends PositionComponent {
     final dataAlpha = 0.3 + math.sin(_time * 8 + tilePhase) * 0.1;
 
     // Data pulse glow
-    _circuitGlowPaint.color = const Color(0xFFFF00AA).withOpacity(dataAlpha * 0.2);
+    _circuitGlowPaint.color =
+        const Color(0xFFFF00AA).withOpacity(dataAlpha * 0.2);
     final dataX = rect.left + dataFlowPhase;
     if (dataX < rect.right - 3) {
       canvas.drawCircle(Offset(dataX, cy), 3, _circuitGlowPaint);
-      _circuitPulsePaint.color = const Color(0xFFFFFFFF).withOpacity(dataAlpha * 0.4);
+      _circuitPulsePaint.color =
+          const Color(0xFFFFFFFF).withOpacity(dataAlpha * 0.4);
       canvas.drawCircle(Offset(dataX, cy), 1.5, _circuitPulsePaint);
     }
 
@@ -894,38 +1223,65 @@ class _WorldRenderer extends PositionComponent {
     final nodePulse = 0.25 + math.sin(nodePhase) * 0.1;
 
     // Corner junction nodes
-    final junctionPositions = [
-      Offset(rect.left + 5, rect.top + 5),
-      Offset(rect.right - 5, rect.top + 5),
-      Offset(rect.left + 5, rect.bottom - 5),
-      Offset(rect.right - 5, rect.bottom - 5),
-    ];
+    final junctionTopLeft = Offset(rect.left + 5, rect.top + 5);
+    final junctionTopRight = Offset(rect.right - 5, rect.top + 5);
+    final junctionBottomLeft = Offset(rect.left + 5, rect.bottom - 5);
+    final junctionBottomRight = Offset(rect.right - 5, rect.bottom - 5);
+    final junctionAlpha0 = nodePulse * (0.4 + math.sin(nodePhase) * 0.1);
+    final junctionAlpha1 = nodePulse * (0.4 + math.sin(nodePhase + 1) * 0.1);
+    final junctionAlpha2 = nodePulse * (0.4 + math.sin(nodePhase + 2) * 0.1);
+    final junctionAlpha3 = nodePulse * (0.4 + math.sin(nodePhase + 3) * 0.1);
 
-    for (int i = 0; i < junctionPositions.length; i++) {
-      final pos = junctionPositions[i];
-      final junctionAlpha = nodePulse * (0.4 + math.sin(nodePhase + i) * 0.1);
+    _circuitJunctionPaint.color =
+        const Color(0xFFFF0066).withOpacity(junctionAlpha0 * 0.25);
+    canvas.drawCircle(junctionTopLeft, 4, _circuitJunctionPaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFF4488).withOpacity(junctionAlpha0 * 0.5);
+    canvas.drawCircle(junctionTopLeft, 2, _circuitNodePaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFFFFFF).withOpacity(junctionAlpha0 * 0.4);
+    canvas.drawCircle(junctionTopLeft, 0.8, _circuitNodePaint);
 
-      // Node glow
-      _circuitJunctionPaint.color = const Color(0xFFFF0066).withOpacity(junctionAlpha * 0.25);
-      canvas.drawCircle(pos, 4, _circuitJunctionPaint);
+    _circuitJunctionPaint.color =
+        const Color(0xFFFF0066).withOpacity(junctionAlpha1 * 0.25);
+    canvas.drawCircle(junctionTopRight, 4, _circuitJunctionPaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFF4488).withOpacity(junctionAlpha1 * 0.5);
+    canvas.drawCircle(junctionTopRight, 2, _circuitNodePaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFFFFFF).withOpacity(junctionAlpha1 * 0.4);
+    canvas.drawCircle(junctionTopRight, 0.8, _circuitNodePaint);
 
-      // Node core
-      _circuitNodePaint.color = const Color(0xFFFF4488).withOpacity(junctionAlpha * 0.5);
-      canvas.drawCircle(pos, 2, _circuitNodePaint);
+    _circuitJunctionPaint.color =
+        const Color(0xFFFF0066).withOpacity(junctionAlpha2 * 0.25);
+    canvas.drawCircle(junctionBottomLeft, 4, _circuitJunctionPaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFF4488).withOpacity(junctionAlpha2 * 0.5);
+    canvas.drawCircle(junctionBottomLeft, 2, _circuitNodePaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFFFFFF).withOpacity(junctionAlpha2 * 0.4);
+    canvas.drawCircle(junctionBottomLeft, 0.8, _circuitNodePaint);
 
-      // Inner bright dot
-      _circuitNodePaint.color = const Color(0xFFFFFFFF).withOpacity(junctionAlpha * 0.4);
-      canvas.drawCircle(pos, 0.8, _circuitNodePaint);
-    }
+    _circuitJunctionPaint.color =
+        const Color(0xFFFF0066).withOpacity(junctionAlpha3 * 0.25);
+    canvas.drawCircle(junctionBottomRight, 4, _circuitJunctionPaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFF4488).withOpacity(junctionAlpha3 * 0.5);
+    canvas.drawCircle(junctionBottomRight, 2, _circuitNodePaint);
+    _circuitNodePaint.color =
+        const Color(0xFFFFFFFF).withOpacity(junctionAlpha3 * 0.4);
+    canvas.drawCircle(junctionBottomRight, 0.8, _circuitNodePaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 5: MICROCHIP COMPONENT IN CENTER (reduced intensity)
     // ═══════════════════════════════════════════════════════════════════════
     final chipSize = 8.0;
-    final chipRect = Rect.fromCenter(center: Offset(cx, cy), width: chipSize, height: chipSize);
+    final chipRect = Rect.fromCenter(
+        center: Offset(cx, cy), width: chipSize, height: chipSize);
 
     // Chip glow
-    _circuitEnergyPaint.color = const Color(0xFFFF0066).withOpacity(0.15 + math.sin(_time * 4 + tilePhase) * 0.05);
+    _circuitEnergyPaint.color = const Color(0xFFFF0066)
+        .withOpacity(0.15 + math.sin(_time * 4 + tilePhase) * 0.05);
     canvas.drawRect(chipRect.inflate(2), _circuitEnergyPaint);
 
     // Chip body
@@ -940,17 +1296,25 @@ class _WorldRenderer extends PositionComponent {
     _circuitTracePaint.color = const Color(0xFFFF4488).withOpacity(0.25);
     final pinLength = 3.0;
     // Top pins
-    canvas.drawLine(Offset(cx - 2, chipRect.top), Offset(cx - 2, chipRect.top - pinLength), _circuitTracePaint);
-    canvas.drawLine(Offset(cx + 2, chipRect.top), Offset(cx + 2, chipRect.top - pinLength), _circuitTracePaint);
+    canvas.drawLine(Offset(cx - 2, chipRect.top),
+        Offset(cx - 2, chipRect.top - pinLength), _circuitTracePaint);
+    canvas.drawLine(Offset(cx + 2, chipRect.top),
+        Offset(cx + 2, chipRect.top - pinLength), _circuitTracePaint);
     // Bottom pins
-    canvas.drawLine(Offset(cx - 2, chipRect.bottom), Offset(cx - 2, chipRect.bottom + pinLength), _circuitTracePaint);
-    canvas.drawLine(Offset(cx + 2, chipRect.bottom), Offset(cx + 2, chipRect.bottom + pinLength), _circuitTracePaint);
+    canvas.drawLine(Offset(cx - 2, chipRect.bottom),
+        Offset(cx - 2, chipRect.bottom + pinLength), _circuitTracePaint);
+    canvas.drawLine(Offset(cx + 2, chipRect.bottom),
+        Offset(cx + 2, chipRect.bottom + pinLength), _circuitTracePaint);
     // Left pins
-    canvas.drawLine(Offset(chipRect.left, cy - 2), Offset(chipRect.left - pinLength, cy - 2), _circuitTracePaint);
-    canvas.drawLine(Offset(chipRect.left, cy + 2), Offset(chipRect.left - pinLength, cy + 2), _circuitTracePaint);
+    canvas.drawLine(Offset(chipRect.left, cy - 2),
+        Offset(chipRect.left - pinLength, cy - 2), _circuitTracePaint);
+    canvas.drawLine(Offset(chipRect.left, cy + 2),
+        Offset(chipRect.left - pinLength, cy + 2), _circuitTracePaint);
     // Right pins
-    canvas.drawLine(Offset(chipRect.right, cy - 2), Offset(chipRect.right + pinLength, cy - 2), _circuitTracePaint);
-    canvas.drawLine(Offset(chipRect.right, cy + 2), Offset(chipRect.right + pinLength, cy + 2), _circuitTracePaint);
+    canvas.drawLine(Offset(chipRect.right, cy - 2),
+        Offset(chipRect.right + pinLength, cy - 2), _circuitTracePaint);
+    canvas.drawLine(Offset(chipRect.right, cy + 2),
+        Offset(chipRect.right + pinLength, cy + 2), _circuitTracePaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 6: HEXAGONAL GRID OVERLAY (reduced intensity)
@@ -976,10 +1340,16 @@ class _WorldRenderer extends PositionComponent {
       final waveAlpha = (1 - waveProgress) * 0.1;
       final waveRadius = 3 + waveProgress * 12;
 
-      _circuitEnergyPaint.color = const Color(0xFFFF0088).withOpacity(waveAlpha);
+      _circuitEnergyPaint.color =
+          const Color(0xFFFF0088).withOpacity(waveAlpha);
       _circuitPath.reset();
-      _circuitPath.addOval(Rect.fromCircle(center: Offset(cx, cy), radius: waveRadius));
-      canvas.drawPath(_circuitPath, _circuitEnergyPaint..style = PaintingStyle.stroke..strokeWidth = 1);
+      _circuitPath
+          .addOval(Rect.fromCircle(center: Offset(cx, cy), radius: waveRadius));
+      canvas.drawPath(
+          _circuitPath,
+          _circuitEnergyPaint
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 1);
       _circuitEnergyPaint.style = PaintingStyle.fill;
     }
 
@@ -993,11 +1363,14 @@ class _WorldRenderer extends PositionComponent {
 
       // Particles moving along different paths
       final particleX = rect.left + 4 + particleProgress * (rect.width - 8);
-      final particleY = rect.top + 6 + particle * 8 + math.sin(particlePhase * 3) * 2;
+      final particleY =
+          rect.top + 6 + particle * 8 + math.sin(particlePhase * 3) * 2;
 
       if (particleY < rect.bottom - 4) {
-        _circuitPulsePaint.color = const Color(0xFFFF44AA).withOpacity(particleAlpha);
-        canvas.drawCircle(Offset(particleX, particleY), 1.2, _circuitPulsePaint);
+        _circuitPulsePaint.color =
+            const Color(0xFFFF44AA).withOpacity(particleAlpha);
+        canvas.drawCircle(
+            Offset(particleX, particleY), 1.2, _circuitPulsePaint);
       }
     }
 
@@ -1007,35 +1380,66 @@ class _WorldRenderer extends PositionComponent {
     final borderAlpha = 0.2 + math.sin(_time * 3 + tilePhase) * 0.05;
 
     // Outer border glow
-    _circuitGlowPaint.color = const Color(0xFFFF0066).withOpacity(borderAlpha * 0.15);
-    canvas.drawRect(rect.deflate(1), _circuitGlowPaint..style = PaintingStyle.stroke..strokeWidth = 3);
+    _circuitGlowPaint.color =
+        const Color(0xFFFF0066).withOpacity(borderAlpha * 0.15);
+    canvas.drawRect(
+        rect.deflate(1),
+        _circuitGlowPaint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3);
     _circuitGlowPaint.style = PaintingStyle.fill;
 
     // Core border
-    _circuitTracePaint.color = const Color(0xFFFF0088).withOpacity(borderAlpha * 0.5);
+    _circuitTracePaint.color =
+        const Color(0xFFFF0088).withOpacity(borderAlpha * 0.5);
     _circuitTracePaint.strokeWidth = 1.5;
     canvas.drawRect(rect.deflate(2), _circuitTracePaint);
 
     // Animated corner highlights
     final cornerLength = 6.0;
     final cornerAlpha = 0.3 + math.sin(_time * 6 + tilePhase) * 0.1;
-    _circuitDataFlowPaint.color = const Color(0xFFFFFFFF).withOpacity(cornerAlpha);
+    _circuitDataFlowPaint.color =
+        const Color(0xFFFFFFFF).withOpacity(cornerAlpha);
 
     // Top-left corner
-    canvas.drawLine(Offset(rect.left + 2, rect.top + 2), Offset(rect.left + 2 + cornerLength, rect.top + 2), _circuitDataFlowPaint);
-    canvas.drawLine(Offset(rect.left + 2, rect.top + 2), Offset(rect.left + 2, rect.top + 2 + cornerLength), _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.left + 2, rect.top + 2),
+        Offset(rect.left + 2 + cornerLength, rect.top + 2),
+        _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.left + 2, rect.top + 2),
+        Offset(rect.left + 2, rect.top + 2 + cornerLength),
+        _circuitDataFlowPaint);
 
     // Top-right corner
-    canvas.drawLine(Offset(rect.right - 2, rect.top + 2), Offset(rect.right - 2 - cornerLength, rect.top + 2), _circuitDataFlowPaint);
-    canvas.drawLine(Offset(rect.right - 2, rect.top + 2), Offset(rect.right - 2, rect.top + 2 + cornerLength), _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.right - 2, rect.top + 2),
+        Offset(rect.right - 2 - cornerLength, rect.top + 2),
+        _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.right - 2, rect.top + 2),
+        Offset(rect.right - 2, rect.top + 2 + cornerLength),
+        _circuitDataFlowPaint);
 
     // Bottom-left corner
-    canvas.drawLine(Offset(rect.left + 2, rect.bottom - 2), Offset(rect.left + 2 + cornerLength, rect.bottom - 2), _circuitDataFlowPaint);
-    canvas.drawLine(Offset(rect.left + 2, rect.bottom - 2), Offset(rect.left + 2, rect.bottom - 2 - cornerLength), _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.left + 2, rect.bottom - 2),
+        Offset(rect.left + 2 + cornerLength, rect.bottom - 2),
+        _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.left + 2, rect.bottom - 2),
+        Offset(rect.left + 2, rect.bottom - 2 - cornerLength),
+        _circuitDataFlowPaint);
 
     // Bottom-right corner
-    canvas.drawLine(Offset(rect.right - 2, rect.bottom - 2), Offset(rect.right - 2 - cornerLength, rect.bottom - 2), _circuitDataFlowPaint);
-    canvas.drawLine(Offset(rect.right - 2, rect.bottom - 2), Offset(rect.right - 2, rect.bottom - 2 - cornerLength), _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.right - 2, rect.bottom - 2),
+        Offset(rect.right - 2 - cornerLength, rect.bottom - 2),
+        _circuitDataFlowPaint);
+    canvas.drawLine(
+        Offset(rect.right - 2, rect.bottom - 2),
+        Offset(rect.right - 2, rect.bottom - 2 - cornerLength),
+        _circuitDataFlowPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 10: CENTRAL PROCESSOR GLOW (reduced intensity)
@@ -1043,15 +1447,18 @@ class _WorldRenderer extends PositionComponent {
     final processorPulse = 0.2 + math.sin(_time * 6 + tilePhase) * 0.1;
 
     // Deep outer glow
-    _circuitEnergyPaint.color = const Color(0xFFFF0066).withOpacity(processorPulse * 0.15);
+    _circuitEnergyPaint.color =
+        const Color(0xFFFF0066).withOpacity(processorPulse * 0.15);
     canvas.drawCircle(Offset(cx, cy), 6, _circuitEnergyPaint);
 
     // Inner bright core
-    _circuitPulsePaint.color = const Color(0xFFFF4488).withOpacity(processorPulse * 0.3);
+    _circuitPulsePaint.color =
+        const Color(0xFFFF4488).withOpacity(processorPulse * 0.3);
     canvas.drawCircle(Offset(cx, cy), 2.5, _circuitPulsePaint);
 
     // White hot center
-    _circuitPulsePaint.color = const Color(0xFFFFFFFF).withOpacity(processorPulse * 0.4);
+    _circuitPulsePaint.color =
+        const Color(0xFFFFFFFF).withOpacity(processorPulse * 0.4);
     canvas.drawCircle(Offset(cx, cy), 1, _circuitPulsePaint);
   }
 
@@ -1073,8 +1480,7 @@ class _WorldRenderer extends PositionComponent {
 
   void _drawBuildableTile(Canvas canvas, Rect rect, int x, int y) {
     // Dark tech floor base
-    final basePaint = Paint()..color = const Color(0xFF0a0a16);
-    canvas.drawRect(rect, basePaint);
+    canvas.drawRect(rect, _buildableBasePaint);
 
     // Subtle tech pattern based on position
     final patternType = (x + y * 3) % 5;
@@ -1094,43 +1500,34 @@ class _WorldRenderer extends PositionComponent {
     }
 
     // Outer grid border - always present
-    final gridPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
-    canvas.drawRect(rect.deflate(1), gridPaint);
+    _buildableGridPaint.color = const Color(0xFF00FFFF).withOpacity(0.12);
+    canvas.drawRect(rect.deflate(1), _buildableGridPaint);
 
     // Corner anchor points
-    final anchorGlow = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    final anchorCore = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.4);
-
-    for (final corner in [
-      Offset(rect.left + 3, rect.top + 3),
-      Offset(rect.right - 3, rect.top + 3),
-      Offset(rect.left + 3, rect.bottom - 3),
-      Offset(rect.right - 3, rect.bottom - 3),
-    ]) {
-      canvas.drawCircle(corner, 2.5, anchorGlow);
-      canvas.drawCircle(corner, 1.2, anchorCore);
-    }
+    _buildableAnchorGlowPaint.color = const Color(0xFF00FFFF).withOpacity(0.2);
+    _buildableAnchorCorePaint.color = const Color(0xFF00FFFF).withOpacity(0.4);
+    final topLeft = Offset(rect.left + 3, rect.top + 3);
+    final topRight = Offset(rect.right - 3, rect.top + 3);
+    final bottomLeft = Offset(rect.left + 3, rect.bottom - 3);
+    final bottomRight = Offset(rect.right - 3, rect.bottom - 3);
+    canvas.drawCircle(topLeft, 2.5, _buildableAnchorGlowPaint);
+    canvas.drawCircle(topLeft, 1.2, _buildableAnchorCorePaint);
+    canvas.drawCircle(topRight, 2.5, _buildableAnchorGlowPaint);
+    canvas.drawCircle(topRight, 1.2, _buildableAnchorCorePaint);
+    canvas.drawCircle(bottomLeft, 2.5, _buildableAnchorGlowPaint);
+    canvas.drawCircle(bottomLeft, 1.2, _buildableAnchorCorePaint);
+    canvas.drawCircle(bottomRight, 2.5, _buildableAnchorGlowPaint);
+    canvas.drawCircle(bottomRight, 1.2, _buildableAnchorCorePaint);
 
     // Random data flicker effect
     if ((x * 7 + y * 11 + (_time * 2).floor()) % 23 == 0) {
-      final flickerPaint = Paint()
-        ..color = const Color(0xFF00FFFF).withOpacity(0.08)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawRect(rect, flickerPaint);
+      _buildableFlickerPaint.color = const Color(0xFF00FFFF).withOpacity(0.08);
+      canvas.drawRect(rect, _buildableFlickerPaint);
     }
   }
 
   void _drawCircuitPattern(Canvas canvas, Rect rect, int x, int y) {
-    final tracePaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.15)
-      ..strokeWidth = 0.8
-      ..style = PaintingStyle.stroke;
+    _buildableTracePaint.color = const Color(0xFF00FFFF).withOpacity(0.15);
 
     final cx = rect.center.dx;
     final cy = rect.center.dy;
@@ -1139,101 +1536,98 @@ class _WorldRenderer extends PositionComponent {
     canvas.drawLine(
       Offset(rect.left + 4, cy),
       Offset(rect.right - 4, cy),
-      tracePaint,
+      _buildableTracePaint,
     );
 
     // Vertical trace with break
     canvas.drawLine(
       Offset(cx, rect.top + 4),
       Offset(cx, cy - 4),
-      tracePaint,
+      _buildableTracePaint,
     );
     canvas.drawLine(
       Offset(cx, cy + 4),
       Offset(cx, rect.bottom - 4),
-      tracePaint,
+      _buildableTracePaint,
     );
 
     // Center node
-    final nodePaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.25 + math.sin(_time * 2 + x + y) * 0.1);
-    canvas.drawCircle(Offset(cx, cy), 2, nodePaint);
+    _buildableNodePaint.color = const Color(0xFF00FFFF)
+        .withOpacity(0.25 + math.sin(_time * 2 + x + y) * 0.1);
+    canvas.drawCircle(Offset(cx, cy), 2, _buildableNodePaint);
   }
 
   void _drawHexGridPattern(Canvas canvas, Rect rect) {
-    final hexPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.08)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
+    _buildableHexPaint.color = const Color(0xFF00FFFF).withOpacity(0.08);
 
     final hexSize = 6.0;
     final cx = rect.center.dx;
     final cy = rect.center.dy;
 
     // Draw a single hex at center
-    _drawHexagon(canvas, Offset(cx, cy), hexSize, hexPaint);
+    _drawHexagon(canvas, Offset(cx, cy), hexSize, _buildableHexPaint);
 
     // Corner hexes (partial)
-    for (final offset in [
-      Offset(-hexSize * 1.5, -hexSize * 0.866),
-      Offset(hexSize * 1.5, -hexSize * 0.866),
-      Offset(-hexSize * 1.5, hexSize * 0.866),
-      Offset(hexSize * 1.5, hexSize * 0.866),
-    ]) {
-      _drawHexagon(canvas, Offset(cx + offset.dx, cy + offset.dy), hexSize * 0.5, hexPaint);
-    }
+    _drawHexagon(canvas, Offset(cx - hexSize * 1.5, cy - hexSize * 0.866),
+        hexSize * 0.5, _buildableHexPaint);
+    _drawHexagon(canvas, Offset(cx + hexSize * 1.5, cy - hexSize * 0.866),
+        hexSize * 0.5, _buildableHexPaint);
+    _drawHexagon(canvas, Offset(cx - hexSize * 1.5, cy + hexSize * 0.866),
+        hexSize * 0.5, _buildableHexPaint);
+    _drawHexagon(canvas, Offset(cx + hexSize * 1.5, cy + hexSize * 0.866),
+        hexSize * 0.5, _buildableHexPaint);
   }
 
   void _drawDiamondPattern(Canvas canvas, Rect rect, int x, int y) {
-    final diamondPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 0.5;
+    _buildableDiamondPaint.color = const Color(0xFF00FFFF).withOpacity(0.1);
 
     final cx = rect.center.dx;
     final cy = rect.center.dy;
     final size = 8.0;
 
-    final path = Path()
+    _buildableDiamondPath
+      ..reset()
       ..moveTo(cx, cy - size)
       ..lineTo(cx + size, cy)
       ..lineTo(cx, cy + size)
       ..lineTo(cx - size, cy)
       ..close();
-
-    canvas.drawPath(path, diamondPaint);
+    canvas.drawPath(_buildableDiamondPath, _buildableDiamondPaint);
 
     // Inner diamond
-    final innerPath = Path()
+    _buildableDiamondInnerPath
+      ..reset()
       ..moveTo(cx, cy - size * 0.5)
       ..lineTo(cx + size * 0.5, cy)
       ..lineTo(cx, cy + size * 0.5)
       ..lineTo(cx - size * 0.5, cy)
       ..close();
-
-    final innerPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.06 + math.sin(_time + x) * 0.02)
-      ..style = PaintingStyle.fill;
-    canvas.drawPath(innerPath, innerPaint);
+    _buildableDiamondInnerPaint.color =
+        const Color(0xFF00FFFF).withOpacity(0.06 + math.sin(_time + x) * 0.02);
+    canvas.drawPath(_buildableDiamondInnerPath, _buildableDiamondInnerPaint);
   }
 
   void _drawStandardGrid(Canvas canvas, Rect rect, int x, int y) {
     // Cross pattern
-    final crossPaint = Paint()
-      ..color = const Color(0xFF00FFFF).withOpacity(0.08)
-      ..strokeWidth = 0.5;
+    _buildableCrossPaint.color = const Color(0xFF00FFFF).withOpacity(0.08);
 
     final cx = rect.center.dx;
     final cy = rect.center.dy;
 
-    canvas.drawLine(Offset(cx - 6, cy), Offset(cx + 6, cy), crossPaint);
-    canvas.drawLine(Offset(cx, cy - 6), Offset(cx, cy + 6), crossPaint);
+    canvas.drawLine(
+        Offset(cx - 6, cy), Offset(cx + 6, cy), _buildableCrossPaint);
+    canvas.drawLine(
+        Offset(cx, cy - 6), Offset(cx, cy + 6), _buildableCrossPaint);
 
     // Tick marks at edges
-    canvas.drawLine(Offset(rect.left + 2, cy), Offset(rect.left + 5, cy), crossPaint);
-    canvas.drawLine(Offset(rect.right - 5, cy), Offset(rect.right - 2, cy), crossPaint);
-    canvas.drawLine(Offset(cx, rect.top + 2), Offset(cx, rect.top + 5), crossPaint);
-    canvas.drawLine(Offset(cx, rect.bottom - 5), Offset(cx, rect.bottom - 2), crossPaint);
+    canvas.drawLine(Offset(rect.left + 2, cy), Offset(rect.left + 5, cy),
+        _buildableCrossPaint);
+    canvas.drawLine(Offset(rect.right - 5, cy), Offset(rect.right - 2, cy),
+        _buildableCrossPaint);
+    canvas.drawLine(Offset(cx, rect.top + 2), Offset(cx, rect.top + 5),
+        _buildableCrossPaint);
+    canvas.drawLine(Offset(cx, rect.bottom - 5), Offset(cx, rect.bottom - 2),
+        _buildableCrossPaint);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1242,19 +1636,18 @@ class _WorldRenderer extends PositionComponent {
   void _drawHexagonalGridOverlay(Canvas canvas) {
     if (world.reduceFx) return; // Skip on low quality
 
-    final worldWidth = world.tileSize * world.mapWidth.toDouble();
-    final worldHeight = world.tileSize * world.mapHeight.toDouble();
+    _ensureHexCache();
 
-    // Hexagon parameters
+    final worldWidth = _hexCachedWorldWidth;
+    final worldHeight = _hexCachedWorldHeight;
     const hexRadius = 25.0;
-    final hexWidth = hexRadius * 2;
     final hexHeight = hexRadius * math.sqrt(3);
-    final horizontalSpacing = hexWidth * 0.75;
     final verticalSpacing = hexHeight;
-
-    // Calculate grid dimensions
-    final colCount = (worldWidth / horizontalSpacing).ceil() + 1;
     final rowCount = (worldHeight / verticalSpacing).ceil() + 1;
+    // Cached geometry already prepared in _ensureHexCache().
+
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, worldWidth, worldHeight));
 
     // Base grid color with subtle animation
     final baseAlpha = 0.03 + math.sin(_time * 0.5) * 0.01;
@@ -1265,28 +1658,7 @@ class _WorldRenderer extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     _hexGridPaint.color = const Color(0xFF00FFFF).withOpacity(baseAlpha);
 
-    for (int row = 0; row < rowCount; row++) {
-      for (int col = 0; col < colCount; col++) {
-        final offsetX = (row % 2) * horizontalSpacing * 0.5;
-        final centerX = col * horizontalSpacing + offsetX;
-        final centerY = row * verticalSpacing;
-
-        // Draw hexagon outline
-        _hexGridPath.reset();
-        for (int i = 0; i < 6; i++) {
-          final angle = i * math.pi / 3 - math.pi / 6;
-          final px = centerX + math.cos(angle) * hexRadius;
-          final py = centerY + math.sin(angle) * hexRadius;
-          if (i == 0) {
-            _hexGridPath.moveTo(px, py);
-          } else {
-            _hexGridPath.lineTo(px, py);
-          }
-        }
-        _hexGridPath.close();
-        canvas.drawPath(_hexGridPath, _hexGridPaint);
-      }
-    }
+    canvas.drawPath(_hexGridPath, _hexGridPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 2: GLOWING HIGHLIGHT HEXAGONS (sparse, animated)
@@ -1294,49 +1666,23 @@ class _WorldRenderer extends PositionComponent {
     _hexGridGlowPaint.color = const Color(0xFF00FFFF).withOpacity(glowAlpha);
 
     // Highlight every Nth hexagon with phase offset
-    for (int row = 0; row < rowCount; row += 3) {
-      for (int col = 0; col < colCount; col += 3) {
-        final highlightPhase = math.sin(_time * 2 + row * 0.3 + col * 0.4);
-        if (highlightPhase < 0.3) continue; // Only show some hexagons
+    for (int i = 0; i < _hexHighlightIndices.length; i++) {
+      final highlightPhase = math.sin(_time * 2 + _hexHighlightPhaseSeeds[i]);
+      if (highlightPhase < 0.3) continue; // Only show some hexagons
 
-        final offsetX = (row % 2) * horizontalSpacing * 0.5;
-        final centerX = col * horizontalSpacing + offsetX;
-        final centerY = row * verticalSpacing;
-
-        final highlightAlpha = glowAlpha * highlightPhase;
-        _hexGridGlowPaint.color = const Color(0xFF00FFFF).withOpacity(highlightAlpha);
-
-        _hexGridPath.reset();
-        for (int i = 0; i < 6; i++) {
-          final angle = i * math.pi / 3 - math.pi / 6;
-          final px = centerX + math.cos(angle) * hexRadius;
-          final py = centerY + math.sin(angle) * hexRadius;
-          if (i == 0) {
-            _hexGridPath.moveTo(px, py);
-          } else {
-            _hexGridPath.lineTo(px, py);
-          }
-        }
-        _hexGridPath.close();
-        canvas.drawPath(_hexGridPath, _hexGridGlowPaint);
-      }
+      final highlightAlpha = glowAlpha * highlightPhase;
+      _hexGridGlowPaint.color =
+          const Color(0xFF00FFFF).withOpacity(highlightAlpha);
+      canvas.drawPath(_hexPaths[_hexHighlightIndices[i]], _hexGridGlowPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: CORNER NODES (subtle dots at intersections)
     // ═══════════════════════════════════════════════════════════════════════
-    _hexGridCornerPaint.color = const Color(0xFF00FFFF).withOpacity(baseAlpha * 2);
+    _hexGridCornerPaint.color =
+        const Color(0xFF00FFFF).withOpacity(baseAlpha * 2);
 
-    for (int row = 0; row < rowCount; row += 2) {
-      for (int col = 0; col < colCount; col += 2) {
-        final offsetX = (row % 2) * horizontalSpacing * 0.5;
-        final centerX = col * horizontalSpacing + offsetX;
-        final centerY = row * verticalSpacing;
-
-        // Draw small dot at hexagon center
-        canvas.drawCircle(Offset(centerX, centerY), 1.5, _hexGridCornerPaint);
-      }
-    }
+    canvas.drawPath(_hexCornerPath, _hexGridCornerPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 4: ANIMATED PULSE RINGS (traveling outward)
@@ -1349,8 +1695,10 @@ class _WorldRenderer extends PositionComponent {
       final pulseRadius = pulsePhase * math.max(worldWidth, worldHeight) * 0.4;
       final pulseAlpha = (1 - pulsePhase) * 0.08;
 
-      _hexGridPulsePaint.color = const Color(0xFF00FFFF).withOpacity(pulseAlpha);
-      canvas.drawCircle(Offset(pulseCenterX, pulseCenterY), pulseRadius, _hexGridPulsePaint);
+      _hexGridPulsePaint.color =
+          const Color(0xFF00FFFF).withOpacity(pulseAlpha);
+      canvas.drawCircle(
+          Offset(pulseCenterX, pulseCenterY), pulseRadius, _hexGridPulsePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -1380,16 +1728,10 @@ class _WorldRenderer extends PositionComponent {
     // LAYER 6: HIGHLIGHT CELLS NEAR ACTIVITY (towers, enemies)
     // ═══════════════════════════════════════════════════════════════════════
     // Create a subtle aura effect in active regions
-    final towerPositions = <Offset>[];
-    // Check if there are towers in the scene (via the game reference)
-    // For simplicity, we'll just create moving highlight points
     for (int i = 0; i < 3; i++) {
       final highlightX = worldWidth * (0.3 + math.sin(_time * 0.5 + i) * 0.2);
       final highlightY = worldHeight * (0.3 + math.cos(_time * 0.4 + i) * 0.2);
-      towerPositions.add(Offset(highlightX, highlightY));
-    }
-
-    for (final pos in towerPositions) {
+      final pos = Offset(highlightX, highlightY);
       final auraAlpha = 0.02 + math.sin(_time * 4) * 0.01;
       _hexGridAuraPaint.color = const Color(0xFF00FFFF).withOpacity(auraAlpha);
       canvas.drawCircle(pos, hexRadius * 2, _hexGridAuraPaint);
@@ -1399,29 +1741,10 @@ class _WorldRenderer extends PositionComponent {
     // LAYER 7: SECONDARY MAGENTA ACCENT HEXAGONS
     // ═══════════════════════════════════════════════════════════════════════
     final magentaAlpha = 0.02 + math.sin(_time * 1.2 + 2) * 0.01;
-    _hexGridHighlightPaint.color = const Color(0xFFFF00FF).withOpacity(magentaAlpha);
+    _hexGridHighlightPaint.color =
+        const Color(0xFFFF00FF).withOpacity(magentaAlpha);
 
-    for (int row = 1; row < rowCount; row += 5) {
-      for (int col = 1; col < colCount; col += 5) {
-        final offsetX = (row % 2) * horizontalSpacing * 0.5;
-        final centerX = col * horizontalSpacing + offsetX;
-        final centerY = row * verticalSpacing;
-
-        _hexGridPath.reset();
-        for (int i = 0; i < 6; i++) {
-          final angle = i * math.pi / 3 - math.pi / 6;
-          final px = centerX + math.cos(angle) * (hexRadius * 0.6);
-          final py = centerY + math.sin(angle) * (hexRadius * 0.6);
-          if (i == 0) {
-            _hexGridPath.moveTo(px, py);
-          } else {
-            _hexGridPath.lineTo(px, py);
-          }
-        }
-        _hexGridPath.close();
-        canvas.drawPath(_hexGridPath, _hexGridHighlightPaint);
-      }
-    }
+    canvas.drawPath(_hexAccentPath, _hexGridHighlightPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 8: SCANNING LINE EFFECT
@@ -1439,7 +1762,8 @@ class _WorldRenderer extends PositionComponent {
     for (int trail = 1; trail < 4; trail++) {
       final trailY = scanY - trail * 5;
       if (trailY > 0) {
-        _hexGridEnergyPaint.color = const Color(0xFF00FFFF).withOpacity(scanAlpha * (1 - trail * 0.25));
+        _hexGridEnergyPaint.color =
+            const Color(0xFF00FFFF).withOpacity(scanAlpha * (1 - trail * 0.25));
         canvas.drawLine(
           Offset(0, trailY),
           Offset(worldWidth, trailY),
@@ -1447,6 +1771,8 @@ class _WorldRenderer extends PositionComponent {
         );
       }
     }
+
+    canvas.restore();
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1454,78 +1780,11 @@ class _WorldRenderer extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
   void _drawPulsingEnergyVeins(Canvas canvas) {
     if (world.reduceFx) return;
-
+    _ensureVeinCache();
     final worldWidth = world.tileSize * world.mapWidth.toDouble();
     final worldHeight = world.tileSize * world.mapHeight.toDouble();
-
-    // Define main vein network paths
-    final veinPaths = <List<Offset>>[];
-
-    // Create organic-looking vein paths
-    // Main horizontal veins
-    veinPaths.add([
-      Offset(0, worldHeight * 0.2),
-      Offset(worldWidth * 0.15, worldHeight * 0.22),
-      Offset(worldWidth * 0.35, worldHeight * 0.18),
-      Offset(worldWidth * 0.5, worldHeight * 0.25),
-      Offset(worldWidth * 0.7, worldHeight * 0.2),
-      Offset(worldWidth * 0.85, worldHeight * 0.23),
-      Offset(worldWidth, worldHeight * 0.2),
-    ]);
-
-    veinPaths.add([
-      Offset(0, worldHeight * 0.5),
-      Offset(worldWidth * 0.2, worldHeight * 0.48),
-      Offset(worldWidth * 0.4, worldHeight * 0.52),
-      Offset(worldWidth * 0.6, worldHeight * 0.47),
-      Offset(worldWidth * 0.8, worldHeight * 0.53),
-      Offset(worldWidth, worldHeight * 0.5),
-    ]);
-
-    veinPaths.add([
-      Offset(0, worldHeight * 0.8),
-      Offset(worldWidth * 0.25, worldHeight * 0.78),
-      Offset(worldWidth * 0.45, worldHeight * 0.82),
-      Offset(worldWidth * 0.65, worldHeight * 0.77),
-      Offset(worldWidth * 0.9, worldHeight * 0.8),
-      Offset(worldWidth, worldHeight * 0.8),
-    ]);
-
-    // Main vertical veins
-    veinPaths.add([
-      Offset(worldWidth * 0.2, 0),
-      Offset(worldWidth * 0.22, worldHeight * 0.3),
-      Offset(worldWidth * 0.18, worldHeight * 0.6),
-      Offset(worldWidth * 0.2, worldHeight),
-    ]);
-
-    veinPaths.add([
-      Offset(worldWidth * 0.5, 0),
-      Offset(worldWidth * 0.48, worldHeight * 0.25),
-      Offset(worldWidth * 0.52, worldHeight * 0.5),
-      Offset(worldWidth * 0.48, worldHeight * 0.75),
-      Offset(worldWidth * 0.5, worldHeight),
-    ]);
-
-    veinPaths.add([
-      Offset(worldWidth * 0.8, 0),
-      Offset(worldWidth * 0.78, worldHeight * 0.35),
-      Offset(worldWidth * 0.82, worldHeight * 0.7),
-      Offset(worldWidth * 0.8, worldHeight),
-    ]);
-
-    // Diagonal connector veins
-    veinPaths.add([
-      Offset(worldWidth * 0.1, worldHeight * 0.1),
-      Offset(worldWidth * 0.3, worldHeight * 0.35),
-      Offset(worldWidth * 0.4, worldHeight * 0.6),
-    ]);
-
-    veinPaths.add([
-      Offset(worldWidth * 0.9, worldHeight * 0.1),
-      Offset(worldWidth * 0.7, worldHeight * 0.4),
-      Offset(worldWidth * 0.6, worldHeight * 0.65),
-    ]);
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, worldWidth, worldHeight));
 
     // Animation parameters
     final pulsePhase = (_time * 1.5) % 1.0;
@@ -1534,78 +1793,62 @@ class _WorldRenderer extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: VEIN AURA (deep glow)
     // ═══════════════════════════════════════════════════════════════════════
-    for (int v = 0; v < veinPaths.length; v++) {
-      final path = veinPaths[v];
-      if (path.length < 2) continue;
+    for (int v = 0; v < _veinPaths.length; v++) {
+      if (_veinPaths[v].length < 2) continue;
 
-      final veinColor = v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
+      final veinColor =
+          v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
       final auraAlpha = 0.02 + math.sin(_time * 1.5 + v) * 0.01;
       _veinAuraPaint.color = veinColor.withOpacity(auraAlpha);
-
-      _veinPath.reset();
-      _veinPath.moveTo(path[0].dx, path[0].dy);
-      for (int i = 1; i < path.length; i++) {
-        _veinPath.lineTo(path[i].dx, path[i].dy);
-      }
       _veinAuraPaint.style = PaintingStyle.stroke;
       _veinAuraPaint.strokeWidth = 20;
-      canvas.drawPath(_veinPath, _veinAuraPaint);
+      canvas.drawPath(_veinPathCache[v], _veinAuraPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 2: MAIN VEIN GLOW
     // ═══════════════════════════════════════════════════════════════════════
-    for (int v = 0; v < veinPaths.length; v++) {
-      final path = veinPaths[v];
-      if (path.length < 2) continue;
+    for (int v = 0; v < _veinPaths.length; v++) {
+      if (_veinPaths[v].length < 2) continue;
 
-      final veinColor = v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
+      final veinColor =
+          v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
       final glowAlpha = (0.05 + baseBrightness * 0.05);
       _veinGlowPaint.color = veinColor.withOpacity(glowAlpha);
 
-      _veinPath.reset();
-      _veinPath.moveTo(path[0].dx, path[0].dy);
-      for (int i = 1; i < path.length; i++) {
-        _veinPath.lineTo(path[i].dx, path[i].dy);
-      }
-      canvas.drawPath(_veinPath, _veinGlowPaint);
+      canvas.drawPath(_veinPathCache[v], _veinGlowPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: VEIN CORE (bright center line)
     // ═══════════════════════════════════════════════════════════════════════
-    for (int v = 0; v < veinPaths.length; v++) {
-      final path = veinPaths[v];
-      if (path.length < 2) continue;
+    for (int v = 0; v < _veinPaths.length; v++) {
+      if (_veinPaths[v].length < 2) continue;
 
-      final veinColor = v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
+      final veinColor =
+          v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
       final coreAlpha = (0.1 + baseBrightness * 0.1);
       _veinCorePaint.color = veinColor.withOpacity(coreAlpha);
 
-      _veinPath.reset();
-      _veinPath.moveTo(path[0].dx, path[0].dy);
-      for (int i = 1; i < path.length; i++) {
-        _veinPath.lineTo(path[i].dx, path[i].dy);
-      }
-      canvas.drawPath(_veinPath, _veinCorePaint);
+      canvas.drawPath(_veinPathCache[v], _veinCorePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 4: TRAVELING PULSES ALONG VEINS
     // ═══════════════════════════════════════════════════════════════════════
-    for (int v = 0; v < veinPaths.length; v++) {
-      final path = veinPaths[v];
-      if (path.length < 2) continue;
+    for (int v = 0; v < _veinPaths.length; v++) {
+      if (_veinPaths[v].length < 2) continue;
 
-      final veinColor = v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
+      final veinColor =
+          v % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
 
       // Calculate pulse position along path
       final veinPulsePhase = (pulsePhase + v * 0.15) % 1.0;
-      final totalLength = _calculatePathLength(path);
+      final totalLength = _veinPathLengths[v];
       final pulseDistance = veinPulsePhase * totalLength;
 
       // Find pulse position
-      final pulsePos = _getPositionAlongPath(path, pulseDistance);
+      final pulsePos = _getVeinPositionAlongPath(v, pulseDistance);
 
       // Draw pulse glow
       final pulseAlpha = 0.15 + math.sin(_time * 8 + v) * 0.05;
@@ -1619,7 +1862,7 @@ class _WorldRenderer extends PositionComponent {
       // Draw secondary pulses
       final secondaryPhase = (veinPulsePhase + 0.5) % 1.0;
       final secondaryDistance = secondaryPhase * totalLength;
-      final secondaryPos = _getPositionAlongPath(path, secondaryDistance);
+      final secondaryPos = _getVeinPositionAlongPath(v, secondaryDistance);
 
       _veinPulsePaint.color = veinColor.withOpacity(pulseAlpha * 0.6);
       canvas.drawCircle(secondaryPos, 5, _veinPulsePaint);
@@ -1629,22 +1872,11 @@ class _WorldRenderer extends PositionComponent {
     // LAYER 5: JUNCTION NODES
     // ═══════════════════════════════════════════════════════════════════════
     // Calculate intersections and draw glowing nodes
-    final nodePositions = [
-      Offset(worldWidth * 0.2, worldHeight * 0.2),
-      Offset(worldWidth * 0.5, worldHeight * 0.25),
-      Offset(worldWidth * 0.8, worldHeight * 0.2),
-      Offset(worldWidth * 0.2, worldHeight * 0.5),
-      Offset(worldWidth * 0.5, worldHeight * 0.5),
-      Offset(worldWidth * 0.8, worldHeight * 0.5),
-      Offset(worldWidth * 0.2, worldHeight * 0.8),
-      Offset(worldWidth * 0.5, worldHeight * 0.75),
-      Offset(worldWidth * 0.8, worldHeight * 0.8),
-    ];
-
-    for (int n = 0; n < nodePositions.length; n++) {
-      final pos = nodePositions[n];
+    for (int n = 0; n < _veinNodes.length; n++) {
+      final pos = _veinNodes[n];
       final nodePulse = 0.5 + math.sin(_time * 3 + n * 0.7) * 0.5;
-      final nodeColor = n % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
+      final nodeColor =
+          n % 2 == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF00FF);
 
       // Node glow
       _veinNodePaint.color = nodeColor.withOpacity(nodePulse * 0.15);
@@ -1666,8 +1898,8 @@ class _WorldRenderer extends PositionComponent {
     _veinBranchPaint.color = const Color(0xFF00FFFF).withOpacity(branchAlpha);
 
     // Draw small branch lines from nodes
-    for (int n = 0; n < nodePositions.length; n++) {
-      final pos = nodePositions[n];
+    for (int n = 0; n < _veinNodes.length; n++) {
+      final pos = _veinNodes[n];
       final branchCount = 3 + (n % 2);
 
       for (int b = 0; b < branchCount; b++) {
@@ -1686,13 +1918,12 @@ class _WorldRenderer extends PositionComponent {
     final sparkCount = 6;
     for (int s = 0; s < sparkCount; s++) {
       final sparkPhase = (_time * 4 + s * 0.5) % 1.0;
-      final pathIndex = s % veinPaths.length;
-      final path = veinPaths[pathIndex];
-      if (path.length < 2) continue;
+      final pathIndex = s % _veinPaths.length;
+      if (_veinPaths[pathIndex].length < 2) continue;
 
-      final totalLength = _calculatePathLength(path);
+      final totalLength = _veinPathLengths[pathIndex];
       final sparkDistance = sparkPhase * totalLength;
-      final sparkPos = _getPositionAlongPath(path, sparkDistance);
+      final sparkPos = _getVeinPositionAlongPath(pathIndex, sparkDistance);
 
       // Add small random offset
       final offsetX = math.sin(_time * 10 + s) * 3;
@@ -1706,34 +1937,36 @@ class _WorldRenderer extends PositionComponent {
         _veinSparkPaint,
       );
     }
+    canvas.restore();
   }
 
-  double _calculatePathLength(List<Offset> path) {
-    double length = 0;
-    for (int i = 1; i < path.length; i++) {
-      final dx = path[i].dx - path[i - 1].dx;
-      final dy = path[i].dy - path[i - 1].dy;
-      length += math.sqrt(dx * dx + dy * dy);
-    }
-    return length;
-  }
+  Offset _getVeinPositionAlongPath(int pathIndex, double distance) {
+    final path = _veinPaths[pathIndex];
+    if (path.isEmpty) return Offset.zero;
+    if (path.length < 2) return path.last;
 
-  Offset _getPositionAlongPath(List<Offset> path, double distance) {
-    double accumulated = 0;
-    for (int i = 1; i < path.length; i++) {
-      final dx = path[i].dx - path[i - 1].dx;
-      final dy = path[i].dy - path[i - 1].dy;
-      final segmentLength = math.sqrt(dx * dx + dy * dy);
+    final totalLength = _veinPathLengths[pathIndex];
+    if (distance <= 0) return path.first;
+    if (distance >= totalLength) return path.last;
 
-      if (accumulated + segmentLength >= distance) {
-        final t = (distance - accumulated) / segmentLength;
+    final segmentLengths = _veinSegmentLengths[pathIndex];
+    final segmentStarts = _veinSegmentStarts[pathIndex];
+    for (int i = 0; i < segmentLengths.length; i++) {
+      final segmentLength = segmentLengths[i];
+      if (segmentLength <= 0) continue;
+      final segmentStart = segmentStarts[i];
+      final segmentEnd = segmentStart + segmentLength;
+      if (distance <= segmentEnd) {
+        final t = (distance - segmentStart) / segmentLength;
+        final start = path[i];
+        final end = path[i + 1];
         return Offset(
-          path[i - 1].dx + dx * t,
-          path[i - 1].dy + dy * t,
+          start.dx + (end.dx - start.dx) * t,
+          start.dy + (end.dy - start.dy) * t,
         );
       }
-      accumulated += segmentLength;
     }
+
     return path.last;
   }
 
@@ -1741,17 +1974,44 @@ class _WorldRenderer extends PositionComponent {
     if (world.waypoints.length < 2) return;
     _ensurePathCache();
     if (_pathOverlay == null) return;
+    final worldWidth = world.tileSize * world.mapWidth.toDouble();
+    final worldHeight = world.tileSize * world.mapHeight.toDouble();
+    canvas.save();
+    canvas.clipRect(Rect.fromLTWH(0, 0, worldWidth, worldHeight));
+    _ensurePathStaticLayer();
+    if (_pathStaticLayer != null) {
+      canvas.drawPicture(_pathStaticLayer!);
+    }
 
+    // Animated energy pulses
+    _drawEnergyPulses(canvas);
+    canvas.restore();
+  }
+
+  void _ensurePathStaticLayer() {
+    if (_pathOverlay == null) return;
+    final reduceFx = world.reduceFx;
+    final allowBlur = world.allowBlur;
+    if (!_pathStaticDirty &&
+        _pathStaticLayer != null &&
+        reduceFx == _lastReduceFx &&
+        allowBlur == _lastAllowBlur) {
+      return;
+    }
+
+    _pathStaticLayer?.dispose();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
     final path = _pathOverlay!;
 
     // Outer glow - wide and diffuse
-    _pathOuterGlowPaint.maskFilter = world.allowBlur ? _blur10 : null;
-    if (!world.reduceFx) {
+    _pathOuterGlowPaint.maskFilter = allowBlur ? _blur10 : null;
+    if (!reduceFx) {
       canvas.drawPath(path, _pathOuterGlowPaint);
     }
 
     // Middle glow
-    _pathMiddleGlowPaint.maskFilter = world.allowBlur ? _blur4 : null;
+    _pathMiddleGlowPaint.maskFilter = allowBlur ? _blur4 : null;
     canvas.drawPath(path, _pathMiddleGlowPaint);
 
     // Core line - bright
@@ -1760,8 +2020,10 @@ class _WorldRenderer extends PositionComponent {
     // Waypoint nodes
     _drawWaypointNodes(canvas);
 
-    // Animated energy pulses
-    _drawEnergyPulses(canvas);
+    _pathStaticLayer = recorder.endRecording();
+    _pathStaticDirty = false;
+    _lastReduceFx = reduceFx;
+    _lastAllowBlur = allowBlur;
   }
 
   void _drawWaypointNodes(Canvas canvas) {
@@ -1795,7 +2057,8 @@ class _WorldRenderer extends PositionComponent {
     final pulseSpeed = world.reduceFx ? 55.0 : 80.0;
     for (int p = 0; p < pulseCount; p++) {
       final baseProgress =
-          ((_time * pulseSpeed + p * _pathLength / pulseCount) % _pathLength) / _pathLength;
+          ((_time * pulseSpeed + p * _pathLength / pulseCount) % _pathLength) /
+              _pathLength;
 
       // Draw pulse with trail
       for (int t = 0; t < trailCount; t++) {
@@ -1816,7 +2079,8 @@ class _WorldRenderer extends PositionComponent {
         } else {
           // Trail particles - update color with alpha
           final trailAlpha = 1.0 - (t / trailCount);
-          _pulseTrailPaint.color = const Color(0xFFFF4488).withOpacity(trailAlpha * 0.6);
+          _pulseTrailPaint.color =
+              const Color(0xFFFF4488).withOpacity(trailAlpha * 0.6);
           canvas.drawCircle(Offset(pos.x, pos.y), trailSize, _pulseTrailPaint);
         }
       }
@@ -1867,7 +2131,8 @@ class _WorldRenderer extends PositionComponent {
     canvas.rotate(ringAngle);
 
     // Draw segmented ring
-    final arcRect = Rect.fromCircle(center: Offset.zero, radius: tileSize * 0.6);
+    final arcRect =
+        Rect.fromCircle(center: Offset.zero, radius: tileSize * 0.6);
     for (int i = 0; i < 6; i++) {
       final angle = i * math.pi / 3;
       canvas.drawArc(arcRect, angle, math.pi / 4, false, _portalRingPaint);
@@ -1876,7 +2141,8 @@ class _WorldRenderer extends PositionComponent {
 
     // Inner portal glow
     _portalGlowPaint
-      ..color = const Color(0xFF00FF88).withOpacity(0.5 + math.sin(_time * 4) * 0.2)
+      ..color =
+          const Color(0xFF00FF88).withOpacity(0.5 + math.sin(_time * 4) * 0.2)
       ..maskFilter = world.allowBlur ? _blur12 : null;
     if (!world.reduceFx) {
       canvas.drawCircle(Offset(cx, cy), tileSize * 0.4, _portalGlowPaint);
@@ -1890,15 +2156,18 @@ class _WorldRenderer extends PositionComponent {
 
     // Spawn arrow indicator
     canvas.drawLine(Offset(cx - 6, cy), Offset(cx + 8, cy), _portalArrowPaint);
-    canvas.drawLine(Offset(cx + 4, cy - 4), Offset(cx + 8, cy), _portalArrowPaint);
-    canvas.drawLine(Offset(cx + 4, cy + 4), Offset(cx + 8, cy), _portalArrowPaint);
+    canvas.drawLine(
+        Offset(cx + 4, cy - 4), Offset(cx + 8, cy), _portalArrowPaint);
+    canvas.drawLine(
+        Offset(cx + 4, cy + 4), Offset(cx + 8, cy), _portalArrowPaint);
 
     // "SPAWN" label glow
     _portalLabelPaint
       ..color = const Color(0xFF00FF88).withOpacity(0.6)
       ..maskFilter = world.allowBlur ? _blur2 : null;
     canvas.drawRect(
-      Rect.fromCenter(center: Offset(cx, cy - tileSize * 0.8), width: 40, height: 12),
+      Rect.fromCenter(
+          center: Offset(cx, cy - tileSize * 0.8), width: 40, height: 12),
       _portalLabelPaint,
     );
   }
@@ -1948,7 +2217,9 @@ class _WorldRenderer extends PositionComponent {
     canvas.drawCircle(Offset(cx, cy), tileSize * 0.12, _coreCenterPaint);
 
     // X mark
-    canvas.drawLine(Offset(cx - 5, cy - 5), Offset(cx + 5, cy + 5), _coreXPaint);
-    canvas.drawLine(Offset(cx + 5, cy - 5), Offset(cx - 5, cy + 5), _coreXPaint);
+    canvas.drawLine(
+        Offset(cx - 5, cy - 5), Offset(cx + 5, cy + 5), _coreXPaint);
+    canvas.drawLine(
+        Offset(cx + 5, cy - 5), Offset(cx - 5, cy + 5), _coreXPaint);
   }
 }

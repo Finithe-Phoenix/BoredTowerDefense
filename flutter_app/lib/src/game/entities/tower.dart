@@ -10,6 +10,23 @@ import '../bored_games_game.dart';
 import '../../ui/theme/neon_theme.dart';
 import '../../models/upgrade_data.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 /// Targeting modes for towers
 enum TargetMode { first, last, strongest, weakest, closest }
 
@@ -134,7 +151,8 @@ enum TowerType {
   final double projectileSpeed;
   final double slowAmount; // 0 = no slow, 0.5 = 50% slow
   final double slowDuration;
-  final bool canDetectPhantom; // Whether this tower can see and attack phantom enemies
+  final bool
+      canDetectPhantom; // Whether this tower can see and attack phantom enemies
 
   /// Whether this tower applies slow on hit
   bool get appliesSlow => slowAmount > 0 && slowDuration > 0;
@@ -146,6 +164,7 @@ typedef TowerFireCallback = void Function(
 
 class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   static bool lowFx = false;
+  BoredGamesGame? _cachedGame;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STATIC PAINT OBJECTS FOR HYPER-OPTIMIZATION
@@ -469,7 +488,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Reusable path for web shapes
   static final Path _webPath = Path();
   // Random for web effects
-  static final math.Random _webRandom = math.Random();
+  static final _FastRng _webRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // VORTEX/BLACK HOLE EFFECT PAINTS (Resonance Siphon)
@@ -500,7 +519,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.5;
   static final Path _vortexPath = Path();
-  static final math.Random _vortexRandom = math.Random();
+  static final _FastRng _vortexRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ORBITAL SATELLITE EFFECT PAINTS (Support Tower - Resonance Siphon)
@@ -720,7 +739,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _beamAuraPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
   static final Path _beamPath = Path();
-  static final math.Random _beamRandom = math.Random();
+  static final _FastRng _beamRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ELECTRIC ARC CONNECTION PAINTS (Between nearby towers)
@@ -749,7 +768,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _electricArcFlashPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
   static final Path _electricArcPath = Path();
-  static final math.Random _electricArcRandom = math.Random();
+  static final _FastRng _electricArcRandom = _FastRng();
   static const double _electricArcMaxDistance = 180.0; // Max distance for arcs
   static const double _electricArcMinDistance = 50.0; // Min distance for arcs
 
@@ -757,8 +776,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // DYNAMIC SHADOW PAINTS
   // ═══════════════════════════════════════════════════════════════════════════
   // Layer 1: Main shadow silhouette
-  static final Paint _shadowMainPaint = Paint()
-    ..style = PaintingStyle.fill;
+  static final Paint _shadowMainPaint = Paint()..style = PaintingStyle.fill;
   // Layer 2: Soft shadow edge with blur
   static final Paint _shadowSoftEdgePaint = Paint()
     ..style = PaintingStyle.fill
@@ -864,8 +882,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   static final Paint _radarBlipPulsePaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
   // Layer 5: Sweep trail (fading arc behind sweep line)
-  static final Paint _radarTrailPaint = Paint()
-    ..style = PaintingStyle.fill;
+  static final Paint _radarTrailPaint = Paint()..style = PaintingStyle.fill;
   // Layer 6: Scan line grid pattern
   static final Paint _radarGridPaint = Paint()
     ..style = PaintingStyle.stroke
@@ -883,7 +900,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Reusable path for radar shapes
   static final Path _radarPath = Path();
   // Random for radar effects
-  static final math.Random _radarRandom = math.Random();
+  static final _FastRng _radarRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // HOLOGRAPHIC CONSTRUCTION EFFECT PAINTS
@@ -945,7 +962,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Reusable path for construction shapes
   static final Path _constructPath = Path();
   // Random for construction effects
-  static final math.Random _constructRandom = math.Random();
+  static final _FastRng _constructRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DAMAGE FRACTURE EFFECT PAINTS
@@ -1004,7 +1021,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Reusable path for fracture shapes
   static final Path _fracturePath = Path();
   // Random for fracture effects
-  static final math.Random _fractureRandom = math.Random();
+  static final _FastRng _fractureRandom = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ENERGY SIPHON BEAM PAINTS (Resonance Siphon - drains energy from enemies)
@@ -1070,7 +1087,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Reusable path for siphon beam
   static final Path _siphonBeamPath = Path();
   // Random for siphon effects
-  static final math.Random _siphonRandom = math.Random();
+  static final _FastRng _siphonRandom = _FastRng();
   // ═══════════════════════════════════════════════════════════════════════════
 
   Tower({
@@ -1085,17 +1102,50 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     double fireRateMultiplier = 1.0,
     double projectileSpeedMultiplier = 1.0,
     double slowMultiplier = 1.0,
-  }) : _fireCooldown = 0,
-       _animationPhase = math.Random().nextDouble() * math.pi * 2,
-       _random = math.Random(),
-       _damageMultiplier = damageMultiplier,
-       _rangeMultiplier = rangeMultiplier,
-       _fireRateMultiplier = fireRateMultiplier,
-       _projectileSpeedMultiplier = projectileSpeedMultiplier,
-       _slowMultiplier = slowMultiplier {
+  })  : _fireCooldown = 0,
+        _animationPhase = _FastRng().nextDouble() * math.pi * 2,
+        _random = _FastRng(),
+        _damageMultiplier = damageMultiplier,
+        _rangeMultiplier = rangeMultiplier,
+        _fireRateMultiplier = fireRateMultiplier,
+        _projectileSpeedMultiplier = projectileSpeedMultiplier,
+        _slowMultiplier = slowMultiplier {
     anchor = Anchor.topLeft;
     this.position = position;
     this.size = Vector2.all(size);
+    _centerPosition = Vector2(
+      this.position.x + (size / 2),
+      this.position.y + (size / 2),
+    );
+    final hsl = HSLColor.fromColor(type.color);
+    _secondaryColor = hsl.withHue((hsl.hue + 60) % 360).toColor();
+    _delayedRippleColor = type.color.withOpacity(0.6);
+    _baseCoreSize = this.size.x * 0.18;
+    final brightColor = Color.lerp(type.color, const Color(0xFFFFFFFF), 0.5)!;
+    _coreGradientShader = RadialGradient(
+      colors: [
+        brightColor,
+        type.color,
+        type.color.withOpacity(0.6),
+        type.color.withOpacity(0.2),
+      ],
+      stops: const [0, 0.35, 0.65, 1],
+    ).createShader(Rect.fromCircle(center: Offset.zero, radius: _baseCoreSize));
+    _localCenter = Offset(this.size.x / 2, this.size.y / 2);
+    _hexBaseOuterPath =
+        NeonEffects.createHexagonPath(_localCenter, this.size.x * 0.45);
+    _hexBaseInnerPath =
+        NeonEffects.createHexagonPath(_localCenter, this.size.x * 0.35);
+    _hexShieldInnerPath =
+        NeonEffects.createHexagonPath(_localCenter, this.size.x * 0.6);
+    _hexShieldOuterPath =
+        NeonEffects.createHexagonPath(_localCenter, this.size.x * 0.75);
+    _megaBaseOuterShader = _megaBaseGradient.createShader(
+      Rect.fromCircle(center: _localCenter, radius: this.size.x * 0.45),
+    );
+    _megaBaseInnerShader = _megaBaseGradient.createShader(
+      Rect.fromCircle(center: _localCenter, radius: this.size.x * 0.35),
+    );
     _initializeParticles();
   }
 
@@ -1103,12 +1153,24 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   TargetMode targetMode;
   TowerFireCallback? onFire;
   final int buildCost;
-  final math.Random _random;
+  final _FastRng _random;
   double _damageMultiplier;
   double _rangeMultiplier;
   double _fireRateMultiplier;
   double _projectileSpeedMultiplier;
   double _slowMultiplier;
+  late final Vector2 _centerPosition;
+  late final Color _secondaryColor;
+  late final Color _delayedRippleColor;
+  late final double _baseCoreSize;
+  late final Shader _coreGradientShader;
+  late final Offset _localCenter;
+  late final Path _hexBaseOuterPath;
+  late final Path _hexBaseInnerPath;
+  late final Path _hexShieldInnerPath;
+  late final Path _hexShieldOuterPath;
+  late final Shader _megaBaseOuterShader;
+  late final Shader _megaBaseInnerShader;
   int _resonanceBoosters = 0;
   bool get _isBoosted => _isManualBoosted || _resonanceBoosters > 0;
   bool _isManualBoosted = false;
@@ -1136,6 +1198,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // Energy wave ripples
   final List<_EnergyWaveRipple> _energyWaveRipples = [];
   static const int _maxRipples = 8;
+  final List<double> _pendingRippleTimers = [];
+  static const double _delayedRippleDelay = 0.08;
 
   // Electric arc points for Phase Mage
   final List<Offset> _arcPoints = [];
@@ -1147,7 +1211,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   // Radar sweep state for detection towers (neuralDisruptor, phaseMage)
   double _radarSweepAngle = 0.0; // Current sweep angle in radians
-  final List<_RadarBlip> _radarBlips = []; // Tracked enemy blips with ping state
+  final List<_RadarBlip> _radarBlips =
+      []; // Tracked enemy blips with ping state
   static const double _radarSweepSpeed = 2.5; // Radians per second
   static const int _maxRadarBlips = 12;
 
@@ -1250,16 +1315,19 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   /// Center position for targeting calculations
-  Vector2 get centerPosition => position + size / 2;
+  Vector2 get centerPosition => _centerPosition;
 
   double get _boostMultiplier => _isBoosted ? 1.2 : 1.0;
 
   /// Get tower stats from type
-  double get damage => type.damage * _damageMultiplier * (_isBoosted ? 2.2 : 1.0);
-  double get fireRate => type.fireRate * _fireRateMultiplier * (_isBoosted ? 2.2 : 1.0);
+  double get damage =>
+      type.damage * _damageMultiplier * (_isBoosted ? 2.2 : 1.0);
+  double get fireRate =>
+      type.fireRate * _fireRateMultiplier * (_isBoosted ? 2.2 : 1.0);
   double get range => type.range * _rangeMultiplier;
   Color get color => type.color;
-  double get projectileSpeed => type.projectileSpeed * _projectileSpeedMultiplier;
+  double get projectileSpeed =>
+      type.projectileSpeed * _projectileSpeedMultiplier;
   double get slowAmount => type.slowAmount * _slowMultiplier;
   double get slowDuration => type.slowDuration;
 
@@ -1298,8 +1366,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   void setResonanceBoost(bool boosted) {
-    if (boosted) _resonanceBoosters++;
-    else _resonanceBoosters = math.max(0, _resonanceBoosters - 1);
+    if (boosted)
+      _resonanceBoosters++;
+    else
+      _resonanceBoosters = math.max(0, _resonanceBoosters - 1);
   }
 
   void resetResonanceBoost() {
@@ -1394,10 +1464,6 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     _fireCooldown -= dt;
 
-    // Animation updates
-    _animationPhase += dt * 2;
-    _pulseAnimation = (math.sin(_animationPhase) + 1) / 2;
-
     // Update fire flash timer
     if (_fireFlashTimer > 0) {
       _fireFlashTimer -= dt;
@@ -1405,6 +1471,60 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         _isFiring = false;
       }
     }
+
+    final game = _cachedGame ?? findGame();
+    final isVisible = game == null ||
+        (game as BoredGamesGame)
+            .isWorldPointVisible(centerPosition, padding: size.x);
+    if (game is BoredGamesGame) {
+      _cachedGame = game;
+    }
+    if (!isVisible) {
+      if (_fireCooldown <= 0 && _chargeLevel < 1) {
+        _chargeLevel = (_chargeLevel + dt * 3).clamp(0, 1);
+      }
+
+      if (_energyWaveRipples.isNotEmpty) {
+        _energyWaveRipples.clear();
+      }
+      if (_pendingRippleTimers.isNotEmpty) {
+        _pendingRippleTimers.clear();
+      }
+
+      if (_slowedEnemies.isNotEmpty) {
+        int slowedWriteIdx = 0;
+        for (int i = 0; i < _slowedEnemies.length; i++) {
+          final e = _slowedEnemies[i];
+          if (e.isAlive && e.isSlowed) {
+            if (slowedWriteIdx != i) _slowedEnemies[slowedWriteIdx] = e;
+            slowedWriteIdx++;
+          }
+        }
+        if (slowedWriteIdx < _slowedEnemies.length) {
+          _slowedEnemies.removeRange(slowedWriteIdx, _slowedEnemies.length);
+        }
+      }
+
+      if (_radarBlips.isNotEmpty) {
+        int blipWriteIdx = 0;
+        for (int i = 0; i < _radarBlips.length; i++) {
+          final blip = _radarBlips[i];
+          if (blip.enemy.isAlive) {
+            if (blipWriteIdx != i) _radarBlips[blipWriteIdx] = blip;
+            blipWriteIdx++;
+          }
+        }
+        if (blipWriteIdx < _radarBlips.length) {
+          _radarBlips.removeRange(blipWriteIdx, _radarBlips.length);
+        }
+      }
+
+      return;
+    }
+
+    // Animation updates
+    _animationPhase += dt * 2;
+    _pulseAnimation = (math.sin(_animationPhase) + 1) / 2;
 
     // Update orbiting particles
     for (final particle in _orbitParticles) {
@@ -1429,6 +1549,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (rippleWriteIdx < _energyWaveRipples.length) {
       _energyWaveRipples.removeRange(rippleWriteIdx, _energyWaveRipples.length);
     }
+    _updateDelayedRipples(dt);
 
     // Generate electric arcs for Phase Mage idle
     if (type == TowerType.phaseMage && _random.nextDouble() < dt * 3) {
@@ -1460,20 +1581,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Update radar sweep for detection towers
     if (type == TowerType.neuralDisruptor || type == TowerType.phaseMage) {
-      final prevAngle = _radarSweepAngle;
       _radarSweepAngle += dt * _radarSweepSpeed;
       if (_radarSweepAngle > math.pi * 2) {
         _radarSweepAngle -= math.pi * 2;
       }
-      // Update blip ping intensities (fade over time)
-      for (final blip in _radarBlips) {
-        blip.pingIntensity = (blip.pingIntensity - dt * 0.8).clamp(0.0, 1.0);
-        blip.lastPingTime += dt;
-      }
-      // Remove dead enemies from blips (single-pass)
+      // Update and compact blips in a single pass.
       int blipWriteIdx = 0;
       for (int i = 0; i < _radarBlips.length; i++) {
         final blip = _radarBlips[i];
+        blip.pingIntensity = (blip.pingIntensity - dt * 0.8).clamp(0.0, 1.0);
+        blip.lastPingTime += dt;
         if (blip.enemy.isAlive) {
           if (blipWriteIdx != i) _radarBlips[blipWriteIdx] = blip;
           blipWriteIdx++;
@@ -1500,8 +1617,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (!_isTargetValid(_currentTarget!)) {
         _currentTarget = null;
       } else {
-        final direction = _currentTarget!.position - centerPosition;
-        final targetAngle = math.atan2(direction.y, direction.x);
+        final center = _centerPosition;
+        final targetPos = _currentTarget!.position;
+        final targetAngle = math.atan2(
+          targetPos.y - center.y,
+          targetPos.x - center.x,
+        );
         // Smooth rotation
         final angleDiff = _normalizeAngle(targetAngle - _rotationAngle);
         _rotationAngle += angleDiff * dt * 8;
@@ -1546,7 +1667,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _arcPoints.add(current);
 
     for (int i = 0; i < 4; i++) {
-      final angle = startAngle + (i + 1) * 0.3 + (_random.nextDouble() - 0.5) * 0.5;
+      final angle =
+          startAngle + (i + 1) * 0.3 + (_random.nextDouble() - 0.5) * 0.5;
       current = Offset(
         math.cos(angle) * (8 + arcLength * (i + 1) / 4),
         math.sin(angle) * (8 + arcLength * (i + 1) / 4),
@@ -1574,10 +1696,6 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       _energyWaveRipples.removeAt(0);
     }
 
-    // Get secondary color for variety
-    final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
-
     // Spawn main expanding ripple
     _energyWaveRipples.add(_EnergyWaveRipple(
       startRadius: size.x * 0.2,
@@ -1593,25 +1711,49 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         startRadius: size.x * 0.15,
         maxRadius: size.x * 0.9,
         duration: 0.3,
-        color: secondaryColor,
+        color: _secondaryColor,
         isDirectional: true,
         direction: _rotationAngle,
         spreadAngle: math.pi / 2, // 90 degree cone
       ));
     }
 
-    // Spawn delayed secondary ripple for echo effect
-    Future.delayed(const Duration(milliseconds: 80), () {
-      if (_energyWaveRipples.length < _maxRipples) {
-        _energyWaveRipples.add(_EnergyWaveRipple(
-          startRadius: size.x * 0.25,
-          maxRadius: size.x * 0.8,
-          duration: 0.35,
-          color: color.withOpacity(0.6),
-          isDirectional: false,
-        ));
+    // Spawn delayed secondary ripple for echo effect (no Future.delayed allocations)
+    _pendingRippleTimers.add(_delayedRippleDelay);
+  }
+
+  void _updateDelayedRipples(double dt) {
+    if (_pendingRippleTimers.isEmpty) return;
+    int writeIdx = 0;
+    for (int i = 0; i < _pendingRippleTimers.length; i++) {
+      final remaining = _pendingRippleTimers[i] - dt;
+      if (remaining <= 0) {
+        _spawnDelayedRipple();
+      } else {
+        if (writeIdx != i) {
+          _pendingRippleTimers[writeIdx] = remaining;
+        } else {
+          _pendingRippleTimers[i] = remaining;
+        }
+        writeIdx++;
       }
-    });
+    }
+    if (writeIdx < _pendingRippleTimers.length) {
+      _pendingRippleTimers.removeRange(writeIdx, _pendingRippleTimers.length);
+    }
+  }
+
+  void _spawnDelayedRipple() {
+    if (_energyWaveRipples.length >= _maxRipples) {
+      _energyWaveRipples.removeAt(0);
+    }
+    _energyWaveRipples.add(_EnergyWaveRipple(
+      startRadius: size.x * 0.25,
+      maxRadius: size.x * 0.8,
+      duration: 0.35,
+      color: _delayedRippleColor,
+      isDirectional: false,
+    ));
   }
 
   double _normalizeAngle(double angle) {
@@ -1708,14 +1850,11 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Calculate lead position for moving target
     final targetPos = _calculateLeadPosition(target);
 
-    // Try to get game time from the game instance
-    try {
-      final game = findGame();
-      if (game != null) {
-        _lastFireTime = (game as dynamic).gameTime ?? 0.0;
-      }
-    } catch (_) {
-      // Fallback: use current time
+    final game = _cachedGame ?? findGame();
+    if (game is BoredGamesGame) {
+      _cachedGame = game;
+      _lastFireTime = game.gameTime;
+    } else {
       _lastFireTime = 0.0;
     }
 
@@ -1728,23 +1867,42 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   Vector2 _calculateLeadPosition(Enemy target) {
-    // Simple leading: predict where enemy will be
-    final distance = (target.position - centerPosition).length;
-    final flightTime = distance / projectileSpeed;
-    final direction = target.position - centerPosition;
-    if (direction.length > 0) {
-      direction.normalize();
+    // Scalar math keeps this fire-path allocation-light.
+    final center = _centerPosition;
+    final targetPos = target.position;
+    final dx = targetPos.x - center.x;
+    final dy = targetPos.y - center.y;
+    final distanceSq = (dx * dx) + (dy * dy);
+    if (distanceSq <= 0.000001 || projectileSpeed <= 0) {
+      return targetPos.clone();
     }
-    // Assume enemy continues in same direction
-    return target.position + (direction * target.speed * flightTime * 0.5);
+
+    final distance = math.sqrt(distanceSq);
+    final invDistance = 1.0 / distance;
+    final flightTime = distance / projectileSpeed;
+    final leadDistance = target.speed * flightTime * 0.5;
+
+    return Vector2(
+      targetPos.x + dx * invDistance * leadDistance,
+      targetPos.y + dy * invDistance * leadDistance,
+    );
   }
 
   @override
   void render(Canvas canvas) {
     super.render(canvas);
 
+    final game = _cachedGame ?? findGame();
+    if (game is BoredGamesGame &&
+        !game.isWorldPointVisible(centerPosition, padding: size.x)) {
+      return;
+    }
+    if (game is BoredGamesGame) {
+      _cachedGame = game;
+    }
+
     final reduceFx = Tower.lowFx;
-    final center = Offset(size.x / 2, size.y / 2);
+    final center = _localCenter;
 
     // CONSTRUCTION MODE: Render holographic construction effect instead of normal tower
     if (_isConstructing) {
@@ -1754,7 +1912,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Simplified construction effect for low-fx mode
         final progress = _constructionProgress;
         final holoColor = Color.lerp(color, const Color(0xFF00FFFF), 0.3)!;
-        _constructProgressPaint.color = holoColor.withOpacity(0.5 + progress * 0.5);
+        _constructProgressPaint.color =
+            holoColor.withOpacity(0.5 + progress * 0.5);
         canvas.drawCircle(center, size.x * 0.4, _constructProgressPaint);
 
         // Simple progress arc
@@ -1801,7 +1960,9 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // LAYER -0.35: Energy web trap effect for slow towers (Phase Mage, Glimmer Field)
-    if (!reduceFx && type.appliesSlow && (_webExpansion > 0.01 || _slowedEnemies.isNotEmpty)) {
+    if (!reduceFx &&
+        type.appliesSlow &&
+        (_webExpansion > 0.01 || _slowedEnemies.isNotEmpty)) {
       _renderEnergyWeb(canvas, center);
     }
 
@@ -1821,7 +1982,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // LAYER -0.05: Radar sweep effect for detection towers (neuralDisruptor, phaseMage)
-    if (!reduceFx && (type == TowerType.neuralDisruptor || type == TowerType.phaseMage)) {
+    if (!reduceFx &&
+        (type == TowerType.neuralDisruptor || type == TowerType.phaseMage)) {
       _renderRadarSweep(canvas, center);
     }
 
@@ -1916,7 +2078,9 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // LAYER 11.6: Energy siphon beam for Resonance Siphon towers
-    if (!reduceFx && type == TowerType.resonanceSiphon && _currentTarget != null) {
+    if (!reduceFx &&
+        type == TowerType.resonanceSiphon &&
+        _currentTarget != null) {
       _renderSiphonBeam(canvas, center);
     }
 
@@ -1935,7 +2099,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       } else {
         // Simplified damage indicator for low-fx mode
         final damageIntensity = 1.0 - (healthPercent * 2); // 0 at 50%, 1 at 0%
-        _fracturePrimaryPaint.color = const Color(0xFFFF4400).withOpacity(0.5 * damageIntensity);
+        _fracturePrimaryPaint.color =
+            const Color(0xFFFF4400).withOpacity(0.5 * damageIntensity);
         canvas.drawCircle(center, size.x * 0.3, _fracturePrimaryPaint);
       }
     }
@@ -1964,21 +2129,22 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _shieldGlowPaint.color = boostColor.withOpacity(0.15 * shieldPulse);
     canvas.drawCircle(center, size.x * 0.85, _shieldGlowPaint);
 
-    // Animated hexagonal shield rings
-    for (int i = 0; i < 2; i++) {
-      final ringRadius = size.x * (0.6 + i * 0.15);
-      final ringAlpha = (0.4 - i * 0.15) * shieldPulse;
-      final hexPath = NeonEffects.createHexagonPath(center, ringRadius);
+    // Animated hexagonal shield rings (cached paths)
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(_animationPhase * 0.5);
+    canvas.translate(-center.dx, -center.dy);
+    _shieldHexPaint.color = boostColor.withOpacity(0.4 * shieldPulse);
+    canvas.drawPath(_hexShieldInnerPath, _shieldHexPaint);
+    canvas.restore();
 
-      canvas.save();
-      canvas.translate(center.dx, center.dy);
-      canvas.rotate(_animationPhase * (i == 0 ? 0.5 : -0.3));
-      canvas.translate(-center.dx, -center.dy);
-
-      _shieldHexPaint.color = boostColor.withOpacity(ringAlpha);
-      canvas.drawPath(hexPath, _shieldHexPaint);
-      canvas.restore();
-    }
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(_animationPhase * -0.3);
+    canvas.translate(-center.dx, -center.dy);
+    _shieldHexPaint.color = boostColor.withOpacity(0.25 * shieldPulse);
+    canvas.drawPath(_hexShieldOuterPath, _shieldHexPaint);
+    canvas.restore();
 
     // Energy particles spiraling around
     for (int i = 0; i < 6; i++) {
@@ -2007,7 +2173,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Conduit glow line
       _conduitGlowPaint.color = color.withOpacity(0.3);
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _conduitGlowPaint);
+      canvas.drawLine(
+          Offset(startX, startY), Offset(endX, endY), _conduitGlowPaint);
 
       // Animated energy pulse along conduit
       final pulseProgress = ((_animationPhase * 2 + i * 0.3) % 1.0);
@@ -2019,7 +2186,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Core conduit line
       _conduitCorePaint.color = color.withOpacity(0.5);
-      canvas.drawLine(Offset(startX, startY), Offset(endX, endY), _conduitCorePaint);
+      canvas.drawLine(
+          Offset(startX, startY), Offset(endX, endY), _conduitCorePaint);
     }
 
     // Junction nodes at hexagon vertices
@@ -2039,10 +2207,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _renderHolographicOverlay(Canvas canvas, Offset center) {
     // Animated scanline effect
-    final scanlineY = center.dy - size.y * 0.3 + ((_animationPhase * 0.5) % 1.0) * size.y * 0.6;
+    final scanlineY = center.dy -
+        size.y * 0.3 +
+        ((_animationPhase * 0.5) % 1.0) * size.y * 0.6;
     _holoScanlinePaint.color = color.withOpacity(0.08);
     canvas.drawRect(
-      Rect.fromCenter(center: Offset(center.dx, scanlineY), width: size.x * 0.7, height: 2),
+      Rect.fromCenter(
+          center: Offset(center.dx, scanlineY), width: size.x * 0.7, height: 2),
       _holoScanlinePaint,
     );
 
@@ -2093,7 +2264,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Plasma wisps orbiting the core
     for (int i = 0; i < 4; i++) {
       final wispAngle = _animationPhase * 3 + i * math.pi / 2;
-      final wispRadius = coreSize * (0.8 + math.sin(_animationPhase * 5 + i) * 0.3);
+      final wispRadius =
+          coreSize * (0.8 + math.sin(_animationPhase * 5 + i) * 0.3);
       final wispX = math.cos(wispAngle) * wispRadius;
       final wispY = math.sin(wispAngle) * wispRadius;
 
@@ -2106,7 +2278,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final trailY = math.sin(trailAngle) * wispRadius * 0.9;
 
       _plasmaSwirlPaint.color = color.withOpacity(0.2);
-      canvas.drawLine(Offset(trailX, trailY), Offset(wispX, wispY), _plasmaSwirlPaint);
+      canvas.drawLine(
+          Offset(trailX, trailY), Offset(wispX, wispY), _plasmaSwirlPaint);
     }
 
     // Inner plasma swirl
@@ -2189,8 +2362,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get color variations using HSL
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 30) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 30) % 360).toColor();
+    final tertiaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
     final brightCore = Color.lerp(color, const Color(0xFFFFFFFF), 0.7)!;
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2276,7 +2451,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final rayBase = Offset(rayBaseX, rayBaseY);
 
       // Ray extends perpendicular to beam
-      final rayLength = (8 + math.sin(_animationPhase * 8 + i) * 6) * flashIntensity;
+      final rayLength =
+          (8 + math.sin(_animationPhase * 8 + i) * 6) * flashIntensity;
       final rayDir = (i % 2 == 0) ? 1.0 : -1.0;
 
       final rayEndX = rayBaseX + math.cos(perpAngle) * rayLength * rayDir;
@@ -2335,15 +2511,18 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Outer pulse glow
       _beamPulsePaint.color = color.withOpacity(pulseAlpha * 0.4);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseSize * 2.5, _beamPulsePaint);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), pulseSize * 2.5, _beamPulsePaint);
 
       // Inner pulse glow
       _beamPulsePaint.color = secondaryColor.withOpacity(pulseAlpha * 0.6);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseSize * 1.5, _beamPulsePaint);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), pulseSize * 1.5, _beamPulsePaint);
 
       // Pulse core
       _beamPulsePaint.color = brightCore.withOpacity(pulseAlpha);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseSize * 0.5, _beamPulsePaint);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), pulseSize * 0.5, _beamPulsePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2368,11 +2547,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
         // Wavy offset perpendicular to beam
         final waveAmp = 3 + math.sin(_animationPhase * 6 + d) * 2;
-        final waveOffset = math.sin(_animationPhase * 12 + segT * 20 + d * 2) * waveAmp;
+        final waveOffset =
+            math.sin(_animationPhase * 12 + segT * 20 + d * 2) * waveAmp;
         final offsetDir = (d % 2 == 0) ? 1.0 : -1.0;
 
-        final px = baseX + math.cos(perpAngle) * waveOffset * offsetDir * (8 + d * 2);
-        final py = baseY + math.sin(perpAngle) * waveOffset * offsetDir * (8 + d * 2);
+        final px =
+            baseX + math.cos(perpAngle) * waveOffset * offsetDir * (8 + d * 2);
+        final py =
+            baseY + math.sin(perpAngle) * waveOffset * offsetDir * (8 + d * 2);
 
         if (s == 0) {
           _beamPath.moveTo(px, py);
@@ -2446,7 +2628,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Animation values
     final beamPulse = 0.7 + math.sin(_animationPhase * 8) * 0.3;
-    final flowSpeed = _animationPhase * 3; // Energy flowing from target to tower
+    final flowSpeed =
+        _animationPhase * 3; // Energy flowing from target to tower
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: MAIN BEAM CONNECTION (Wavy line between entities)
@@ -2475,11 +2658,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     }
 
     // Draw outer glow first (behind)
-    _siphonBeamOuterGlowPaint.color = siphonPrimaryColor.withOpacity(0.15 * beamPulse);
+    _siphonBeamOuterGlowPaint.color =
+        siphonPrimaryColor.withOpacity(0.15 * beamPulse);
     canvas.drawPath(_siphonBeamPath, _siphonBeamOuterGlowPaint);
 
     // Draw inner glow
-    _siphonBeamGlowPaint.color = siphonSecondaryColor.withOpacity(0.3 * beamPulse);
+    _siphonBeamGlowPaint.color =
+        siphonSecondaryColor.withOpacity(0.3 * beamPulse);
     canvas.drawPath(_siphonBeamPath, _siphonBeamGlowPaint);
 
     // Draw core beam
@@ -2494,8 +2679,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final glowX = center.dx + beamDir.dx * beamLength * t;
       final glowY = center.dy + beamDir.dy * beamLength * t;
       final glowSize = 12 + math.sin(_animationPhase * 4 + t * 8) * 4;
-      _siphonBeamOuterGlowPaint.color = siphonPrimaryColor.withOpacity(0.08 * beamPulse);
-      canvas.drawCircle(Offset(glowX, glowY), glowSize, _siphonBeamOuterGlowPaint);
+      _siphonBeamOuterGlowPaint.color =
+          siphonPrimaryColor.withOpacity(0.08 * beamPulse);
+      canvas.drawCircle(
+          Offset(glowX, glowY), glowSize, _siphonBeamOuterGlowPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2525,7 +2712,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final trailLength = 8 * particleT;
       final trailEndX = particleX + beamDir.dx * trailLength;
       final trailEndY = particleY + beamDir.dy * trailLength;
-      _siphonParticleTrailPaint.color = siphonSecondaryColor.withOpacity(particleAlpha * 0.3);
+      _siphonParticleTrailPaint.color =
+          siphonSecondaryColor.withOpacity(particleAlpha * 0.3);
       canvas.drawLine(
         Offset(particleX, particleY),
         Offset(trailEndX, trailEndY),
@@ -2533,12 +2721,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
 
       // Draw particle glow
-      _siphonParticlePaint.color = siphonPrimaryColor.withOpacity(particleAlpha * 0.5);
-      canvas.drawCircle(Offset(particleX, particleY), particleSize * 2, _siphonParticlePaint);
+      _siphonParticlePaint.color =
+          siphonPrimaryColor.withOpacity(particleAlpha * 0.5);
+      canvas.drawCircle(
+          Offset(particleX, particleY), particleSize * 2, _siphonParticlePaint);
 
       // Draw particle core
-      _siphonParticleCorePaint.color = siphonCoreColor.withOpacity(particleAlpha);
-      canvas.drawCircle(Offset(particleX, particleY), particleSize, _siphonParticleCorePaint);
+      _siphonParticleCorePaint.color =
+          siphonCoreColor.withOpacity(particleAlpha);
+      canvas.drawCircle(
+          Offset(particleX, particleY), particleSize, _siphonParticleCorePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2547,15 +2739,18 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final accumulationPulse = 0.6 + math.sin(_animationPhase * 10) * 0.4;
 
     // Outer accumulation glow
-    _siphonAccumulationGlowPaint.color = siphonPrimaryColor.withOpacity(0.2 * accumulationPulse);
+    _siphonAccumulationGlowPaint.color =
+        siphonPrimaryColor.withOpacity(0.2 * accumulationPulse);
     canvas.drawCircle(center, 18, _siphonAccumulationGlowPaint);
 
     // Mid accumulation glow
-    _siphonAccumulationCorePaint.color = siphonSecondaryColor.withOpacity(0.35 * accumulationPulse);
+    _siphonAccumulationCorePaint.color =
+        siphonSecondaryColor.withOpacity(0.35 * accumulationPulse);
     canvas.drawCircle(center, 12, _siphonAccumulationCorePaint);
 
     // Bright core at tower center
-    _siphonAccumulationCorePaint.color = siphonCoreColor.withOpacity(0.6 * accumulationPulse);
+    _siphonAccumulationCorePaint.color =
+        siphonCoreColor.withOpacity(0.6 * accumulationPulse);
     canvas.drawCircle(center, 6, _siphonAccumulationCorePaint);
 
     // Pulsing rings around accumulation
@@ -2563,7 +2758,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final ringPhase = (_animationPhase * 3 + r * 0.5) % 1.0;
       final ringRadius = 8 + ringPhase * 12;
       final ringAlpha = (1.0 - ringPhase) * 0.4 * accumulationPulse;
-      _siphonAccumulationRingPaint.color = siphonSecondaryColor.withOpacity(ringAlpha);
+      _siphonAccumulationRingPaint.color =
+          siphonSecondaryColor.withOpacity(ringAlpha);
       canvas.drawCircle(center, ringRadius, _siphonAccumulationRingPaint);
     }
 
@@ -2573,7 +2769,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final drainPulse = 0.5 + math.sin(_animationPhase * 8 + math.pi) * 0.5;
 
     // Outer drain glow - dimmer, shows energy being extracted
-    _siphonDrainGlowPaint.color = siphonDrainColor.withOpacity(0.25 * drainPulse);
+    _siphonDrainGlowPaint.color =
+        siphonDrainColor.withOpacity(0.25 * drainPulse);
     canvas.drawCircle(targetOffset, 15, _siphonDrainGlowPaint);
 
     // Drain vortex spirals - energy being sucked out
@@ -2597,12 +2794,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       }
 
       final vortexAlpha = 0.5 * drainPulse * (1.0 - v * 0.2);
-      _siphonDrainVortexPaint.color = siphonSecondaryColor.withOpacity(vortexAlpha);
+      _siphonDrainVortexPaint.color =
+          siphonSecondaryColor.withOpacity(vortexAlpha);
       canvas.drawPath(_siphonBeamPath, _siphonDrainVortexPaint);
     }
 
     // Inner drain point - darker center
-    _siphonDrainGlowPaint.color = siphonDrainColor.withOpacity(0.4 * drainPulse);
+    _siphonDrainGlowPaint.color =
+        siphonDrainColor.withOpacity(0.4 * drainPulse);
     canvas.drawCircle(targetOffset, 5, _siphonDrainGlowPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2622,21 +2821,29 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final pulseRadius = 5 + pulseIntensity * 4;
 
       // Outer pulse glow
-      _siphonPulseWavePaint.color = siphonPrimaryColor.withOpacity(0.3 * pulseIntensity);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseRadius * 2, _siphonPulseWavePaint);
+      _siphonPulseWavePaint.color =
+          siphonPrimaryColor.withOpacity(0.3 * pulseIntensity);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), pulseRadius * 2, _siphonPulseWavePaint);
 
       // Inner pulse glow
-      _siphonPulseWavePaint.color = siphonSecondaryColor.withOpacity(0.5 * pulseIntensity);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseRadius, _siphonPulseWavePaint);
+      _siphonPulseWavePaint.color =
+          siphonSecondaryColor.withOpacity(0.5 * pulseIntensity);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), pulseRadius, _siphonPulseWavePaint);
 
       // Pulse core
-      _siphonPulseWavePaint.color = siphonCoreColor.withOpacity(0.7 * pulseIntensity);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseRadius * 0.4, _siphonPulseWavePaint);
+      _siphonPulseWavePaint.color =
+          siphonCoreColor.withOpacity(0.7 * pulseIntensity);
+      canvas.drawCircle(
+          Offset(pulseX, pulseY), pulseRadius * 0.4, _siphonPulseWavePaint);
 
       // Expanding ring at pulse position
       final ringExpand = pulseIntensity * 8;
-      _siphonPulseRingPaint.color = siphonSecondaryColor.withOpacity(0.25 * pulseIntensity);
-      canvas.drawCircle(Offset(pulseX, pulseY), pulseRadius + ringExpand, _siphonPulseRingPaint);
+      _siphonPulseRingPaint.color =
+          siphonSecondaryColor.withOpacity(0.25 * pulseIntensity);
+      canvas.drawCircle(Offset(pulseX, pulseY), pulseRadius + ringExpand,
+          _siphonPulseRingPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -2646,7 +2853,9 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final electricFlicker = 0.5 + _siphonRandom.nextDouble() * 0.5;
     if (electricFlicker > 0.6) {
       for (int e = 0; e < 4; e++) {
-        final arcAngle = _animationPhase * 12 + e * math.pi / 2 + _siphonRandom.nextDouble() * 0.5;
+        final arcAngle = _animationPhase * 12 +
+            e * math.pi / 2 +
+            _siphonRandom.nextDouble() * 0.5;
         final arcLength = 8 + _siphonRandom.nextDouble() * 6;
 
         _siphonBeamPath.reset();
@@ -2666,16 +2875,19 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         }
 
         // Draw electric arc glow
-        _siphonElectricGlowPaint.color = siphonPrimaryColor.withOpacity(0.4 * electricFlicker);
+        _siphonElectricGlowPaint.color =
+            siphonPrimaryColor.withOpacity(0.4 * electricFlicker);
         canvas.drawPath(_siphonBeamPath, _siphonElectricGlowPaint);
 
         // Draw electric arc core
-        _siphonElectricCorePaint.color = siphonCoreColor.withOpacity(0.8 * electricFlicker);
+        _siphonElectricCorePaint.color =
+            siphonCoreColor.withOpacity(0.8 * electricFlicker);
         canvas.drawPath(_siphonBeamPath, _siphonElectricCorePaint);
       }
 
       // Spark at tower end
-      _siphonElectricSparkPaint.color = siphonCoreColor.withOpacity(0.7 * electricFlicker);
+      _siphonElectricSparkPaint.color =
+          siphonCoreColor.withOpacity(0.7 * electricFlicker);
       canvas.drawCircle(center, 3, _siphonElectricSparkPaint);
     }
 
@@ -2683,7 +2895,9 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final targetElectricFlicker = 0.5 + _siphonRandom.nextDouble() * 0.5;
     if (targetElectricFlicker > 0.55) {
       for (int e = 0; e < 3; e++) {
-        final arcAngle = _animationPhase * -10 + e * math.pi * 2 / 3 + _siphonRandom.nextDouble() * 0.6;
+        final arcAngle = _animationPhase * -10 +
+            e * math.pi * 2 / 3 +
+            _siphonRandom.nextDouble() * 0.6;
         final arcLength = 6 + _siphonRandom.nextDouble() * 5;
 
         _siphonBeamPath.reset();
@@ -2703,16 +2917,19 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         }
 
         // Draw electric arc glow
-        _siphonElectricGlowPaint.color = siphonDrainColor.withOpacity(0.35 * targetElectricFlicker);
+        _siphonElectricGlowPaint.color =
+            siphonDrainColor.withOpacity(0.35 * targetElectricFlicker);
         canvas.drawPath(_siphonBeamPath, _siphonElectricGlowPaint);
 
         // Draw electric arc core
-        _siphonElectricCorePaint.color = siphonSecondaryColor.withOpacity(0.7 * targetElectricFlicker);
+        _siphonElectricCorePaint.color =
+            siphonSecondaryColor.withOpacity(0.7 * targetElectricFlicker);
         canvas.drawPath(_siphonBeamPath, _siphonElectricCorePaint);
       }
 
       // Spark at target end
-      _siphonElectricSparkPaint.color = siphonSecondaryColor.withOpacity(0.6 * targetElectricFlicker);
+      _siphonElectricSparkPaint.color =
+          siphonSecondaryColor.withOpacity(0.6 * targetElectricFlicker);
       canvas.drawCircle(targetOffset, 2.5, _siphonElectricSparkPaint);
     }
   }
@@ -2774,14 +2991,17 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           _phaseArcPaint.color = color.withOpacity(0.6);
 
           _tempPath1.reset();
-          _tempPath1.moveTo(center.dx + _arcPoints[0].dx, center.dy + _arcPoints[0].dy);
+          _tempPath1.moveTo(
+              center.dx + _arcPoints[0].dx, center.dy + _arcPoints[0].dy);
           for (int i = 1; i < _arcPoints.length; i++) {
-            _tempPath1.lineTo(center.dx + _arcPoints[i].dx, center.dy + _arcPoints[i].dy);
+            _tempPath1.lineTo(
+                center.dx + _arcPoints[i].dx, center.dy + _arcPoints[i].dy);
           }
           canvas.drawPath(_tempPath1, _phaseArcPaint);
 
           // Glow at arc tips
-          _tempOffset1 = Offset(center.dx + _arcPoints.last.dx, center.dy + _arcPoints.last.dy);
+          _tempOffset1 = Offset(
+              center.dx + _arcPoints.last.dx, center.dy + _arcPoints.last.dy);
           _glowDotPaint.color = color.withOpacity(0.8);
           canvas.drawCircle(_tempOffset1, 3, _glowDotPaint);
         }
@@ -2816,7 +3036,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Rapid flickering particles in a field
         for (int i = 0; i < 8; i++) {
           final sparkAngle = _animationPhase * 4 + i * math.pi / 4;
-          final sparkRadius = size.x * (0.35 + math.sin(_animationPhase * 6 + i) * 0.15);
+          final sparkRadius =
+              size.x * (0.35 + math.sin(_animationPhase * 6 + i) * 0.15);
           final sparkX = center.dx + math.cos(sparkAngle) * sparkRadius;
           final sparkY = center.dy + math.sin(sparkAngle) * sparkRadius;
           final sparkAlpha = 0.4 + math.sin(_animationPhase * 8 + i * 2) * 0.4;
@@ -2875,7 +3096,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       case TowerType.neuralDisruptor:
         // Static noise field
         if (_random.nextDouble() < 0.2) {
-          _tempRect = Rect.fromCenter(center: center, width: size.x * 0.8, height: 2);
+          _tempRect =
+              Rect.fromCenter(center: center, width: size.x * 0.8, height: 2);
           _noisePaint.color = color.withOpacity(0.3);
           canvas.drawRect(_tempRect, _noisePaint);
         }
@@ -2885,7 +3107,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Wobbling plasma orbs orbiting the tower
         for (int i = 0; i < 4; i++) {
           final orbitAngle = _animationPhase * 2 + i * math.pi / 2;
-          final orbitRadius = size.x * 0.4 + math.sin(_animationPhase * 3 + i) * 4;
+          final orbitRadius =
+              size.x * 0.4 + math.sin(_animationPhase * 3 + i) * 4;
           final orbX = center.dx + math.cos(orbitAngle) * orbitRadius;
           final orbY = center.dy + math.sin(orbitAngle) * orbitRadius;
           final orbAlpha = 0.4 + math.sin(_animationPhase * 4 + i * 0.5) * 0.2;
@@ -2893,7 +3116,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
             ..color = color.withOpacity(orbAlpha)
             ..style = PaintingStyle.fill
             ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-          canvas.drawCircle(Offset(orbX, orbY), 3 + math.sin(_animationPhase * 5 + i) * 1, _pulseRingPaint);
+          canvas.drawCircle(Offset(orbX, orbY),
+              3 + math.sin(_animationPhase * 5 + i) * 1, _pulseRingPaint);
         }
         break;
     }
@@ -2905,19 +3129,19 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   );
 
   void _renderMegaBase(Canvas canvas, Offset center) {
-    for (int i = 0; i < 2; i++) {
-      final radius = size.x * (0.45 - i * 0.1);
-      final hexPath = NeonEffects.createHexagonPath(center, radius);
+    _basePaint.shader = _megaBaseOuterShader;
+    canvas.drawPath(_hexBaseOuterPath, _basePaint);
+    _baseBorderPaint
+      ..color = color.withOpacity(0.6 + _pulseAnimation * 0.2)
+      ..strokeWidth = 2;
+    canvas.drawPath(_hexBaseOuterPath, _baseBorderPaint);
 
-      _tempRect = Rect.fromCircle(center: center, radius: radius);
-      _basePaint.shader = _megaBaseGradient.createShader(_tempRect);
-      canvas.drawPath(hexPath, _basePaint);
-
-      _baseBorderPaint
-        ..color = color.withOpacity((0.6 - i * 0.2) + _pulseAnimation * 0.2)
-        ..strokeWidth = 2 - i * 0.5;
-      canvas.drawPath(hexPath, _baseBorderPaint);
-    }
+    _basePaint.shader = _megaBaseInnerShader;
+    canvas.drawPath(_hexBaseInnerPath, _basePaint);
+    _baseBorderPaint
+      ..color = color.withOpacity(0.4 + _pulseAnimation * 0.2)
+      ..strokeWidth = 1.5;
+    canvas.drawPath(_hexBaseInnerPath, _baseBorderPaint);
   }
 
   void _renderBaseTrim(Canvas canvas, Offset center) {
@@ -2976,7 +3200,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           _tempRect = Rect.fromCircle(center: center, radius: ringRadius);
           for (int i = 0; i < 4; i++) {
             final startAngle = i * math.pi / 2 + _animationPhase * 0.5;
-            canvas.drawArc(_tempRect, startAngle, math.pi / 4, false, _decorArcPaint);
+            canvas.drawArc(
+                _tempRect, startAngle, math.pi / 4, false, _decorArcPaint);
           }
         }
         break;
@@ -3016,8 +3241,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final angle = i * math.pi / 4 + _animationPhase;
           final cosA = math.cos(angle);
           final sinA = math.sin(angle);
-          _tempOffset1 = Offset(center.dx + cosA * inner, center.dy + sinA * inner);
-          _tempOffset2 = Offset(center.dx + cosA * outer, center.dy + sinA * outer);
+          _tempOffset1 =
+              Offset(center.dx + cosA * inner, center.dy + sinA * inner);
+          _tempOffset2 =
+              Offset(center.dx + cosA * outer, center.dy + sinA * outer);
           canvas.drawLine(_tempOffset1, _tempOffset2, _decorLinePaint);
         }
         break;
@@ -3048,7 +3275,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         _decorTrianglePaint.color = color;
         for (int i = 0; i < 3; i++) {
           final angle = i * 2 * math.pi / 3 + _animationPhase;
-          _tempOffset1 = Offset(center.dx + math.cos(angle) * 15, center.dy + math.sin(angle) * 15);
+          _tempOffset1 = Offset(center.dx + math.cos(angle) * 15,
+              center.dy + math.sin(angle) * 15);
           canvas.drawCircle(_tempOffset1, 3, _decorTrianglePaint);
         }
         break;
@@ -3064,7 +3292,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final bubbleRadius = size.x * 0.3;
           final bx = center.dx + math.cos(bubbleAngle) * bubbleRadius;
           final by = center.dy + math.sin(bubbleAngle) * bubbleRadius;
-          _decorCirclePaint.color = color.withOpacity(0.25 + math.sin(_animationPhase * 3 + i) * 0.1);
+          _decorCirclePaint.color =
+              color.withOpacity(0.25 + math.sin(_animationPhase * 3 + i) * 0.1);
           canvas.drawCircle(Offset(bx, by), 4, _decorCirclePaint);
         }
         break;
@@ -3073,19 +3302,24 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _renderEnergyCore(Canvas canvas) {
     // Pulse faster when charging/firing
-    final pulseSpeed = _isFiring ? 8.0 : (_chargeLevel > 0 ? 4.0 + _chargeLevel * 4.0 : 2.0);
+    final pulseSpeed =
+        _isFiring ? 8.0 : (_chargeLevel > 0 ? 4.0 + _chargeLevel * 4.0 : 2.0);
     final corePulse = math.sin(_animationPhase * pulseSpeed);
     final baseCoreSize = size.x * 0.18;
-    final coreSize = baseCoreSize + (_chargeLevel * size.x * 0.06) + corePulse * baseCoreSize * 0.1;
+    final coreSize = baseCoreSize +
+        (_chargeLevel * size.x * 0.06) +
+        corePulse * baseCoreSize * 0.1;
     final reduceFx = Tower.lowFx;
 
     // ═══════════════════════════════════════════════════════════════════════════
     // LAYER 6: Core intensity pulse based on charge level (background flash)
     // ═══════════════════════════════════════════════════════════════════════════
     if (!reduceFx && (_chargeLevel > 0.3 || _isFiring)) {
-      final intensityPulse = math.sin(_animationPhase * pulseSpeed * 1.5) * 0.5 + 0.5;
+      final intensityPulse =
+          math.sin(_animationPhase * pulseSpeed * 1.5) * 0.5 + 0.5;
       final flashIntensity = _isFiring ? 0.4 : _chargeLevel * 0.3;
-      _energyCoreIntensityPaint.color = color.withOpacity(flashIntensity * intensityPulse);
+      _energyCoreIntensityPaint.color =
+          color.withOpacity(flashIntensity * intensityPulse);
       canvas.drawCircle(Offset.zero, coreSize * 2.5, _energyCoreIntensityPaint);
 
       // Extra flash burst when firing
@@ -3110,8 +3344,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         _ => 4
       };
       for (int i = 0; i < tendrilCount; i++) {
-        final baseAngle = (i * 2 * math.pi / tendrilCount) + _animationPhase * 1.5;
-        final tendrilLength = coreSize * (1.2 + corePulse * 0.3 + _chargeLevel * 0.5);
+        final baseAngle =
+            (i * 2 * math.pi / tendrilCount) + _animationPhase * 1.5;
+        final tendrilLength =
+            coreSize * (1.2 + corePulse * 0.3 + _chargeLevel * 0.5);
 
         // Build tendril path with sine wave distortion
         _energyCorePath.reset();
@@ -3122,7 +3358,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final t = s / segments;
           final dist = tendrilLength * t;
           // Tendril wiggles with phase offset
-          final wiggle = math.sin(_animationPhase * 6 + t * math.pi * 3 + i) * (5 * t);
+          final wiggle =
+              math.sin(_animationPhase * 6 + t * math.pi * 3 + i) * (5 * t);
           final perpAngle = baseAngle + math.pi / 2;
           final px = math.cos(baseAngle) * dist + math.cos(perpAngle) * wiggle;
           final py = math.sin(baseAngle) * dist + math.sin(perpAngle) * wiggle;
@@ -3130,11 +3367,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         }
 
         // Tendril glow
-        _energyCoreTendrilGlowPaint.color = color.withOpacity(0.15 + _chargeLevel * 0.1);
+        _energyCoreTendrilGlowPaint.color =
+            color.withOpacity(0.15 + _chargeLevel * 0.1);
         canvas.drawPath(_energyCorePath, _energyCoreTendrilGlowPaint);
 
         // Tendril core
-        _energyCoreTendrilPaint.color = color.withOpacity(0.4 + _chargeLevel * 0.2);
+        _energyCoreTendrilPaint.color =
+            color.withOpacity(0.4 + _chargeLevel * 0.2);
         canvas.drawPath(_energyCorePath, _energyCoreTendrilPaint);
       }
     }
@@ -3146,7 +3385,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       const conduitCount = 6;
       final conduitLength = size.x * 0.35;
       for (int i = 0; i < conduitCount; i++) {
-        final angle = (i * math.pi / 3) + math.pi / 6; // Offset to align with hexagon edges
+        final angle = (i * math.pi / 3) +
+            math.pi / 6; // Offset to align with hexagon edges
 
         // Animated energy pulse along conduit
         final pulseProgress = ((_animationPhase * 3 + i * 0.2) % 1.0);
@@ -3158,18 +3398,21 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
         // Conduit glow
         _energyCoreConduitGlowPaint.color = color.withOpacity(0.15);
-        canvas.drawLine(Offset.zero, Offset(endX, endY), _energyCoreConduitGlowPaint);
+        canvas.drawLine(
+            Offset.zero, Offset(endX, endY), _energyCoreConduitGlowPaint);
 
         // Conduit core
         _energyCoreConduitPaint.color = color.withOpacity(0.4);
-        canvas.drawLine(Offset.zero, Offset(endX, endY), _energyCoreConduitPaint);
+        canvas.drawLine(
+            Offset.zero, Offset(endX, endY), _energyCoreConduitPaint);
 
         // Energy pulse traveling along conduit
         final pulseX = math.cos(angle) * pulsePos;
         final pulseY = math.sin(angle) * pulsePos;
         final pulseBrightness = 0.5 + corePulse * 0.3;
         _energyCoreConduitNodePaint.color = color.withOpacity(pulseBrightness);
-        canvas.drawCircle(Offset(pulseX, pulseY), 2.5 + _chargeLevel * 1.5, _energyCoreConduitNodePaint);
+        canvas.drawCircle(Offset(pulseX, pulseY), 2.5 + _chargeLevel * 1.5,
+            _energyCoreConduitNodePaint);
 
         // Node at conduit end
         final nodePulse = math.sin(_animationPhase * 4 + i * 1.2) * 0.3 + 0.5;
@@ -3187,7 +3430,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Each particle orbits at different speed and radius
         final orbitSpeed = 2.0 + (i % 3) * 0.5;
         final orbitRadius = coreSize * (0.9 + (i % 4) * 0.15);
-        final particleAngle = _animationPhase * orbitSpeed + (i * 2 * math.pi / particleCount);
+        final particleAngle =
+            _animationPhase * orbitSpeed + (i * 2 * math.pi / particleCount);
 
         // Particle position with slight vertical oscillation for 3D effect
         final verticalOffset = math.sin(_animationPhase * 3 + i * 0.8) * 2;
@@ -3197,16 +3441,20 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Particle trail
         final trailAngle = particleAngle - 0.4;
         final trailX = math.cos(trailAngle) * orbitRadius * 0.95;
-        final trailY = math.sin(trailAngle) * orbitRadius * 0.95 + verticalOffset * 0.8;
+        final trailY =
+            math.sin(trailAngle) * orbitRadius * 0.95 + verticalOffset * 0.8;
 
         _energyCoreParticleTrailPaint.color = color.withOpacity(0.2);
-        canvas.drawLine(Offset(trailX, trailY), Offset(px, py), _energyCoreParticleTrailPaint);
+        canvas.drawLine(Offset(trailX, trailY), Offset(px, py),
+            _energyCoreParticleTrailPaint);
 
         // Particle glow
-        final particleBrightness = 0.4 + math.sin(_animationPhase * 5 + i) * 0.2;
+        final particleBrightness =
+            0.4 + math.sin(_animationPhase * 5 + i) * 0.2;
         final particleSize = 2.0 + _chargeLevel * 1.5;
         _energyCoreParticlePaint.color = color.withOpacity(particleBrightness);
-        canvas.drawCircle(Offset(px, py), particleSize, _energyCoreParticlePaint);
+        canvas.drawCircle(
+            Offset(px, py), particleSize, _energyCoreParticlePaint);
       }
     }
 
@@ -3272,36 +3520,33 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════════
     // Outer glow
     if (!reduceFx) {
-      _energyCoreInnerGlowPaint.color = color.withOpacity(0.25 + corePulse * 0.1 + _chargeLevel * 0.15);
+      _energyCoreInnerGlowPaint.color =
+          color.withOpacity(0.25 + corePulse * 0.1 + _chargeLevel * 0.15);
       canvas.drawCircle(Offset.zero, coreSize * 1.6, _energyCoreInnerGlowPaint);
     }
 
-    // Core gradient sphere
-    final brightColor = Color.lerp(color, const Color(0xFFFFFFFF), 0.5)!;
-    _tempRect = Rect.fromCircle(center: Offset.zero, radius: coreSize);
-    final coreGradient = RadialGradient(
-      colors: [
-        brightColor,
-        color,
-        color.withOpacity(0.6),
-        color.withOpacity(0.2),
-      ],
-      stops: const [0, 0.35, 0.65, 1],
-    ).createShader(_tempRect);
-
-    _energyCoreSpherePaint.shader = coreGradient;
-    canvas.drawCircle(Offset.zero, coreSize, _energyCoreSpherePaint);
+    // Core gradient sphere (cached shader + scale to avoid per-frame createShader)
+    final scale = coreSize / _baseCoreSize;
+    _energyCoreSpherePaint.shader = _coreGradientShader;
+    canvas.save();
+    canvas.scale(scale);
+    canvas.drawCircle(Offset.zero, _baseCoreSize, _energyCoreSpherePaint);
+    canvas.restore();
 
     // Bright center highlight
     final centerPulse = 0.7 + corePulse * 0.2 + _chargeLevel * 0.1;
-    _energyCoreBrightCenterPaint.color = const Color(0xFFFFFFFF).withOpacity(centerPulse);
-    canvas.drawCircle(Offset.zero, coreSize * 0.35, _energyCoreBrightCenterPaint);
+    _energyCoreBrightCenterPaint.color =
+        const Color(0xFFFFFFFF).withOpacity(centerPulse);
+    canvas.drawCircle(
+        Offset.zero, coreSize * 0.35, _energyCoreBrightCenterPaint);
 
     // Inner spark highlight (offset for 3D effect)
     if (!reduceFx) {
       final sparkOffset = Offset(-coreSize * 0.15, -coreSize * 0.15);
-      _energyCoreBrightCenterPaint.color = const Color(0xFFFFFFFF).withOpacity(0.6);
-      canvas.drawCircle(sparkOffset, coreSize * 0.12, _energyCoreBrightCenterPaint);
+      _energyCoreBrightCenterPaint.color =
+          const Color(0xFFFFFFFF).withOpacity(0.6);
+      canvas.drawCircle(
+          sparkOffset, coreSize * 0.12, _energyCoreBrightCenterPaint);
     }
 
     // Rotating Energy Arms (kept from original for continuity)
@@ -3313,8 +3558,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _coreArmPaint.color = color.withOpacity(0.5 + _chargeLevel * 0.2);
     final armLength = coreSize * (1.1 + _chargeLevel * 0.3);
     for (int i = 0; i < arms; i++) {
-      final angle = (i * 2 * math.pi / arms) + _animationPhase * pulseSpeed * 0.5;
-      _tempOffset1 = Offset(math.cos(angle) * armLength, math.sin(angle) * armLength);
+      final angle =
+          (i * 2 * math.pi / arms) + _animationPhase * pulseSpeed * 0.5;
+      _tempOffset1 =
+          Offset(math.cos(angle) * armLength, math.sin(angle) * armLength);
       canvas.drawLine(Offset.zero, _tempOffset1, _coreArmPaint);
     }
   }
@@ -3322,7 +3569,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   void _renderTurretHead(Canvas canvas) {
     final s = size.x;
     _turretFillPaint.color = color.withOpacity(0.55);
-    _turretAccentPaint.color = Colors.white.withOpacity(0.35 + _pulseAnimation * 0.2);
+    _turretAccentPaint.color =
+        Colors.white.withOpacity(0.35 + _pulseAnimation * 0.2);
     _turretStrokePaint.color = color.withOpacity(0.9);
 
     switch (type) {
@@ -3351,7 +3599,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       case TowerType.circuitCannon:
         final barrelRect = RRect.fromRectAndRadius(
-          Rect.fromCenter(center: Offset(s * 0.25, 0), width: s * 0.5, height: s * 0.18),
+          Rect.fromCenter(
+              center: Offset(s * 0.25, 0), width: s * 0.5, height: s * 0.18),
           Radius.circular(s * 0.05),
         );
         canvas.drawRRect(barrelRect, _turretFillPaint);
@@ -3390,7 +3639,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final petalRadius = s * 0.34;
         for (int i = -1; i <= 1; i++) {
           final angle = i * 0.35;
-          _tempOffset1 = Offset(math.cos(angle) * petalRadius, math.sin(angle) * petalRadius);
+          _tempOffset1 = Offset(
+              math.cos(angle) * petalRadius, math.sin(angle) * petalRadius);
           canvas.drawCircle(_tempOffset1, s * 0.06, _turretPetalPaint);
           canvas.drawCircle(_tempOffset1, s * 0.06, _turretStrokePaint);
         }
@@ -3441,7 +3691,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         break;
 
       case TowerType.neuralDisruptor:
-        _tempRect = Rect.fromCenter(center: Offset(s * 0.22, 0), width: s * 0.24, height: s * 0.24);
+        _tempRect = Rect.fromCenter(
+            center: Offset(s * 0.22, 0), width: s * 0.24, height: s * 0.24);
         canvas.drawRect(_tempRect, _turretFillPaint);
         canvas.drawRect(_tempRect, _turretStrokePaint);
         _tempRect = Rect.fromLTWH(s * 0.38, -s * 0.05, s * 0.12, s * 0.1);
@@ -3473,7 +3724,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get secondary color for visual variety
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 60) % 360).toColor();
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: HOLOGRAPHIC TARGETING BEAM
@@ -3506,7 +3758,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       }
 
       // Data particle core
-      _targetDashPaint.color = const Color(0xFFFFFFFF).withOpacity(dashAlpha * 0.7);
+      _targetDashPaint.color =
+          const Color(0xFFFFFFFF).withOpacity(dashAlpha * 0.7);
       canvas.drawCircle(Offset(dashPos, 0), 1.5, _targetDashPaint);
     }
 
@@ -3518,7 +3771,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     if (!Tower.lowFx) {
       _holoReticleFillPaint.color = color.withOpacity(0.15);
-      canvas.drawCircle(reticleCenter, reticleRadius * 1.5, _holoReticleFillPaint);
+      canvas.drawCircle(
+          reticleCenter, reticleRadius * 1.5, _holoReticleFillPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -3580,12 +3834,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _targetCrosshairPaint.color = color.withOpacity(crosshairAlpha);
 
     // Horizontal crosshairs
-    canvas.drawLine(Offset(-crosshairLength, 0), Offset(-crosshairGap, 0), _targetCrosshairPaint);
-    canvas.drawLine(Offset(crosshairGap, 0), Offset(crosshairLength, 0), _targetCrosshairPaint);
+    canvas.drawLine(Offset(-crosshairLength, 0), Offset(-crosshairGap, 0),
+        _targetCrosshairPaint);
+    canvas.drawLine(Offset(crosshairGap, 0), Offset(crosshairLength, 0),
+        _targetCrosshairPaint);
 
     // Vertical crosshairs
-    canvas.drawLine(Offset(0, -crosshairLength), Offset(0, -crosshairGap), _targetCrosshairPaint);
-    canvas.drawLine(Offset(0, crosshairGap), Offset(0, crosshairLength), _targetCrosshairPaint);
+    canvas.drawLine(Offset(0, -crosshairLength), Offset(0, -crosshairGap),
+        _targetCrosshairPaint);
+    canvas.drawLine(Offset(0, crosshairGap), Offset(0, crosshairLength),
+        _targetCrosshairPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 7: CORNER BRACKETS
@@ -3596,20 +3854,44 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _holoReticleDataPaint.color = color.withOpacity(0.7);
 
     // Top-left bracket
-    canvas.drawLine(Offset(-bracketSize, -bracketSize), Offset(-bracketSize + bracketLength, -bracketSize), _holoReticleDataPaint);
-    canvas.drawLine(Offset(-bracketSize, -bracketSize), Offset(-bracketSize, -bracketSize + bracketLength), _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(-bracketSize, -bracketSize),
+        Offset(-bracketSize + bracketLength, -bracketSize),
+        _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(-bracketSize, -bracketSize),
+        Offset(-bracketSize, -bracketSize + bracketLength),
+        _holoReticleDataPaint);
 
     // Top-right bracket
-    canvas.drawLine(Offset(bracketSize, -bracketSize), Offset(bracketSize - bracketLength, -bracketSize), _holoReticleDataPaint);
-    canvas.drawLine(Offset(bracketSize, -bracketSize), Offset(bracketSize, -bracketSize + bracketLength), _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(bracketSize, -bracketSize),
+        Offset(bracketSize - bracketLength, -bracketSize),
+        _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(bracketSize, -bracketSize),
+        Offset(bracketSize, -bracketSize + bracketLength),
+        _holoReticleDataPaint);
 
     // Bottom-left bracket
-    canvas.drawLine(Offset(-bracketSize, bracketSize), Offset(-bracketSize + bracketLength, bracketSize), _holoReticleDataPaint);
-    canvas.drawLine(Offset(-bracketSize, bracketSize), Offset(-bracketSize, bracketSize - bracketLength), _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(-bracketSize, bracketSize),
+        Offset(-bracketSize + bracketLength, bracketSize),
+        _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(-bracketSize, bracketSize),
+        Offset(-bracketSize, bracketSize - bracketLength),
+        _holoReticleDataPaint);
 
     // Bottom-right bracket
-    canvas.drawLine(Offset(bracketSize, bracketSize), Offset(bracketSize - bracketLength, bracketSize), _holoReticleDataPaint);
-    canvas.drawLine(Offset(bracketSize, bracketSize), Offset(bracketSize, bracketSize - bracketLength), _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(bracketSize, bracketSize),
+        Offset(bracketSize - bracketLength, bracketSize),
+        _holoReticleDataPaint);
+    canvas.drawLine(
+        Offset(bracketSize, bracketSize),
+        Offset(bracketSize, bracketSize - bracketLength),
+        _holoReticleDataPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 8: HEXAGONAL TARGETING PATTERN
@@ -3667,7 +3949,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawCircle(Offset.zero, 3, _holoReticleMarkerPaint);
 
     // Center bright dot
-    _holoReticleMarkerPaint.color = const Color(0xFFFFFFFF).withOpacity(dotPulse);
+    _holoReticleMarkerPaint.color =
+        const Color(0xFFFFFFFF).withOpacity(dotPulse);
     canvas.drawCircle(Offset.zero, 1.5, _holoReticleMarkerPaint);
 
     canvas.restore();
@@ -3682,7 +3965,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       _holoReticleDataPaint.color = color.withOpacity(markerAlpha);
 
       // Small tick marks
-      canvas.drawLine(Offset(markerX, -2), Offset(markerX, 2), _holoReticleDataPaint);
+      canvas.drawLine(
+          Offset(markerX, -2), Offset(markerX, 2), _holoReticleDataPaint);
     }
   }
 
@@ -3701,12 +3985,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // If no impact points exist yet, generate based on damage
     if (_fractureImpactPoints.isEmpty && damageIntensity > 0.1) {
-      final impactCount = (damageIntensity * 3).ceil().clamp(1, _maxFractureImpacts);
+      final impactCount =
+          (damageIntensity * 3).ceil().clamp(1, _maxFractureImpacts);
       for (int i = 0; i < impactCount; i++) {
         final angle = _fractureRandom.nextDouble() * math.pi * 2;
-        final distance = size.x * 0.15 + _fractureRandom.nextDouble() * size.x * 0.2;
+        final distance =
+            size.x * 0.15 + _fractureRandom.nextDouble() * size.x * 0.2;
         _fractureImpactPoints.add(_FractureImpactPoint(
-          offset: Offset(math.cos(angle) * distance, math.sin(angle) * distance),
+          offset:
+              Offset(math.cos(angle) * distance, math.sin(angle) * distance),
           angle: angle,
           intensity: 0.5 + _fractureRandom.nextDouble() * 0.5,
           branchCount: 2 + _fractureRandom.nextInt(3),
@@ -3722,13 +4009,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final numCracks = 3 + (damageIntensity * 4).toInt();
 
       for (int i = 0; i < numCracks; i++) {
-        final crackAngle = impact.angle + (i - numCracks / 2) * 0.4 +
+        final crackAngle = impact.angle +
+            (i - numCracks / 2) * 0.4 +
             math.sin(time * 0.5 + i) * 0.05;
-        final crackLength = size.x * (0.2 + damageIntensity * 0.25) * impact.intensity;
+        final crackLength =
+            size.x * (0.2 + damageIntensity * 0.25) * impact.intensity;
 
         // Glow layer
-        _fracturePrimaryGlowPaint.color = damageColorGlow.withOpacity(
-            0.4 * damageIntensity * impact.intensity);
+        _fracturePrimaryGlowPaint.color = damageColorGlow
+            .withOpacity(0.4 * damageIntensity * impact.intensity);
         canvas.drawLine(
           impactPos,
           Offset(
@@ -3739,8 +4028,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         );
 
         // Core line
-        _fracturePrimaryPaint.color = damageColorCore.withOpacity(
-            0.7 * damageIntensity * impact.intensity);
+        _fracturePrimaryPaint.color = damageColorCore
+            .withOpacity(0.7 * damageIntensity * impact.intensity);
         canvas.drawLine(
           impactPos,
           Offset(
@@ -3759,7 +4048,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final impactPos = center + impact.offset;
 
       for (int branch = 0; branch < impact.branchCount; branch++) {
-        final baseAngle = impact.angle + (branch - impact.branchCount / 2) * 0.6;
+        final baseAngle =
+            impact.angle + (branch - impact.branchCount / 2) * 0.6;
         final branchStart = size.x * 0.12;
         final branchLength = size.x * (0.08 + damageIntensity * 0.12);
 
@@ -3768,11 +4058,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final startY = impactPos.dy + math.sin(baseAngle) * branchStart;
 
         // Branch off at an angle
-        final branchAngle = baseAngle + (branch % 2 == 0 ? 0.7 : -0.7) +
+        final branchAngle = baseAngle +
+            (branch % 2 == 0 ? 0.7 : -0.7) +
             _fractureRandom.nextDouble() * 0.3;
 
-        _fractureSecondaryGlowPaint.color = damageColorGlow.withOpacity(
-            0.3 * damageIntensity * impact.intensity);
+        _fractureSecondaryGlowPaint.color = damageColorGlow
+            .withOpacity(0.3 * damageIntensity * impact.intensity);
         canvas.drawLine(
           Offset(startX, startY),
           Offset(
@@ -3782,8 +4073,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           _fractureSecondaryGlowPaint,
         );
 
-        _fractureSecondaryPaint.color = damageColorCore.withOpacity(
-            0.5 * damageIntensity * impact.intensity);
+        _fractureSecondaryPaint.color = damageColorCore
+            .withOpacity(0.5 * damageIntensity * impact.intensity);
         canvas.drawLine(
           Offset(startX, startY),
           Offset(
@@ -3803,14 +4094,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final impactPos = center + impact.offset;
 
       // Energy leak glow at impact point
-      final leakRadius = size.x * 0.06 * (1 + energyPulse * 0.3) * damageIntensity;
-      _fractureEnergyLeakPaint.color = damageColorEnergy.withOpacity(
-          0.5 * energyPulse * damageIntensity * impact.intensity);
+      final leakRadius =
+          size.x * 0.06 * (1 + energyPulse * 0.3) * damageIntensity;
+      _fractureEnergyLeakPaint.color = damageColorEnergy
+          .withOpacity(0.5 * energyPulse * damageIntensity * impact.intensity);
       canvas.drawCircle(impactPos, leakRadius, _fractureEnergyLeakPaint);
 
       // Energy core at center
-      _fractureEnergyCorePaint.color = damageColorEnergy.withOpacity(
-          0.8 * damageIntensity * impact.intensity);
+      _fractureEnergyCorePaint.color = damageColorEnergy
+          .withOpacity(0.8 * damageIntensity * impact.intensity);
       canvas.drawCircle(impactPos, leakRadius * 0.4, _fractureEnergyCorePaint);
 
       // Energy wisps along cracks
@@ -3822,8 +4114,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           impactPos.dy + math.sin(wispAngle) * wispDist,
         );
 
-        _fractureEnergyLeakPaint.color = damageColorEnergy.withOpacity(
-            0.4 * energyPulse * damageIntensity);
+        _fractureEnergyLeakPaint.color =
+            damageColorEnergy.withOpacity(0.4 * energyPulse * damageIntensity);
         canvas.drawCircle(wispPos, size.x * 0.02, _fractureEnergyLeakPaint);
       }
     }
@@ -3845,7 +4137,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         );
 
         // Determine if this hex is "stressed" (near damage)
-        final stressLevel = damageIntensity * (0.5 + math.sin(time * 3 + h * 1.5) * 0.5);
+        final stressLevel =
+            damageIntensity * (0.5 + math.sin(time * 3 + h * 1.5) * 0.5);
 
         // Draw hexagon outline
         _fracturePath.reset();
@@ -3863,14 +4156,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
         // Stressed fill
         if (stressLevel > 0.4) {
-          _fractureHexFillPaint.color = damageColorGlow.withOpacity(
-              0.15 * stressLevel);
+          _fractureHexFillPaint.color =
+              damageColorGlow.withOpacity(0.15 * stressLevel);
           canvas.drawPath(_fracturePath, _fractureHexFillPaint);
         }
 
         // Outline
-        _fractureHexStressPaint.color = damageColorCore.withOpacity(
-            0.3 + stressLevel * 0.4);
+        _fractureHexStressPaint.color =
+            damageColorCore.withOpacity(0.3 + stressLevel * 0.4);
         canvas.drawPath(_fracturePath, _fractureHexStressPaint);
       }
     }
@@ -3890,8 +4183,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final flickerRadius = size.x * 0.1 * damageIntensity * flicker;
           final flickerPos = center + impact.offset * 0.7;
 
-          _fractureFlickerPaint.color = damageColorGlow.withOpacity(
-              0.3 * (flicker - 0.6) * damageIntensity);
+          _fractureFlickerPaint.color = damageColorGlow
+              .withOpacity(0.3 * (flicker - 0.6) * damageIntensity);
           canvas.drawCircle(flickerPos, flickerRadius, _fractureFlickerPaint);
         }
       }
@@ -3900,13 +4193,17 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (damageIntensity > 0.5 && flicker > 0.7) {
         final glitchCount = (damageIntensity * 3).toInt();
         for (int g = 0; g < glitchCount; g++) {
-          final gx = center.dx + (_fractureRandom.nextDouble() - 0.5) * size.x * 0.6;
-          final gy = center.dy + (_fractureRandom.nextDouble() - 0.5) * size.y * 0.6;
-          final gw = size.x * 0.05 + _fractureRandom.nextDouble() * size.x * 0.1;
-          final gh = size.y * 0.02 + _fractureRandom.nextDouble() * size.y * 0.04;
+          final gx =
+              center.dx + (_fractureRandom.nextDouble() - 0.5) * size.x * 0.6;
+          final gy =
+              center.dy + (_fractureRandom.nextDouble() - 0.5) * size.y * 0.6;
+          final gw =
+              size.x * 0.05 + _fractureRandom.nextDouble() * size.x * 0.1;
+          final gh =
+              size.y * 0.02 + _fractureRandom.nextDouble() * size.y * 0.04;
 
-          _fractureFlickerPaint.color = damageColorEnergy.withOpacity(
-              0.4 * flicker * damageIntensity);
+          _fractureFlickerPaint.color =
+              damageColorEnergy.withOpacity(0.4 * flicker * damageIntensity);
           canvas.drawRect(
             Rect.fromCenter(center: Offset(gx, gy), width: gw, height: gh),
             _fractureFlickerPaint,
@@ -3931,19 +4228,21 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           // Spark glow
           _fractureSparkPaint.color = damageColorEnergy.withOpacity(
               0.6 * sparkPulse * damageIntensity * impact.intensity);
-          canvas.drawCircle(sparkPos, size.x * 0.03 * sparkPulse,
-              _fractureSparkPaint);
+          canvas.drawCircle(
+              sparkPos, size.x * 0.03 * sparkPulse, _fractureSparkPaint);
 
           // Spark core
-          _fractureSparkCorePaint.color = const Color(0xFFFFFFFF).withOpacity(
-              0.8 * sparkPulse * damageIntensity);
-          canvas.drawCircle(sparkPos, size.x * 0.01 * sparkPulse,
-              _fractureSparkCorePaint);
+          _fractureSparkCorePaint.color = const Color(0xFFFFFFFF)
+              .withOpacity(0.8 * sparkPulse * damageIntensity);
+          canvas.drawCircle(
+              sparkPos, size.x * 0.01 * sparkPulse, _fractureSparkCorePaint);
         }
 
         // Occasional spark arcs
-        if (shouldSpark && _fractureRandom.nextDouble() < 0.4 * damageIntensity) {
-          final arcLength = size.x * (0.04 + _fractureRandom.nextDouble() * 0.06);
+        if (shouldSpark &&
+            _fractureRandom.nextDouble() < 0.4 * damageIntensity) {
+          final arcLength =
+              size.x * (0.04 + _fractureRandom.nextDouble() * 0.06);
           final arcAngle = _fractureRandom.nextDouble() * math.pi * 2;
 
           // Draw jagged spark arc
@@ -3956,14 +4255,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final segmentLength = arcLength / segments;
 
           for (int s = 0; s < segments; s++) {
-            final segAngle = arcAngle + (_fractureRandom.nextDouble() - 0.5) * 1.2;
+            final segAngle =
+                arcAngle + (_fractureRandom.nextDouble() - 0.5) * 1.2;
             currentX += math.cos(segAngle) * segmentLength;
             currentY += math.sin(segAngle) * segmentLength;
             _fracturePath.lineTo(currentX, currentY);
           }
 
-          _fractureSparkArcPaint.color = damageColorEnergy.withOpacity(
-              0.7 * damageIntensity);
+          _fractureSparkArcPaint.color =
+              damageColorEnergy.withOpacity(0.7 * damageIntensity);
           canvas.drawPath(_fracturePath, _fractureSparkArcPaint);
         }
       }
@@ -3984,8 +4284,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get color variations using HSL for rich effects
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final tertiaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
     final holoColor = Color.lerp(color, const Color(0xFF00FFFF), 0.3)!;
 
     // Hologram base opacity (starts transparent, becomes solid)
@@ -4000,7 +4302,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final wireframeGlowAlpha = 0.6 * (1 - progress * 0.5);
 
     // Outer glow wireframe
-    _constructWireframeGlowPaint.color = holoColor.withOpacity(wireframeGlowAlpha * effectiveOpacity);
+    _constructWireframeGlowPaint.color =
+        holoColor.withOpacity(wireframeGlowAlpha * effectiveOpacity);
     _constructPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = i * math.pi / 3 - math.pi / 6;
@@ -4016,7 +4319,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawPath(_constructPath, _constructWireframeGlowPaint);
 
     // Core wireframe with scanline distortion
-    _constructWireframePaint.color = holoColor.withOpacity(0.8 * effectiveOpacity);
+    _constructWireframePaint.color =
+        holoColor.withOpacity(0.8 * effectiveOpacity);
     canvas.drawPath(_constructPath, _constructWireframePaint);
 
     // Vertical wireframe lines (hexagon to center)
@@ -4029,8 +4333,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final innerY = center.dy + math.sin(angle) * innerRadius;
 
       final lineAlpha = 0.4 + math.sin(time * 3 + i) * 0.2;
-      _constructWireframePaint.color = holoColor.withOpacity(lineAlpha * effectiveOpacity);
-      canvas.drawLine(Offset(outerX, outerY), Offset(innerX, innerY), _constructWireframePaint);
+      _constructWireframePaint.color =
+          holoColor.withOpacity(lineAlpha * effectiveOpacity);
+      canvas.drawLine(Offset(outerX, outerY), Offset(innerX, innerY),
+          _constructWireframePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4040,10 +4346,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final gridExtent = wireframeRadius * 0.8;
     final gridAlpha = 0.15 * (1 - progress * 0.8);
 
-    _constructGridPaint.color = holoColor.withOpacity(gridAlpha * effectiveOpacity);
+    _constructGridPaint.color =
+        holoColor.withOpacity(gridAlpha * effectiveOpacity);
 
     // Horizontal and vertical grid lines
-    for (double offset = -gridExtent; offset <= gridExtent; offset += gridSize) {
+    for (double offset = -gridExtent;
+        offset <= gridExtent;
+        offset += gridSize) {
       // Horizontal lines with wave distortion
       final waveOffset = math.sin(time * 4 + offset * 0.1) * 2 * (1 - progress);
       canvas.drawLine(
@@ -4061,12 +4370,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Grid intersection nodes (pulsing)
     final nodeAlpha = 0.3 + math.sin(time * 6) * 0.2;
-    _constructGridNodePaint.color = secondaryColor.withOpacity(nodeAlpha * effectiveOpacity * (1 - progress));
+    _constructGridNodePaint.color = secondaryColor
+        .withOpacity(nodeAlpha * effectiveOpacity * (1 - progress));
     for (double x = -gridExtent; x <= gridExtent; x += gridSize) {
       for (double y = -gridExtent; y <= gridExtent; y += gridSize) {
         final dist = math.sqrt(x * x + y * y);
         if (dist < wireframeRadius) {
-          canvas.drawCircle(Offset(center.dx + x, center.dy + y), 1.5, _constructGridNodePaint);
+          canvas.drawCircle(Offset(center.dx + x, center.dy + y), 1.5,
+              _constructGridNodePaint);
         }
       }
     }
@@ -4074,40 +4385,57 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 3: Scanning line moving through the hologram
     // ═══════════════════════════════════════════════════════════════════════
-    final scanLineY = center.dy - wireframeRadius + ((time * 0.5) % 1.0) * wireframeRadius * 2;
+    final scanLineY = center.dy -
+        wireframeRadius +
+        ((time * 0.5) % 1.0) * wireframeRadius * 2;
     final scanLineWidth = wireframeRadius * 2;
 
     // Wide glow under scan line
-    _constructScanGlowPaint.color = holoColor.withOpacity(0.3 * effectiveOpacity);
+    _constructScanGlowPaint.color =
+        holoColor.withOpacity(0.3 * effectiveOpacity);
     canvas.drawRect(
-      Rect.fromCenter(center: Offset(center.dx, scanLineY), width: scanLineWidth, height: 20),
+      Rect.fromCenter(
+          center: Offset(center.dx, scanLineY),
+          width: scanLineWidth,
+          height: 20),
       _constructScanGlowPaint,
     );
 
     // Core scan line
-    _constructScanLinePaint.color = Color.lerp(holoColor, Colors.white, 0.5)!.withOpacity(0.8 * effectiveOpacity);
+    _constructScanLinePaint.color = Color.lerp(holoColor, Colors.white, 0.5)!
+        .withOpacity(0.8 * effectiveOpacity);
     canvas.drawRect(
-      Rect.fromCenter(center: Offset(center.dx, scanLineY), width: scanLineWidth, height: 3),
+      Rect.fromCenter(
+          center: Offset(center.dx, scanLineY),
+          width: scanLineWidth,
+          height: 3),
       _constructScanLinePaint,
     );
 
     // Scan line edge particles
     for (int i = 0; i < 6; i++) {
-      final particleX = center.dx - wireframeRadius + i * (wireframeRadius * 2 / 5);
+      final particleX =
+          center.dx - wireframeRadius + i * (wireframeRadius * 2 / 5);
       final particleOffset = math.sin(time * 10 + i * 2) * 3;
-      _constructParticlePaint.color = Colors.white.withOpacity(0.6 * effectiveOpacity);
-      canvas.drawCircle(Offset(particleX, scanLineY + particleOffset), 2, _constructParticlePaint);
+      _constructParticlePaint.color =
+          Colors.white.withOpacity(0.6 * effectiveOpacity);
+      canvas.drawCircle(Offset(particleX, scanLineY + particleOffset), 2,
+          _constructParticlePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 4: Materializing particles coalescing into form
     // ═══════════════════════════════════════════════════════════════════════
     for (final particle in _constructionParticles) {
-      final particleProgress = (progress * 1.5 - particle.phase * 0.3).clamp(0.0, 1.0);
+      final particleProgress =
+          (progress * 1.5 - particle.phase * 0.3).clamp(0.0, 1.0);
 
       // Particles spiral inward as construction progresses
-      final currentRadius = particle.radius * (1 - particleProgress) + particle.targetRadius * particleProgress;
-      final spiralAngle = particle.angle + time * particle.spiralRate + particleProgress * math.pi * 4;
+      final currentRadius = particle.radius * (1 - particleProgress) +
+          particle.targetRadius * particleProgress;
+      final spiralAngle = particle.angle +
+          time * particle.spiralRate +
+          particleProgress * math.pi * 4;
 
       final px = center.dx + math.cos(spiralAngle) * currentRadius;
       final py = center.dy + math.sin(spiralAngle) * currentRadius;
@@ -4120,12 +4448,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
               : 1.0;
 
       // Particle glow
-      _constructParticlePaint.color = holoColor.withOpacity(0.6 * particleAlpha * effectiveOpacity);
-      canvas.drawCircle(Offset(px, py), particle.size * 1.5, _constructParticlePaint);
+      _constructParticlePaint.color =
+          holoColor.withOpacity(0.6 * particleAlpha * effectiveOpacity);
+      canvas.drawCircle(
+          Offset(px, py), particle.size * 1.5, _constructParticlePaint);
 
       // Particle core
-      _constructParticlePaint.color = Colors.white.withOpacity(0.9 * particleAlpha * effectiveOpacity);
-      canvas.drawCircle(Offset(px, py), particle.size * 0.5, _constructParticlePaint);
+      _constructParticlePaint.color =
+          Colors.white.withOpacity(0.9 * particleAlpha * effectiveOpacity);
+      canvas.drawCircle(
+          Offset(px, py), particle.size * 0.5, _constructParticlePaint);
 
       // Particle trail
       if (particleProgress > 0.1 && particleProgress < 0.9) {
@@ -4134,8 +4466,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final trailX = center.dx + math.cos(trailAngle) * trailRadius;
         final trailY = center.dy + math.sin(trailAngle) * trailRadius;
 
-        _constructParticleTrailPaint.color = holoColor.withOpacity(0.3 * particleAlpha * effectiveOpacity);
-        canvas.drawLine(Offset(px, py), Offset(trailX, trailY), _constructParticleTrailPaint);
+        _constructParticleTrailPaint.color =
+            holoColor.withOpacity(0.3 * particleAlpha * effectiveOpacity);
+        canvas.drawLine(Offset(px, py), Offset(trailX, trailY),
+            _constructParticleTrailPaint);
       }
     }
 
@@ -4146,17 +4480,22 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final dataStreamWidth = wireframeRadius * 1.2;
 
     // Data bar background
-    _constructDataPaint.color = tertiaryColor.withOpacity(0.2 * effectiveOpacity);
+    _constructDataPaint.color =
+        tertiaryColor.withOpacity(0.2 * effectiveOpacity);
     canvas.drawRRect(
       RRect.fromRectAndRadius(
-        Rect.fromCenter(center: Offset(center.dx, dataStreamY), width: dataStreamWidth, height: 8),
+        Rect.fromCenter(
+            center: Offset(center.dx, dataStreamY),
+            width: dataStreamWidth,
+            height: 8),
         const Radius.circular(2),
       ),
       _constructDataPaint,
     );
 
     // Data bar fill (progress)
-    _constructDataGlowPaint.color = holoColor.withOpacity(0.8 * effectiveOpacity);
+    _constructDataGlowPaint.color =
+        holoColor.withOpacity(0.8 * effectiveOpacity);
     final fillWidth = dataStreamWidth * progress;
     canvas.drawRRect(
       RRect.fromRectAndRadius(
@@ -4174,10 +4513,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Scrolling data bits along the bar
     final bitCount = 8;
     for (int i = 0; i < bitCount; i++) {
-      final bitX = center.dx - dataStreamWidth / 2 + ((time * 50 + i * 15) % dataStreamWidth);
+      final bitX = center.dx -
+          dataStreamWidth / 2 +
+          ((time * 50 + i * 15) % dataStreamWidth);
       if (bitX < center.dx - dataStreamWidth / 2 + fillWidth) {
         final bitAlpha = 0.5 + _constructRandom.nextDouble() * 0.5;
-        _constructDataPaint.color = Colors.white.withOpacity(bitAlpha * effectiveOpacity);
+        _constructDataPaint.color =
+            Colors.white.withOpacity(bitAlpha * effectiveOpacity);
         canvas.drawRect(
           Rect.fromLTWH(bitX, dataStreamY - 2, 3, 4),
           _constructDataPaint,
@@ -4190,7 +4532,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final blockX = center.dx + wireframeRadius * 0.6 + i * 6;
       final blockY = center.dy + wireframeRadius + 8;
       final blockAlpha = i < (progress * 3).floor() ? 0.8 : 0.2;
-      _constructDataPaint.color = holoColor.withOpacity(blockAlpha * effectiveOpacity);
+      _constructDataPaint.color =
+          holoColor.withOpacity(blockAlpha * effectiveOpacity);
       canvas.drawRect(
         Rect.fromLTWH(blockX, blockY, 4, 4),
         _constructDataPaint,
@@ -4203,12 +4546,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final ringRadius = wireframeRadius + 8;
 
     // Background ring
-    _constructProgressBgPaint.color = tertiaryColor.withOpacity(0.15 * effectiveOpacity);
+    _constructProgressBgPaint.color =
+        tertiaryColor.withOpacity(0.15 * effectiveOpacity);
     canvas.drawCircle(center, ringRadius, _constructProgressBgPaint);
 
     // Progress arc glow
     final sweepAngle = progress * math.pi * 2;
-    _constructProgressGlowPaint.color = holoColor.withOpacity(0.5 * effectiveOpacity);
+    _constructProgressGlowPaint.color =
+        holoColor.withOpacity(0.5 * effectiveOpacity);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: ringRadius),
       -math.pi / 2,
@@ -4218,7 +4563,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     );
 
     // Progress arc core
-    _constructProgressPaint.color = Color.lerp(holoColor, Colors.white, 0.3)!.withOpacity(0.9 * effectiveOpacity);
+    _constructProgressPaint.color = Color.lerp(holoColor, Colors.white, 0.3)!
+        .withOpacity(0.9 * effectiveOpacity);
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: ringRadius),
       -math.pi / 2,
@@ -4233,13 +4579,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final endX = center.dx + math.cos(endAngle) * ringRadius;
       final endY = center.dy + math.sin(endAngle) * ringRadius;
 
-      _constructParticlePaint.color = Colors.white.withOpacity(0.9 * effectiveOpacity);
+      _constructParticlePaint.color =
+          Colors.white.withOpacity(0.9 * effectiveOpacity);
       canvas.drawCircle(Offset(endX, endY), 4, _constructParticlePaint);
 
       // Pulsing glow at progress head
       final pulseSize = 6 + math.sin(time * 10) * 2;
-      _constructProgressGlowPaint.color = holoColor.withOpacity(0.4 * effectiveOpacity);
-      canvas.drawCircle(Offset(endX, endY), pulseSize, _constructProgressGlowPaint);
+      _constructProgressGlowPaint.color =
+          holoColor.withOpacity(0.4 * effectiveOpacity);
+      canvas.drawCircle(
+          Offset(endX, endY), pulseSize, _constructProgressGlowPaint);
     }
 
     // Tick marks around the ring
@@ -4254,8 +4603,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       final tickProgress = i / 12.0;
       final tickAlpha = tickProgress <= progress ? 0.8 : 0.2;
-      _constructWireframePaint.color = holoColor.withOpacity(tickAlpha * effectiveOpacity);
-      canvas.drawLine(Offset(tickX1, tickY1), Offset(tickX2, tickY2), _constructWireframePaint);
+      _constructWireframePaint.color =
+          holoColor.withOpacity(tickAlpha * effectiveOpacity);
+      canvas.drawLine(Offset(tickX1, tickY1), Offset(tickX2, tickY2),
+          _constructWireframePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4267,15 +4618,19 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Central flash
       _constructFlashPaint.color = Colors.white.withOpacity(flashAlpha * 0.8);
-      canvas.drawCircle(center, wireframeRadius * flashProgress * 2, _constructFlashPaint);
+      canvas.drawCircle(
+          center, wireframeRadius * flashProgress * 2, _constructFlashPaint);
 
       // Expanding ring
       _constructFlashRingPaint.color = holoColor.withOpacity(flashAlpha * 0.6);
-      canvas.drawCircle(center, wireframeRadius * (1 + flashProgress), _constructFlashRingPaint);
+      canvas.drawCircle(center, wireframeRadius * (1 + flashProgress),
+          _constructFlashRingPaint);
 
       // Secondary color ring
-      _constructFlashRingPaint.color = secondaryColor.withOpacity(flashAlpha * 0.4);
-      canvas.drawCircle(center, wireframeRadius * (1.2 + flashProgress * 0.5), _constructFlashRingPaint);
+      _constructFlashRingPaint.color =
+          secondaryColor.withOpacity(flashAlpha * 0.4);
+      canvas.drawCircle(center, wireframeRadius * (1.2 + flashProgress * 0.5),
+          _constructFlashRingPaint);
     }
   }
 
@@ -4283,26 +4638,34 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   void _renderConstructionCompleteFlash(Canvas canvas, Offset center) {
     if (_constructionFlashTimer <= 0) return;
 
-    final flashProgress = 1 - (_constructionFlashTimer / 0.5); // 0 to 1 as flash fades
-    final flashAlpha = (1 - flashProgress) * (1 - flashProgress); // Quadratic fade
+    final flashProgress =
+        1 - (_constructionFlashTimer / 0.5); // 0 to 1 as flash fades
+    final flashAlpha =
+        (1 - flashProgress) * (1 - flashProgress); // Quadratic fade
 
     final hslColor = HSLColor.fromColor(color);
     final holoColor = Color.lerp(color, const Color(0xFF00FFFF), 0.3)!;
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 60) % 360).toColor();
 
     // Expanding flash rings
     for (int i = 0; i < 3; i++) {
       final ringRadius = size.x * (0.5 + flashProgress * (0.8 + i * 0.3));
       final ringAlpha = flashAlpha * (1 - i * 0.3);
 
-      _constructFlashRingPaint.color = (i == 0 ? Colors.white : i == 1 ? holoColor : secondaryColor)
+      _constructFlashRingPaint.color = (i == 0
+              ? Colors.white
+              : i == 1
+                  ? holoColor
+                  : secondaryColor)
           .withOpacity(ringAlpha * 0.6);
       canvas.drawCircle(center, ringRadius, _constructFlashRingPaint);
     }
 
     // Central bright flash
     _constructFlashPaint.color = Colors.white.withOpacity(flashAlpha * 0.5);
-    canvas.drawCircle(center, size.x * 0.3 * (1 - flashProgress * 0.5), _constructFlashPaint);
+    canvas.drawCircle(
+        center, size.x * 0.3 * (1 - flashProgress * 0.5), _constructFlashPaint);
 
     // Spark particles radiating outward
     for (int i = 0; i < 8; i++) {
@@ -4312,7 +4675,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final sparkY = center.dy + math.sin(sparkAngle) * sparkRadius;
 
       _constructParticlePaint.color = holoColor.withOpacity(flashAlpha * 0.8);
-      canvas.drawCircle(Offset(sparkX, sparkY), 3 * (1 - flashProgress), _constructParticlePaint);
+      canvas.drawCircle(Offset(sparkX, sparkY), 3 * (1 - flashProgress),
+          _constructParticlePaint);
     }
   }
 
@@ -4351,7 +4715,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 3: Secondary ambient shadow (lighter, wider) - rendered first
     // ─────────────────────────────────────────────────────────────────────────
     final ambientOpacity = 0.08 * activityIntensity;
-    _shadowAmbientPaint.color = const Color(0xFF000000).withOpacity(ambientOpacity);
+    _shadowAmbientPaint.color =
+        const Color(0xFF000000).withOpacity(ambientOpacity);
 
     _shadowPath.reset();
     _shadowPath.addOval(Rect.fromCenter(
@@ -4368,7 +4733,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 2: Soft shadow edge with blur
     // ─────────────────────────────────────────────────────────────────────────
     final softEdgeOpacity = 0.15 * activityIntensity;
-    _shadowSoftEdgePaint.color = const Color(0xFF000000).withOpacity(softEdgeOpacity);
+    _shadowSoftEdgePaint.color =
+        const Color(0xFF000000).withOpacity(softEdgeOpacity);
 
     _shadowPath.reset();
     _shadowPath.addOval(Rect.fromCenter(
@@ -4402,7 +4768,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 4: Ground contact shadow (darker at base)
     // ─────────────────────────────────────────────────────────────────────────
     final groundContactOpacity = 0.35 * activityIntensity;
-    _shadowGroundContactPaint.color = const Color(0xFF000000).withOpacity(groundContactOpacity);
+    _shadowGroundContactPaint.color =
+        const Color(0xFF000000).withOpacity(groundContactOpacity);
 
     _shadowPath.reset();
     _shadowPath.addOval(Rect.fromCenter(
@@ -4422,7 +4789,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Activity-based shadow pulse
       final pulsePhase = math.sin(_animationPhase * 4) * 0.5 + 0.5;
       final pulseOpacity = 0.1 * pulsePhase * activityIntensity;
-      _shadowPulsePaint.color = const Color(0xFF000000).withOpacity(pulseOpacity);
+      _shadowPulsePaint.color =
+          const Color(0xFF000000).withOpacity(pulseOpacity);
 
       // Pulsing shadow ring around the main shadow
       final pulseRadius = baseRadius * (1.5 + pulsePhase * 0.3) * shadowScale;
@@ -4486,7 +4854,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (isCharging && _chargeLevel > 0.3) {
       final chargeGlowIntensity = 0.08 * _chargeLevel;
       final chargeColor = hsl.withHue((hsl.hue + 30) % 360).toColor();
-      _shadowNeonBouncePaint.color = chargeColor.withOpacity(chargeGlowIntensity);
+      _shadowNeonBouncePaint.color =
+          chargeColor.withOpacity(chargeGlowIntensity);
 
       final chargeWobble = math.sin(_animationPhase * 6) * 2;
       _shadowPath.reset();
@@ -4527,11 +4896,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Calculate activity level for arc intensity
     final hasTarget = _currentTarget != null;
     final isCharging = _chargeLevel > 0;
-    final activityLevel = (hasTarget ? 0.4 : 0.2) + (isCharging ? _chargeLevel * 0.3 : 0.0) + (_isFiring ? 0.4 : 0.0);
+    final activityLevel = (hasTarget ? 0.4 : 0.2) +
+        (isCharging ? _chargeLevel * 0.3 : 0.0) +
+        (_isFiring ? 0.4 : 0.0);
 
     // Get color info for arcs
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
 
     for (int i = myIndex + 1; i < towers.length; i++) {
       final otherTower = towers[i];
@@ -4539,7 +4911,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final distance = myCenter.distanceTo(otherCenter);
 
       // Check if within arc range
-      if (distance < _electricArcMinDistance || distance > _electricArcMaxDistance) continue;
+      if (distance < _electricArcMinDistance ||
+          distance > _electricArcMaxDistance) continue;
 
       // Calculate combined activity
       final otherHasTarget = otherTower._currentTarget != null;
@@ -4547,16 +4920,20 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final otherActivity = (otherHasTarget ? 0.4 : 0.2) +
           (otherIsCharging ? otherTower._chargeLevel * 0.3 : 0.0) +
           (otherTower._isFiring ? 0.4 : 0.0);
-      final combinedActivity = ((activityLevel + otherActivity) / 2).clamp(0.2, 1.0);
+      final combinedActivity =
+          ((activityLevel + otherActivity) / 2).clamp(0.2, 1.0);
 
       // Distance falloff
-      final distanceFactor = 1.0 - ((distance - _electricArcMinDistance) / (_electricArcMaxDistance - _electricArcMinDistance));
+      final distanceFactor = 1.0 -
+          ((distance - _electricArcMinDistance) /
+              (_electricArcMaxDistance - _electricArcMinDistance));
       final arcOpacity = combinedActivity * distanceFactor * 0.8;
 
       if (arcOpacity < 0.1) continue;
 
       // Calculate direction and offset for this tower's position
-      final direction = Vector2(otherCenter.x - myCenter.x, otherCenter.y - myCenter.y);
+      final direction =
+          Vector2(otherCenter.x - myCenter.x, otherCenter.y - myCenter.y);
       final startOffset = Offset(
         center.dx + direction.x,
         center.dy + direction.y,
@@ -4613,21 +4990,25 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final branchY = localStartY + (localEndY - localStartY) * t;
 
           final branchAngle = animPhase * 2 + b * math.pi * 0.7;
-          final branchLen = distance * 0.15 * (_electricArcRandom.nextDouble() * 0.5 + 0.5);
+          final branchLen =
+              distance * 0.15 * (_electricArcRandom.nextDouble() * 0.5 + 0.5);
           final branchEndX = branchX + math.cos(branchAngle) * branchLen;
           final branchEndY = branchY + math.sin(branchAngle) * branchLen;
 
           _electricArcPath.reset();
           _generateLightningPath(
             _electricArcPath,
-            branchX, branchY,
-            branchEndX, branchEndY,
+            branchX,
+            branchY,
+            branchEndX,
+            branchEndY,
             3,
             branchLen * 0.2,
             animPhase * 12 + b,
           );
 
-          _electricArcBranchPaint.color = secondaryColor.withOpacity(arcOpacity * 0.4);
+          _electricArcBranchPaint.color =
+              secondaryColor.withOpacity(arcOpacity * 0.4);
           canvas.drawPath(_electricArcPath, _electricArcBranchPaint);
         }
       }
@@ -4639,8 +5020,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final nodeSize = 4.0 * nodePulse * combinedActivity;
 
       _electricArcNodePaint.color = primaryColor.withOpacity(arcOpacity * 0.5);
-      canvas.drawCircle(Offset(localStartX, localStartY), nodeSize, _electricArcNodePaint);
-      canvas.drawCircle(Offset(localEndX, localEndY), nodeSize, _electricArcNodePaint);
+      canvas.drawCircle(
+          Offset(localStartX, localStartY), nodeSize, _electricArcNodePaint);
+      canvas.drawCircle(
+          Offset(localEndX, localEndY), nodeSize, _electricArcNodePaint);
 
       // ═══════════════════════════════════════════════════════════════════════
       // LAYER 6: Traveling sparks along the arc
@@ -4656,7 +5039,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final jitterX = math.sin(animPhase * 10 + s) * 3;
           final jitterY = math.cos(animPhase * 10 + s) * 3;
 
-          _electricArcSparkPaint.color = Colors.white.withOpacity(arcOpacity * 0.7);
+          _electricArcSparkPaint.color =
+              Colors.white.withOpacity(arcOpacity * 0.7);
           canvas.drawCircle(
             Offset(sparkX + jitterX, sparkY + jitterY),
             2.0 + math.sin(animPhase * 8 + s) * 1.0,
@@ -4674,7 +5058,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final midX = (localStartX + localEndX) / 2;
           final midY = (localStartY + localEndY) / 2;
 
-          _electricArcFlashPaint.color = Colors.white.withOpacity(arcOpacity * 0.4);
+          _electricArcFlashPaint.color =
+              Colors.white.withOpacity(arcOpacity * 0.4);
           canvas.drawCircle(Offset(midX, midY), 8.0, _electricArcFlashPaint);
         }
       }
@@ -4684,8 +5069,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   /// Generates a lightning bolt path between two points
   void _generateLightningPath(
     Path path,
-    double x1, double y1,
-    double x2, double y2,
+    double x1,
+    double y1,
+    double x2,
+    double y2,
     int segments,
     double displacement,
     double seed,
@@ -4709,7 +5096,9 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final baseY = y1 + dy * t;
 
       // Randomized offset perpendicular to the line
-      final randomOffset = math.sin(seed * (i + 1) * 3.7) * displacement * (1 - math.pow(2 * t - 1, 2));
+      final randomOffset = math.sin(seed * (i + 1) * 3.7) *
+          displacement *
+          (1 - math.pow(2 * t - 1, 2));
       final finalX = baseX + normPerpX * randomOffset;
       final finalY = baseY + normPerpY * randomOffset;
 
@@ -4733,12 +5122,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final firingActivity = _isFiring ? 0.8 : 0.0; // Bright flash when firing
     final boostActivity = _isBoosted ? 0.3 : 0.0; // Extra glow when boosted
 
-    final totalActivity = (baseActivity + chargeActivity + firingActivity + boostActivity).clamp(0.0, 1.0);
+    final totalActivity =
+        (baseActivity + chargeActivity + firingActivity + boostActivity)
+            .clamp(0.0, 1.0);
 
     // Get secondary and tertiary colors
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final tertiaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
     final boostColor = const Color(0xFFFFD700); // Golden for boost
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -4753,9 +5146,11 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Secondary color ambient glow
     if (!Tower.lowFx) {
       final secondaryGroundAlpha = groundGlowAlpha * 0.4;
-      _dynamicGroundGlowPaint.color = secondaryColor.withOpacity(secondaryGroundAlpha);
+      _dynamicGroundGlowPaint.color =
+          secondaryColor.withOpacity(secondaryGroundAlpha);
       canvas.drawCircle(
-        Offset(center.dx + math.cos(_animationPhase) * 3, center.dy + math.sin(_animationPhase) * 3),
+        Offset(center.dx + math.cos(_animationPhase) * 3,
+            center.dy + math.sin(_animationPhase) * 3),
         groundGlowRadius * 0.7,
         _dynamicGroundGlowPaint,
       );
@@ -4765,7 +5160,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // LAYER 2: ANIMATED AMBIENT GLOW RING
     // ═══════════════════════════════════════════════════════════════════════
     final ambientPulse = 0.7 + math.sin(_animationPhase * 3) * 0.3;
-    final ambientRadius = size.x * (0.6 + totalActivity * 0.2 + ambientPulse * 0.05);
+    final ambientRadius =
+        size.x * (0.6 + totalActivity * 0.2 + ambientPulse * 0.05);
     final ambientAlpha = (0.1 + totalActivity * 0.2) * ambientPulse;
 
     _dynamicAmbientGlowPaint.color = color.withOpacity(ambientAlpha);
@@ -4785,7 +5181,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Charge buildup secondary glow
       if (!Tower.lowFx && _chargeLevel > 0.3) {
         final chargeGlowRadius = size.x * 0.35 * _chargeLevel;
-        _dynamicChargeGlowPaint.color = secondaryColor.withOpacity(innerAlpha * 0.6);
+        _dynamicChargeGlowPaint.color =
+            secondaryColor.withOpacity(innerAlpha * 0.6);
         canvas.drawCircle(center, chargeGlowRadius, _dynamicChargeGlowPaint);
       }
     }
@@ -4804,17 +5201,22 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // White hot center flash
       final whiteFlashRadius = flashRadius * 0.5 * flashIntensity;
-      _dynamicFireFlashPaint.color = const Color(0xFFFFFFFF).withOpacity(flashAlpha * 0.8);
+      _dynamicFireFlashPaint.color =
+          const Color(0xFFFFFFFF).withOpacity(flashAlpha * 0.8);
       canvas.drawCircle(center, whiteFlashRadius, _dynamicFireFlashPaint);
 
       // Chromatic aberration flash rings
       if (!Tower.lowFx) {
         final chromaOffset = 3 * flashIntensity;
-        _dynamicFireFlashPaint.color = const Color(0xFFFF0066).withOpacity(flashAlpha * 0.3);
-        canvas.drawCircle(Offset(center.dx - chromaOffset, center.dy), flashRadius * 0.8, _dynamicFireFlashPaint);
+        _dynamicFireFlashPaint.color =
+            const Color(0xFFFF0066).withOpacity(flashAlpha * 0.3);
+        canvas.drawCircle(Offset(center.dx - chromaOffset, center.dy),
+            flashRadius * 0.8, _dynamicFireFlashPaint);
 
-        _dynamicFireFlashPaint.color = const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.3);
-        canvas.drawCircle(Offset(center.dx + chromaOffset, center.dy), flashRadius * 0.8, _dynamicFireFlashPaint);
+        _dynamicFireFlashPaint.color =
+            const Color(0xFF00FFFF).withOpacity(flashAlpha * 0.3);
+        canvas.drawCircle(Offset(center.dx + chromaOffset, center.dy),
+            flashRadius * 0.8, _dynamicFireFlashPaint);
       }
     }
 
@@ -4850,7 +5252,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final rayEndY = center.dy + math.sin(rayAngle) * rayLength;
 
           _dynamicEnergyRayPaint.color = color.withOpacity(rayAlpha);
-          canvas.drawLine(center, Offset(rayEndX, rayEndY), _dynamicEnergyRayPaint);
+          canvas.drawLine(
+              center, Offset(rayEndX, rayEndY), _dynamicEnergyRayPaint);
         }
       }
     }
@@ -4868,7 +5271,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Bright white center when highly active
     if (totalActivity > 0.5) {
       final whiteCoreAlpha = (totalActivity - 0.5) * corePulse;
-      _dynamicCorePulsePaint.color = const Color(0xFFFFFFFF).withOpacity(whiteCoreAlpha);
+      _dynamicCorePulsePaint.color =
+          const Color(0xFFFFFFFF).withOpacity(whiteCoreAlpha);
       canvas.drawCircle(center, coreRadius * 0.4, _dynamicCorePulsePaint);
     }
 
@@ -4880,9 +5284,11 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       for (int i = 0; i < ringCount; i++) {
         final ringPhase = (_animationPhase * 4 + i * 0.3) % (math.pi * 2);
         final ringRadius = size.x * (0.35 + i * 0.08);
-        final ringAlpha = 0.3 * (1 - i * 0.2) * (0.7 + math.sin(ringPhase) * 0.3);
+        final ringAlpha =
+            0.3 * (1 - i * 0.2) * (0.7 + math.sin(ringPhase) * 0.3);
 
-        _dynamicHaloRingPaint.color = color.withOpacity(ringAlpha * _chargeLevel);
+        _dynamicHaloRingPaint.color =
+            color.withOpacity(ringAlpha * _chargeLevel);
         canvas.drawCircle(center, ringRadius, _dynamicHaloRingPaint);
       }
     }
@@ -4915,7 +5321,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       for (int i = 0; i < arcCount; i++) {
         final arcStartAngle = _animationPhase * 5 + i * math.pi / 2;
-        final arcEndAngle = arcStartAngle + math.pi / 4 + _random.nextDouble() * math.pi / 4;
+        final arcEndAngle =
+            arcStartAngle + math.pi / 4 + _random.nextDouble() * math.pi / 4;
 
         _dynamicLightingPath.reset();
         final startRadius = size.x * 0.2;
@@ -4938,7 +5345,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           _dynamicLightingPath.lineTo(currentX, currentY);
         }
 
-        final arcAlpha = arcIntensity * (0.5 + math.sin(_animationPhase * 12 + i) * 0.3);
+        final arcAlpha =
+            arcIntensity * (0.5 + math.sin(_animationPhase * 12 + i) * 0.3);
         _dynamicArcPaint.color = color.withOpacity(arcAlpha);
         canvas.drawPath(_dynamicLightingPath, _dynamicArcPaint);
 
@@ -4963,14 +5371,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (!Tower.lowFx) {
         for (int i = 0; i < 6; i++) {
           final flareAngle = _animationPhase * 2 + i * math.pi / 3;
-          final flareLength = size.x * (0.5 + math.sin(_animationPhase * 6 + i) * 0.15);
+          final flareLength =
+              size.x * (0.5 + math.sin(_animationPhase * 6 + i) * 0.15);
           final flareAlpha = boostPulse * 0.3;
 
           final flareEndX = center.dx + math.cos(flareAngle) * flareLength;
           final flareEndY = center.dy + math.sin(flareAngle) * flareLength;
 
           _dynamicFlareRayPaint.color = boostColor.withOpacity(flareAlpha);
-          canvas.drawLine(center, Offset(flareEndX, flareEndY), _dynamicFlareRayPaint);
+          canvas.drawLine(
+              center, Offset(flareEndX, flareEndY), _dynamicFlareRayPaint);
         }
       }
     }
@@ -4988,10 +5398,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       _dynamicLightingPath.moveTo(center.dx, center.dy);
 
       final wedgeSpread = math.pi / 6; // 30 degree spread
-      final wedgeX1 = center.dx + math.cos(targetDir - wedgeSpread) * dirGlowLength;
-      final wedgeY1 = center.dy + math.sin(targetDir - wedgeSpread) * dirGlowLength;
-      final wedgeX2 = center.dx + math.cos(targetDir + wedgeSpread) * dirGlowLength;
-      final wedgeY2 = center.dy + math.sin(targetDir + wedgeSpread) * dirGlowLength;
+      final wedgeX1 =
+          center.dx + math.cos(targetDir - wedgeSpread) * dirGlowLength;
+      final wedgeY1 =
+          center.dy + math.sin(targetDir - wedgeSpread) * dirGlowLength;
+      final wedgeX2 =
+          center.dx + math.cos(targetDir + wedgeSpread) * dirGlowLength;
+      final wedgeY2 =
+          center.dy + math.sin(targetDir + wedgeSpread) * dirGlowLength;
 
       _dynamicLightingPath.lineTo(wedgeX1, wedgeY1);
       _dynamicLightingPath.lineTo(wedgeX2, wedgeY2);
@@ -5028,7 +5442,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final waveHeight = 3 + math.sin(_animationPhase * 8 + i) * 2;
 
       for (double x = -waveWidth / 2; x <= waveWidth / 2; x += 4) {
-        final distort = math.sin(x * 0.15 + _animationPhase * 10 + i * 2) * waveHeight;
+        final distort =
+            math.sin(x * 0.15 + _animationPhase * 10 + i * 2) * waveHeight;
         final py = waveY + distort;
         if (x == -waveWidth / 2) {
           _heatPath.moveTo(center.dx + x, py);
@@ -5046,7 +5461,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     final lineCount = 8;
     for (int i = 0; i < lineCount; i++) {
-      final lineX = center.dx + (i - lineCount / 2) * (size.x / lineCount) * 1.5;
+      final lineX =
+          center.dx + (i - lineCount / 2) * (size.x / lineCount) * 1.5;
       final lineFlicker = math.sin(_animationPhase * 12 + i * 1.3) * 0.5 + 0.5;
 
       if (lineFlicker < 0.3) continue;
@@ -5058,7 +5474,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final lineHeight = size.y * 0.8;
 
       for (double y = 0; y <= lineHeight; y += 5) {
-        final xDistort = math.sin(y * 0.2 + _animationPhase * 6 + i) * (3 + heatIntensity * 3);
+        final xDistort = math.sin(y * 0.2 + _animationPhase * 6 + i) *
+            (3 + heatIntensity * 3);
         final px = lineX + xDistort;
         final py = center.dy - y;
 
@@ -5119,10 +5536,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Ember color varies from yellow to orange to red
       final emberHue = 30 + sparkPhase * 30; // Yellow to orange
-      final emberColor = HSLColor.fromAHSL(1, emberHue, 1, 0.5 + (1 - sparkPhase) * 0.3).toColor();
+      final emberColor =
+          HSLColor.fromAHSL(1, emberHue, 1, 0.5 + (1 - sparkPhase) * 0.3)
+              .toColor();
 
       _heatSparkPaint.color = emberColor.withOpacity(sparkAlpha);
-      canvas.drawCircle(Offset(sparkX, sparkY), 2 + (1 - sparkPhase) * 2, _heatSparkPaint);
+      canvas.drawCircle(
+          Offset(sparkX, sparkY), 2 + (1 - sparkPhase) * 2, _heatSparkPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5153,11 +5573,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final auraPulse = 0.7 + math.sin(_animationPhase * 3) * 0.3;
     final auraRadius = size.x * (0.7 + freezeIntensity * 0.4);
 
-    _iceFrostPaint.color = iceColor.withOpacity(freezeIntensity * 0.12 * auraPulse);
+    _iceFrostPaint.color =
+        iceColor.withOpacity(freezeIntensity * 0.12 * auraPulse);
     canvas.drawCircle(center, auraRadius, _iceFrostPaint);
 
     // Inner cold core glow
-    _iceFrostPaint.color = iceColorCore.withOpacity(freezeIntensity * 0.2 * auraPulse);
+    _iceFrostPaint.color =
+        iceColorCore.withOpacity(freezeIntensity * 0.2 * auraPulse);
     canvas.drawCircle(center, auraRadius * 0.5, _iceFrostPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5165,15 +5587,18 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     final crystalCount = 6;
     for (int i = 0; i < crystalCount; i++) {
-      final crystalAngle = (i * math.pi * 2 / crystalCount) + _animationPhase * 0.5;
-      final crystalDistance = size.x * (0.4 + math.sin(_animationPhase * 2 + i) * 0.15);
+      final crystalAngle =
+          (i * math.pi * 2 / crystalCount) + _animationPhase * 0.5;
+      final crystalDistance =
+          size.x * (0.4 + math.sin(_animationPhase * 2 + i) * 0.15);
       final crystalX = center.dx + math.cos(crystalAngle) * crystalDistance;
       final crystalY = center.dy + math.sin(crystalAngle) * crystalDistance;
 
       // Crystal rotation
       final crystalRotation = _animationPhase * 1.5 + i * 0.7;
       final crystalSize = 4 + math.sin(_animationPhase * 3 + i * 1.2) * 2;
-      final crystalAlpha = freezeIntensity * (0.5 + math.sin(_animationPhase * 4 + i) * 0.3);
+      final crystalAlpha =
+          freezeIntensity * (0.5 + math.sin(_animationPhase * 4 + i) * 0.3);
 
       if (crystalAlpha < 0.1) continue;
 
@@ -5223,9 +5648,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final fallDistance = size.y * 1.2;
 
       // Snowflakes drift down and outward
-      final snowX = center.dx + math.sin(_animationPhase * 3 + i * 1.5) * size.x * 0.6;
+      final snowX =
+          center.dx + math.sin(_animationPhase * 3 + i * 1.5) * size.x * 0.6;
       final snowY = center.dy - fallDistance / 2 + snowPhase * fallDistance;
-      final snowAlpha = (1 - math.pow((snowPhase - 0.5).abs() * 2, 2)) * freezeIntensity * 0.7;
+      final snowAlpha = (1 - math.pow((snowPhase - 0.5).abs() * 2, 2)) *
+          freezeIntensity *
+          0.7;
 
       if (snowAlpha < 0.1) continue;
 
@@ -5271,12 +5699,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     final spikeCount = 12;
     for (int i = 0; i < spikeCount; i++) {
-      final spikeAngle = i * math.pi * 2 / spikeCount + math.sin(_animationPhase * 2) * 0.1;
+      final spikeAngle =
+          i * math.pi * 2 / spikeCount + math.sin(_animationPhase * 2) * 0.1;
       final spikeFlicker = math.sin(_animationPhase * 6 + i * 1.1) * 0.5 + 0.5;
 
       if (spikeFlicker < 0.25) continue;
 
-      final spikeLength = size.x * (0.3 + spikeFlicker * 0.25 * freezeIntensity);
+      final spikeLength =
+          size.x * (0.3 + spikeFlicker * 0.25 * freezeIntensity);
       final spikeWidth = 2 + spikeFlicker * 1.5;
       final spikeAlpha = freezeIntensity * spikeFlicker * 0.5;
 
@@ -5287,8 +5717,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Base of spike
       _icePath.moveTo(
-        center.dx + math.cos(spikeAngle) * spikeStart + math.cos(perpAngle) * spikeWidth,
-        center.dy + math.sin(spikeAngle) * spikeStart + math.sin(perpAngle) * spikeWidth,
+        center.dx +
+            math.cos(spikeAngle) * spikeStart +
+            math.cos(perpAngle) * spikeWidth,
+        center.dy +
+            math.sin(spikeAngle) * spikeStart +
+            math.sin(perpAngle) * spikeWidth,
       );
       // Tip of spike
       _icePath.lineTo(
@@ -5297,8 +5731,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       );
       // Other base corner
       _icePath.lineTo(
-        center.dx + math.cos(spikeAngle) * spikeStart - math.cos(perpAngle) * spikeWidth,
-        center.dy + math.sin(spikeAngle) * spikeStart - math.sin(perpAngle) * spikeWidth,
+        center.dx +
+            math.cos(spikeAngle) * spikeStart -
+            math.cos(perpAngle) * spikeWidth,
+        center.dy +
+            math.sin(spikeAngle) * spikeStart -
+            math.sin(perpAngle) * spikeWidth,
       );
       _icePath.close();
 
@@ -5336,7 +5774,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (sparkleFlash < 0.2) continue;
 
       // Random position around the tower
-      final sparkleRandom = math.Random(i * 31 + (_animationPhase * 10).floor());
+      final sparkleRandom = _FastRng(i * 31 + (_animationPhase * 10).floor());
       final sparkleAngle = sparkleRandom.nextDouble() * math.pi * 2;
       final sparkleDistance = sparkleRandom.nextDouble() * size.x * 0.8;
       final sparkleX = center.dx + math.cos(sparkleAngle) * sparkleDistance;
@@ -5347,11 +5785,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Bright center
       _iceSparkPaint.color = Colors.white.withOpacity(sparkleAlpha);
-      canvas.drawCircle(Offset(sparkleX, sparkleY), sparkleSize * 0.5, _iceSparkPaint);
+      canvas.drawCircle(
+          Offset(sparkleX, sparkleY), sparkleSize * 0.5, _iceSparkPaint);
 
       // Colored halo
       _iceSparkPaint.color = iceColorCore.withOpacity(sparkleAlpha * 0.6);
-      canvas.drawCircle(Offset(sparkleX, sparkleY), sparkleSize, _iceSparkPaint);
+      canvas.drawCircle(
+          Offset(sparkleX, sparkleY), sparkleSize, _iceSparkPaint);
 
       // Tiny cross-shaped glint
       _iceSnowflakePaint.color = Colors.white.withOpacity(sparkleAlpha * 0.8);
@@ -5376,15 +5816,18 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final coreRadius = size.x * 0.3 * coreIntensity;
 
       // Bright white core
-      _iceGlowPaint.color = Colors.white.withOpacity(coreIntensity * 0.4 * corePulse);
+      _iceGlowPaint.color =
+          Colors.white.withOpacity(coreIntensity * 0.4 * corePulse);
       canvas.drawCircle(center, coreRadius * 0.5, _iceGlowPaint);
 
       // Cyan outer glow
-      _iceGlowPaint.color = iceColorCore.withOpacity(coreIntensity * 0.3 * corePulse);
+      _iceGlowPaint.color =
+          iceColorCore.withOpacity(coreIntensity * 0.3 * corePulse);
       canvas.drawCircle(center, coreRadius, _iceGlowPaint);
 
       // Deep blue halo
-      _iceGlowPaint.color = iceColorDeep.withOpacity(coreIntensity * 0.2 * corePulse);
+      _iceGlowPaint.color =
+          iceColorDeep.withOpacity(coreIntensity * 0.2 * corePulse);
       canvas.drawCircle(center, coreRadius * 1.5, _iceGlowPaint);
     }
 
@@ -5428,7 +5871,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   // ENERGY WEB TRAP EFFECT FOR SLOW TOWERS (Phase Mage, Glimmer Field)
   // ═══════════════════════════════════════════════════════════════════════════
   void _renderEnergyWeb(Canvas canvas, Offset center) {
-    final webIntensity = _webExpansion * (0.6 + _chargeLevel * 0.3 + (_isFiring ? 0.4 : 0));
+    final webIntensity =
+        _webExpansion * (0.6 + _chargeLevel * 0.3 + (_isFiring ? 0.4 : 0));
     if (webIntensity < 0.01) return;
 
     // Cyan/blue color scheme for energy web
@@ -5449,15 +5893,18 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final hubRadius = size.x * 0.25 * webIntensity;
 
     // Outer hub glow
-    _webHubGlowPaint.color = webColorPrimary.withOpacity(webIntensity * 0.3 * hubPulse);
+    _webHubGlowPaint.color =
+        webColorPrimary.withOpacity(webIntensity * 0.3 * hubPulse);
     canvas.drawCircle(center, hubRadius * 2, _webHubGlowPaint);
 
     // Inner hub glow
-    _webHubGlowPaint.color = webColorSecondary.withOpacity(webIntensity * 0.4 * hubPulse);
+    _webHubGlowPaint.color =
+        webColorSecondary.withOpacity(webIntensity * 0.4 * hubPulse);
     canvas.drawCircle(center, hubRadius * 1.2, _webHubGlowPaint);
 
     // Hub core
-    _webHubCorePaint.color = webColorCore.withOpacity(webIntensity * 0.6 * hubPulse);
+    _webHubCorePaint.color =
+        webColorCore.withOpacity(webIntensity * 0.6 * hubPulse);
     canvas.drawCircle(center, hubRadius * 0.5, _webHubCorePaint);
 
     // Hub ring
@@ -5474,10 +5921,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final wobbledAngle = strandAngle + strandWobble;
 
       // Calculate strand length based on expansion
-      final strandLength = baseRadius + (maxWebRadius - baseRadius) * _webExpansion;
+      final strandLength =
+          baseRadius + (maxWebRadius - baseRadius) * _webExpansion;
 
       // Draw glow layer first
-      _webStrandGlowPaint.color = webColorPrimary.withOpacity(webIntensity * 0.2);
+      _webStrandGlowPaint.color =
+          webColorPrimary.withOpacity(webIntensity * 0.2);
       canvas.drawLine(
         Offset(
           center.dx + math.cos(wobbledAngle) * baseRadius * 0.5,
@@ -5492,7 +5941,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Draw core strand
       final strandPulse = 0.5 + math.sin(_webPulsePhase * 3 + i) * 0.3;
-      _webStrandPaint.color = webColorPrimary.withOpacity(webIntensity * 0.6 * strandPulse);
+      _webStrandPaint.color =
+          webColorPrimary.withOpacity(webIntensity * 0.6 * strandPulse);
       canvas.drawLine(
         Offset(
           center.dx + math.cos(wobbledAngle) * baseRadius * 0.5,
@@ -5511,12 +5961,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     for (int ring = 1; ring <= ringCount; ring++) {
       final ringProgress = ring / (ringCount + 1);
-      final ringRadius = baseRadius + (maxWebRadius - baseRadius) * ringProgress * _webExpansion;
+      final ringRadius = baseRadius +
+          (maxWebRadius - baseRadius) * ringProgress * _webExpansion;
 
       if (ringRadius < baseRadius * 0.6) continue;
 
       final ringPulse = 0.4 + math.sin(_webPulsePhase * 2 + ring * 0.8) * 0.3;
-      final ringAlpha = webIntensity * 0.4 * ringPulse * (1 - ringProgress * 0.3);
+      final ringAlpha =
+          webIntensity * 0.4 * ringPulse * (1 - ringProgress * 0.3);
 
       // Draw segmented ring connecting strands
       _webPath.reset();
@@ -5551,12 +6003,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     for (int i = 0; i < pulseCount; i++) {
       // Each pulse travels along a strand
       final strandIndex = i % strandCount;
-      final strandAngle = strandIndex * math.pi * 2 / strandCount + _animationPhase * 0.1;
+      final strandAngle =
+          strandIndex * math.pi * 2 / strandCount + _animationPhase * 0.1;
 
       // Pulse travels outward along the strand
       final pulsePhase = (_webPulsePhase * 1.5 + i * 0.3) % 1.0;
-      final strandLength = baseRadius + (maxWebRadius - baseRadius) * _webExpansion;
-      final pulseDistance = baseRadius * 0.5 + (strandLength - baseRadius * 0.5) * pulsePhase;
+      final strandLength =
+          baseRadius + (maxWebRadius - baseRadius) * _webExpansion;
+      final pulseDistance =
+          baseRadius * 0.5 + (strandLength - baseRadius * 0.5) * pulsePhase;
 
       // Pulse fades at beginning and end
       final pulseAlpha = math.sin(pulsePhase * math.pi) * webIntensity * 0.8;
@@ -5591,18 +6046,22 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (distanceToEnemy > maxWebRadius * 1.2) continue;
 
       final trapPulse = 0.6 + math.sin(_webPulsePhase * 5) * 0.4;
-      final trapIntensity = webIntensity * (1 - distanceToEnemy / (maxWebRadius * 1.5)).clamp(0.0, 1.0);
+      final trapIntensity = webIntensity *
+          (1 - distanceToEnemy / (maxWebRadius * 1.5)).clamp(0.0, 1.0);
 
       // Outer trap glow
-      _webTrapGlowPaint.color = webColorAccent.withOpacity(trapIntensity * 0.25 * trapPulse);
+      _webTrapGlowPaint.color =
+          webColorAccent.withOpacity(trapIntensity * 0.25 * trapPulse);
       canvas.drawCircle(enemyPos, 20, _webTrapGlowPaint);
 
       // Inner trap glow
-      _webTrapGlowPaint.color = webColorPrimary.withOpacity(trapIntensity * 0.35 * trapPulse);
+      _webTrapGlowPaint.color =
+          webColorPrimary.withOpacity(trapIntensity * 0.35 * trapPulse);
       canvas.drawCircle(enemyPos, 12, _webTrapGlowPaint);
 
       // Trap ring
-      _webTrapRingPaint.color = webColorPrimary.withOpacity(trapIntensity * 0.5 * trapPulse);
+      _webTrapRingPaint.color =
+          webColorPrimary.withOpacity(trapIntensity * 0.5 * trapPulse);
       canvas.drawCircle(enemyPos, 15, _webTrapRingPaint);
 
       // Hexagonal trap indicator
@@ -5619,7 +6078,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         }
       }
       _webPath.close();
-      _webRingPaint.color = webColorAccent.withOpacity(trapIntensity * 0.4 * trapPulse);
+      _webRingPaint.color =
+          webColorAccent.withOpacity(trapIntensity * 0.4 * trapPulse);
       _webRingPaint.strokeWidth = 1;
       canvas.drawPath(_webPath, _webRingPaint);
     }
@@ -5635,10 +6095,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (shimmerFlash < 0.15) continue;
 
       // Random position along web structure
-      final shimmerRandom = _webRandom.nextInt(1000) + i * 137 + (_webPulsePhase * 5).floor();
-      final shimmerSeed = math.Random(shimmerRandom);
+      final shimmerRandom =
+          _webRandom.nextInt(1000) + i * 137 + (_webPulsePhase * 5).floor();
+      final shimmerSeed = _FastRng(shimmerRandom);
       final shimmerAngle = shimmerSeed.nextDouble() * math.pi * 2;
-      final shimmerDistance = baseRadius + shimmerSeed.nextDouble() * (maxWebRadius - baseRadius) * _webExpansion;
+      final shimmerDistance = baseRadius +
+          shimmerSeed.nextDouble() *
+              (maxWebRadius - baseRadius) *
+              _webExpansion;
       final shimmerX = center.dx + math.cos(shimmerAngle) * shimmerDistance;
       final shimmerY = center.dy + math.sin(shimmerAngle) * shimmerDistance;
 
@@ -5647,11 +6111,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Shimmer glow
       _webShimmerPaint.color = webColorCore.withOpacity(shimmerAlpha * 0.6);
-      canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize * 1.5, _webShimmerPaint);
+      canvas.drawCircle(
+          Offset(shimmerX, shimmerY), shimmerSize * 1.5, _webShimmerPaint);
 
       // Shimmer core
       _webPulseCorePaint.color = webColorCore.withOpacity(shimmerAlpha);
-      canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize * 0.5, _webPulseCorePaint);
+      canvas.drawCircle(
+          Offset(shimmerX, shimmerY), shimmerSize * 0.5, _webPulseCorePaint);
 
       // Cross-shaped glint
       _webStrandPaint.color = webColorCore.withOpacity(shimmerAlpha * 0.8);
@@ -5682,21 +6148,32 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Only draw tension lines to enemies within range
       if (distanceToEnemy > maxWebRadius * 1.3) continue;
 
-      final tensionIntensity = webIntensity * (1 - distanceToEnemy / (maxWebRadius * 1.5)).clamp(0.0, 1.0);
-      final tensionPulse = 0.5 + math.sin(_webPulsePhase * 6 + distanceToEnemy * 0.01) * 0.4;
+      final tensionIntensity = webIntensity *
+          (1 - distanceToEnemy / (maxWebRadius * 1.5)).clamp(0.0, 1.0);
+      final tensionPulse =
+          0.5 + math.sin(_webPulsePhase * 6 + distanceToEnemy * 0.01) * 0.4;
 
       // Calculate the angle to the enemy
-      final angleToEnemy = math.atan2(enemyPos.dy - center.dy, enemyPos.dx - center.dx);
+      final angleToEnemy =
+          math.atan2(enemyPos.dy - center.dy, enemyPos.dx - center.dx);
 
       // Find nearest strand angle
-      final nearestStrandIndex = ((angleToEnemy / (math.pi * 2 / strandCount)) % strandCount).round() % strandCount;
-      final nearestStrandAngle = nearestStrandIndex * math.pi * 2 / strandCount + _animationPhase * 0.1;
+      final nearestStrandIndex =
+          ((angleToEnemy / (math.pi * 2 / strandCount)) % strandCount).round() %
+              strandCount;
+      final nearestStrandAngle =
+          nearestStrandIndex * math.pi * 2 / strandCount +
+              _animationPhase * 0.1;
 
       // Draw tension line from nearest strand intersection to enemy
-      final strandLength = baseRadius + (maxWebRadius - baseRadius) * _webExpansion;
-      final intersectionDistance = (distanceToEnemy * 0.7).clamp(baseRadius, strandLength);
-      final intersectionX = center.dx + math.cos(nearestStrandAngle) * intersectionDistance;
-      final intersectionY = center.dy + math.sin(nearestStrandAngle) * intersectionDistance;
+      final strandLength =
+          baseRadius + (maxWebRadius - baseRadius) * _webExpansion;
+      final intersectionDistance =
+          (distanceToEnemy * 0.7).clamp(baseRadius, strandLength);
+      final intersectionX =
+          center.dx + math.cos(nearestStrandAngle) * intersectionDistance;
+      final intersectionY =
+          center.dy + math.sin(nearestStrandAngle) * intersectionDistance;
 
       // Draw wavy tension line
       _webPath.reset();
@@ -5713,11 +6190,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       _webPath.quadraticBezierTo(controlX, controlY, enemyPos.dx, enemyPos.dy);
 
       // Draw tension glow
-      _webTensionGlowPaint.color = webColorAccent.withOpacity(tensionIntensity * 0.2 * tensionPulse);
+      _webTensionGlowPaint.color =
+          webColorAccent.withOpacity(tensionIntensity * 0.2 * tensionPulse);
       canvas.drawPath(_webPath, _webTensionGlowPaint);
 
       // Draw tension core
-      _webTensionPaint.color = webColorPrimary.withOpacity(tensionIntensity * 0.5 * tensionPulse);
+      _webTensionPaint.color =
+          webColorPrimary.withOpacity(tensionIntensity * 0.5 * tensionPulse);
       canvas.drawPath(_webPath, _webTensionPaint);
 
       // Draw energy nodes along tension line
@@ -5725,8 +6204,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       for (int n = 1; n < nodeCount; n++) {
         final t = n / nodeCount;
         // Approximate position along the quadratic bezier
-        final nodeX = (1 - t) * (1 - t) * intersectionX + 2 * (1 - t) * t * controlX + t * t * enemyPos.dx;
-        final nodeY = (1 - t) * (1 - t) * intersectionY + 2 * (1 - t) * t * controlY + t * t * enemyPos.dy;
+        final nodeX = (1 - t) * (1 - t) * intersectionX +
+            2 * (1 - t) * t * controlX +
+            t * t * enemyPos.dx;
+        final nodeY = (1 - t) * (1 - t) * intersectionY +
+            2 * (1 - t) * t * controlY +
+            t * t * enemyPos.dy;
 
         final nodePulse = 0.5 + math.sin(_webPulsePhase * 5 + n * 1.2) * 0.5;
         final nodeAlpha = tensionIntensity * 0.6 * nodePulse;
@@ -5776,7 +6259,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         }
       }
 
-      final lineAlpha = vortexIntensity * (0.15 + math.sin(_animationPhase * 4 + i) * 0.1);
+      final lineAlpha =
+          vortexIntensity * (0.15 + math.sin(_animationPhase * 4 + i) * 0.1);
       _vortexDistortPaint.color = vortexColor.withOpacity(lineAlpha);
       canvas.drawPath(_vortexPath, _vortexDistortPaint);
     }
@@ -5786,7 +6270,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     final spiralCount = 4;
     for (int i = 0; i < spiralCount; i++) {
-      final spiralBaseAngle = i * math.pi * 2 / spiralCount + _animationPhase * 2;
+      final spiralBaseAngle =
+          i * math.pi * 2 / spiralCount + _animationPhase * 2;
       final spiralLength = size.x * (0.8 + vortexIntensity * 0.4);
 
       _vortexPath.reset();
@@ -5805,7 +6290,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         }
       }
 
-      final spiralAlpha = vortexIntensity * (0.4 + math.sin(_animationPhase * 5 + i * 1.5) * 0.2);
+      final spiralAlpha = vortexIntensity *
+          (0.4 + math.sin(_animationPhase * 5 + i * 1.5) * 0.2);
       _vortexSpiralPaint.color = vortexColorAccent.withOpacity(spiralAlpha);
       canvas.drawPath(_vortexPath, _vortexSpiralPaint);
 
@@ -5856,12 +6342,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawCircle(center, horizonRadius * horizonPulse, _vortexCorePaint);
 
     // Event horizon glow
-    _vortexEventHorizonPaint.color = vortexColorInner.withOpacity(vortexIntensity * 0.7);
-    canvas.drawCircle(center, horizonRadius * horizonPulse, _vortexEventHorizonPaint);
+    _vortexEventHorizonPaint.color =
+        vortexColorInner.withOpacity(vortexIntensity * 0.7);
+    canvas.drawCircle(
+        center, horizonRadius * horizonPulse, _vortexEventHorizonPaint);
 
     // Outer horizon glow
-    _vortexEventHorizonPaint.color = vortexColor.withOpacity(vortexIntensity * 0.5);
-    canvas.drawCircle(center, horizonRadius * horizonPulse * 1.2, _vortexEventHorizonPaint);
+    _vortexEventHorizonPaint.color =
+        vortexColor.withOpacity(vortexIntensity * 0.5);
+    canvas.drawCircle(
+        center, horizonRadius * horizonPulse * 1.2, _vortexEventHorizonPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 5: PARTICLES BEING PULLED IN
@@ -5869,12 +6359,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final particleCount = (12 * vortexIntensity).ceil();
     for (int i = 0; i < particleCount; i++) {
       final particlePhase = (_animationPhase * 2 + i * 0.4) % 1.0;
-      final particleAngle = i * math.pi * 2 / particleCount + _animationPhase * 3;
+      final particleAngle =
+          i * math.pi * 2 / particleCount + _animationPhase * 3;
 
       // Particle spirals inward
       final outerR = size.x * 0.9;
       final innerR = size.x * 0.15;
-      final particleR = outerR - (outerR - innerR) * math.pow(particlePhase, 0.5);
+      final particleR =
+          outerR - (outerR - innerR) * math.pow(particlePhase, 0.5);
       final spiralOffset = particlePhase * math.pi * 1.2;
 
       final px = center.dx + math.cos(particleAngle + spiralOffset) * particleR;
@@ -5888,8 +6380,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       canvas.drawCircle(Offset(px, py), particleSize, _vortexParticlePaint);
 
       // Bright core
-      _vortexParticlePaint.color = Colors.white.withOpacity(particleAlpha * 0.7);
-      canvas.drawCircle(Offset(px, py), particleSize * 0.4, _vortexParticlePaint);
+      _vortexParticlePaint.color =
+          Colors.white.withOpacity(particleAlpha * 0.7);
+      canvas.drawCircle(
+          Offset(px, py), particleSize * 0.4, _vortexParticlePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5910,10 +6404,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         for (int j = 0; j <= 6; j++) {
           final t = j / 6;
           final r = arcStart + (arcEnd - arcStart) * t;
-          final wobble = math.sin(t * math.pi * 2 + _animationPhase * 10) * 4 * (1 - t);
+          final wobble =
+              math.sin(t * math.pi * 2 + _animationPhase * 10) * 4 * (1 - t);
           final perpAngle = arcAngle + math.pi / 2;
-          final x = center.dx + math.cos(arcAngle) * r + math.cos(perpAngle) * wobble;
-          final y = center.dy + math.sin(arcAngle) * r + math.sin(perpAngle) * wobble;
+          final x =
+              center.dx + math.cos(arcAngle) * r + math.cos(perpAngle) * wobble;
+          final y =
+              center.dy + math.sin(arcAngle) * r + math.sin(perpAngle) * wobble;
 
           if (j == 0) {
             _vortexPath.moveTo(x, y);
@@ -5934,10 +6431,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final glowPulse = 0.6 + math.sin(_animationPhase * 3) * 0.2;
     final glowRadius = size.x * (0.5 + vortexIntensity * 0.3);
 
-    _vortexGlowPaint.color = vortexColorInner.withOpacity(vortexIntensity * 0.15 * glowPulse);
+    _vortexGlowPaint.color =
+        vortexColorInner.withOpacity(vortexIntensity * 0.15 * glowPulse);
     canvas.drawCircle(center, glowRadius, _vortexGlowPaint);
 
-    _vortexGlowPaint.color = vortexColor.withOpacity(vortexIntensity * 0.1 * glowPulse);
+    _vortexGlowPaint.color =
+        vortexColor.withOpacity(vortexIntensity * 0.1 * glowPulse);
     canvas.drawCircle(center, glowRadius * 1.3, _vortexGlowPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -5953,7 +6452,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       canvas.drawCircle(center, flashRadius * 0.5, _vortexGlowPaint);
 
       // Colored ring expanding outward
-      _vortexEventHorizonPaint.color = vortexColor.withOpacity(flashAlpha * 0.7);
+      _vortexEventHorizonPaint.color =
+          vortexColor.withOpacity(flashAlpha * 0.7);
       canvas.drawCircle(center, flashRadius, _vortexEventHorizonPaint);
 
       // Distortion rings
@@ -5977,9 +6477,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get secondary and tertiary colors for visual variety
     final hslColor = HSLColor.fromColor(primaryColor);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
-    final accentColor = hslColor.withLightness((hslColor.lightness + 0.2).clamp(0.0, 1.0)).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final tertiaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final accentColor = hslColor
+        .withLightness((hslColor.lightness + 0.2).clamp(0.0, 1.0))
+        .toColor();
 
     // Satellite configuration: 4 satellites at different orbital heights and speeds
     const int satelliteCount = 4;
@@ -5989,8 +6493,18 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       size.x * 0.85,
       size.x * 1.0,
     ];
-    final List<double> orbitSpeeds = [1.2, -0.8, 1.5, -1.0]; // Varied speeds, some reverse
-    final List<double> verticalOffsets = [0.0, -3.0, 2.0, -1.5]; // Simulate height variation
+    final List<double> orbitSpeeds = [
+      1.2,
+      -0.8,
+      1.5,
+      -1.0
+    ]; // Varied speeds, some reverse
+    final List<double> verticalOffsets = [
+      0.0,
+      -3.0,
+      2.0,
+      -1.5
+    ]; // Simulate height variation
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: ORBITAL PATH RINGS (dashed/dotted effect)
@@ -6003,7 +6517,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final dashLength = dashAngleSpan * 0.4;
 
       for (int d = 0; d < dashCount; d++) {
-        final dashStart = d * dashAngleSpan + _animationPhase * orbitSpeeds[i] * 0.3;
+        final dashStart =
+            d * dashAngleSpan + _animationPhase * orbitSpeeds[i] * 0.3;
 
         // Orbital ring with dashed segments
         _satellitePath.reset();
@@ -6014,7 +6529,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         );
 
         final dashPulse = 0.7 + math.sin(_animationPhase * 4 + d * 0.3) * 0.3;
-        _satelliteOrbitPaint.color = primaryColor.withOpacity(orbitAlpha * dashPulse);
+        _satelliteOrbitPaint.color =
+            primaryColor.withOpacity(orbitAlpha * dashPulse);
         canvas.drawPath(_satellitePath, _satelliteOrbitPaint);
       }
     }
@@ -6026,20 +6542,24 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final orbitRadius = orbitRadii[i];
       final speed = orbitSpeeds[i];
       final satelliteAngle = _animationPhase * speed + i * math.pi / 2;
-      final vertOffset = verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
+      final vertOffset =
+          verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
 
       final satX = center.dx + math.cos(satelliteAngle) * orbitRadius;
-      final satY = center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
+      final satY =
+          center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
       final satCenter = Offset(satX, satY);
 
       // Outer glow halo
       final glowPulse = 0.6 + math.sin(_animationPhase * 5 + i * 1.5) * 0.4;
       final glowRadius = 8 + glowPulse * 4;
-      _satelliteGlowPaint.color = primaryColor.withOpacity(satelliteIntensity * 0.3 * glowPulse);
+      _satelliteGlowPaint.color =
+          primaryColor.withOpacity(satelliteIntensity * 0.3 * glowPulse);
       canvas.drawCircle(satCenter, glowRadius, _satelliteGlowPaint);
 
       // Inner core glow
-      _satelliteCorePaint.color = accentColor.withOpacity(satelliteIntensity * 0.5 * glowPulse);
+      _satelliteCorePaint.color =
+          accentColor.withOpacity(satelliteIntensity * 0.5 * glowPulse);
       canvas.drawCircle(satCenter, glowRadius * 0.5, _satelliteCorePaint);
     }
 
@@ -6050,10 +6570,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final orbitRadius = orbitRadii[i];
       final speed = orbitSpeeds[i];
       final satelliteAngle = _animationPhase * speed + i * math.pi / 2;
-      final vertOffset = verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
+      final vertOffset =
+          verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
 
       final satX = center.dx + math.cos(satelliteAngle) * orbitRadius;
-      final satY = center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
+      final satY =
+          center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
 
       // Draw curved energy tether from center to satellite
       _satellitePath.reset();
@@ -6067,12 +6589,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Pulsing energy along tether
       final tetherPulse = 0.5 + math.sin(_animationPhase * 6 + i * 2) * 0.5;
-      _satelliteTetherPaint.color = secondaryColor.withOpacity(satelliteIntensity * 0.35 * tetherPulse);
+      _satelliteTetherPaint.color =
+          secondaryColor.withOpacity(satelliteIntensity * 0.35 * tetherPulse);
       canvas.drawPath(_satellitePath, _satelliteTetherPaint);
 
       // Brighter core tether line
       _satelliteTetherPaint.strokeWidth = 1;
-      _satelliteTetherPaint.color = accentColor.withOpacity(satelliteIntensity * 0.5 * tetherPulse);
+      _satelliteTetherPaint.color =
+          accentColor.withOpacity(satelliteIntensity * 0.5 * tetherPulse);
       canvas.drawPath(_satellitePath, _satelliteTetherPaint);
       _satelliteTetherPaint.strokeWidth = 1.5;
 
@@ -6083,7 +6607,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Simple lerp along the tether (approximation)
         final px = center.dx + (satX - center.dx) * t;
         final py = center.dy + (satY - center.dy) * t;
-        final particleAlpha = (1 - (t - 0.5).abs() * 2) * satelliteIntensity * 0.6;
+        final particleAlpha =
+            (1 - (t - 0.5).abs() * 2) * satelliteIntensity * 0.6;
 
         _satelliteDataPaint.color = accentColor.withOpacity(particleAlpha);
         canvas.drawCircle(Offset(px, py), 2, _satelliteDataPaint);
@@ -6097,10 +6622,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final orbitRadius = orbitRadii[i];
       final speed = orbitSpeeds[i];
       final satelliteAngle = _animationPhase * speed + i * math.pi / 2;
-      final vertOffset = verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
+      final vertOffset =
+          verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
 
       final satX = center.dx + math.cos(satelliteAngle) * orbitRadius;
-      final satY = center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
+      final satY =
+          center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
       final satCenter = Offset(satX, satY);
 
       // Satellite body - small diamond/rhombus shape
@@ -6121,11 +6648,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       _satellitePath.close();
 
       // Fill satellite body
-      _satelliteBodyPaint.color = primaryColor.withOpacity(satelliteIntensity * 0.8);
+      _satelliteBodyPaint.color =
+          primaryColor.withOpacity(satelliteIntensity * 0.8);
       canvas.drawPath(_satellitePath, _satelliteBodyPaint);
 
       // Bright center dot
-      _satelliteCorePaint.color = Colors.white.withOpacity(satelliteIntensity * 0.9);
+      _satelliteCorePaint.color =
+          Colors.white.withOpacity(satelliteIntensity * 0.9);
       canvas.drawCircle(satCenter, 1.5, _satelliteCorePaint);
     }
 
@@ -6141,13 +6670,17 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final speed2 = orbitSpeeds[nextI];
       final angle1 = _animationPhase * speed1 + i * math.pi / 2;
       final angle2 = _animationPhase * speed2 + nextI * math.pi / 2;
-      final vertOffset1 = verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
-      final vertOffset2 = verticalOffsets[nextI] + math.sin(_animationPhase * 2 + nextI) * 2;
+      final vertOffset1 =
+          verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
+      final vertOffset2 =
+          verticalOffsets[nextI] + math.sin(_animationPhase * 2 + nextI) * 2;
 
       final sat1X = center.dx + math.cos(angle1) * orbitRadius1;
-      final sat1Y = center.dy + math.sin(angle1) * orbitRadius1 * 0.6 + vertOffset1;
+      final sat1Y =
+          center.dy + math.sin(angle1) * orbitRadius1 * 0.6 + vertOffset1;
       final sat2X = center.dx + math.cos(angle2) * orbitRadius2;
-      final sat2Y = center.dy + math.sin(angle2) * orbitRadius2 * 0.6 + vertOffset2;
+      final sat2Y =
+          center.dy + math.sin(angle2) * orbitRadius2 * 0.6 + vertOffset2;
 
       // Data stream particles traveling between adjacent satellites
       const streamParticles = 4;
@@ -6155,7 +6688,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final t = ((_animationPhase * 4 + i * 0.5 + p * 0.25) % 1.0);
         final px = sat1X + (sat2X - sat1X) * t;
         final py = sat1Y + (sat2Y - sat1Y) * t;
-        final particleAlpha = (1 - (t - 0.5).abs() * 2) * satelliteIntensity * 0.5;
+        final particleAlpha =
+            (1 - (t - 0.5).abs() * 2) * satelliteIntensity * 0.5;
 
         // Alternate colors for data variety
         final particleColor = (p % 2 == 0) ? tertiaryColor : secondaryColor;
@@ -6171,10 +6705,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final orbitRadius = orbitRadii[i];
       final speed = orbitSpeeds[i];
       final satelliteAngle = _animationPhase * speed + i * math.pi / 2;
-      final vertOffset = verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
+      final vertOffset =
+          verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
 
       final satX = center.dx + math.cos(satelliteAngle) * orbitRadius;
-      final satY = center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
+      final satY =
+          center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
       final satCenter = Offset(satX, satY);
 
       // Expanding pulse wave (staggered timing per satellite)
@@ -6189,10 +6725,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         // Secondary inner pulse wave
         final innerPulsePhase = ((pulsePhase + 0.3) % 1.0);
         final innerPulseRadius = 2 + innerPulsePhase * 10;
-        final innerPulseAlpha = (1 - innerPulsePhase) * satelliteIntensity * 0.3;
+        final innerPulseAlpha =
+            (1 - innerPulsePhase) * satelliteIntensity * 0.3;
 
         if (innerPulseAlpha > 0.05) {
-          _satellitePulsePaint.color = secondaryColor.withOpacity(innerPulseAlpha);
+          _satellitePulsePaint.color =
+              secondaryColor.withOpacity(innerPulseAlpha);
           canvas.drawCircle(satCenter, innerPulseRadius, _satellitePulsePaint);
         }
       }
@@ -6205,23 +6743,28 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final orbitRadius = orbitRadii[i];
       final speed = orbitSpeeds[i];
       final satelliteAngle = _animationPhase * speed + i * math.pi / 2;
-      final vertOffset = verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
+      final vertOffset =
+          verticalOffsets[i] + math.sin(_animationPhase * 2 + i) * 2;
 
       final satX = center.dx + math.cos(satelliteAngle) * orbitRadius;
-      final satY = center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
+      final satY =
+          center.dy + math.sin(satelliteAngle) * orbitRadius * 0.6 + vertOffset;
 
       // Holographic antenna/sensor lines extending from satellite
       const antennaCount = 3;
       final satRotation = _animationPhase * 3 + i * 0.8;
 
       for (int a = 0; a < antennaCount; a++) {
-        final antennaAngle = satRotation + a * math.pi * 2 / antennaCount + math.pi / 6;
+        final antennaAngle =
+            satRotation + a * math.pi * 2 / antennaCount + math.pi / 6;
         final antennaLength = 6 + math.sin(_animationPhase * 4 + i + a) * 2;
         final antennaEndX = satX + math.cos(antennaAngle) * antennaLength;
         final antennaEndY = satY + math.sin(antennaAngle) * antennaLength * 0.7;
 
-        final holoFlicker = 0.5 + math.sin(_animationPhase * 8 + i * 2 + a) * 0.5;
-        _satelliteHoloPaint.color = accentColor.withOpacity(satelliteIntensity * 0.5 * holoFlicker);
+        final holoFlicker =
+            0.5 + math.sin(_animationPhase * 8 + i * 2 + a) * 0.5;
+        _satelliteHoloPaint.color =
+            accentColor.withOpacity(satelliteIntensity * 0.5 * holoFlicker);
         canvas.drawLine(
           Offset(satX, satY),
           Offset(antennaEndX, antennaEndY),
@@ -6229,8 +6772,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         );
 
         // Small node at antenna tip
-        _satelliteDataPaint.color = tertiaryColor.withOpacity(satelliteIntensity * 0.6 * holoFlicker);
-        canvas.drawCircle(Offset(antennaEndX, antennaEndY), 1, _satelliteDataPaint);
+        _satelliteDataPaint.color =
+            tertiaryColor.withOpacity(satelliteIntensity * 0.6 * holoFlicker);
+        canvas.drawCircle(
+            Offset(antennaEndX, antennaEndY), 1, _satelliteDataPaint);
       }
 
       // Holographic data readout arc around satellite
@@ -6246,7 +6791,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         dataArcSweep,
       );
 
-      _satelliteHoloPaint.color = secondaryColor.withOpacity(satelliteIntensity * 0.4 * dataFlicker);
+      _satelliteHoloPaint.color =
+          secondaryColor.withOpacity(satelliteIntensity * 0.4 * dataFlicker);
       canvas.drawPath(_satellitePath, _satelliteHoloPaint);
 
       // Small holographic tick marks on the arc
@@ -6260,8 +6806,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final tickX2 = satX + math.cos(tickAngle) * tickOuter;
         final tickY2 = satY + math.sin(tickAngle) * tickOuter;
 
-        _satelliteHoloPaint.color = accentColor.withOpacity(satelliteIntensity * 0.35 * dataFlicker);
-        canvas.drawLine(Offset(tickX1, tickY1), Offset(tickX2, tickY2), _satelliteHoloPaint);
+        _satelliteHoloPaint.color =
+            accentColor.withOpacity(satelliteIntensity * 0.35 * dataFlicker);
+        canvas.drawLine(Offset(tickX1, tickY1), Offset(tickX2, tickY2),
+            _satelliteHoloPaint);
       }
     }
   }
@@ -6276,8 +6824,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Get secondary colors for visual variety (green/cyan scheme)
     final hslColor = HSLColor.fromColor(primaryColor);
     final cyanColor = hslColor.withHue(180).toColor(); // Cyan accent
-    final brightGreen = hslColor.withLightness((hslColor.lightness + 0.2).clamp(0.0, 1.0)).toColor();
-    final darkGreen = hslColor.withLightness((hslColor.lightness - 0.2).clamp(0.0, 1.0)).toColor();
+    final brightGreen = hslColor
+        .withLightness((hslColor.lightness + 0.2).clamp(0.0, 1.0))
+        .toColor();
+    final darkGreen = hslColor
+        .withLightness((hslColor.lightness - 0.2).clamp(0.0, 1.0))
+        .toColor();
 
     // Drone configuration: 7 drones at various orbital parameters
     const int droneCount = 7;
@@ -6291,8 +6843,24 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       size.x * 0.95,
     ];
     final List<double> orbitSpeeds = [1.3, -0.9, 1.1, -1.4, 0.8, -1.2, 1.0];
-    final List<double> heightOffsets = [0.0, -4.0, 2.5, -2.0, 3.5, -1.0, 1.5]; // Simulate 3D height
-    final List<double> phaseOffsets = [0.0, 0.9, 1.8, 2.7, 3.6, 4.5, 5.4]; // Initial angle offsets
+    final List<double> heightOffsets = [
+      0.0,
+      -4.0,
+      2.5,
+      -2.0,
+      3.5,
+      -1.0,
+      1.5
+    ]; // Simulate 3D height
+    final List<double> phaseOffsets = [
+      0.0,
+      0.9,
+      1.8,
+      2.7,
+      3.6,
+      4.5,
+      5.4
+    ]; // Initial angle offsets
 
     // Calculate drone positions first (used by multiple layers)
     final List<Offset> dronePositions = [];
@@ -6300,17 +6868,21 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final orbitRadius = orbitRadii[i];
       final speed = orbitSpeeds[i];
       final droneAngle = _animationPhase * speed + phaseOffsets[i];
-      final vertOffset = heightOffsets[i] + math.sin(_animationPhase * 2.5 + i * 0.7) * 3;
+      final vertOffset =
+          heightOffsets[i] + math.sin(_animationPhase * 2.5 + i * 0.7) * 3;
 
       // Formation break effect: occasionally drones drift from their orbit
       final breakPhase = math.sin(_animationPhase * 0.5 + i * 1.2);
       final breakAmount = breakPhase > 0.7 ? (breakPhase - 0.7) * 15 : 0.0;
       final breakAngle = _animationPhase * 0.3 + i;
 
-      final droneX = center.dx + math.cos(droneAngle) * orbitRadius +
+      final droneX = center.dx +
+          math.cos(droneAngle) * orbitRadius +
           math.cos(breakAngle) * breakAmount;
-      final droneY = center.dy + math.sin(droneAngle) * orbitRadius * 0.55 +
-          vertOffset + math.sin(breakAngle) * breakAmount * 0.5;
+      final droneY = center.dy +
+          math.sin(droneAngle) * orbitRadius * 0.55 +
+          vertOffset +
+          math.sin(breakAngle) * breakAmount * 0.5;
 
       dronePositions.add(Offset(droneX, droneY));
     }
@@ -6324,11 +6896,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final glowRadius = 10 + glowPulse * 5;
 
       // Outer glow halo
-      _droneBodyGlowPaint.color = primaryColor.withOpacity(droneIntensity * 0.25 * glowPulse);
+      _droneBodyGlowPaint.color =
+          primaryColor.withOpacity(droneIntensity * 0.25 * glowPulse);
       canvas.drawCircle(droneCenter, glowRadius, _droneBodyGlowPaint);
 
       // Inner cyan accent glow
-      _droneBodyGlowPaint.color = cyanColor.withOpacity(droneIntensity * 0.15 * glowPulse);
+      _droneBodyGlowPaint.color =
+          cyanColor.withOpacity(droneIntensity * 0.15 * glowPulse);
       canvas.drawCircle(droneCenter, glowRadius * 0.6, _droneBodyGlowPaint);
     }
 
@@ -6346,18 +6920,23 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Engine glow point
       final engineOffset = 3.0;
-      final engineX = droneCenter.dx + math.cos(trailAngle + math.pi) * engineOffset;
-      final engineY = droneCenter.dy + math.sin(trailAngle + math.pi) * engineOffset * 0.55;
+      final engineX =
+          droneCenter.dx + math.cos(trailAngle + math.pi) * engineOffset;
+      final engineY =
+          droneCenter.dy + math.sin(trailAngle + math.pi) * engineOffset * 0.55;
       final engineGlow = 0.6 + math.sin(_animationPhase * 8 + i * 2) * 0.4;
 
-      _droneEngineGlowPaint.color = cyanColor.withOpacity(droneIntensity * 0.6 * engineGlow);
+      _droneEngineGlowPaint.color =
+          cyanColor.withOpacity(droneIntensity * 0.6 * engineGlow);
       canvas.drawCircle(Offset(engineX, engineY), 4, _droneEngineGlowPaint);
 
       // Trail line
       final trailEndX = droneCenter.dx + math.cos(trailAngle) * trailLength;
-      final trailEndY = droneCenter.dy + math.sin(trailAngle) * trailLength * 0.55;
+      final trailEndY =
+          droneCenter.dy + math.sin(trailAngle) * trailLength * 0.55;
 
-      _droneEngineTrailPaint.color = cyanColor.withOpacity(droneIntensity * 0.4 * engineGlow);
+      _droneEngineTrailPaint.color =
+          cyanColor.withOpacity(droneIntensity * 0.4 * engineGlow);
       canvas.drawLine(
         Offset(engineX, engineY),
         Offset(trailEndX, trailEndY),
@@ -6381,24 +6960,30 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     for (int i = 0; i < droneCount; i++) {
       final droneCenter = dronePositions[i];
-      final tetherPulse = (0.5 + math.sin(_animationPhase * 5 + i * 1.5) * 0.5).clamp(0.0, 1.0);
+      final tetherPulse =
+          (0.5 + math.sin(_animationPhase * 5 + i * 1.5) * 0.5).clamp(0.0, 1.0);
 
       // Curved bezier tether from center to drone
       _dronePath.reset();
       final controlOffset = orbitRadii[i] * 0.4;
-      final controlAngle = math.atan2(droneCenter.dy - center.dy, droneCenter.dx - center.dx) + math.pi / 3;
+      final controlAngle =
+          math.atan2(droneCenter.dy - center.dy, droneCenter.dx - center.dx) +
+              math.pi / 3;
       final ctrlX = center.dx + math.cos(controlAngle) * controlOffset;
       final ctrlY = center.dy + math.sin(controlAngle) * controlOffset * 0.55;
 
       _dronePath.moveTo(center.dx, center.dy);
-      _dronePath.quadraticBezierTo(ctrlX, ctrlY, droneCenter.dx, droneCenter.dy);
+      _dronePath.quadraticBezierTo(
+          ctrlX, ctrlY, droneCenter.dx, droneCenter.dy);
 
       // Outer glow tether
-      _droneTetherPaint.color = primaryColor.withOpacity(droneIntensity * 0.25 * tetherPulse);
+      _droneTetherPaint.color =
+          primaryColor.withOpacity(droneIntensity * 0.25 * tetherPulse);
       canvas.drawPath(_dronePath, _droneTetherPaint);
 
       // Core bright tether line
-      _droneTetherCorePaint.color = brightGreen.withOpacity(droneIntensity * 0.4 * tetherPulse);
+      _droneTetherCorePaint.color =
+          brightGreen.withOpacity(droneIntensity * 0.4 * tetherPulse);
       canvas.drawPath(_dronePath, _droneTetherCorePaint);
 
       // Energy pulses along tether
@@ -6406,9 +6991,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final t = ((_animationPhase * 4 + i * 0.4 + p * 0.25) % 1.0);
         // Approximate position along the quadratic bezier
         final oneMinusT = 1 - t;
-        final px = oneMinusT * oneMinusT * center.dx + 2 * oneMinusT * t * ctrlX + t * t * droneCenter.dx;
-        final py = oneMinusT * oneMinusT * center.dy + 2 * oneMinusT * t * ctrlY + t * t * droneCenter.dy;
-        final pulseAlpha = (1 - (t - 0.5).abs() * 2) * droneIntensity * 0.6 * tetherPulse;
+        final px = oneMinusT * oneMinusT * center.dx +
+            2 * oneMinusT * t * ctrlX +
+            t * t * droneCenter.dx;
+        final py = oneMinusT * oneMinusT * center.dy +
+            2 * oneMinusT * t * ctrlY +
+            t * t * droneCenter.dy;
+        final pulseAlpha =
+            (1 - (t - 0.5).abs() * 2) * droneIntensity * 0.6 * tetherPulse;
 
         _droneDataParticlePaint.color = cyanColor.withOpacity(pulseAlpha);
         canvas.drawCircle(Offset(px, py), 2.5, _droneDataParticlePaint);
@@ -6447,11 +7037,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         _dronePath.close();
 
         // Scan beam fill with gradient-like opacity
-        _droneScanBeamPaint.color = primaryColor.withOpacity(droneIntensity * 0.15 * (scanPulse - 0.5) * 2);
+        _droneScanBeamPaint.color = primaryColor
+            .withOpacity(droneIntensity * 0.15 * (scanPulse - 0.5) * 2);
         canvas.drawPath(_dronePath, _droneScanBeamPaint);
 
         // Scan line at the bottom of the beam
-        _droneScanLinePaint.color = cyanColor.withOpacity(droneIntensity * 0.5 * (scanPulse - 0.5) * 2);
+        _droneScanLinePaint.color =
+            cyanColor.withOpacity(droneIntensity * 0.5 * (scanPulse - 0.5) * 2);
         canvas.drawLine(
           Offset(
             beamEndX - math.cos(beamAngle + math.pi / 2) * beamWidth / 2,
@@ -6482,7 +7074,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       if (distance < size.x * 0.8) {
         // Faint connection line
-        final linkAlpha = (1 - distance / (size.x * 0.8)) * droneIntensity * 0.2;
+        final linkAlpha =
+            (1 - distance / (size.x * 0.8)) * droneIntensity * 0.2;
         _droneDataLinkPaint.color = primaryColor.withOpacity(linkAlpha);
         canvas.drawLine(drone1, drone2, _droneDataLinkPaint);
 
@@ -6491,10 +7084,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final t = ((_animationPhase * 5 + i * 0.6 + p * 0.33) % 1.0);
           final px = drone1.dx + dx * t;
           final py = drone1.dy + dy * t;
-          final particleAlpha = (1 - (t - 0.5).abs() * 2) * droneIntensity * 0.5;
+          final particleAlpha =
+              (1 - (t - 0.5).abs() * 2) * droneIntensity * 0.5;
 
           final particleColor = (p % 2 == 0) ? cyanColor : primaryColor;
-          _droneDataParticlePaint.color = particleColor.withOpacity(particleAlpha);
+          _droneDataParticlePaint.color =
+              particleColor.withOpacity(particleAlpha);
           canvas.drawCircle(Offset(px, py), 2, _droneDataParticlePaint);
         }
       }
@@ -6513,7 +7108,11 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (distance < size.x * 1.0) {
         final linkFlicker = 0.3 + math.sin(_animationPhase * 6 + i) * 0.7;
         if (linkFlicker > 0.5) {
-          final linkAlpha = (1 - distance / (size.x * 1.0)) * droneIntensity * 0.15 * (linkFlicker - 0.5) * 2;
+          final linkAlpha = (1 - distance / (size.x * 1.0)) *
+              droneIntensity *
+              0.15 *
+              (linkFlicker - 0.5) *
+              2;
           _droneDataLinkPaint.color = cyanColor.withOpacity(linkAlpha);
           canvas.drawLine(drone1, drone2, _droneDataLinkPaint);
         }
@@ -6539,7 +7138,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         math.pi / 6,
       );
 
-      _droneFormationPaint.color = primaryColor.withOpacity(droneIntensity * formationPulse * 0.3);
+      _droneFormationPaint.color =
+          primaryColor.withOpacity(droneIntensity * formationPulse * 0.3);
       canvas.drawPath(_dronePath, _droneFormationPaint);
     }
 
@@ -6558,7 +7158,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       _dronePath.lineTo(markerX - markerSize, markerY);
       _dronePath.close();
 
-      _droneFormationPaint.color = cyanColor.withOpacity(droneIntensity * formationPulse * 0.5);
+      _droneFormationPaint.color =
+          cyanColor.withOpacity(droneIntensity * formationPulse * 0.5);
       canvas.drawPath(_dronePath, _droneFormationPaint);
     }
 
@@ -6572,7 +7173,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Drone body size varies slightly
       final bodySize = 5.0 + i * 0.3;
-      final bodyRotation = droneAngle * 2 + _animationPhase; // Drone spins as it moves
+      final bodyRotation =
+          droneAngle * 2 + _animationPhase; // Drone spins as it moves
 
       // Main drone body (hexagonal shape for cyberpunk aesthetic)
       _dronePath.reset();
@@ -6598,22 +7200,27 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Center core light
       final corePulse = 0.6 + math.sin(_animationPhase * 6 + i * 2) * 0.4;
-      _droneHighlightPaint.color = Colors.white.withOpacity(droneIntensity * corePulse * 0.9);
+      _droneHighlightPaint.color =
+          Colors.white.withOpacity(droneIntensity * corePulse * 0.9);
       canvas.drawCircle(droneCenter, 2, _droneHighlightPaint);
 
       // Secondary cyan accent light
       final accentAngle = bodyRotation + math.pi / 6;
       final accentX = droneCenter.dx + math.cos(accentAngle) * bodySize * 0.5;
       final accentY = droneCenter.dy + math.sin(accentAngle) * bodySize * 0.35;
-      _droneHighlightPaint.color = cyanColor.withOpacity(droneIntensity * corePulse * 0.7);
+      _droneHighlightPaint.color =
+          cyanColor.withOpacity(droneIntensity * corePulse * 0.7);
       canvas.drawCircle(Offset(accentX, accentY), 1.5, _droneHighlightPaint);
 
       // Antenna/sensor lines extending from drone
       for (int a = 0; a < 2; a++) {
-        final antennaAngle = bodyRotation + (a == 0 ? math.pi / 4 : -math.pi / 4);
+        final antennaAngle =
+            bodyRotation + (a == 0 ? math.pi / 4 : -math.pi / 4);
         final antennaLength = 4 + math.sin(_animationPhase * 5 + i + a) * 1.5;
-        final antennaEndX = droneCenter.dx + math.cos(antennaAngle) * (bodySize + antennaLength);
-        final antennaEndY = droneCenter.dy + math.sin(antennaAngle) * (bodySize + antennaLength) * 0.7;
+        final antennaEndX = droneCenter.dx +
+            math.cos(antennaAngle) * (bodySize + antennaLength);
+        final antennaEndY = droneCenter.dy +
+            math.sin(antennaAngle) * (bodySize + antennaLength) * 0.7;
 
         _droneDetailPaint.color = cyanColor.withOpacity(droneIntensity * 0.6);
         canvas.drawLine(
@@ -6626,9 +7233,13 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         );
 
         // Antenna tip glow
-        final tipPulse = (0.5 + math.sin(_animationPhase * 8 + i * 2 + a * 3) * 0.5).clamp(0.0, 1.0);
-        _droneHighlightPaint.color = primaryColor.withOpacity(droneIntensity * tipPulse * 0.8);
-        canvas.drawCircle(Offset(antennaEndX, antennaEndY), 1, _droneHighlightPaint);
+        final tipPulse =
+            (0.5 + math.sin(_animationPhase * 8 + i * 2 + a * 3) * 0.5)
+                .clamp(0.0, 1.0);
+        _droneHighlightPaint.color =
+            primaryColor.withOpacity(droneIntensity * tipPulse * 0.8);
+        canvas.drawCircle(
+            Offset(antennaEndX, antennaEndY), 1, _droneHighlightPaint);
       }
     }
 
@@ -6665,9 +7276,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get secondary colors for visual variety
     final hslColor = HSLColor.fromColor(primaryColor);
-    final accentColor = hslColor.withHue((hslColor.hue + 120) % 360).toColor(); // Complementary accent
-    final brightColor = hslColor.withLightness((hslColor.lightness + 0.3).clamp(0.0, 1.0)).toColor();
-    final dimColor = hslColor.withLightness((hslColor.lightness - 0.2).clamp(0.0, 1.0)).toColor();
+    final accentColor = hslColor
+        .withHue((hslColor.hue + 120) % 360)
+        .toColor(); // Complementary accent
+    final brightColor = hslColor
+        .withLightness((hslColor.lightness + 0.3).clamp(0.0, 1.0))
+        .toColor();
+    final dimColor = hslColor
+        .withLightness((hslColor.lightness - 0.2).clamp(0.0, 1.0))
+        .toColor();
 
     // Radar dimensions
     final radarRadius = size.x * 0.75; // Outer radar range
@@ -6694,10 +7311,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _radarPath.reset();
     final dishTipX = center.dx + math.cos(dishAngle) * dishSize * 1.8;
     final dishTipY = center.dy + math.sin(dishAngle) * dishSize * 1.8;
-    final dishBaseLeftX = center.dx + math.cos(dishAngle + math.pi * 0.8) * dishSize * 0.6;
-    final dishBaseLeftY = center.dy + math.sin(dishAngle + math.pi * 0.8) * dishSize * 0.6;
-    final dishBaseRightX = center.dx + math.cos(dishAngle - math.pi * 0.8) * dishSize * 0.6;
-    final dishBaseRightY = center.dy + math.sin(dishAngle - math.pi * 0.8) * dishSize * 0.6;
+    final dishBaseLeftX =
+        center.dx + math.cos(dishAngle + math.pi * 0.8) * dishSize * 0.6;
+    final dishBaseLeftY =
+        center.dy + math.sin(dishAngle + math.pi * 0.8) * dishSize * 0.6;
+    final dishBaseRightX =
+        center.dx + math.cos(dishAngle - math.pi * 0.8) * dishSize * 0.6;
+    final dishBaseRightY =
+        center.dy + math.sin(dishAngle - math.pi * 0.8) * dishSize * 0.6;
 
     _radarPath.moveTo(dishTipX, dishTipY);
     _radarPath.lineTo(dishBaseLeftX, dishBaseLeftY);
@@ -6723,18 +7344,22 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     _tempRect = Rect.fromCircle(center: center, radius: radarRadius);
 
     // Outer sweep glow (widest, dimmest)
-    _radarSweepGlowPaint.color = primaryColor.withOpacity(radarIntensity * 0.15);
-    canvas.drawArc(_tempRect, sweepAngle - sweepWidth * 0.5, sweepWidth, true, _radarSweepGlowPaint);
+    _radarSweepGlowPaint.color =
+        primaryColor.withOpacity(radarIntensity * 0.15);
+    canvas.drawArc(_tempRect, sweepAngle - sweepWidth * 0.5, sweepWidth, true,
+        _radarSweepGlowPaint);
 
     // Mid sweep layer
     _radarSweepPaint.color = primaryColor.withOpacity(radarIntensity * 0.25);
     _tempRect = Rect.fromCircle(center: center, radius: radarRadius * 0.9);
-    canvas.drawArc(_tempRect, sweepAngle - sweepWidth * 0.4, sweepWidth * 0.8, true, _radarSweepPaint);
+    canvas.drawArc(_tempRect, sweepAngle - sweepWidth * 0.4, sweepWidth * 0.8,
+        true, _radarSweepPaint);
 
     // Inner sweep core (brightest)
     _radarSweepPaint.color = brightColor.withOpacity(radarIntensity * 0.4);
     _tempRect = Rect.fromCircle(center: center, radius: radarRadius * 0.75);
-    canvas.drawArc(_tempRect, sweepAngle - sweepWidth * 0.3, sweepWidth * 0.6, true, _radarSweepPaint);
+    canvas.drawArc(_tempRect, sweepAngle - sweepWidth * 0.3, sweepWidth * 0.6,
+        true, _radarSweepPaint);
 
     // Leading edge beam line (bright)
     final beamEndX = center.dx + math.cos(sweepAngle) * radarRadius;
@@ -6747,24 +7372,31 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     const int ringCount = 4;
     for (int i = 1; i <= ringCount; i++) {
-      final ringRadius = innerRadius + (radarRadius - innerRadius) * (i / ringCount);
+      final ringRadius =
+          innerRadius + (radarRadius - innerRadius) * (i / ringCount);
       final ringPulse = 0.5 + math.sin(_animationPhase * 2 + i * 0.5) * 0.2;
 
       // Ring glow (subtle)
-      _radarRingGlowPaint.color = primaryColor.withOpacity(radarIntensity * 0.1 * ringPulse);
+      _radarRingGlowPaint.color =
+          primaryColor.withOpacity(radarIntensity * 0.1 * ringPulse);
       canvas.drawCircle(center, ringRadius, _radarRingGlowPaint);
 
       // Ring line
-      _radarRingPaint.color = primaryColor.withOpacity(radarIntensity * 0.3 * ringPulse);
+      _radarRingPaint.color =
+          primaryColor.withOpacity(radarIntensity * 0.3 * ringPulse);
       canvas.drawCircle(center, ringRadius, _radarRingPaint);
 
       // Range markers at cardinal directions
       for (int j = 0; j < 8; j++) {
         final markerAngle = j * math.pi / 4;
-        final markerInnerX = center.dx + math.cos(markerAngle) * (ringRadius - 3);
-        final markerInnerY = center.dy + math.sin(markerAngle) * (ringRadius - 3);
-        final markerOuterX = center.dx + math.cos(markerAngle) * (ringRadius + 3);
-        final markerOuterY = center.dy + math.sin(markerAngle) * (ringRadius + 3);
+        final markerInnerX =
+            center.dx + math.cos(markerAngle) * (ringRadius - 3);
+        final markerInnerY =
+            center.dy + math.sin(markerAngle) * (ringRadius - 3);
+        final markerOuterX =
+            center.dx + math.cos(markerAngle) * (ringRadius + 3);
+        final markerOuterY =
+            center.dy + math.sin(markerAngle) * (ringRadius + 3);
 
         _radarGridPaint.color = accentColor.withOpacity(radarIntensity * 0.4);
         canvas.drawLine(
@@ -6789,11 +7421,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final distanceToEnemy = (enemyOffset - center).distance;
 
       // Only show blips within radar range
-      if (distanceToEnemy > radarRadius || distanceToEnemy < innerRadius) continue;
+      if (distanceToEnemy > radarRadius || distanceToEnemy < innerRadius)
+        continue;
 
       // Calculate enemy angle relative to tower
-      final enemyAngle = math.atan2(enemyOffset.dy - center.dy, enemyOffset.dx - center.dx);
-      final normalizedEnemyAngle = enemyAngle < 0 ? enemyAngle + math.pi * 2 : enemyAngle;
+      final enemyAngle =
+          math.atan2(enemyOffset.dy - center.dy, enemyOffset.dx - center.dx);
+      final normalizedEnemyAngle =
+          enemyAngle < 0 ? enemyAngle + math.pi * 2 : enemyAngle;
       final normalizedSweepAngle = sweepAngle % (math.pi * 2);
 
       // Check if sweep just passed this enemy (within sweep width)
@@ -6860,7 +7495,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // Multiple trail arcs with decreasing opacity
     const int trailSegments = 6;
     for (int i = 1; i <= trailSegments; i++) {
-      final trailAngleOffset = i * (math.pi / 12); // Each segment is 15 degrees behind
+      final trailAngleOffset =
+          i * (math.pi / 12); // Each segment is 15 degrees behind
       final trailStartAngle = sweepAngle - trailAngleOffset - (math.pi / 24);
       final trailAlpha = radarIntensity * 0.15 * (1 - i / (trailSegments + 1));
 
@@ -6868,7 +7504,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         _radarTrailPaint.color = primaryColor.withOpacity(trailAlpha);
         final trailRadius = radarRadius * (0.95 - i * 0.03);
         _tempRect = Rect.fromCircle(center: center, radius: trailRadius);
-        canvas.drawArc(_tempRect, trailStartAngle, math.pi / 24, true, _radarTrailPaint);
+        canvas.drawArc(
+            _tempRect, trailStartAngle, math.pi / 24, true, _radarTrailPaint);
       }
     }
 
@@ -6887,9 +7524,11 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Spoke line with varying intensity based on proximity to sweep
       var spokeDiff = ((sweepAngle % (math.pi * 2)) - spokeAngle).abs();
       if (spokeDiff > math.pi) spokeDiff = math.pi * 2 - spokeDiff;
-      final spokeHighlight = spokeDiff < sweepWidth ? (1 - spokeDiff / sweepWidth) * 0.5 : 0.0;
+      final spokeHighlight =
+          spokeDiff < sweepWidth ? (1 - spokeDiff / sweepWidth) * 0.5 : 0.0;
 
-      _radarGridPaint.color = primaryColor.withOpacity(radarIntensity * (0.15 + spokeHighlight));
+      _radarGridPaint.color =
+          primaryColor.withOpacity(radarIntensity * (0.15 + spokeHighlight));
       canvas.drawLine(
         Offset(spokeInnerX, spokeInnerY),
         Offset(spokeOuterX, spokeOuterY),
@@ -6898,12 +7537,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Grid nodes at ring intersections
       for (int j = 1; j <= ringCount; j++) {
-        final nodeRadius = innerRadius + (radarRadius - innerRadius) * (j / ringCount);
+        final nodeRadius =
+            innerRadius + (radarRadius - innerRadius) * (j / ringCount);
         final nodeX = center.dx + math.cos(spokeAngle) * nodeRadius;
         final nodeY = center.dy + math.sin(spokeAngle) * nodeRadius;
 
-        final nodePulse = 0.3 + math.sin(_animationPhase * 3 + i + j) * 0.2 + spokeHighlight;
-        _radarGridNodePaint.color = accentColor.withOpacity(radarIntensity * nodePulse * 0.5);
+        final nodePulse =
+            0.3 + math.sin(_animationPhase * 3 + i + j) * 0.2 + spokeHighlight;
+        _radarGridNodePaint.color =
+            accentColor.withOpacity(radarIntensity * nodePulse * 0.5);
         canvas.drawCircle(Offset(nodeX, nodeY), 1.5, _radarGridNodePaint);
       }
     }
@@ -6926,7 +7568,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Data bracket around enemy position
       final bracketSize = 12.0;
-      final bracketOffset = Offset(enemyOffset.dx + bracketSize * 1.5, enemyOffset.dy - bracketSize);
+      final bracketOffset = Offset(
+          enemyOffset.dx + bracketSize * 1.5, enemyOffset.dy - bracketSize);
 
       // Bracket corners
       _radarDataLinePaint.color = accentColor.withOpacity(dataAlpha);
@@ -6957,7 +7600,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Connection line from blip to data readout
       _radarDataLinePaint.color = primaryColor.withOpacity(dataAlpha * 0.5);
-      canvas.drawLine(enemyOffset, Offset(bracketOffset.dx, bracketOffset.dy + 6), _radarDataLinePaint);
+      canvas.drawLine(enemyOffset,
+          Offset(bracketOffset.dx, bracketOffset.dy + 6), _radarDataLinePaint);
 
       // Simulated data bars (health/threat indicator)
       final barCount = 4;
@@ -6965,17 +7609,20 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       final barMaxHeight = 8.0;
       for (int i = 0; i < barCount; i++) {
         final barX = bracketOffset.dx + 4 + i * (barWidth + 1);
-        final barHeight = barMaxHeight * (0.3 + _radarRandom.nextDouble() * 0.7 * blip.pingIntensity);
+        final barHeight = barMaxHeight *
+            (0.3 + _radarRandom.nextDouble() * 0.7 * blip.pingIntensity);
 
         // Bar glow
         _radarDataGlowPaint.color = primaryColor.withOpacity(dataAlpha * 0.4);
         canvas.drawRect(
-          Rect.fromLTWH(barX - 1, bracketOffset.dy + 2, barWidth + 2, barHeight + 2),
+          Rect.fromLTWH(
+              barX - 1, bracketOffset.dy + 2, barWidth + 2, barHeight + 2),
           _radarDataGlowPaint,
         );
 
         // Bar fill
-        _radarDataPaint.color = (i == 0 ? accentColor : primaryColor).withOpacity(dataAlpha * 0.8);
+        _radarDataPaint.color =
+            (i == 0 ? accentColor : primaryColor).withOpacity(dataAlpha * 0.8);
         canvas.drawRect(
           Rect.fromLTWH(barX, bracketOffset.dy + 3, barWidth, barHeight),
           _radarDataPaint,
@@ -6986,7 +7633,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       if (blip.pingIntensity > 0.7) {
         final lockPulse = math.sin(_animationPhase * 10) * 0.5 + 0.5;
         _radarDataPaint.color = accentColor.withOpacity(dataAlpha * lockPulse);
-        canvas.drawCircle(Offset(bracketOffset.dx + 22, bracketOffset.dy + 3), 2, _radarDataPaint);
+        canvas.drawCircle(Offset(bracketOffset.dx + 22, bracketOffset.dy + 3),
+            2, _radarDataPaint);
       }
     }
 
@@ -6995,10 +7643,12 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     // ═══════════════════════════════════════════════════════════════════════
     // Subtle outer boundary with scanning effect
     final boundaryPulse = 0.3 + math.sin(_animationPhase * 1.5) * 0.1;
-    _radarRingGlowPaint.color = primaryColor.withOpacity(radarIntensity * boundaryPulse * 0.2);
+    _radarRingGlowPaint.color =
+        primaryColor.withOpacity(radarIntensity * boundaryPulse * 0.2);
     canvas.drawCircle(center, radarRadius, _radarRingGlowPaint);
 
-    _radarRingPaint.color = primaryColor.withOpacity(radarIntensity * boundaryPulse * 0.4);
+    _radarRingPaint.color =
+        primaryColor.withOpacity(radarIntensity * boundaryPulse * 0.4);
     canvas.drawCircle(center, radarRadius, _radarRingPaint);
   }
 
@@ -7009,7 +7659,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get secondary colors for visual variety
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 40) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 40) % 360).toColor();
     final tertiaryColor = hslColor.withHue((hslColor.hue + 80) % 360).toColor();
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -7018,12 +7669,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (!Tower.lowFx) {
       final outerGlowRadius = size.x * (0.8 + _chargeLevel * 0.3);
       final outerGlowPulse = math.sin(_animationPhase * 4) * 0.15 + 0.85;
-      _absorptionOuterGlowPaint.color = color.withOpacity(_chargeLevel * 0.2 * outerGlowPulse);
+      _absorptionOuterGlowPaint.color =
+          color.withOpacity(_chargeLevel * 0.2 * outerGlowPulse);
       canvas.drawCircle(center, outerGlowRadius, _absorptionOuterGlowPaint);
 
       // Secondary glow layer
-      _absorptionOuterGlowPaint.color = secondaryColor.withOpacity(_chargeLevel * 0.1);
-      canvas.drawCircle(center, outerGlowRadius * 0.7, _absorptionOuterGlowPaint);
+      _absorptionOuterGlowPaint.color =
+          secondaryColor.withOpacity(_chargeLevel * 0.1);
+      canvas.drawCircle(
+          center, outerGlowRadius * 0.7, _absorptionOuterGlowPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -7032,16 +7686,20 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final particleCount = (8 * _chargeLevel).ceil();
     for (int i = 0; i < particleCount; i++) {
       // Each particle has its own phase based on time and index
-      final particlePhase = _animationPhase * 3 + i * (math.pi * 2 / particleCount);
+      final particlePhase =
+          _animationPhase * 3 + i * (math.pi * 2 / particleCount);
       final normalizedPhase = (particlePhase % (math.pi * 2)) / (math.pi * 2);
 
       // Particle spirals inward as charge increases
       final maxRadius = size.x * 0.8;
       final minRadius = size.x * 0.1;
-      final particleRadius = maxRadius - (maxRadius - minRadius) * normalizedPhase;
+      final particleRadius =
+          maxRadius - (maxRadius - minRadius) * normalizedPhase;
 
       // Rotate around center
-      final particleAngle = _animationPhase * 2 + i * (math.pi * 2 / particleCount) + normalizedPhase * math.pi;
+      final particleAngle = _animationPhase * 2 +
+          i * (math.pi * 2 / particleCount) +
+          normalizedPhase * math.pi;
       final px = center.dx + math.cos(particleAngle) * particleRadius;
       final py = center.dy + math.sin(particleAngle) * particleRadius;
 
@@ -7051,7 +7709,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Particle glow
       if (!Tower.lowFx) {
         _absorptionSparkPaint.color = color.withOpacity(particleAlpha * 0.5);
-        canvas.drawCircle(Offset(px, py), particleSize * 2, _absorptionSparkPaint);
+        canvas.drawCircle(
+            Offset(px, py), particleSize * 2, _absorptionSparkPaint);
       }
 
       // Particle core with color variation
@@ -7116,7 +7775,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     for (int ring = 0; ring < 3; ring++) {
       final ringPhase = _animationPhase * 5 + ring * 0.5;
       final ringProgress = (ringPhase % 1.0);
-      final ringRadius = size.x * (0.2 + ringProgress * 0.5) * (0.5 + _chargeLevel * 0.5);
+      final ringRadius =
+          size.x * (0.2 + ringProgress * 0.5) * (0.5 + _chargeLevel * 0.5);
       final ringAlpha = _chargeLevel * (1 - ringProgress) * 0.5;
 
       if (ringAlpha > 0.05) {
@@ -7147,13 +7807,20 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         const segments = 5;
         for (int seg = 1; seg <= segments; seg++) {
           final segProgress = seg / segments;
-          final segRadius = arcStartRadius - (arcStartRadius - arcEndRadius) * segProgress;
+          final segRadius =
+              arcStartRadius - (arcStartRadius - arcEndRadius) * segProgress;
 
-          final jitter = math.sin(_animationPhase * 20 + arc * 5 + seg * 3) * 4 * (1 - segProgress);
+          final jitter = math.sin(_animationPhase * 20 + arc * 5 + seg * 3) *
+              4 *
+              (1 - segProgress);
           final perpAngle = arcAngle + math.pi / 2;
 
-          final segX = center.dx + math.cos(arcAngle) * segRadius + math.cos(perpAngle) * jitter;
-          final segY = center.dy + math.sin(arcAngle) * segRadius + math.sin(perpAngle) * jitter;
+          final segX = center.dx +
+              math.cos(arcAngle) * segRadius +
+              math.cos(perpAngle) * jitter;
+          final segY = center.dy +
+              math.sin(arcAngle) * segRadius +
+              math.sin(perpAngle) * jitter;
 
           _absorptionPath2.lineTo(segX, segY);
         }
@@ -7169,14 +7836,21 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     if (!Tower.lowFx && _chargeLevel > 0.15) {
       for (int wisp = 0; wisp < 6; wisp++) {
         final wispAngle = _animationPhase * 4 + wisp * (math.pi / 3);
-        final wispRadius = size.x * (0.3 + math.sin(_animationPhase * 6 + wisp) * 0.1) * _chargeLevel;
+        final wispRadius = size.x *
+            (0.3 + math.sin(_animationPhase * 6 + wisp) * 0.1) *
+            _chargeLevel;
 
         _absorptionPath1.reset();
         for (int p = 0; p < 8; p++) {
           final progress = p / 8;
           final wobble = math.sin(_animationPhase * 8 + p * 2 + wisp) * 3;
-          final px = center.dx + math.cos(wispAngle + progress * 0.5) * (wispRadius - progress * size.x * 0.15) + wobble;
-          final py = center.dy + math.sin(wispAngle + progress * 0.5) * (wispRadius - progress * size.x * 0.15);
+          final px = center.dx +
+              math.cos(wispAngle + progress * 0.5) *
+                  (wispRadius - progress * size.x * 0.15) +
+              wobble;
+          final py = center.dy +
+              math.sin(wispAngle + progress * 0.5) *
+                  (wispRadius - progress * size.x * 0.15);
 
           if (p == 0) {
             _absorptionPath1.moveTo(px, py);
@@ -7202,12 +7876,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // Glow
       if (!Tower.lowFx) {
         _chargeGlowArcPaint.color = color.withOpacity(arcAlpha * 0.5);
-        canvas.drawArc(_tempRect, -math.pi / 2, sweepAngle, false, _chargeGlowArcPaint);
+        canvas.drawArc(
+            _tempRect, -math.pi / 2, sweepAngle, false, _chargeGlowArcPaint);
       }
 
       // Core arc
       _chargeCoreArcPaint.color = color.withOpacity(arcAlpha);
-      canvas.drawArc(_tempRect, -math.pi / 2, sweepAngle, false, _chargeCoreArcPaint);
+      canvas.drawArc(
+          _tempRect, -math.pi / 2, sweepAngle, false, _chargeCoreArcPaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -7219,11 +7895,14 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       // Core glow
       _absorptionCorePaint.color = color.withOpacity(_chargeLevel * 0.6);
-      canvas.drawCircle(center, coreRadius * 2 * corePulse, _absorptionCorePaint);
+      canvas.drawCircle(
+          center, coreRadius * 2 * corePulse, _absorptionCorePaint);
 
       // Bright center
-      _absorptionParticlePaint.color = const Color(0xFFFFFFFF).withOpacity(_chargeLevel * 0.8);
-      canvas.drawCircle(center, coreRadius * corePulse, _absorptionParticlePaint);
+      _absorptionParticlePaint.color =
+          const Color(0xFFFFFFFF).withOpacity(_chargeLevel * 0.8);
+      canvas.drawCircle(
+          center, coreRadius * corePulse, _absorptionParticlePaint);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -7256,7 +7935,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final sparkX = center.dx + math.cos(sparkAngle) * sparkRadius;
         final sparkY = center.dy + math.sin(sparkAngle) * sparkRadius;
 
-        _absorptionSparkPaint.color = const Color(0xFFFFFFFF).withOpacity(0.8 * readyPulse);
+        _absorptionSparkPaint.color =
+            const Color(0xFFFFFFFF).withOpacity(0.8 * readyPulse);
         canvas.drawCircle(Offset(sparkX, sparkY), 2, _absorptionSparkPaint);
       }
 
@@ -7275,12 +7955,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final progress = seg / 3;
           final jitter = math.sin(_animationPhase * 30 + arc * 7 + seg * 4) * 3;
           _absorptionPath1.lineTo(
-            center.dx + math.cos(arcAngle) * arcRadius * (0.5 + progress * 0.5) + jitter,
+            center.dx +
+                math.cos(arcAngle) * arcRadius * (0.5 + progress * 0.5) +
+                jitter,
             center.dy + math.sin(arcAngle) * arcRadius * (0.5 + progress * 0.5),
           );
         }
 
-        _absorptionBeamPaint.color = tertiaryColor.withOpacity(0.7 * readyPulse);
+        _absorptionBeamPaint.color =
+            tertiaryColor.withOpacity(0.7 * readyPulse);
         canvas.drawPath(_absorptionPath1, _absorptionBeamPaint);
       }
     }
@@ -7311,7 +7994,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       case TowerType.circuitCannon:
       case TowerType.ionSniper:
         _flashCirclePaint.color = color.withOpacity(flashIntensity * 0.5);
-        canvas.drawCircle(center, size.x * (0.3 + flashIntensity * 0.5), _flashCirclePaint);
+        canvas.drawCircle(
+            center, size.x * (0.3 + flashIntensity * 0.5), _flashCirclePaint);
         break;
 
       case TowerType.phaseMage:
@@ -7336,7 +8020,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
       _tempOffset1 = Offset(px, py);
       _muzzleParticlePaint.color = color.withOpacity(alpha);
-      canvas.drawCircle(_tempOffset1, particle.size * (1 - progress * 0.5), _muzzleParticlePaint);
+      canvas.drawCircle(_tempOffset1, particle.size * (1 - progress * 0.5),
+          _muzzleParticlePaint);
     }
   }
 
@@ -7348,8 +8033,10 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Get secondary colors
     final hslColor = HSLColor.fromColor(color);
-    final secondaryColor = hslColor.withHue((hslColor.hue + 60) % 360).toColor();
-    final tertiaryColor = hslColor.withHue((hslColor.hue + 180) % 360).toColor();
+    final secondaryColor =
+        hslColor.withHue((hslColor.hue + 60) % 360).toColor();
+    final tertiaryColor =
+        hslColor.withHue((hslColor.hue + 180) % 360).toColor();
 
     for (final ripple in _energyWaveRipples) {
       if (!ripple.isActive) continue;
@@ -7427,12 +8114,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final chromaAlpha = alpha * 0.3;
 
         // Red ring (offset left)
-        _rippleChromaRedPaint.color = const Color(0xFFFF0066).withOpacity(chromaAlpha);
-        canvas.drawCircle(Offset(center.dx - chromaOffset, center.dy), radius, _rippleChromaRedPaint);
+        _rippleChromaRedPaint.color =
+            const Color(0xFFFF0066).withOpacity(chromaAlpha);
+        canvas.drawCircle(Offset(center.dx - chromaOffset, center.dy), radius,
+            _rippleChromaRedPaint);
 
         // Cyan ring (offset right)
-        _rippleChromaCyanPaint.color = const Color(0xFF00FFFF).withOpacity(chromaAlpha);
-        canvas.drawCircle(Offset(center.dx + chromaOffset, center.dy), radius, _rippleChromaCyanPaint);
+        _rippleChromaCyanPaint.color =
+            const Color(0xFF00FFFF).withOpacity(chromaAlpha);
+        canvas.drawCircle(Offset(center.dx + chromaOffset, center.dy), radius,
+            _rippleChromaCyanPaint);
       }
 
       // ═══════════════════════════════════════════════════════════════════════
@@ -7440,18 +8131,24 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       // ═══════════════════════════════════════════════════════════════════════
       if (!Tower.lowFx) {
         final sparkCount = ripple.isDirectional ? 4 : 8;
-        final startAngle = ripple.isDirectional ? ripple.direction - ripple.spreadAngle / 2 : 0.0;
-        final angleRange = ripple.isDirectional ? ripple.spreadAngle : math.pi * 2;
+        final startAngle = ripple.isDirectional
+            ? ripple.direction - ripple.spreadAngle / 2
+            : 0.0;
+        final angleRange =
+            ripple.isDirectional ? ripple.spreadAngle : math.pi * 2;
 
         for (int i = 0; i < sparkCount; i++) {
-          final sparkAngle = startAngle + (i + progress * 3) * angleRange / sparkCount;
+          final sparkAngle =
+              startAngle + (i + progress * 3) * angleRange / sparkCount;
           final sparkDist = radius * (0.95 + math.sin(progress * 10 + i) * 0.1);
           final sparkX = center.dx + math.cos(sparkAngle) * sparkDist;
           final sparkY = center.dy + math.sin(sparkAngle) * sparkDist;
 
-          final sparkAlpha = alpha * (0.5 + math.sin(progress * 15 + i * 2) * 0.5);
+          final sparkAlpha =
+              alpha * (0.5 + math.sin(progress * 15 + i * 2) * 0.5);
           _rippleSparkPaint.color = rippleColor.withOpacity(sparkAlpha);
-          canvas.drawCircle(Offset(sparkX, sparkY), 2 + (1 - progress) * 2, _rippleSparkPaint);
+          canvas.drawCircle(Offset(sparkX, sparkY), 2 + (1 - progress) * 2,
+              _rippleSparkPaint);
         }
       }
 
@@ -7464,7 +8161,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         _rippleArcSegmentPaint.color = secondaryColor.withOpacity(segmentAlpha);
 
         for (int i = 0; i < segmentCount; i++) {
-          final segmentAngle = (i * math.pi * 2 / segmentCount) + progress * math.pi;
+          final segmentAngle =
+              (i * math.pi * 2 / segmentCount) + progress * math.pi;
           final arcLength = math.pi / 8;
 
           _ripplePath.reset();
@@ -7511,13 +8209,16 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
         final halfSpread = ripple.spreadAngle / 2;
         for (int i = 0; i < dataCount; i++) {
           final dataProgress = (progress + i * 0.15) % 1.0;
-          final dataAngle = ripple.direction + (i - dataCount / 2) * ripple.spreadAngle / dataCount;
-          final dataDist = ripple.startRadius + (ripple.maxRadius - ripple.startRadius) * dataProgress;
+          final dataAngle = ripple.direction +
+              (i - dataCount / 2) * ripple.spreadAngle / dataCount;
+          final dataDist = ripple.startRadius +
+              (ripple.maxRadius - ripple.startRadius) * dataProgress;
 
           final dataX = center.dx + math.cos(dataAngle) * dataDist;
           final dataY = center.dy + math.sin(dataAngle) * dataDist;
 
-          _rippleDataPaint.color = rippleColor.withOpacity(dataAlpha * (1 - dataProgress));
+          _rippleDataPaint.color =
+              rippleColor.withOpacity(dataAlpha * (1 - dataProgress));
           canvas.drawCircle(Offset(dataX, dataY), 1.5, _rippleDataPaint);
         }
       }
@@ -7545,7 +8246,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
           final markerY = center.dy + math.sin(markerAngle) * radius;
 
           // Draw small cross marker
-          _rippleDataPaint.color = const Color(0xFFFFFFFF).withOpacity(markerAlpha);
+          _rippleDataPaint.color =
+              const Color(0xFFFFFFFF).withOpacity(markerAlpha);
           canvas.drawLine(
             Offset(markerX - 2, markerY),
             Offset(markerX + 2, markerY),
@@ -7578,7 +8280,8 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     final markOffset = _animationPhase * 0.05;
     for (int i = 0; i < 4; i++) {
       final angle = i * math.pi / 2 + markOffset;
-      _tempOffset1 = Offset(center.dx + math.cos(angle) * range, center.dy + math.sin(angle) * range);
+      _tempOffset1 = Offset(center.dx + math.cos(angle) * range,
+          center.dy + math.sin(angle) * range);
       canvas.drawCircle(_tempOffset1, 2, _rangeCornerPaint);
     }
   }
@@ -7704,7 +8407,7 @@ class _MuzzleParticle {
     }
   }
 
-  void reset(math.Random random, double baseAngle) {
+  void reset(_FastRng random, double baseAngle) {
     angle = baseAngle + (random.nextDouble() - 0.5) * 0.8;
     speed = 50 + random.nextDouble() * 100;
     lifetime = 0.001; // Start active
@@ -7722,7 +8425,8 @@ class _EnergyWaveRipple {
     this.isDirectional = false,
     this.direction = 0,
     this.spreadAngle = math.pi * 2,
-  }) : progress = 0, age = 0;
+  })  : progress = 0,
+        age = 0;
 
   final double startRadius;
   final double maxRadius;
@@ -7757,13 +8461,13 @@ class _ConstructionParticle {
     required this.spiralRate,
   });
 
-  double angle;         // Starting angle in radians
-  double radius;        // Starting radius (far from center)
-  double speed;         // Base rotation speed
-  double size;          // Particle size
-  double phase;         // Phase offset for staggered animation
-  double targetRadius;  // Final radius when merged
-  double spiralRate;    // How fast the particle spirals inward
+  double angle; // Starting angle in radians
+  double radius; // Starting radius (far from center)
+  double speed; // Base rotation speed
+  double size; // Particle size
+  double phase; // Phase offset for staggered animation
+  double targetRadius; // Final radius when merged
+  double spiralRate; // How fast the particle spirals inward
 
   void update(double dt, double constructionProgress) {
     // Rotate faster as construction progresses
@@ -7780,10 +8484,10 @@ class _FractureImpactPoint {
     required this.branchCount,
   });
 
-  final Offset offset;     // Position offset from tower center
-  final double angle;      // Impact angle in radians
-  final double intensity;  // Damage intensity at this point (0-1)
-  final int branchCount;   // Number of secondary branches from this impact
+  final Offset offset; // Position offset from tower center
+  final double angle; // Impact angle in radians
+  final double intensity; // Damage intensity at this point (0-1)
+  final int branchCount; // Number of secondary branches from this impact
 }
 
 // Helper class for radar sweep enemy blips
@@ -7794,7 +8498,7 @@ class _RadarBlip {
     required this.pingIntensity,
   });
 
-  final Enemy enemy;          // Reference to the enemy being tracked
-  double lastPingTime;        // Time since last sweep ping (animation phase)
-  double pingIntensity;       // Current ping intensity (fades over time)
+  final Enemy enemy; // Reference to the enemy being tracked
+  double lastPingTime; // Time since last sweep ping (animation phase)
+  double pingIntensity; // Current ping intensity (fades over time)
 }

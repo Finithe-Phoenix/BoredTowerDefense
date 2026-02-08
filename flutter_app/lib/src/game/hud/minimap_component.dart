@@ -1,9 +1,27 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
 import '../bored_games_game.dart';
+
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
 
 /// CYBERPUNK CORRUPTED MINIMAP - Extreme TRON aesthetic with glitch effects
 class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
@@ -20,6 +38,25 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   double mapSize = baseMapSize;
   double padding = basePadding;
 
+  Path? _hexPath;
+  Path? _innerHexPath;
+  Path? _routePath;
+  PathMetric? _routeMetric;
+  double _routeLength = 0;
+  double _geometryMapSize = -1;
+  List<Offset>? _cornerDots;
+  TextPainter? _titlePainter;
+  String _titleText = '';
+  int _titleColorValue = 0;
+  TextPainter? _enemyCountPainter;
+  String _enemyCountText = '';
+  int _enemyCountColorValue = 0;
+  int _enemyShadowColorValue = 0;
+  TextPainter? _towerCountPainter;
+  String _towerCountText = '';
+  Picture? _scanlineLayer;
+  double _scanlineLayerSize = -1;
+
   // Animation states
   double _time = 0;
   double _scanAngle = 0;
@@ -31,7 +68,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   double _corruptionLevel = 0;
 
   // Cached random for consistent glitch patterns
-  final _random = math.Random();
+  final _random = _FastRng();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STATIC CACHED PAINT OBJECTS - Avoid per-frame allocations
@@ -68,6 +105,12 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   static final Paint _corruptionPaint = Paint();
   static final Paint _statusPaint = Paint();
   static final Paint _glitchBarPaint = Paint();
+  static final Paint _streamPaint = Paint()..strokeWidth = 1;
+  static const List<String> _glitchChars = ['#', '@', '!', '%', '&', '*', '?', '/', '\\', '|'];
+
+  static int _lcgSeed(int seed, int salt) => (seed ^ salt) & 0x7fffffff;
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
 
   @override
   void update(double dt) {
@@ -99,6 +142,13 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   }
 
   @override
+  void onRemove() {
+    _scanlineLayer?.dispose();
+    _scanlineLayer = null;
+    super.onRemove();
+  }
+
+  @override
   void render(Canvas canvas) {
     super.render(canvas);
     if (gameRef.hideHud || gameRef.focusModeActive) return;
@@ -119,6 +169,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Update dimensions based on scale
     mapSize = (baseMapSize * scale).clamp(80.0, 140.0);
     padding = basePadding * scale;
+    _ensureGeometry();
 
     final mapX = screenWidth - mapSize - padding;
     final mapY = 120.0 * scale; // Responsive top offset
@@ -165,7 +216,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     ).createShader(rect);
 
     // Clip to hexagonal shape for cyber effect
-    final hexPath = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
+    final hexPath = _hexPath ?? _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
     canvas.save();
     canvas.clipPath(hexPath);
 
@@ -183,31 +234,35 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       _corruptionLevel,
     )!;
 
-    canvas.drawPath(
-      hexPath,
-      _glowPaint
-        ..color = glowColor.withOpacity(0.2 + _pulsePhase.sin().abs() * 0.1)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4,
-    );
+    _glowPaint
+      ..color = glowColor.withOpacity(0.2 + _pulsePhase.sin().abs() * 0.1)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4;
+    canvas.drawPath(hexPath, _glowPaint);
   }
 
   void _renderNoiseTexture(Canvas canvas, Rect rect) {
     if (!_isGlitching) return;
 
-    final noisePaint = Paint();
-    final random = math.Random(_glitchFrame);
+    var state = _lcgSeed(_glitchFrame, 0x6c8e9cf5);
 
     for (int i = 0; i < 50; i++) {
-      final x = random.nextDouble() * mapSize;
-      final y = random.nextDouble() * mapSize;
-      final size = 1.0 + random.nextDouble() * 2;
+      state = _lcgNext(state);
+      final x = _lcgUnit(state) * mapSize;
+      state = _lcgNext(state);
+      final y = _lcgUnit(state) * mapSize;
+      state = _lcgNext(state);
+      final size = 1.0 + _lcgUnit(state) * 2;
+      state = _lcgNext(state);
+      final useWhite = (state & 0x1) == 0;
+      state = _lcgNext(state);
+      final alpha = _lcgUnit(state) * 0.3 * _glitchIntensity;
 
-      noisePaint.color = (random.nextBool() ? Colors.white : const Color(0xFF00FFFF))
-          .withOpacity(random.nextDouble() * 0.3 * _glitchIntensity);
+      _noisePaint.color =
+          (useWhite ? Colors.white : const Color(0xFF00FFFF)).withOpacity(alpha);
 
-      canvas.drawRect(Rect.fromLTWH(x, y, size, size), noisePaint);
+      canvas.drawRect(Rect.fromLTWH(x, y, size, size), _noisePaint);
     }
   }
 
@@ -258,38 +313,42 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     final centerY = mapSize / 2;
     final crossPulse = 0.4 + math.sin(_pulsePhase * 2) * 0.2;
 
-    final crossPaint = Paint()
+    _statusPaint
       ..color = primaryColor.withOpacity(crossPulse)
-      ..strokeWidth = 1.5;
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
 
     // Animated crosshair
     final crossSize = 10.0 + math.sin(_pulsePhase) * 2;
-    canvas.drawLine(Offset(centerX - crossSize, centerY), Offset(centerX - 4, centerY), crossPaint);
-    canvas.drawLine(Offset(centerX + 4, centerY), Offset(centerX + crossSize, centerY), crossPaint);
-    canvas.drawLine(Offset(centerX, centerY - crossSize), Offset(centerX, centerY - 4), crossPaint);
-    canvas.drawLine(Offset(centerX, centerY + 4), Offset(centerX, centerY + crossSize), crossPaint);
+    canvas.drawLine(Offset(centerX - crossSize, centerY), Offset(centerX - 4, centerY), _statusPaint);
+    canvas.drawLine(Offset(centerX + 4, centerY), Offset(centerX + crossSize, centerY), _statusPaint);
+    canvas.drawLine(Offset(centerX, centerY - crossSize), Offset(centerX, centerY - 4), _statusPaint);
+    canvas.drawLine(Offset(centerX, centerY + 4), Offset(centerX, centerY + crossSize), _statusPaint);
 
     // Center dot
-    canvas.drawCircle(
-      Offset(centerX, centerY),
-      2,
-      Paint()
-        ..color = primaryColor.withOpacity(0.8)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
-    );
+    _glowPaint
+      ..color = primaryColor.withOpacity(0.8)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2)
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(Offset(centerX, centerY), 2, _glowPaint);
   }
 
   void _renderGlitchScanlines(Canvas canvas) {
-    final scanlinePaint = Paint()..color = Colors.black.withOpacity(0.15);
+    _ensureScanlineLayer();
 
-    // Static scanlines
-    for (double y = 0; y < mapSize; y += 2) {
-      canvas.drawLine(Offset(0, y), Offset(mapSize, y), scanlinePaint);
+    if (_scanlineLayer != null) {
+      canvas.drawPicture(_scanlineLayer!);
     }
 
+    _scanPaint
+      ..color = Colors.black.withOpacity(0.15)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    // Static scanlines
     // Moving scanline
     final scanY = (_time * 40) % mapSize;
-    final movingScanPaint = Paint()
+    _radarSweepPaint
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
@@ -298,14 +357,15 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           const Color(0xFF00FFFF).withOpacity(0.1),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 5, mapSize, 10));
+      ).createShader(Rect.fromLTWH(0, scanY - 5, mapSize, 10))
+      ..style = PaintingStyle.fill;
 
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 5, mapSize, 10), movingScanPaint);
+    canvas.drawRect(Rect.fromLTWH(0, scanY - 5, mapSize, 10), _radarSweepPaint);
 
     // Corruption scanlines (red, when enemies present)
     if (_corruptionLevel > 0.2) {
       final corruptScanY = (mapSize - (_time * 25) % mapSize);
-      final corruptPaint = Paint()
+      _corruptionPaint
         ..shader = LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
@@ -314,20 +374,25 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
             const Color(0xFFFF0044).withOpacity(0.08 * _corruptionLevel),
             Colors.transparent,
           ],
-        ).createShader(Rect.fromLTWH(0, corruptScanY - 8, mapSize, 16));
+        ).createShader(Rect.fromLTWH(0, corruptScanY - 8, mapSize, 16))
+        ..style = PaintingStyle.fill;
 
-      canvas.drawRect(Rect.fromLTWH(0, corruptScanY - 8, mapSize, 16), corruptPaint);
+      canvas.drawRect(
+        Rect.fromLTWH(0, corruptScanY - 8, mapSize, 16),
+        _corruptionPaint,
+      );
     }
   }
 
   void _renderDataStream(Canvas canvas) {
     // Vertical data streams (Matrix-style)
-    final streamPaint = Paint()..strokeWidth = 1;
-    final random = math.Random(42);
+    var state = _lcgSeed(42, 0x51c3e9d7);
 
     for (int i = 0; i < 5; i++) {
-      final x = random.nextDouble() * mapSize;
-      final speed = 20 + random.nextDouble() * 30;
+      state = _lcgNext(state);
+      final x = _lcgUnit(state) * mapSize;
+      state = _lcgNext(state);
+      final speed = 20 + _lcgUnit(state) * 30;
       final baseY = (_time * speed + i * 50) % (mapSize + 30) - 15;
 
       for (int j = 0; j < 8; j++) {
@@ -335,60 +400,67 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         if (y < 0 || y > mapSize) continue;
 
         final alpha = (1.0 - j / 8.0) * 0.3;
-        streamPaint.color = const Color(0xFF00FFFF).withOpacity(alpha);
-        canvas.drawRect(Rect.fromLTWH(x, y, 1, 2), streamPaint);
+        _streamPaint.color = const Color(0xFF00FFFF).withOpacity(alpha);
+        canvas.drawRect(Rect.fromLTWH(x, y, 1, 2), _streamPaint);
       }
     }
   }
 
   void _renderPath(Canvas canvas) {
     // Get actual path from game if available, otherwise show stylized path
-    final pathPaint = Paint()
+    _pathPaint
       ..color = const Color(0xFFFF6600).withOpacity(0.4 + math.sin(_pulsePhase * 0.5) * 0.1)
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
     // Glowing path effect
-    final glowPaint = Paint()
+    _pathGlowPaint
       ..color = const Color(0xFFFF6600).withOpacity(0.15)
       ..strokeWidth = 8
       ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..style = PaintingStyle.stroke;
 
     // Simplified S-curve path
-    final path = Path()
-      ..moveTo(0, mapSize * 0.25)
-      ..lineTo(mapSize * 0.25, mapSize * 0.25)
-      ..lineTo(mapSize * 0.25, mapSize * 0.75)
-      ..lineTo(mapSize * 0.75, mapSize * 0.75)
-      ..lineTo(mapSize * 0.75, mapSize * 0.25)
-      ..lineTo(mapSize, mapSize * 0.25);
+    final path = _routePath ??
+        (Path()
+          ..moveTo(0, mapSize * 0.25)
+          ..lineTo(mapSize * 0.25, mapSize * 0.25)
+          ..lineTo(mapSize * 0.25, mapSize * 0.75)
+          ..lineTo(mapSize * 0.75, mapSize * 0.75)
+          ..lineTo(mapSize * 0.75, mapSize * 0.25)
+          ..lineTo(mapSize, mapSize * 0.25));
 
-    canvas.drawPath(path, glowPaint);
-    canvas.drawPath(path, pathPaint);
+    canvas.drawPath(path, _pathGlowPaint);
+    canvas.drawPath(path, _pathPaint);
 
     // Animated dots along path
     _renderPathDots(canvas, path);
   }
 
   void _renderPathDots(Canvas canvas, Path path) {
-    final metrics = path.computeMetrics().first;
-    final pathLength = metrics.length;
+    final metric = _routeMetric ??
+        (() {
+          final iterator = path.computeMetrics().iterator;
+          return iterator.moveNext() ? iterator.current : null;
+        })();
+    if (metric == null) return;
+    final pathLength = _routeMetric != null ? _routeLength : metric.length;
 
-    final dotPaint = Paint()..color = const Color(0xFFFFAA00);
+    _statusPaint
+      ..color = const Color(0xFFFFAA00)
+      ..style = PaintingStyle.fill;
 
     for (int i = 0; i < 3; i++) {
       final progress = ((_time * 0.1 + i * 0.33) % 1.0);
-      final tangent = metrics.getTangentForOffset(progress * pathLength);
+      final tangent = metric.getTangentForOffset(progress * pathLength);
 
       if (tangent != null) {
         final pulse = 0.6 + math.sin(_pulsePhase + i) * 0.4;
         canvas.drawCircle(
           tangent.position,
           2 * pulse,
-          dotPaint..color = const Color(0xFFFFAA00).withOpacity(pulse),
+          _statusPaint..color = const Color(0xFFFFAA00).withOpacity(pulse),
         );
       }
     }
@@ -407,7 +479,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawCircle(
         Offset(mapX, mapY),
         rangeRadius,
-        Paint()
+        _towerFillPaint
           ..color = tower.color.withOpacity(0.1)
           ..style = PaintingStyle.fill,
       );
@@ -416,9 +488,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawCircle(
         Offset(mapX, mapY),
         6,
-        Paint()
-          ..color = tower.color.withOpacity(0.4)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+        _towerGlowPaint..color = tower.color.withOpacity(0.4),
       );
 
       // Tower icon (hexagonal)
@@ -430,7 +500,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         canvas.drawCircle(
           Offset(mapX, mapY),
           4 + pulseProgress * 4,
-          Paint()
+          _towerFillPaint
             ..color = tower.color.withOpacity(0.5 * (1 - pulseProgress))
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
@@ -461,16 +531,14 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
         canvas.drawCircle(
           Offset(mapX, mapY),
           12,
-          Paint()
-            ..color = baseColor.withOpacity(0.3 * pulse)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+          _bossGlowPaint..color = baseColor.withOpacity(0.3 * pulse),
         );
 
         // Boss warning ring
         canvas.drawCircle(
           Offset(mapX, mapY),
           8 + math.sin(_pulsePhase * 3) * 2,
-          Paint()
+          _bossPaint
             ..color = baseColor.withOpacity(0.5)
             ..style = PaintingStyle.stroke
             ..strokeWidth = 1,
@@ -481,7 +549,9 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawCircle(
         Offset(mapX, mapY),
         size * pulse,
-        Paint()..color = baseColor.withOpacity(0.9),
+        _enemyPaint
+          ..color = baseColor.withOpacity(0.9)
+          ..style = PaintingStyle.fill,
       );
 
       // Direction indicator for enemies (based on movement direction)
@@ -494,8 +564,9 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           mapX + math.cos(angle) * indicatorLength,
           mapY + math.sin(angle) * indicatorLength,
         ),
-        Paint()
+        _enemyPaint
           ..color = baseColor.withOpacity(0.6)
+          ..style = PaintingStyle.stroke
           ..strokeWidth = 1
           ..strokeCap = StrokeCap.round,
       );
@@ -518,7 +589,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     )!;
 
     // Sweep trail (arc)
-    final sweepPaint = Paint()
+    _radarSweepPaint
       ..shader = SweepGradient(
         center: Alignment.center,
         startAngle: _scanAngle - 0.8,
@@ -528,19 +599,22 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           sweepColor.withOpacity(0.05),
           sweepColor.withOpacity(0.15),
         ],
-      ).createShader(Rect.fromCircle(center: Offset(centerX, centerY), radius: scanLength));
+      ).createShader(Rect.fromCircle(center: Offset(centerX, centerY), radius: scanLength))
+      ..style = PaintingStyle.fill;
 
-    canvas.drawCircle(Offset(centerX, centerY), scanLength, sweepPaint);
+    canvas.drawCircle(Offset(centerX, centerY), scanLength, _radarSweepPaint);
 
     // Main scan line with glow
+    _glowPaint
+      ..color = sweepColor.withOpacity(0.3)
+      ..strokeWidth = 6
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.drawLine(
       Offset(centerX, centerY),
       Offset(endX, endY),
-      Paint()
-        ..color = sweepColor.withOpacity(0.3)
-        ..strokeWidth = 6
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+      _glowPaint,
     );
 
     canvas.drawLine(
@@ -555,8 +629,9 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.drawCircle(
       Offset(endX, endY),
       4,
-      Paint()
+      _glowPaint
         ..color = sweepColor.withOpacity(0.6)
+        ..style = PaintingStyle.fill
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
     );
   }
@@ -576,20 +651,27 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
     canvas.drawRect(
       Rect.fromLTWH(0, 0, mapSize, mapSize),
-      Paint()..shader = vignetteGradient,
+      _corruptionPaint
+        ..shader = vignetteGradient
+        ..style = PaintingStyle.fill,
     );
 
     // Corruption artifacts
     if (_corruptionLevel > 0.5) {
-      final artifactRandom = math.Random((_time * 10).floor());
+      var state = _lcgSeed((_time * 10).floor(), 0x4d4f1f2b);
       for (int i = 0; i < (_corruptionLevel * 5).floor(); i++) {
-        final x = artifactRandom.nextDouble() * mapSize;
-        final y = artifactRandom.nextDouble() * mapSize;
-        final w = 5 + artifactRandom.nextDouble() * 15;
+        state = _lcgNext(state);
+        final x = _lcgUnit(state) * mapSize;
+        state = _lcgNext(state);
+        final y = _lcgUnit(state) * mapSize;
+        state = _lcgNext(state);
+        final w = 5 + _lcgUnit(state) * 15;
 
         canvas.drawRect(
           Rect.fromLTWH(x, y, w, 1),
-          Paint()..color = const Color(0xFFFF0044).withOpacity(0.2 * _corruptionLevel),
+          _corruptionPaint
+            ..shader = null
+            ..color = const Color(0xFFFF0044).withOpacity(0.2 * _corruptionLevel),
         );
       }
     }
@@ -602,7 +684,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       _corruptionLevel * 0.5,
     )!;
 
-    final hexPath = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
+    final hexPath = _hexPath ?? _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
 
     // Main frame
     _framePaint
@@ -611,7 +693,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.drawPath(hexPath, _framePaint);
 
     // Inner frame
-    final innerHex = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
+    final innerHex =
+        _innerHexPath ?? _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
     _framePaint
       ..color = frameColor.withOpacity(0.2)
       ..strokeWidth = 1;
@@ -622,49 +705,73 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
     // Glitch frame displacement
     if (_isGlitching && _glitchIntensity > 0.5) {
-      canvas.drawPath(
-        hexPath,
-        Paint()
-          ..color = const Color(0xFFFF0044).withOpacity(0.4 * _glitchIntensity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
+      _framePaint
+        ..color = const Color(0xFFFF0044).withOpacity(0.4 * _glitchIntensity)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2;
+      canvas.drawPath(hexPath, _framePaint);
     }
   }
 
   void _renderCornerDetails(Canvas canvas, Color color) {
-    final detailPaint = Paint()
+    _statusPaint
       ..color = color.withOpacity(0.8)
       ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
 
     // Tech brackets at corners
     const bracketSize = 15.0;
     const offset = 8.0;
 
     // Top-left
-    canvas.drawLine(Offset(offset, offset + bracketSize), Offset(offset, offset), detailPaint);
-    canvas.drawLine(Offset(offset, offset), Offset(offset + bracketSize, offset), detailPaint);
+    canvas.drawLine(Offset(offset, offset + bracketSize), Offset(offset, offset), _statusPaint);
+    canvas.drawLine(Offset(offset, offset), Offset(offset + bracketSize, offset), _statusPaint);
 
     // Top-right
-    canvas.drawLine(Offset(mapSize - offset - bracketSize, offset), Offset(mapSize - offset, offset), detailPaint);
-    canvas.drawLine(Offset(mapSize - offset, offset), Offset(mapSize - offset, offset + bracketSize), detailPaint);
+    canvas.drawLine(
+      Offset(mapSize - offset - bracketSize, offset),
+      Offset(mapSize - offset, offset),
+      _statusPaint,
+    );
+    canvas.drawLine(
+      Offset(mapSize - offset, offset),
+      Offset(mapSize - offset, offset + bracketSize),
+      _statusPaint,
+    );
 
     // Bottom-left
-    canvas.drawLine(Offset(offset, mapSize - offset - bracketSize), Offset(offset, mapSize - offset), detailPaint);
-    canvas.drawLine(Offset(offset, mapSize - offset), Offset(offset + bracketSize, mapSize - offset), detailPaint);
+    canvas.drawLine(
+      Offset(offset, mapSize - offset - bracketSize),
+      Offset(offset, mapSize - offset),
+      _statusPaint,
+    );
+    canvas.drawLine(
+      Offset(offset, mapSize - offset),
+      Offset(offset + bracketSize, mapSize - offset),
+      _statusPaint,
+    );
 
     // Bottom-right
-    canvas.drawLine(Offset(mapSize - offset - bracketSize, mapSize - offset), Offset(mapSize - offset, mapSize - offset), detailPaint);
-    canvas.drawLine(Offset(mapSize - offset, mapSize - offset - bracketSize), Offset(mapSize - offset, mapSize - offset), detailPaint);
+    canvas.drawLine(
+      Offset(mapSize - offset - bracketSize, mapSize - offset),
+      Offset(mapSize - offset, mapSize - offset),
+      _statusPaint,
+    );
+    canvas.drawLine(
+      Offset(mapSize - offset, mapSize - offset - bracketSize),
+      Offset(mapSize - offset, mapSize - offset),
+      _statusPaint,
+    );
 
     // Corner dots with glow
-    final dotPositions = [
-      Offset(offset, offset),
-      Offset(mapSize - offset, offset),
-      Offset(offset, mapSize - offset),
-      Offset(mapSize - offset, mapSize - offset),
-    ];
+    final dotPositions = _cornerDots ??
+        [
+          Offset(offset, offset),
+          Offset(mapSize - offset, offset),
+          Offset(offset, mapSize - offset),
+          Offset(mapSize - offset, mapSize - offset),
+        ];
 
     for (var i = 0; i < dotPositions.length; i++) {
       final pos = dotPositions[i];
@@ -673,11 +780,15 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawCircle(
         pos,
         3,
-        Paint()
+        _glowPaint
           ..color = color.withOpacity(0.3 * pulse)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4)
+          ..style = PaintingStyle.fill,
       );
-      canvas.drawCircle(pos, 2, Paint()..color = color.withOpacity(pulse));
+      _statusPaint
+        ..color = color.withOpacity(pulse)
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(pos, 2, _statusPaint);
     }
   }
 
@@ -694,22 +805,30 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       titleText = _corruptString(titleText);
     }
 
-    final labelPainter = TextPainter(
-      text: TextSpan(
-        text: titleText,
-        style: TextStyle(
-          color: titleColor.withOpacity(0.7),
-          fontSize: 8,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-          letterSpacing: 2,
-          shadows: [Shadow(color: titleColor, blurRadius: 4)],
+    final titleColorValue = titleColor.value;
+    if (_titlePainter == null || _titleText != titleText || _titleColorValue != titleColorValue) {
+      _titleText = titleText;
+      _titleColorValue = titleColorValue;
+      _titlePainter = TextPainter(
+        text: TextSpan(
+          text: titleText,
+          style: TextStyle(
+            color: titleColor.withOpacity(0.7),
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            letterSpacing: 2,
+            shadows: [Shadow(color: titleColor, blurRadius: 4)],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    labelPainter.paint(canvas, Offset((mapSize - labelPainter.width) / 2, mapSize + 6));
+    _titlePainter!.paint(
+      canvas,
+      Offset((mapSize - _titlePainter!.width) / 2, mapSize + 6),
+    );
 
     // Status indicators on sides
     _renderSideStatus(canvas, titleColor);
@@ -719,69 +838,140 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Enemy count indicator (left side)
     final enemyCount = gameRef.enemyManager.aliveCount;
     final enemyText = enemyCount.toString().padLeft(2, '0');
+    final enemyColor =
+        _corruptionLevel > 0.5 ? const Color(0xFFFF4444) : color;
+    final enemyColorValue = enemyColor.value;
+    final shadowColorValue = color.value;
 
-    final enemyPainter = TextPainter(
-      text: TextSpan(
-        text: enemyText,
-        style: TextStyle(
-          color: _corruptionLevel > 0.5 ? const Color(0xFFFF4444) : color,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-          shadows: [Shadow(color: color, blurRadius: 4)],
+    if (_enemyCountPainter == null ||
+        _enemyCountText != enemyText ||
+        _enemyCountColorValue != enemyColorValue ||
+        _enemyShadowColorValue != shadowColorValue) {
+      _enemyCountText = enemyText;
+      _enemyCountColorValue = enemyColorValue;
+      _enemyShadowColorValue = shadowColorValue;
+      _enemyCountPainter = TextPainter(
+        text: TextSpan(
+          text: enemyText,
+          style: TextStyle(
+            color: enemyColor,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            shadows: [Shadow(color: color, blurRadius: 4)],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
     // Rotate for side display
     canvas.save();
     canvas.translate(-12, mapSize / 2);
     canvas.rotate(-math.pi / 2);
-    enemyPainter.paint(canvas, Offset(-enemyPainter.width / 2, 0));
+    _enemyCountPainter!.paint(canvas, Offset(-_enemyCountPainter!.width / 2, 0));
     canvas.restore();
 
     // Tower count (right side)
     final towerCount = gameRef.towerManager.towers.length;
     final towerText = towerCount.toString().padLeft(2, '0');
 
-    final towerPainter = TextPainter(
-      text: TextSpan(
-        text: towerText,
-        style: TextStyle(
-          color: const Color(0xFF00FF88),
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
-          shadows: [Shadow(color: const Color(0xFF00FF88), blurRadius: 4)],
+    if (_towerCountPainter == null || _towerCountText != towerText) {
+      _towerCountText = towerText;
+      _towerCountPainter = TextPainter(
+        text: TextSpan(
+          text: towerText,
+          style: const TextStyle(
+            color: Color(0xFF00FF88),
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 4)],
+          ),
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
     canvas.save();
     canvas.translate(mapSize + 12, mapSize / 2);
     canvas.rotate(math.pi / 2);
-    towerPainter.paint(canvas, Offset(-towerPainter.width / 2, 0));
+    _towerCountPainter!.paint(canvas, Offset(-_towerCountPainter!.width / 2, 0));
     canvas.restore();
   }
 
   void _renderGlitchBars(Canvas canvas) {
     if (!_isGlitching || _glitchIntensity < 0.2) return;
 
-    final random = math.Random(_glitchFrame);
+    var state = _lcgSeed(_glitchFrame, 0x2e6f7b51);
 
     for (int i = 0; i < (5 * _glitchIntensity).floor(); i++) {
-      final y = random.nextDouble() * mapSize;
-      final height = 1 + random.nextDouble() * 3;
-      final xOffset = (random.nextDouble() - 0.5) * 10 * _glitchIntensity;
-      final color = random.nextBool() ? const Color(0xFF00FFFF) : const Color(0xFFFF0044);
+      state = _lcgNext(state);
+      final y = _lcgUnit(state) * mapSize;
+      state = _lcgNext(state);
+      final height = 1 + _lcgUnit(state) * 3;
+      state = _lcgNext(state);
+      final xOffset = (_lcgUnit(state) - 0.5) * 10 * _glitchIntensity;
+      state = _lcgNext(state);
+      final color = (state & 0x1) == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF0044);
 
       canvas.drawRect(
         Rect.fromLTWH(xOffset, y, mapSize, height),
-        Paint()..color = color.withOpacity(0.2 * _glitchIntensity),
+        _glitchBarPaint..color = color.withOpacity(0.2 * _glitchIntensity),
       );
     }
+  }
+
+  void _ensureGeometry() {
+    if (_geometryMapSize == mapSize && _hexPath != null && _routePath != null) {
+      return;
+    }
+
+    _geometryMapSize = mapSize;
+    _hexPath = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
+    _innerHexPath = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
+
+    const offset = 8.0;
+    _cornerDots = [
+      const Offset(offset, offset),
+      Offset(mapSize - offset, offset),
+      Offset(offset, mapSize - offset),
+      Offset(mapSize - offset, mapSize - offset),
+    ];
+
+    _routePath = Path()
+      ..moveTo(0, mapSize * 0.25)
+      ..lineTo(mapSize * 0.25, mapSize * 0.25)
+      ..lineTo(mapSize * 0.25, mapSize * 0.75)
+      ..lineTo(mapSize * 0.75, mapSize * 0.75)
+      ..lineTo(mapSize * 0.75, mapSize * 0.25)
+      ..lineTo(mapSize, mapSize * 0.25);
+
+    final metricIterator = _routePath!.computeMetrics().iterator;
+    _routeMetric = metricIterator.moveNext() ? metricIterator.current : null;
+    _routeLength = _routeMetric?.length ?? 0;
+  }
+
+  void _ensureScanlineLayer() {
+    if (_scanlineLayer != null && _scanlineLayerSize == mapSize) {
+      return;
+    }
+
+    _scanlineLayer?.dispose();
+    final recorder = PictureRecorder();
+    final scanCanvas = Canvas(recorder);
+
+    _scanPaint
+      ..color = Colors.black.withOpacity(0.15)
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+
+    for (double y = 0; y < mapSize; y += 2) {
+      scanCanvas.drawLine(Offset(0, y), Offset(mapSize, y), _scanPaint);
+    }
+
+    _scanlineLayer = recorder.endRecording();
+    _scanlineLayerSize = mapSize;
   }
 
   // Helper methods
@@ -818,17 +1008,21 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
     path.close();
 
-    canvas.drawPath(path, Paint()..color = color);
+    _towerFillPaint
+      ..color = color
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path, _towerFillPaint);
   }
 
   String _corruptString(String input) {
-    final glitchChars = ['#', '@', '!', '%', '&', '*', '?', '/', '\\', '|'];
-    final random = math.Random(_glitchFrame);
+    var state = _lcgSeed(_glitchFrame, 0x9e3779b9);
     final chars = input.split('');
 
     for (int i = 0; i < chars.length; i++) {
-      if (random.nextDouble() < 0.25) {
-        chars[i] = glitchChars[random.nextInt(glitchChars.length)];
+      state = _lcgNext(state);
+      if (_lcgUnit(state) < 0.25) {
+        state = _lcgNext(state);
+        chars[i] = _glitchChars[state % _glitchChars.length];
       }
     }
     return chars.join();
@@ -839,3 +1033,4 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 extension on double {
   double sin() => math.sin(this);
 }
+

@@ -51,7 +51,13 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
 
   // Particles
   final List<_AtmosphereParticle> _particles = [];
-  final math.Random _random = math.Random();
+  int _rngState = 0x85ebca6b;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
 
   // Typewriter
   Timer? _typewriterTimer;
@@ -122,7 +128,8 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
 
     for (int i = 0; i < count; i++) {
       _particles.add(_AtmosphereParticle.generate(
-        _random,
+        _nextUnit,
+        _nextInt,
         mood,
         widget.chronicle.accentColor,
       ));
@@ -692,6 +699,7 @@ class _BackgroundPainter extends CustomPainter {
   final Color primaryColor;
   final Color secondaryColor;
   final double pulseValue;
+  static final Paint _bgPaint = Paint();
 
   _BackgroundPainter({
     required this.time,
@@ -719,7 +727,8 @@ class _BackgroundPainter extends CustomPainter {
       stops: const [0.0, 0.4, 1.0],
     ).createShader(rect);
 
-    canvas.drawRect(rect, Paint()..shader = baseGradient);
+    _bgPaint.shader = baseGradient;
+    canvas.drawRect(rect, _bgPaint);
 
     // Grid lines (subtle)
     _drawGridLines(canvas, size);
@@ -855,46 +864,47 @@ class _AtmosphereParticle {
   });
 
   factory _AtmosphereParticle.generate(
-    math.Random random,
+    double Function() nextUnit,
+    int Function(int) nextInt,
     ChapterMood mood,
     Color baseColor,
   ) {
-    final speed = _getSpeedForMood(mood, random);
+    final speed = _getSpeedForMood(mood, nextUnit);
     return _AtmosphereParticle(
-      x: random.nextDouble(),
-      y: random.nextDouble(),
-      vx: (random.nextDouble() - 0.5) * speed,
-      vy: (random.nextDouble() - 0.5) * speed - 0.01, // Slight upward drift
-      size: random.nextDouble() * 3 + 1,
-      alpha: random.nextDouble() * 0.5 + 0.1,
-      lifetime: random.nextDouble(),
-      color: _getColorForMood(mood, baseColor, random),
+      x: nextUnit(),
+      y: nextUnit(),
+      vx: (nextUnit() - 0.5) * speed,
+      vy: (nextUnit() - 0.5) * speed - 0.01, // Slight upward drift
+      size: nextUnit() * 3 + 1,
+      alpha: nextUnit() * 0.5 + 0.1,
+      lifetime: nextUnit(),
+      color: _getColorForMood(mood, baseColor, nextUnit),
     );
   }
 
-  static double _getSpeedForMood(ChapterMood mood, math.Random random) {
+  static double _getSpeedForMood(ChapterMood mood, double Function() nextUnit) {
     switch (mood) {
       case ChapterMood.action:
       case ChapterMood.epic:
-        return 0.03 + random.nextDouble() * 0.02;
+        return 0.03 + nextUnit() * 0.02;
       case ChapterMood.mysterious:
       case ChapterMood.philosophical:
-        return 0.005 + random.nextDouble() * 0.005;
+        return 0.005 + nextUnit() * 0.005;
       default:
-        return 0.01 + random.nextDouble() * 0.01;
+        return 0.01 + nextUnit() * 0.01;
     }
   }
 
   static Color _getColorForMood(
     ChapterMood mood,
     Color baseColor,
-    math.Random random,
+    double Function() nextUnit,
   ) {
     switch (mood) {
       case ChapterMood.horror:
-        return Color.lerp(baseColor, Colors.red, random.nextDouble() * 0.5)!;
+        return Color.lerp(baseColor, Colors.red, nextUnit() * 0.5)!;
       case ChapterMood.hopeful:
-        return Color.lerp(baseColor, Colors.white, random.nextDouble() * 0.3)!;
+        return Color.lerp(baseColor, Colors.white, nextUnit() * 0.3)!;
       default:
         return baseColor;
     }
@@ -921,6 +931,9 @@ class _ParticlePainter extends CustomPainter {
   final List<_AtmosphereParticle> particles;
   final Color accentColor;
 
+  static final Paint _particlePaint = Paint();
+  static const MaskFilter _blurSmall = MaskFilter.blur(BlurStyle.normal, 3);
+
   _ParticlePainter({
     required this.particles,
     required this.accentColor,
@@ -929,16 +942,15 @@ class _ParticlePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     for (final p in particles) {
-      final paint = Paint()
+      if (p.alpha <= 0.01) continue;
+      _particlePaint
         ..color = p.color.withOpacity(p.alpha)
-        ..maskFilter = p.size > 2
-            ? const MaskFilter.blur(BlurStyle.normal, 3)
-            : null;
+        ..maskFilter = p.size > 2 ? _blurSmall : null;
 
       canvas.drawCircle(
         Offset(p.x * size.width, p.y * size.height),
         p.size,
-        paint,
+        _particlePaint,
       );
     }
   }

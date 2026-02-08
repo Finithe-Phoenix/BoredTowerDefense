@@ -18,6 +18,13 @@ class ParticleShaderComponent extends PositionComponent with HasGameRef<BoredGam
 
   // Static cached paint to avoid per-frame allocations
   static final ui.Paint _shaderPaint = ui.Paint();
+  final Float32List _uniforms = Float32List(3);
+  ui.Rect _renderRect = ui.Rect.zero;
+  double _renderWidth = 0;
+  double _renderHeight = 0;
+  double _lastScale = -1;
+  double _lastWidth = -1;
+  double _lastHeight = -1;
 
   @override
   Future<void> onLoad() async {
@@ -51,25 +58,35 @@ class ParticleShaderComponent extends PositionComponent with HasGameRef<BoredGam
     if (!enabled) return;
     if (_program == null) return;
     final scale = gameRef.shaderScale;
-    final renderWidth = size.x * scale;
-    final renderHeight = size.y * scale;
-    final rect = ui.Rect.fromLTWH(0, 0, renderWidth, renderHeight);
+    _ensureRenderMetrics(scale);
     final shader = _program!.fragmentShader();
-    final uniforms = Float32List.fromList([
-      renderWidth,
-      renderHeight,
-      _time,
-    ]);
-    for (var i = 0; i < uniforms.length; i++) {
-      shader.setFloat(i, uniforms[i]);
+    _uniforms[0] = _renderWidth;
+    _uniforms[1] = _renderHeight;
+    _uniforms[2] = _time;
+    for (var i = 0; i < _uniforms.length; i++) {
+      shader.setFloat(i, _uniforms[i]);
     }
     _shaderPaint.shader = shader;
-    canvas.save();
     if (scale != 1.0) {
+      canvas.save();
       canvas.scale(1 / scale);
+      canvas.drawRect(_renderRect, _shaderPaint);
+      canvas.restore();
+    } else {
+      canvas.drawRect(_renderRect, _shaderPaint);
     }
-    canvas.drawRect(rect, _shaderPaint);
-    canvas.restore();
     shader.dispose();
+  }
+
+  void _ensureRenderMetrics(double scale) {
+    final width = size.x;
+    final height = size.y;
+    if (scale == _lastScale && width == _lastWidth && height == _lastHeight) return;
+    _lastScale = scale;
+    _lastWidth = width;
+    _lastHeight = height;
+    _renderWidth = width * scale;
+    _renderHeight = height * scale;
+    _renderRect = ui.Rect.fromLTWH(0, 0, _renderWidth, _renderHeight);
   }
 }

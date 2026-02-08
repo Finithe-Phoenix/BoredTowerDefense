@@ -40,7 +40,13 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   late AnimationController _glitchController;
 
   final List<_EnergyParticle> _particles = [];
-  final math.Random _random = math.Random();
+  int _rngState = 0x2c1b3c6d;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
   double _glitchIntensity = 0;
   int _revealedCardIndex = 0;
   Timer? _cardRevealTimer;
@@ -155,7 +161,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
     // Initialize particles
     for (int i = 0; i < 60; i++) {
-      _particles.add(_EnergyParticle.random(_random));
+      _particles.add(_EnergyParticle.random(_nextUnit, _nextInt));
     }
 
     // Card reveal sequence
@@ -346,7 +352,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 
   Widget _buildEpicHeader() {
     final fadeIn = Curves.easeOut.transform(_masterController.value.clamp(0.0, 0.5) * 2);
-    final glitchOffset = _glitchIntensity * (_random.nextDouble() - 0.5) * 6;
+    final glitchOffset = _glitchIntensity * (_nextUnit() - 0.5) * 6;
 
     return Transform.translate(
       offset: Offset(glitchOffset, 0),
@@ -424,7 +430,12 @@ class _AnimatedStatusBarState extends State<_AnimatedStatusBar> {
   Timer? _typewriterTimer;
   static const _fullText = 'ESTADO DEL SISTEMA: CRÍTICO - RECURSIVE_DECOMPILE_DETECTED';
   static const _glitchChars = r'!@#$%^&*()_+-=[]{}|;:<>/?01';
-  final _random = math.Random();
+  int _rngState = 0x5bd1e995;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
 
   @override
   void initState() {
@@ -446,7 +457,7 @@ class _AnimatedStatusBarState extends State<_AnimatedStatusBar> {
           _displayText = _fullText.substring(0, _charIndex);
           // Add random glitch char at end
           if (_charIndex < _fullText.length) {
-            _displayText += _glitchChars[_random.nextInt(_glitchChars.length)];
+            _displayText += _glitchChars[_nextInt(_glitchChars.length)];
           }
         });
       } else {
@@ -1083,6 +1094,19 @@ class _HolographicCardPainter extends CustomPainter {
   final bool isHovered;
   final int cardIndex;
 
+  static final Paint _innerGradientPaint = Paint();
+  static final Paint _scanlinePaint = Paint();
+  static final Map<int, Shader> _innerGradientShaders = {};
+  static final Map<int, Shader> _scanlineShaders = {};
+
+  static int _innerGradientKey(Size size, int opacityStep, int colorValue) {
+    return (size.width.round() << 32) ^ (size.height.round() << 16) ^ (opacityStep << 8) ^ colorValue;
+  }
+
+  static int _scanlineKey(Size size, int opacityStep, int colorValue) {
+    return (size.width.round() << 16) ^ (opacityStep << 8) ^ colorValue;
+  }
+
   _HolographicCardPainter({
     required this.accent,
     required this.opacity,
@@ -1103,35 +1127,45 @@ class _HolographicCardPainter extends CustomPainter {
     canvas.drawRRect(rrect, bgPaint);
 
     // Inner gradient overlay
-    final gradientPaint = Paint()
-      ..shader = LinearGradient(
+    final opacityStep = (opacity * 60).round();
+    final innerKey = _innerGradientKey(size, opacityStep, accent.value);
+    final innerShader = _innerGradientShaders.putIfAbsent(innerKey, () {
+      final scalar = opacityStep / 60.0;
+      return LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
-          accent.withOpacity(0.08 * opacity),
+          accent.withOpacity(0.08 * scalar),
           Colors.transparent,
-          accent.withOpacity(0.04 * opacity),
+          accent.withOpacity(0.04 * scalar),
         ],
       ).createShader(rect);
-    canvas.drawRRect(rrect, gradientPaint);
+    });
+    _innerGradientPaint.shader = innerShader;
+    canvas.drawRRect(rrect, _innerGradientPaint);
 
     // Scanline effect inside card
     final scanY = size.height * scanProgress;
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
+    final scanKey = _scanlineKey(size, opacityStep, accent.value);
+    final scanShader = _scanlineShaders.putIfAbsent(scanKey, () {
+      final scalar = opacityStep / 60.0;
+      return LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: [
           Colors.transparent,
-          accent.withOpacity(0.15 * opacity),
-          accent.withOpacity(0.25 * opacity),
-          accent.withOpacity(0.15 * opacity),
+          accent.withOpacity(0.15 * scalar),
+          accent.withOpacity(0.25 * scalar),
+          accent.withOpacity(0.15 * scalar),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 2, size.width, 4));
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 4));
+    });
+    _scanlinePaint.shader = scanShader;
     canvas.save();
     canvas.clipRRect(rrect);
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 2, size.width, 4), scanPaint);
+    canvas.translate(0, scanY - 2);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 4), _scanlinePaint);
     canvas.restore();
 
     // Border with glow
@@ -1242,6 +1276,20 @@ class _ParticleSystemPainter extends CustomPainter {
   final List<_EnergyParticle> particles;
   final double opacity;
 
+  static final Paint _glowPaint = Paint();
+  static final Paint _corePaint = Paint();
+  static final Map<int, MaskFilter> _blurCache = {};
+
+  static MaskFilter _blur(double sigma) {
+    var key = sigma.round();
+    if (key < 1) key = 1;
+    if (key > 20) key = 20;
+    return _blurCache.putIfAbsent(
+      key,
+      () => MaskFilter.blur(BlurStyle.normal, key.toDouble()),
+    );
+  }
+
   _ParticleSystemPainter({
     required this.particles,
     required this.opacity,
@@ -1253,15 +1301,14 @@ class _ParticleSystemPainter extends CustomPainter {
       final pos = Offset(p.x * size.width, p.y * size.height);
 
       // Glow
-      final glowPaint = Paint()
+      _glowPaint
         ..color = p.color.withOpacity(p.alpha * 0.5 * opacity)
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, p.size * 2);
-      canvas.drawCircle(pos, p.size * 1.2, glowPaint);
+        ..maskFilter = _blur(p.size * 2);
+      canvas.drawCircle(pos, p.size * 1.2, _glowPaint);
 
       // Core
-      final corePaint = Paint()
-        ..color = p.color.withOpacity(p.alpha * 0.9 * opacity);
-      canvas.drawCircle(pos, p.size * 0.5, corePaint);
+      _corePaint.color = p.color.withOpacity(p.alpha * 0.9 * opacity);
+      canvas.drawCircle(pos, p.size * 0.5, _corePaint);
     }
   }
 
@@ -1275,6 +1322,18 @@ class _CyberScanOverlayPainter extends CustomPainter {
   final double masterOpacity;
   final double glitchIntensity;
 
+  static final Paint _scanlinePaint = Paint();
+  static final Paint _scanline2Paint = Paint();
+  static final Paint _crtLinePaint = Paint();
+  static final Paint _glitchRedPaint = Paint();
+  static final Paint _glitchCyanPaint = Paint();
+  static final Paint _glitchNoisePaint = Paint();
+  static final Map<int, Shader> _scanlineShaders = {};
+
+  static int _scanlineKey(Size size, int opacityStep) {
+    return (size.width.round() << 16) ^ opacityStep;
+  }
+
   _CyberScanOverlayPainter({
     required this.scanProgress,
     required this.pulseValue,
@@ -1284,68 +1343,85 @@ class _CyberScanOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (masterOpacity <= 0.01 || size.width <= 0 || size.height <= 0) return;
     // Horizontal scan line
     final scanY = scanProgress * size.height;
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
+    final opacityStep = (masterOpacity * 60).round();
+    final scanKey = _scanlineKey(size, opacityStep);
+    final scanShader = _scanlineShaders.putIfAbsent(scanKey, () {
+      final scalar = opacityStep / 60.0;
+      return LinearGradient(
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         colors: [
           Colors.transparent,
-          NeonColors.cyan.withOpacity(0.2 * masterOpacity),
-          NeonColors.cyan.withOpacity(0.4 * masterOpacity),
-          NeonColors.cyan.withOpacity(0.2 * masterOpacity),
+          NeonColors.cyan.withOpacity(0.2 * scalar),
+          NeonColors.cyan.withOpacity(0.4 * scalar),
+          NeonColors.cyan.withOpacity(0.2 * scalar),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 2, size.width, 4));
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 2, size.width, 4), scanPaint);
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 4));
+    });
+    _scanlinePaint.shader = scanShader;
+    canvas.save();
+    canvas.translate(0, scanY - 2);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 4), _scanlinePaint);
+    canvas.restore();
 
     // Secondary scan line (opposite direction)
     final scan2Y = (1 - scanProgress) * size.height;
-    final scan2Paint = Paint()
-      ..color = NeonColors.magenta.withOpacity(0.1 * masterOpacity);
-    canvas.drawRect(Rect.fromLTWH(0, scan2Y - 1, size.width, 2), scan2Paint);
+    _scanline2Paint.color = NeonColors.magenta.withOpacity(0.1 * masterOpacity);
+    canvas.drawRect(Rect.fromLTWH(0, scan2Y - 1, size.width, 2), _scanline2Paint);
 
     // CRT scanlines (subtle horizontal lines)
+    _crtLinePaint.color = Colors.black.withOpacity(0.05 * masterOpacity);
     for (int i = 0; i < size.height ~/ 4; i++) {
       final y = i * 4.0;
-      final linePaint = Paint()
-        ..color = Colors.black.withOpacity(0.05 * masterOpacity);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), linePaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _crtLinePaint);
     }
 
     // Glitch effect
-    if (glitchIntensity > 0) {
+    if (glitchIntensity > 0.01) {
       _drawGlitch(canvas, size);
     }
   }
 
   void _drawGlitch(Canvas canvas, Size size) {
-    final random = math.Random();
+    int rngState = ((scanProgress * 100000).round() ^ (glitchIntensity * 1000).round() ^ 0x9e3779b9) & 0x7fffffff;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
 
     for (int i = 0; i < 8; i++) {
-      final y = random.nextDouble() * size.height;
-      final height = 2 + random.nextDouble() * 6;
-      final offsetX = (random.nextDouble() - 0.5) * 15 * glitchIntensity;
+      final y = nextUnit() * size.height;
+      final height = 2 + nextUnit() * 6;
+      final offsetX = (nextUnit() - 0.5) * 15 * glitchIntensity;
 
       // RGB split
+      _glitchRedPaint.color = Colors.red.withOpacity(0.15 * glitchIntensity);
       canvas.drawRect(
         Rect.fromLTWH(-offsetX, y, size.width, height),
-        Paint()..color = Colors.red.withOpacity(0.15 * glitchIntensity),
+        _glitchRedPaint,
       );
+      _glitchCyanPaint.color = NeonColors.cyan.withOpacity(0.15 * glitchIntensity);
       canvas.drawRect(
         Rect.fromLTWH(offsetX, y, size.width, height),
-        Paint()..color = NeonColors.cyan.withOpacity(0.15 * glitchIntensity),
+        _glitchCyanPaint,
       );
     }
 
     // Static noise
     for (int i = 0; i < 30; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = random.nextDouble() * size.height;
+      final x = nextUnit() * size.width;
+      final y = nextUnit() * size.height;
+      final noiseAlpha = nextUnit() * 0.3 * glitchIntensity;
+      if (noiseAlpha <= 0.01) continue;
+      _glitchNoisePaint.color = Colors.white.withOpacity(noiseAlpha);
       canvas.drawRect(
         Rect.fromLTWH(x, y, 2, 2),
-        Paint()..color = Colors.white.withOpacity(random.nextDouble() * 0.3 * glitchIntensity),
+        _glitchNoisePaint,
       );
     }
   }
@@ -1398,6 +1474,7 @@ class _EnergyParticle {
   double maxLife;
   double size;
   Color color;
+  int _rngState;
 
   _EnergyParticle({
     required this.x,
@@ -1408,9 +1485,17 @@ class _EnergyParticle {
     required this.maxLife,
     required this.size,
     required this.color,
-  });
+    required int rngState,
+  }) : _rngState = rngState;
 
-  factory _EnergyParticle.random(math.Random r) {
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+
+  factory _EnergyParticle.random(double Function() nextUnit, int Function(int) nextInt) {
     final colors = [
       NeonColors.cyan,
       NeonColors.magenta,
@@ -1418,14 +1503,15 @@ class _EnergyParticle {
       NeonColors.blue,
     ];
     return _EnergyParticle(
-      x: r.nextDouble(),
-      y: r.nextDouble(),
-      vx: (r.nextDouble() - 0.5) * 0.005,
-      vy: -0.002 - r.nextDouble() * 0.005, // Mostly upward drift
-      life: r.nextDouble(),
-      maxLife: 0.8 + r.nextDouble() * 0.4,
-      size: 1.5 + r.nextDouble() * 2.5,
-      color: colors[r.nextInt(colors.length)],
+      x: nextUnit(),
+      y: nextUnit(),
+      vx: (nextUnit() - 0.5) * 0.005,
+      vy: -0.002 - nextUnit() * 0.005, // Mostly upward drift
+      life: nextUnit(),
+      maxLife: 0.8 + nextUnit() * 0.4,
+      size: 1.5 + nextUnit() * 2.5,
+      color: colors[nextInt(colors.length)],
+      rngState: nextInt(0x7fffffff),
     );
   }
 
@@ -1435,9 +1521,8 @@ class _EnergyParticle {
     life -= dt * 0.4;
 
     if (life <= 0 || y < -0.1 || x < -0.1 || x > 1.1) {
-      final r = math.Random();
-      x = r.nextDouble();
-      y = 1.0 + r.nextDouble() * 0.1;
+      x = _nextUnit();
+      y = 1.0 + _nextUnit() * 0.1;
       life = maxLife;
     }
   }

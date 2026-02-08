@@ -34,7 +34,7 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
 
   final List<_FloatingParticle> _particles = [];
   final List<_DataStream> _dataStreams = [];
-  final math.Random _random = math.Random();
+  int _rngState = 0x6d2b79f5;
   Timer? _glitchTimer;
 
   double _glitchIntensity = 0.0;
@@ -45,6 +45,7 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
   @override
   void initState() {
     super.initState();
+    _rngState = 0x6d2b79f5 ^ DateTime.now().millisecondsSinceEpoch;
 
     _gridController = AnimationController(
       duration: const Duration(seconds: 15),
@@ -85,13 +86,13 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
     _particles.clear();
     for (int i = 0; i < 50; i++) {
       _particles.add(_FloatingParticle(
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        size: 1 + _random.nextDouble() * 3,
-        speed: 0.0005 + _random.nextDouble() * 0.002,
-        opacity: 0.2 + _random.nextDouble() * 0.5,
-        color: _random.nextBool() ? NeonColors.cyan : NeonColors.magenta,
-        phase: _random.nextDouble() * math.pi * 2,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        size: 1 + _nextUnit() * 3,
+        speed: 0.0005 + _nextUnit() * 0.002,
+        opacity: 0.2 + _nextUnit() * 0.5,
+        color: _nextBool() ? NeonColors.cyan : NeonColors.magenta,
+        phase: _nextUnit() * math.pi * 2,
       ));
     }
   }
@@ -100,11 +101,11 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
     _dataStreams.clear();
     for (int i = 0; i < 8; i++) {
       _dataStreams.add(_DataStream(
-        x: _random.nextDouble(),
-        speed: 0.02 + _random.nextDouble() * 0.03,
-        length: 0.1 + _random.nextDouble() * 0.2,
+        x: _nextUnit(),
+        speed: 0.02 + _nextUnit() * 0.03,
+        length: 0.1 + _nextUnit() * 0.2,
         color: [NeonColors.cyan, NeonColors.magenta, NeonColors.green, NeonColors.purple][i % 4],
-        characters: List.generate(10 + _random.nextInt(15), (_) => _random.nextInt(2).toString()),
+        characters: List.generate(10 + _nextInt(15), (_) => _nextInt(2).toString()),
       ));
     }
   }
@@ -115,7 +116,7 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
       p.x += math.sin(_particleController.value * math.pi * 2 + p.phase) * 0.0005;
       if (p.y < -0.1) {
         p.y = 1.1;
-        p.x = _random.nextDouble();
+        p.x = _nextUnit();
       }
     }
   }
@@ -124,7 +125,7 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
     if (!mounted || !widget.enableGlitch) return;
     _glitchTimer?.cancel();
     _glitchTimer = Timer(
-      Duration(milliseconds: 2000 + _random.nextInt(5000)),
+      Duration(milliseconds: 2000 + _nextInt(5000)),
       () {
         if (!mounted) return;
         _triggerGlitch();
@@ -137,9 +138,9 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
     if (!widget.enableGlitch) return;
     setState(() {
       _isGlitching = true;
-      _glitchIntensity = 0.5 + _random.nextDouble() * 0.5;
-      _glitchOffsetX = (_random.nextDouble() - 0.5) * 10;
-      _glitchOffsetY = (_random.nextDouble() - 0.5) * 5;
+      _glitchIntensity = 0.5 + _nextUnit() * 0.5;
+      _glitchOffsetX = (_nextUnit() - 0.5) * 10;
+      _glitchOffsetY = (_nextUnit() - 0.5) * 5;
     });
 
     _glitchController.forward(from: 0).then((_) {
@@ -162,6 +163,17 @@ class _CyberGridBackgroundState extends State<CyberGridBackground>
     _dataStreamController.dispose();
     super.dispose();
   }
+
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+
+  bool _nextBool() => (_lcgNext() & 1) == 0;
 
   @override
   Widget build(BuildContext context) {
@@ -247,8 +259,177 @@ class _CyberGridPainter extends CustomPainter {
   final double glitchOffsetY;
   final bool isGlitching;
 
+  static const LinearGradient _spaceGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [
+      Color(0xFF050510),
+      Color(0xFF0A0A1A),
+      Color(0xFF050515),
+      Color(0xFF030308),
+    ],
+    stops: [0.0, 0.3, 0.7, 1.0],
+  );
+
+  static final Paint _spacePaint = Paint();
+  static final Paint _starPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _gridLinePaint = Paint()
+    ..strokeWidth = 1
+    ..style = PaintingStyle.stroke;
+  static final Paint _gridGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _gridCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _gridCyanGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _wavePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _pulsePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _particleGlowPaint = Paint()
+    ..style = PaintingStyle.fill
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _particleCorePaint = Paint()..style = PaintingStyle.fill;
+  static const int _streamCharCacheLimit = 96;
+  static final Map<int, TextPainter> _streamCharCache = {};
+  static final Paint _hexPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Path _hexPath = Path();
+  static final Paint _cornerGlowPaint = Paint()
+    ..strokeWidth = 4
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _cornerAccentPaint = Paint()
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke;
+  static final Paint _cornerDotPaint = Paint();
+  static final Paint _energyCoreOuterPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40);
+  static final Paint _energyCoreInnerPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _glitchCyanPaint = Paint();
+  static final Paint _glitchMagentaPaint = Paint();
+  static final Paint _glitchRedSplitPaint = Paint();
+  static final Paint _glitchCyanSplitPaint = Paint();
+  static final Paint _vignettePaint = Paint();
+  static Size? _spaceShaderSize;
+  static Shader? _spaceShader;
+  static Size? _vignetteShaderSize;
+  static Shader? _vignetteShader;
+
+  static final List<_DistantStar> _distantStars = _buildDistantStars();
+  static final List<Offset> _hexUnitPoints = _buildHexUnitPoints();
+  static Size? _gridCacheSize;
+  static List<_LineSeg> _verticalLines = const [];
+  static List<_LineSeg> _horizontalLines = const [];
+  static Size? _hexCacheSize;
+  static List<_HexCell> _hexCells = const [];
+
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+
+  static List<_DistantStar> _buildDistantStars() {
+    int state = 42;
+    return List.generate(100, (i) {
+      state = _lcgNext(state);
+      final x = _lcgUnit(state);
+      state = _lcgNext(state);
+      final y = _lcgUnit(state) * 0.5;
+      state = _lcgNext(state);
+      final size = 0.5 + _lcgUnit(state) * 1.5;
+      return _DistantStar(
+        x: x,
+        y: y,
+        size: size,
+      );
+    });
+  }
+
+  static List<Offset> _buildHexUnitPoints() {
+    final points = <Offset>[];
+    for (int i = 0; i < 6; i++) {
+      final angle = (i * 60 - 30) * math.pi / 180;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+    }
+    return points;
+  }
+
+  static void _ensureGridCache(Size size) {
+    if (_gridCacheSize == size) return;
+    _gridCacheSize = size;
+
+    final horizonY = size.height * 0.38;
+    final vanishingPointX = size.width / 2;
+
+    const verticalLineCount = 40;
+    final verticalLines = <_LineSeg>[];
+    for (int i = -verticalLineCount ~/ 2; i <= verticalLineCount ~/ 2; i++) {
+      final bottomX = vanishingPointX + i * (size.width / verticalLineCount) * 2.5;
+      final alpha = (1 - (i.abs() / (verticalLineCount / 2))).clamp(0.0, 1.0);
+      verticalLines.add(_LineSeg(
+        Offset(vanishingPointX, horizonY),
+        Offset(bottomX, size.height),
+        alpha.toDouble(),
+      ));
+    }
+
+    const horizontalLineCount = 25;
+    final horizontalLines = <_LineSeg>[];
+    for (int i = 0; i <= horizontalLineCount; i++) {
+      final t = i / horizontalLineCount;
+      final perspectiveT = math.pow(t, 1.8).toDouble();
+      final y = horizonY + (size.height - horizonY) * perspectiveT;
+      final alpha = t.clamp(0.05, 0.4);
+      final leftX = vanishingPointX - (size.width / 2 + 300) * perspectiveT;
+      final rightX = vanishingPointX + (size.width / 2 + 300) * perspectiveT;
+      horizontalLines.add(_LineSeg(
+        Offset(leftX, y),
+        Offset(rightX, y),
+        alpha.toDouble(),
+      ));
+    }
+
+    _verticalLines = verticalLines;
+    _horizontalLines = horizontalLines;
+  }
+
+  static void _ensureHexCache(Size size) {
+    if (_hexCacheSize == size) return;
+    _hexCacheSize = size;
+
+    const hexSize = 50.0;
+    final rows = (size.height / (hexSize * 1.5)).ceil() + 1;
+    final cols = (size.width / (hexSize * 1.732)).ceil() + 1;
+    final cells = <_HexCell>[];
+
+    for (int row = 0; row < rows; row++) {
+      for (int col = 0; col < cols; col++) {
+        final xOffset = col * hexSize * 1.732;
+        final yOffset = row * hexSize * 1.5 + (col.isOdd ? hexSize * 0.75 : 0);
+
+        if (yOffset < size.height * 0.45) {
+          final fadeAlpha = 1 - (yOffset / (size.height * 0.45));
+          cells.add(_HexCell(Offset(xOffset, yOffset), fadeAlpha));
+        }
+      }
+    }
+
+    _hexCells = cells;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Layer 1: Deep space gradient
     _drawSpaceGradient(canvas, size);
 
@@ -287,72 +468,43 @@ class _CyberGridPainter extends CustomPainter {
 
   void _drawSpaceGradient(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final gradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        const Color(0xFF050510),
-        const Color(0xFF0A0A1A),
-        const Color(0xFF050515),
-        const Color(0xFF030308),
-      ],
-      stops: const [0.0, 0.3, 0.7, 1.0],
-    );
-    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
+    if (_spaceShader == null || _spaceShaderSize != size) {
+      _spaceShaderSize = size;
+      _spaceShader = _spaceGradient.createShader(rect);
+    }
+    _spacePaint.shader = _spaceShader;
+    canvas.drawRect(rect, _spacePaint);
   }
 
   void _drawDistantStars(Canvas canvas, Size size) {
-    final starPaint = Paint()..style = PaintingStyle.fill;
-    final random = math.Random(42); // Fixed seed for consistent stars
-
-    for (int i = 0; i < 100; i++) {
-      final x = random.nextDouble() * size.width;
-      final y = random.nextDouble() * size.height * 0.5;
+    for (int i = 0; i < _distantStars.length; i++) {
+      final star = _distantStars[i];
+      final x = star.x * size.width;
+      final y = star.y * size.height;
       final twinkle = (0.3 + 0.7 * math.sin(particleAnimation * math.pi * 2 + i))
           .clamp(0.0, 1.0)
           .toDouble();
-      final starSize = 0.5 + random.nextDouble() * 1.5;
 
-      starPaint.color = Colors.white.withOpacity(0.2 * twinkle);
-      canvas.drawCircle(Offset(x, y), starSize, starPaint);
+      _starPaint.color = Colors.white.withOpacity(0.2 * twinkle);
+      canvas.drawCircle(Offset(x, y), star.size, _starPaint);
     }
   }
 
   void _drawPerspectiveGrid(Canvas canvas, Size size) {
+    _ensureGridCache(size);
     final horizonY = size.height * 0.38;
     final vanishingPointX = size.width / 2;
 
-    final linePaint = Paint()
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke;
-
     // Vertical lines going to horizon
-    const verticalLineCount = 40;
-    for (int i = -verticalLineCount ~/ 2; i <= verticalLineCount ~/ 2; i++) {
-      final bottomX = vanishingPointX + i * (size.width / verticalLineCount) * 2.5;
-      final alpha = (1 - (i.abs() / (verticalLineCount / 2))).clamp(0.0, 1.0);
-
-      linePaint.color = NeonColors.cyan.withOpacity(alpha * 0.25);
-      canvas.drawLine(
-        Offset(vanishingPointX, horizonY),
-        Offset(bottomX, size.height),
-        linePaint,
-      );
+    for (final line in _verticalLines) {
+      _gridLinePaint.color = NeonColors.cyan.withOpacity(line.alpha * 0.25);
+      canvas.drawLine(line.start, line.end, _gridLinePaint);
     }
 
     // Horizontal lines with perspective
-    const horizontalLineCount = 25;
-    for (int i = 0; i <= horizontalLineCount; i++) {
-      final t = i / horizontalLineCount;
-      final perspectiveT = math.pow(t, 1.8);
-      final y = horizonY + (size.height - horizonY) * perspectiveT;
-      final alpha = t.clamp(0.05, 0.4);
-
-      linePaint.color = NeonColors.cyan.withOpacity(alpha);
-      final leftX = vanishingPointX - (size.width / 2 + 300) * perspectiveT;
-      final rightX = vanishingPointX + (size.width / 2 + 300) * perspectiveT;
-
-      canvas.drawLine(Offset(leftX, y), Offset(rightX, y), linePaint);
+    for (final line in _horizontalLines) {
+      _gridLinePaint.color = NeonColors.cyan.withOpacity(line.alpha);
+      canvas.drawLine(line.start, line.end, _gridLinePaint);
     }
 
     // Animated flowing lines (faster, more dramatic)
@@ -364,21 +516,16 @@ class _CyberGridPainter extends CustomPainter {
 
       if (y > horizonY && y < size.height) {
         // Glow line
-        final glowPaint = Paint()
-          ..color = NeonColors.magenta.withOpacity(0.7 * baseT)
-          ..strokeWidth = 3
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+        _gridGlowPaint.color = NeonColors.magenta.withOpacity(0.7 * baseT);
 
         final leftX = vanishingPointX - (size.width / 2 + 300) * perspectiveT;
         final rightX = vanishingPointX + (size.width / 2 + 300) * perspectiveT;
 
-        canvas.drawLine(Offset(leftX, y), Offset(rightX, y), glowPaint);
+        canvas.drawLine(Offset(leftX, y), Offset(rightX, y), _gridGlowPaint);
 
         // Core line
-        final corePaint = Paint()
-          ..color = NeonColors.magenta.withOpacity(0.9 * baseT)
-          ..strokeWidth = 1;
-        canvas.drawLine(Offset(leftX, y), Offset(rightX, y), corePaint);
+        _gridCorePaint.color = NeonColors.magenta.withOpacity(0.9 * baseT);
+        canvas.drawLine(Offset(leftX, y), Offset(rightX, y), _gridCorePaint);
       }
     }
 
@@ -389,15 +536,12 @@ class _CyberGridPainter extends CustomPainter {
       final y = horizonY + (size.height - horizonY) * perspectiveT;
 
       if (y > horizonY && y < size.height) {
-        final glowPaint = Paint()
-          ..color = NeonColors.cyan.withOpacity(0.5 * baseT)
-          ..strokeWidth = 2
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        _gridCyanGlowPaint.color = NeonColors.cyan.withOpacity(0.5 * baseT);
 
         final leftX = vanishingPointX - (size.width / 2 + 300) * perspectiveT;
         final rightX = vanishingPointX + (size.width / 2 + 300) * perspectiveT;
 
-        canvas.drawLine(Offset(leftX, y), Offset(rightX, y), glowPaint);
+        canvas.drawLine(Offset(leftX, y), Offset(rightX, y), _gridCyanGlowPaint);
       }
     }
   }
@@ -413,13 +557,8 @@ class _CyberGridPainter extends CustomPainter {
       final alpha = (1 - waveProgress) * 0.25;
 
       if (alpha > 0.01) {
-        final wavePaint = Paint()
-          ..color = NeonColors.purple.withOpacity(alpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-
-        canvas.drawCircle(Offset(centerX, centerY), radius, wavePaint);
+        _wavePaint.color = NeonColors.purple.withOpacity(alpha);
+        canvas.drawCircle(Offset(centerX, centerY), radius, _wavePaint);
       }
     }
 
@@ -430,41 +569,29 @@ class _CyberGridPainter extends CustomPainter {
       final alpha = (1 - pulseProgress) * 0.4;
 
       if (alpha > 0.01) {
-        final pulsePaint = Paint()
-          ..color = NeonColors.cyan.withOpacity(alpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-
-        canvas.drawCircle(Offset(centerX, centerY), radius, pulsePaint);
+        _pulsePaint.color = NeonColors.cyan.withOpacity(alpha);
+        canvas.drawCircle(Offset(centerX, centerY), radius, _pulsePaint);
       }
     }
   }
 
   void _drawFloatingParticles(Canvas canvas, Size size) {
-    final particlePaint = Paint()..style = PaintingStyle.fill;
-
     for (final p in particles) {
       final x = p.x * size.width;
       final y = p.y * size.height;
 
       // Particle glow
-      particlePaint
-        ..color = p.color.withOpacity(p.opacity * 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(Offset(x, y), p.size * 2, particlePaint);
+      _particleGlowPaint.color = p.color.withOpacity(p.opacity * 0.3);
+      canvas.drawCircle(Offset(x, y), p.size * 2, _particleGlowPaint);
 
       // Particle core
-      particlePaint
-        ..color = p.color.withOpacity(p.opacity)
-        ..maskFilter = null;
-      canvas.drawCircle(Offset(x, y), p.size, particlePaint);
+      _particleCorePaint.color = p.color.withOpacity(p.opacity);
+      canvas.drawCircle(Offset(x, y), p.size, _particleCorePaint);
     }
   }
 
   void _drawDataStreams(Canvas canvas, Size size) {
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
-
+    var cacheExceeded = false;
     for (final stream in dataStreams) {
       final x = stream.x * size.width;
       final progress = (dataStreamAnimation * stream.speed * 10) % 1.5;
@@ -477,58 +604,64 @@ class _CyberGridPainter extends CustomPainter {
         final alpha = (1 - (i / stream.characters.length)) * 0.6;
 
         if (y >= 0 && y <= size.height) {
-          textPainter.text = TextSpan(
-            text: stream.characters[i],
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: stream.color.withOpacity(alpha * charProgress),
-              shadows: [
-                Shadow(
-                  color: stream.color.withOpacity(alpha * 0.5),
-                  blurRadius: 4,
+          final textAlpha = alpha * charProgress;
+          if (textAlpha > 0.05) {
+            final alphaKey = (textAlpha * 32).round().clamp(0, 32);
+            final rgb = stream.color.value & 0x00FFFFFF;
+            final charCode = stream.characters[i].codeUnitAt(0) & 0xFF;
+            final cacheKey = (alphaKey << 32) | (charCode << 24) | rgb;
+            final painter = _streamCharCache.putIfAbsent(cacheKey, () {
+              final tp = TextPainter(textDirection: TextDirection.ltr);
+              tp.text = TextSpan(
+                text: stream.characters[i],
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: stream.color.withOpacity(alphaKey / 32),
+                  shadows: [
+                    Shadow(
+                      color: stream.color.withOpacity(alphaKey / 64),
+                      blurRadius: 4,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-          textPainter.layout();
-          textPainter.paint(canvas, Offset(x, y));
+              );
+              tp.layout();
+              return tp;
+            });
+            painter.paint(canvas, Offset(x, y));
+            if (_streamCharCache.length > _streamCharCacheLimit) {
+              cacheExceeded = true;
+            }
+          }
         }
       }
+    }
+    if (cacheExceeded) {
+      for (final tp in _streamCharCache.values) {
+        tp.dispose();
+      }
+      _streamCharCache.clear();
     }
   }
 
   void _drawHexagonPattern(Canvas canvas, Size size) {
-    final hexPaint = Paint()
-      ..color = NeonColors.gridLine.withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
-
+    _ensureHexCache(size);
     const hexSize = 50.0;
-    final rows = (size.height / (hexSize * 1.5)).ceil() + 1;
-    final cols = (size.width / (hexSize * 1.732)).ceil() + 1;
+    final radius = hexSize * 0.4;
 
-    for (int row = 0; row < rows; row++) {
-      for (int col = 0; col < cols; col++) {
-        final xOffset = col * hexSize * 1.732;
-        final yOffset = row * hexSize * 1.5 + (col.isOdd ? hexSize * 0.75 : 0);
-
-        // Only draw in upper portion with fade
-        if (yOffset < size.height * 0.45) {
-          final fadeAlpha = 1 - (yOffset / (size.height * 0.45));
-          hexPaint.color = NeonColors.gridLine.withOpacity(0.1 * fadeAlpha);
-          _drawHexagon(canvas, Offset(xOffset, yOffset), hexSize * 0.4, hexPaint);
-        }
-      }
+    for (final cell in _hexCells) {
+      _hexPaint.color = NeonColors.gridLine.withOpacity(0.1 * cell.fade);
+      _drawHexagon(canvas, cell.center, radius, _hexPaint);
     }
   }
 
   void _drawHexagon(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path();
-    for (int i = 0; i < 6; i++) {
-      final angle = (i * 60 - 30) * math.pi / 180;
-      final x = center.dx + radius * math.cos(angle);
-      final y = center.dy + radius * math.sin(angle);
+    final path = _hexPath..reset();
+    for (int i = 0; i < _hexUnitPoints.length; i++) {
+      final p = _hexUnitPoints[i];
+      final x = center.dx + p.dx * radius;
+      final y = center.dy + p.dy * radius;
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -544,27 +677,21 @@ class _CyberGridPainter extends CustomPainter {
     const offset = 25.0;
 
     // Glow layer
-    final glowPaint = Paint()
-      ..color = NeonColors.cyan.withOpacity(0.4)
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+    _cornerGlowPaint.color = NeonColors.cyan.withOpacity(0.4);
 
     // Core layer
-    final accentPaint = Paint()
-      ..color = NeonColors.cyan.withOpacity(0.8)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+    _cornerAccentPaint.color = NeonColors.cyan.withOpacity(0.8);
+    _cornerDotPaint.color = NeonColors.cyan.withOpacity(0.9);
 
     // Draw each corner with both layers
     void drawCorner(Offset p1H, Offset p2H, Offset p1V, Offset p2V) {
-      canvas.drawLine(p1H, p2H, glowPaint);
-      canvas.drawLine(p1V, p2V, glowPaint);
-      canvas.drawLine(p1H, p2H, accentPaint);
-      canvas.drawLine(p1V, p2V, accentPaint);
+      canvas.drawLine(p1H, p2H, _cornerGlowPaint);
+      canvas.drawLine(p1V, p2V, _cornerGlowPaint);
+      canvas.drawLine(p1H, p2H, _cornerAccentPaint);
+      canvas.drawLine(p1V, p2V, _cornerAccentPaint);
 
       // Add small dot at corner
-      canvas.drawCircle(p1H, 3, Paint()..color = NeonColors.cyan.withOpacity(0.9));
+      canvas.drawCircle(p1H, 3, _cornerDotPaint);
     }
 
     // Top-left
@@ -606,72 +733,89 @@ class _CyberGridPainter extends CustomPainter {
     final pulse = 0.8 + 0.2 * math.sin(pulseAnimation * math.pi * 2);
 
     // Outer glow
+    _energyCoreOuterPaint.color = NeonColors.cyan.withOpacity(0.1);
     canvas.drawCircle(
       Offset(centerX, centerY),
       80 * pulse,
-      Paint()
-        ..color = NeonColors.cyan.withOpacity(0.1)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40),
+      _energyCoreOuterPaint,
     );
 
     // Inner glow
+    _energyCoreInnerPaint.color = NeonColors.magenta.withOpacity(0.15);
     canvas.drawCircle(
       Offset(centerX, centerY),
       40 * pulse,
-      Paint()
-        ..color = NeonColors.magenta.withOpacity(0.15)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+      _energyCoreInnerPaint,
     );
   }
 
   void _drawGlitchEffect(Canvas canvas, Size size) {
-    final random = math.Random();
+    int state = ((gridAnimation * 1000000).toInt() ^
+            (glitchIntensity * 10000).toInt() ^
+            (glitchOffsetX * 1000).toInt() ^
+            (glitchOffsetY * 1000).toInt()) &
+        0x7fffffff;
+
+    _glitchCyanPaint.color = NeonColors.cyan.withOpacity(0.3 * glitchIntensity);
+    _glitchMagentaPaint.color =
+        NeonColors.magenta.withOpacity(0.3 * glitchIntensity);
 
     // Horizontal glitch bars
     for (int i = 0; i < (glitchIntensity * 10).round(); i++) {
-      final y = random.nextDouble() * size.height;
-      final height = 2 + random.nextDouble() * 8;
-      final offsetX = (random.nextDouble() - 0.5) * 20 * glitchIntensity;
+      state = _lcgNext(state);
+      final y = _lcgUnit(state) * size.height;
+      state = _lcgNext(state);
+      final height = 2 + _lcgUnit(state) * 8;
+      state = _lcgNext(state);
+      final offsetX = (_lcgUnit(state) - 0.5) * 20 * glitchIntensity;
 
       // Cyan glitch
       canvas.drawRect(
         Rect.fromLTWH(offsetX, y, size.width, height),
-        Paint()..color = NeonColors.cyan.withOpacity(0.3 * glitchIntensity),
+        _glitchCyanPaint,
       );
 
       // Magenta glitch (offset)
       canvas.drawRect(
         Rect.fromLTWH(-offsetX, y + 2, size.width, height * 0.5),
-        Paint()..color = NeonColors.magenta.withOpacity(0.3 * glitchIntensity),
+        _glitchMagentaPaint,
       );
     }
 
     // RGB split effect on edges
+    _glitchRedSplitPaint.color =
+        const Color(0xFFFF0000).withOpacity(0.05 * glitchIntensity);
+    _glitchCyanSplitPaint.color =
+        const Color(0xFF00FFFF).withOpacity(0.05 * glitchIntensity);
     canvas.drawRect(
       Rect.fromLTWH(glitchOffsetX, 0, size.width * 0.3, size.height),
-      Paint()..color = const Color(0xFFFF0000).withOpacity(0.05 * glitchIntensity),
+      _glitchRedSplitPaint,
     );
     canvas.drawRect(
       Rect.fromLTWH(-glitchOffsetX + size.width * 0.7, 0, size.width * 0.3, size.height),
-      Paint()..color = const Color(0xFF00FFFF).withOpacity(0.05 * glitchIntensity),
+      _glitchCyanSplitPaint,
     );
   }
 
   void _drawVignette(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final gradient = RadialGradient(
-      center: Alignment.center,
-      radius: 1.0,
-      colors: [
-        Colors.transparent,
-        Colors.transparent,
-        NeonColors.darkBg.withOpacity(0.4),
-        NeonColors.darkBg.withOpacity(0.85),
-      ],
-      stops: const [0.0, 0.4, 0.75, 1.0],
-    );
-
-    canvas.drawRect(rect, Paint()..shader = gradient.createShader(rect));
+    if (_vignetteShader == null || _vignetteShaderSize != size) {
+      _vignetteShaderSize = size;
+      final gradient = RadialGradient(
+        center: Alignment.center,
+        radius: 1.0,
+        colors: [
+          Colors.transparent,
+          Colors.transparent,
+          NeonColors.darkBg.withOpacity(0.4),
+          NeonColors.darkBg.withOpacity(0.85),
+        ],
+        stops: const [0.0, 0.4, 0.75, 1.0],
+      );
+      _vignetteShader = gradient.createShader(rect);
+    }
+    _vignettePaint.shader = _vignetteShader;
+    canvas.drawRect(rect, _vignettePaint);
   }
 
   @override
@@ -687,40 +831,66 @@ class _ScanlinePainter extends CustomPainter {
   final double animation;
   final double glitchIntensity;
 
+  static final Paint _scanlinePaint =
+      Paint()..color = Colors.black.withOpacity(0.03);
+  static final Paint _scanBeamPaint = Paint();
+  static final Paint _flickerPaint = Paint();
+  static double _scanBeamShaderWidth = 0;
+  static Shader? _scanBeamShader;
+  static final Path _scanlinePath = Path();
+  static Size? _scanlineSize;
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Subtle scanlines
-    final scanPaint = Paint()
-      ..color = Colors.black.withOpacity(0.03);
-
-    for (double y = 0; y < size.height; y += 3) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), scanPaint);
+    if (_scanlineSize != size) {
+      _scanlineSize = size;
+      _scanlinePath.reset();
+      for (double y = 0; y < size.height; y += 3) {
+        _scanlinePath
+          ..moveTo(0, y)
+          ..lineTo(size.width, y);
+      }
     }
+    canvas.drawPath(_scanlinePath, _scanlinePaint);
 
     // Moving scan beam
     final scanY = (animation * size.height * 1.5) % (size.height + 100) - 50;
-    final scanGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        Colors.transparent,
-        NeonColors.cyan.withOpacity(0.08),
-        NeonColors.cyan.withOpacity(0.15),
-        NeonColors.cyan.withOpacity(0.08),
-        Colors.transparent,
-      ],
+    if (_scanBeamShader == null || _scanBeamShaderWidth != size.width) {
+      _scanBeamShaderWidth = size.width;
+      _scanBeamShader = const LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.transparent,
+          Color(0x14FFFFFF),
+          Color(0x26FFFFFF),
+          Color(0x14FFFFFF),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, _scanBeamShaderWidth, 80));
+    }
+    _scanBeamPaint.shader = _scanBeamShader;
+    _scanBeamPaint.colorFilter = const ColorFilter.mode(
+      NeonColors.cyan,
+      BlendMode.modulate,
     );
-
+    canvas.save();
+    canvas.translate(0, scanY);
     canvas.drawRect(
-      Rect.fromLTWH(0, scanY, size.width, 80),
-      Paint()..shader = scanGradient.createShader(Rect.fromLTWH(0, scanY, size.width, 80)),
+      Rect.fromLTWH(0, 0, size.width, 80),
+      _scanBeamPaint,
     );
+    canvas.restore();
+    _scanBeamPaint.colorFilter = null;
 
     // CRT flicker effect
     if (glitchIntensity > 0.3) {
+      _flickerPaint.color = Colors.white.withOpacity(0.02 * glitchIntensity);
       canvas.drawRect(
         Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint()..color = Colors.white.withOpacity(0.02 * glitchIntensity),
+        _flickerPaint,
       );
     }
   }
@@ -728,6 +898,33 @@ class _ScanlinePainter extends CustomPainter {
   @override
   bool shouldRepaint(_ScanlinePainter oldDelegate) =>
       oldDelegate.animation != animation || oldDelegate.glitchIntensity != glitchIntensity;
+}
+
+class _DistantStar {
+  _DistantStar({
+    required this.x,
+    required this.y,
+    required this.size,
+  });
+
+  final double x;
+  final double y;
+  final double size;
+}
+
+class _LineSeg {
+  _LineSeg(this.start, this.end, this.alpha);
+
+  final Offset start;
+  final Offset end;
+  final double alpha;
+}
+
+class _HexCell {
+  _HexCell(this.center, this.fade);
+
+  final Offset center;
+  final double fade;
 }
 
 class _FloatingParticle {

@@ -151,19 +151,31 @@ class _MaterializationOverlayState extends State<MaterializationOverlay>
 }
 
 class _MaterialGridPainter extends CustomPainter {
+  static final Paint _gridPaint = Paint()
+    ..color = NeonColors.cyan.withOpacity(0.15)
+    ..strokeWidth = 0.5;
+  static final Path _gridPath = Path();
+  static Size? _gridSize;
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = NeonColors.cyan.withOpacity(0.15)
-      ..strokeWidth = 0.5;
-
+    if (size.width <= 0 || size.height <= 0) return;
     const spacing = 30.0;
-    for (double i = 0; i < size.width; i += spacing) {
-      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    if (_gridSize != size) {
+      _gridSize = size;
+      _gridPath.reset();
+      for (double i = 0; i < size.width; i += spacing) {
+        _gridPath
+          ..moveTo(i, 0)
+          ..lineTo(i, size.height);
+      }
+      for (double i = 0; i < size.height; i += spacing) {
+        _gridPath
+          ..moveTo(0, i)
+          ..lineTo(size.width, i);
+      }
     }
-    for (double i = 0; i < size.height; i += spacing) {
-      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
-    }
+    canvas.drawPath(_gridPath, _gridPaint);
   }
 
   @override

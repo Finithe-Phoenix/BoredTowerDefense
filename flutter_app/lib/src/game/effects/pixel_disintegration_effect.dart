@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 /// Pixel disintegration effect for enemy deaths - breaks enemy into digital pixels
 /// that scatter and fade with a cyberpunk aesthetic.
 class PixelDisintegrationEffect extends PositionComponent {
@@ -11,7 +13,7 @@ class PixelDisintegrationEffect extends PositionComponent {
     required Color color,
     required double effectSize,
     required double duration,
-  }) : _random = math.Random() {
+  }) : _rngState = 0x6f52a1bc {
     _reset(
       position: position,
       color: color,
@@ -44,6 +46,9 @@ class PixelDisintegrationEffect extends PositionComponent {
   static void clearPool() {
     _pool.clear();
     _activeCount = 0;
+    _DisintegrationPixel.clearPool();
+    _DataParticle.clearPool();
+    _ScanlineSegment.clearPool();
   }
 
   static PixelDisintegrationEffect? spawn({
@@ -82,9 +87,16 @@ class PixelDisintegrationEffect extends PositionComponent {
   final List<_DataParticle> _dataParticles = [];
   final List<_ScanlineSegment> _scanlines = [];
   double _time = 0;
-  final math.Random _random;
+  int _rngState;
+  int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  double _nextUnit() {
+    _rngState = _lcgNext(_rngState);
+    return _rngState / 0x7fffffff;
+  }
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Flash intensity for final flash
   double _flashIntensity = 0;
@@ -134,6 +146,27 @@ class PixelDisintegrationEffect extends PositionComponent {
   // Reusable path for custom shapes
   final Path _reusablePath = Path();
 
+  void _recyclePixels() {
+    for (final pixel in _pixels) {
+      pixel.recycle();
+    }
+    _pixels.clear();
+  }
+
+  void _recycleDataParticles() {
+    for (final particle in _dataParticles) {
+      particle.recycle();
+    }
+    _dataParticles.clear();
+  }
+
+  void _recycleScanlines() {
+    for (final scanline in _scanlines) {
+      scanline.recycle();
+    }
+    _scanlines.clear();
+  }
+
   void _markActive() {
     if (_counted) return;
     _counted = true;
@@ -154,9 +187,9 @@ class PixelDisintegrationEffect extends PositionComponent {
     this.duration = duration;
     _time = 0;
     _flashIntensity = 0;
-    _pixels.clear();
-    _dataParticles.clear();
-    _scanlines.clear();
+    _recyclePixels();
+    _recycleDataParticles();
+    _recycleScanlines();
     _initializePixels();
     _initializeDataParticles();
     _initializeScanlines();
@@ -185,26 +218,26 @@ class PixelDisintegrationEffect extends PositionComponent {
         final angleFromCenter = math.atan2(gridY, gridX);
 
         // Add some randomness to scatter direction
-        final scatterAngle = angleFromCenter + (_random.nextDouble() - 0.5) * 0.8;
-        final scatterSpeed = 40 + _random.nextDouble() * 80 + distFromCenter * 2;
+        final scatterAngle = angleFromCenter + (_nextUnit() - 0.5) * 0.8;
+        final scatterSpeed = 40 + _nextUnit() * 80 + distFromCenter * 2;
 
         // Determine if this pixel should have glow (outer pixels more likely)
-        final hasGlow = _random.nextDouble() < (distFromCenter / effectSize) * 0.7;
+        final hasGlow = _nextUnit() < (distFromCenter / effectSize) * 0.7;
 
         // Stagger the start time based on distance from center
-        final delay = distFromCenter / effectSize * 0.15 * _random.nextDouble();
+        final delay = distFromCenter / effectSize * 0.15 * _nextUnit();
 
-        _pixels.add(_DisintegrationPixel(
+        _pixels.add(_DisintegrationPixel.obtain(
           startX: gridX,
           startY: gridY,
           angle: scatterAngle,
           speed: scatterSpeed,
-          size: pixelSize * (0.8 + _random.nextDouble() * 0.4),
-          lifetime: 0.4 + _random.nextDouble() * 0.3,
+          size: pixelSize * (0.8 + _nextUnit() * 0.4),
+          lifetime: 0.4 + _nextUnit() * 0.3,
           delay: delay,
           hasGlow: hasGlow,
-          rotationSpeed: (_random.nextDouble() - 0.5) * 15,
-          gravity: 30 + _random.nextDouble() * 40,
+          rotationSpeed: (_nextUnit() - 0.5) * 15,
+          gravity: 30 + _nextUnit() * 40,
         ));
         created++;
       }
@@ -217,19 +250,19 @@ class PixelDisintegrationEffect extends PositionComponent {
     if (particleCount == 0) return;
 
     for (int i = 0; i < particleCount; i++) {
-      final angle = _random.nextDouble() * math.pi * 2;
-      final startDist = _random.nextDouble() * effectSize * 0.5;
+      final angle = _nextUnit() * math.pi * 2;
+      final startDist = _nextUnit() * effectSize * 0.5;
 
-      _dataParticles.add(_DataParticle(
+      _dataParticles.add(_DataParticle.obtain(
         startX: math.cos(angle) * startDist,
         startY: math.sin(angle) * startDist,
-        driftAngle: angle + (_random.nextDouble() - 0.5) * math.pi,
-        driftSpeed: 10 + _random.nextDouble() * 20,
-        size: 1.5 + _random.nextDouble() * 2,
-        lifetime: 0.5 + _random.nextDouble() * 0.3,
-        delay: 0.2 + _random.nextDouble() * 0.2, // Start after main disintegration
-        oscillationSpeed: 5 + _random.nextDouble() * 5,
-        oscillationAmplitude: 3 + _random.nextDouble() * 4,
+        driftAngle: angle + (_nextUnit() - 0.5) * math.pi,
+        driftSpeed: 10 + _nextUnit() * 20,
+        size: 1.5 + _nextUnit() * 2,
+        lifetime: 0.5 + _nextUnit() * 0.3,
+        delay: 0.2 + _nextUnit() * 0.2, // Start after main disintegration
+        oscillationSpeed: 5 + _nextUnit() * 5,
+        oscillationAmplitude: 3 + _nextUnit() * 4,
       ));
     }
   }
@@ -240,12 +273,12 @@ class PixelDisintegrationEffect extends PositionComponent {
     if (scanlineCount == 0) return;
 
     for (int i = 0; i < scanlineCount; i++) {
-      _scanlines.add(_ScanlineSegment(
+      _scanlines.add(_ScanlineSegment.obtain(
         startY: -effectSize / 2 + (i / scanlineCount) * effectSize,
-        width: effectSize * (0.6 + _random.nextDouble() * 0.4),
-        speed: 80 + _random.nextDouble() * 40,
-        thickness: 1.5 + _random.nextDouble() * 1,
-        lifetime: 0.2 + _random.nextDouble() * 0.1,
+        width: effectSize * (0.6 + _nextUnit() * 0.4),
+        speed: 80 + _nextUnit() * 40,
+        thickness: 1.5 + _nextUnit() * 1,
+        lifetime: 0.2 + _nextUnit() * 0.1,
         delay: i * 0.05,
       ));
     }
@@ -276,6 +309,17 @@ class PixelDisintegrationEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _time += dt;
     final progress = _time / duration;
@@ -311,7 +355,12 @@ class PixelDisintegrationEffect extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
+
+    if (_pixels.isEmpty && _dataParticles.isEmpty && _scanlines.isEmpty && _flashIntensity <= 0) {
+      return;
+    }
 
     if (lowFx) {
       _renderLowFx(canvas);
@@ -348,6 +397,17 @@ class PixelDisintegrationEffect extends PositionComponent {
     if (_flashIntensity > 0) {
       _drawFinalFlash(canvas);
     }
+  }
+
+  bool _isOffscreen({double padding = 90}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   void _renderLowFx(Canvas canvas) {
@@ -425,7 +485,7 @@ class PixelDisintegrationEffect extends PositionComponent {
       canvas.drawRect(rect, _pixelFadePaint);
 
       // Layer 1: Core pixel with slight color variation
-      final pixelColor = _random.nextBool() ? color : secondaryColor;
+      final pixelColor = _nextUnit() > 0.5 ? color : secondaryColor;
       _pixelFillPaint.color = pixelColor.withOpacity(alpha * 0.9);
       canvas.drawRect(
         Rect.fromCenter(
@@ -546,7 +606,8 @@ class PixelDisintegrationEffect extends PositionComponent {
   void _drawDataParticles(Canvas canvas, double progress) {
     final secondaryColor = _getSecondaryColor(-20);
 
-    for (final particle in _dataParticles) {
+    for (int i = 0; i < _dataParticles.length; i++) {
+      final particle = _dataParticles[i];
       if (!particle.isActive) continue;
 
       final alpha = particle.alphaValue * (1 - progress);
@@ -575,7 +636,7 @@ class PixelDisintegrationEffect extends PositionComponent {
       _dataParticlePaint.color = Colors.white.withOpacity(alpha * 0.8);
 
       // Some particles are dots, some are small squares
-      if (_dataParticles.indexOf(particle) % 3 == 0) {
+      if (i % 3 == 0) {
         canvas.drawRect(
           Rect.fromCenter(center: Offset(px, py), width: particle.size, height: particle.size),
           _dataParticlePaint,
@@ -620,6 +681,9 @@ class PixelDisintegrationEffect extends PositionComponent {
       }
       _counted = false;
     }
+    _recyclePixels();
+    _recycleDataParticles();
+    _recycleScanlines();
     if (parent != null) {
       removeFromParent();
     }
@@ -644,32 +708,92 @@ class PixelDisintegrationEffect extends PositionComponent {
 
 /// Individual pixel in the disintegration grid
 class _DisintegrationPixel {
-  _DisintegrationPixel({
-    required this.startX,
-    required this.startY,
-    required this.angle,
-    required this.speed,
-    required this.size,
-    required this.lifetime,
-    required this.delay,
-    required this.hasGlow,
-    required this.rotationSpeed,
-    required this.gravity,
+  static const int _maxPool = 2048;
+  static final List<_DisintegrationPixel> _pool = [];
+
+  static _DisintegrationPixel obtain({
+    required double startX,
+    required double startY,
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required bool hasGlow,
+    required double rotationSpeed,
+    required double gravity,
+  }) {
+    if (_pool.isNotEmpty) {
+      final pixel = _pool.removeLast();
+      pixel.reset(
+        startX: startX,
+        startY: startY,
+        angle: angle,
+        speed: speed,
+        size: size,
+        lifetime: lifetime,
+        delay: delay,
+        hasGlow: hasGlow,
+        rotationSpeed: rotationSpeed,
+        gravity: gravity,
+      );
+      return pixel;
+    }
+    return _DisintegrationPixel._internal(
+      startX: startX,
+      startY: startY,
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      delay: delay,
+      hasGlow: hasGlow,
+      rotationSpeed: rotationSpeed,
+      gravity: gravity,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _DisintegrationPixel._internal({
+    required double startX,
+    required double startY,
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required bool hasGlow,
+    required double rotationSpeed,
+    required double gravity,
   }) : _time = 0,
        distance = 0,
        currentRotation = 0,
-       _velocityY = 0;
+       _velocityY = 0 {
+    reset(
+      startX: startX,
+      startY: startY,
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      delay: delay,
+      hasGlow: hasGlow,
+      rotationSpeed: rotationSpeed,
+      gravity: gravity,
+    );
+  }
 
-  final double startX;
-  final double startY;
-  final double angle;
-  final double speed;
-  final double size;
-  final double lifetime;
-  final double delay;
-  final bool hasGlow;
-  final double rotationSpeed;
-  final double gravity;
+  late double startX;
+  late double startY;
+  late double angle;
+  late double speed;
+  late double size;
+  late double lifetime;
+  late double delay;
+  late bool hasGlow;
+  late double rotationSpeed;
+  late double gravity;
 
   double _time;
   double distance;
@@ -687,6 +811,40 @@ class _DisintegrationPixel {
   double get currentX => startX + math.cos(angle) * distance;
   double get currentY => startY + math.sin(angle) * distance + _velocityY;
 
+  void reset({
+    required double startX,
+    required double startY,
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required bool hasGlow,
+    required double rotationSpeed,
+    required double gravity,
+  }) {
+    this.startX = startX;
+    this.startY = startY;
+    this.angle = angle;
+    this.speed = speed;
+    this.size = size;
+    this.lifetime = lifetime;
+    this.delay = delay;
+    this.hasGlow = hasGlow;
+    this.rotationSpeed = rotationSpeed;
+    this.gravity = gravity;
+    _time = 0;
+    distance = 0;
+    currentRotation = 0;
+    _velocityY = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
+  }
+
   void update(double dt) {
     _time += dt;
     if (_time > delay) {
@@ -701,29 +859,85 @@ class _DisintegrationPixel {
 
 /// Floating data particle that lingers after disintegration
 class _DataParticle {
-  _DataParticle({
-    required this.startX,
-    required this.startY,
-    required this.driftAngle,
-    required this.driftSpeed,
-    required this.size,
-    required this.lifetime,
-    required this.delay,
-    required this.oscillationSpeed,
-    required this.oscillationAmplitude,
+  static const int _maxPool = 512;
+  static final List<_DataParticle> _pool = [];
+
+  static _DataParticle obtain({
+    required double startX,
+    required double startY,
+    required double driftAngle,
+    required double driftSpeed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required double oscillationSpeed,
+    required double oscillationAmplitude,
+  }) {
+    if (_pool.isNotEmpty) {
+      final particle = _pool.removeLast();
+      particle.reset(
+        startX: startX,
+        startY: startY,
+        driftAngle: driftAngle,
+        driftSpeed: driftSpeed,
+        size: size,
+        lifetime: lifetime,
+        delay: delay,
+        oscillationSpeed: oscillationSpeed,
+        oscillationAmplitude: oscillationAmplitude,
+      );
+      return particle;
+    }
+    return _DataParticle._internal(
+      startX: startX,
+      startY: startY,
+      driftAngle: driftAngle,
+      driftSpeed: driftSpeed,
+      size: size,
+      lifetime: lifetime,
+      delay: delay,
+      oscillationSpeed: oscillationSpeed,
+      oscillationAmplitude: oscillationAmplitude,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _DataParticle._internal({
+    required double startX,
+    required double startY,
+    required double driftAngle,
+    required double driftSpeed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required double oscillationSpeed,
+    required double oscillationAmplitude,
   }) : _time = 0,
        _prevX = 0,
-       _prevY = 0;
+       _prevY = 0 {
+    reset(
+      startX: startX,
+      startY: startY,
+      driftAngle: driftAngle,
+      driftSpeed: driftSpeed,
+      size: size,
+      lifetime: lifetime,
+      delay: delay,
+      oscillationSpeed: oscillationSpeed,
+      oscillationAmplitude: oscillationAmplitude,
+    );
+  }
 
-  final double startX;
-  final double startY;
-  final double driftAngle;
-  final double driftSpeed;
-  final double size;
-  final double lifetime;
-  final double delay;
-  final double oscillationSpeed;
-  final double oscillationAmplitude;
+  late double startX;
+  late double startY;
+  late double driftAngle;
+  late double driftSpeed;
+  late double size;
+  late double lifetime;
+  late double delay;
+  late double oscillationSpeed;
+  late double oscillationAmplitude;
 
   double _time;
   double _prevX;
@@ -756,6 +970,37 @@ class _DataParticle {
     return baseY + math.sin(driftAngle + math.pi / 2) * oscillation - activeTime * 10; // Float upward
   }
 
+  void reset({
+    required double startX,
+    required double startY,
+    required double driftAngle,
+    required double driftSpeed,
+    required double size,
+    required double lifetime,
+    required double delay,
+    required double oscillationSpeed,
+    required double oscillationAmplitude,
+  }) {
+    this.startX = startX;
+    this.startY = startY;
+    this.driftAngle = driftAngle;
+    this.driftSpeed = driftSpeed;
+    this.size = size;
+    this.lifetime = lifetime;
+    this.delay = delay;
+    this.oscillationSpeed = oscillationSpeed;
+    this.oscillationAmplitude = oscillationAmplitude;
+    _time = 0;
+    _prevX = 0;
+    _prevY = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
+  }
+
   void update(double dt) {
     _prevX = currentX;
     _prevY = currentY;
@@ -765,21 +1010,65 @@ class _DataParticle {
 
 /// Scanline segment that sweeps through the disintegrating form
 class _ScanlineSegment {
-  _ScanlineSegment({
-    required this.startY,
-    required this.width,
-    required this.speed,
-    required this.thickness,
-    required this.lifetime,
-    required this.delay,
-  }) : _time = 0;
+  static const int _maxPool = 256;
+  static final List<_ScanlineSegment> _pool = [];
 
-  final double startY;
-  final double width;
-  final double speed;
-  final double thickness;
-  final double lifetime;
-  final double delay;
+  static _ScanlineSegment obtain({
+    required double startY,
+    required double width,
+    required double speed,
+    required double thickness,
+    required double lifetime,
+    required double delay,
+  }) {
+    if (_pool.isNotEmpty) {
+      final segment = _pool.removeLast();
+      segment.reset(
+        startY: startY,
+        width: width,
+        speed: speed,
+        thickness: thickness,
+        lifetime: lifetime,
+        delay: delay,
+      );
+      return segment;
+    }
+    return _ScanlineSegment._internal(
+      startY: startY,
+      width: width,
+      speed: speed,
+      thickness: thickness,
+      lifetime: lifetime,
+      delay: delay,
+    );
+  }
+
+  static void clearPool() => _pool.clear();
+
+  _ScanlineSegment._internal({
+    required double startY,
+    required double width,
+    required double speed,
+    required double thickness,
+    required double lifetime,
+    required double delay,
+  }) : _time = 0 {
+    reset(
+      startY: startY,
+      width: width,
+      speed: speed,
+      thickness: thickness,
+      lifetime: lifetime,
+      delay: delay,
+    );
+  }
+
+  late double startY;
+  late double width;
+  late double speed;
+  late double thickness;
+  late double lifetime;
+  late double delay;
 
   double _time;
 
@@ -795,6 +1084,29 @@ class _ScanlineSegment {
     if (_time <= delay) return startY;
     final activeTime = _time - delay;
     return startY + speed * activeTime;
+  }
+
+  void reset({
+    required double startY,
+    required double width,
+    required double speed,
+    required double thickness,
+    required double lifetime,
+    required double delay,
+  }) {
+    this.startY = startY;
+    this.width = width;
+    this.speed = speed;
+    this.thickness = thickness;
+    this.lifetime = lifetime;
+    this.delay = delay;
+    _time = 0;
+  }
+
+  void recycle() {
+    if (_pool.length < _maxPool) {
+      _pool.add(this);
+    }
   }
 
   void update(double dt) {

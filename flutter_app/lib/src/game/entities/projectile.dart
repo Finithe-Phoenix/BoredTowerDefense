@@ -11,6 +11,23 @@ import '../../services/sprite_cache_service.dart';
 import '../effects/impact_effect.dart';
 import '../managers/bullet_manager.dart';
 
+class _FastRng {
+  int _state;
+
+  _FastRng([int? seed]) : _state = (seed ?? 0x6d2b79f5) & 0x7fffffff;
+
+  int _next() {
+    _state = (1664525 * _state + 1013904223) & 0x7fffffff;
+    return _state;
+  }
+
+  double nextDouble() => _next() / 0x7fffffff;
+
+  int nextInt(int max) => max <= 0 ? 0 : _next() % max;
+
+  bool nextBool() => (_next() & 1) == 0;
+}
+
 class Projectile extends PositionComponent {
   static bool lowFx = false;
   static bool allowTrails = true;
@@ -126,15 +143,80 @@ class Projectile extends PositionComponent {
   static final Path _reusablePlasmaWispPath = Path();
   static final Path _reusablePlasmaVortexPath = Path();
   static final Path _reusableBubbleSwirlPath = Path();
+  static final List<Offset> _unitCardinal = List<Offset>.unmodifiable([
+    const Offset(1, 0),
+    const Offset(0, 1),
+    const Offset(-1, 0),
+    const Offset(0, -1),
+  ]);
+  static final List<Offset> _unitOct = List<Offset>.unmodifiable(_buildUnitOct());
+  static final List<Offset> _unitHex = List<Offset>.unmodifiable(_buildUnitHex());
+  static final List<Offset> _starUnitPoints = List<Offset>.unmodifiable(
+    _buildStarUnitPoints(),
+  );
+  static final List<double> _glimmerSinOffsets = List<double>.unmodifiable(
+    _buildSinOffsets(8, 1.0),
+  );
+  static final List<double> _glimmerCosOffsets = List<double>.unmodifiable(
+    _buildCosOffsets(8, 1.0),
+  );
+  static final List<double> _glimmerSinOffsetsFast = List<double>.unmodifiable(
+    _buildSinOffsets(8, 1.5),
+  );
+  static final List<double> _glimmerCosOffsetsFast = List<double>.unmodifiable(
+    _buildCosOffsets(8, 1.5),
+  );
 
   // Reusable Offset objects for loops
   static Offset _tempOffset1 = Offset.zero;
   static Offset _tempOffset2 = Offset.zero;
 
+  static List<Offset> _buildUnitHex() {
+    final points = <Offset>[];
+    for (int i = 0; i < 6; i++) {
+      final angle = i * math.pi / 3;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+    }
+    return points;
+  }
+
+  static List<Offset> _buildUnitOct() {
+    final points = <Offset>[];
+    for (int i = 0; i < 8; i++) {
+      final angle = i * math.pi / 4;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+    }
+    return points;
+  }
+
+  static List<Offset> _buildStarUnitPoints() {
+    final points = <Offset>[];
+    for (int i = 0; i < 4; i++) {
+      final angle = i * math.pi / 2;
+      points.add(Offset(math.cos(angle), math.sin(angle)));
+      final innerAngle = angle + math.pi / 4;
+      points.add(Offset(math.cos(innerAngle) * 0.4, math.sin(innerAngle) * 0.4));
+    }
+    return points;
+  }
+
+  static List<double> _buildSinOffsets(int count, double step) {
+    final values = <double>[];
+    for (int i = 0; i < count; i++) {
+      values.add(math.sin(i * step));
+    }
+    return values;
+  }
+
+  static List<double> _buildCosOffsets(int count, double step) {
+    final values = <double>[];
+    for (int i = 0; i < count; i++) {
+      values.add(math.cos(i * step));
+    }
+    return values;
+  }
+
   // Reusable Vector2 objects for calculations - avoid per-frame allocations
-  static final Vector2 _tempDirection = Vector2.zero();
-  static final Vector2 _tempStep = Vector2.zero();
-  static final Vector2 _tempPerpendicular = Vector2.zero();
 
   // ═══════════════════════════════════════════════════════════════════════════
   // COLOR PALETTE CACHE - Avoid per-frame Color.withOpacity() allocations
@@ -174,7 +256,7 @@ class Projectile extends PositionComponent {
     this.slowDuration = 0,
     this.towerType = TowerType.pulseArcher,
   }) : _active = true,
-       _random = math.Random() {
+       _random = _FastRng() {
     position.setFrom(startPosition);
     size = Vector2.all(6);
     anchor = Anchor.center;
@@ -196,7 +278,7 @@ class Projectile extends PositionComponent {
   bool _active;
   double _time = 0;
   double _rotationAngle = 0;
-  final math.Random _random;
+  final _FastRng _random;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // CACHED HSL-DERIVED COLORS - Avoid per-frame HSLColor.fromColor() calls
@@ -222,6 +304,9 @@ class Projectile extends PositionComponent {
   int _maxTrailLength = 12;
   final List<Vector2> _trailPositions = [];
   final List<double> _trailAlphas = [];
+  final List<Color> _trailBridgeColors = [];
+  int _trailBridgeKey = 0;
+  int _trailBridgeLength = 0;
   int _trailHead = 0; // Current write position in circular buffer
 
   /// Get physical index from logical index (0 = newest, _maxTrailLength-1 = oldest)
@@ -249,7 +334,7 @@ class Projectile extends PositionComponent {
     _maxTrailLength = 12;
     _particleCount = 8;
     _wobbleAmount = 0;
-    _electricSegments = [];
+    _electricSegments.clear();
     switch (towerType) {
       case TowerType.pulseArcher:
         _maxTrailLength = 10;
@@ -264,12 +349,7 @@ class Projectile extends PositionComponent {
         _maxTrailLength = 16;
         _particleCount = 10;
         _wobbleAmount = 0.3;
-        // Initialize electric segments
-        _electricSegments = List.generate(5, (i) => _ElectricSegment(
-          angle: _random.nextDouble() * math.pi * 2,
-          length: 8 + _random.nextDouble() * 6,
-          offset: _random.nextDouble() * math.pi * 2,
-        ));
+        _ensureElectricSegments(5);
         break;
       case TowerType.glimmerField:
         _maxTrailLength = 8;
@@ -310,26 +390,32 @@ class Projectile extends PositionComponent {
         _particleCount = 0;
       }
       _wobbleAmount = 0;
-      _electricSegments = [];
+      _electricSegments.clear();
     }
   }
 
   void _initializeTrail() {
-    _trailPositions.clear();
-    _trailAlphas.clear();
     _trailHead = 0; // Reset circular buffer head
     if (allowTrails && !lowFx && _maxTrailLength > 1) {
+      _ensureTrailCapacity(_maxTrailLength);
+      _updateTrailColorCache();
       for (int i = 0; i < _maxTrailLength; i++) {
-        _trailPositions.add(position.clone());
-        _trailAlphas.add(0);
+        _trailPositions[i].setFrom(position);
+        _trailAlphas[i] = 0;
       }
+    } else {
+      _trailPositions.clear();
+      _trailAlphas.clear();
+      _trailBridgeColors.clear();
+      _trailBridgeKey = 0;
+      _trailBridgeLength = 0;
     }
 
     // Initialize particles
-    _particles.clear();
     if (!lowFx && _particleCount > 0) {
+      _ensureParticles(_particleCount);
       for (int i = 0; i < _particleCount; i++) {
-        _particles.add(_ProjectileParticle(
+        _particles[i].reset(
           offset: Vector2(
             (_random.nextDouble() - 0.5) * 10,
             (_random.nextDouble() - 0.5) * 10,
@@ -338,8 +424,79 @@ class Projectile extends PositionComponent {
           angle: _random.nextDouble() * math.pi * 2,
           size: 1 + _random.nextDouble() * 2,
           alpha: 0.3 + _random.nextDouble() * 0.5,
+        );
+      }
+    } else {
+      _particles.clear();
+    }
+  }
+
+  void _ensureTrailCapacity(int length) {
+    if (_trailPositions.length == length && _trailAlphas.length == length) return;
+    if (_trailPositions.length < length) {
+      for (int i = _trailPositions.length; i < length; i++) {
+        _trailPositions.add(position.clone());
+        _trailAlphas.add(0);
+      }
+    } else {
+      _trailPositions.removeRange(length, _trailPositions.length);
+      _trailAlphas.removeRange(length, _trailAlphas.length);
+    }
+  }
+
+  void _updateTrailColorCache() {
+    final length = _maxTrailLength;
+    if (length <= 0) return;
+    final key = color.value ^ _hslSecondaryColor.value;
+    if (_trailBridgeKey == key &&
+        _trailBridgeLength == length &&
+        _trailBridgeColors.length == length) {
+      return;
+    }
+    _trailBridgeKey = key;
+    _trailBridgeLength = length;
+    _trailBridgeColors.clear();
+    for (int i = 0; i < length; i++) {
+      final progress = i / length;
+      _trailBridgeColors.add(Color.lerp(color, _hslSecondaryColor, progress)!);
+    }
+  }
+
+  void _ensureParticles(int count) {
+    if (_particles.length == count) return;
+    if (_particles.length < count) {
+      for (int i = _particles.length; i < count; i++) {
+        _particles.add(_ProjectileParticle(
+          offset: Vector2.zero(),
+          speed: 0,
+          angle: 0,
+          size: 0,
+          alpha: 0,
         ));
       }
+    } else {
+      _particles.removeRange(count, _particles.length);
+    }
+  }
+
+  void _ensureElectricSegments(int count) {
+    if (_electricSegments.length == count) {
+      for (final segment in _electricSegments) {
+        segment.reset(
+          angle: _random.nextDouble() * math.pi * 2,
+          length: 8 + _random.nextDouble() * 6,
+          offset: _random.nextDouble() * math.pi * 2,
+        );
+      }
+      return;
+    }
+    _electricSegments.clear();
+    for (int i = 0; i < count; i++) {
+      _electricSegments.add(_ElectricSegment(
+        angle: _random.nextDouble() * math.pi * 2,
+        length: 8 + _random.nextDouble() * 6,
+        offset: _random.nextDouble() * math.pi * 2,
+      ));
     }
   }
 
@@ -372,7 +529,7 @@ class Projectile extends PositionComponent {
     _spiralPhase = 0;
     _pulsePhase = 0;
     size = Vector2.all(6);
-    _electricSegments = [];
+    _electricSegments.clear();
     _cacheHSLColors();
     _initializeTypeEffects();
     _initializeTrail();
@@ -436,13 +593,12 @@ class Projectile extends PositionComponent {
       }
     }
 
-    // Move toward target position - use static vectors to avoid allocations
-    _tempDirection
-      ..setFrom(targetPosition)
-      ..sub(position);
-    final distance = _tempDirection.length;
+    // Move toward target position using scalar math to avoid repeated vector normalizations.
+    final dx = targetPosition.x - position.x;
+    final dy = targetPosition.y - position.y;
+    final distanceSq = (dx * dx) + (dy * dy);
 
-    if (distance < 5) {
+    if (distanceSq < 25) {
       // Hit - apply damage and effects if target still valid
       if (target != null && target!.isAlive) {
         target!.takeDamage(damage);
@@ -462,25 +618,24 @@ class Projectile extends PositionComponent {
       return;
     }
 
-    // Move projectile with type-specific behavior - reuse static vector
-    _tempStep
-      ..setFrom(_tempDirection)
-      ..normalize()
-      ..scale(speed * dt);
+    final distance = math.sqrt(distanceSq);
+    final invDistance = distance > 0 ? 1.0 / distance : 0.0;
+    var stepX = dx * invDistance * speed * dt;
+    var stepY = dy * invDistance * speed * dt;
 
     // Add wobble for Phase Mage
     if (_wobbleAmount > 0) {
-      _tempPerpendicular
-        ..setValues(-_tempDirection.y, _tempDirection.x)
-        ..normalize()
-        ..scale(math.sin(_spiralPhase) * _wobbleAmount * dt * 100);
-      _tempStep.add(_tempPerpendicular);
+      final wobble = math.sin(_spiralPhase) * _wobbleAmount * dt * 100;
+      stepX += -dy * invDistance * wobble;
+      stepY += dx * invDistance * wobble;
     }
 
-    if (_tempStep.length >= distance) {
+    final stepLenSq = (stepX * stepX) + (stepY * stepY);
+    if (stepLenSq >= distanceSq) {
       position.setFrom(targetPosition);
     } else {
-      position.add(_tempStep);
+      position.x += stepX;
+      position.y += stepY;
     }
   }
 
@@ -498,7 +653,7 @@ class Projectile extends PositionComponent {
   void _updateTrail() {
     // CIRCULAR BUFFER: O(1) update instead of O(n) array shifting
     // Decay all alphas first (applied once per update)
-    for (int i = 0; i < _maxTrailLength; i++) {
+    for (int i = 0; i < _trailAlphas.length; i++) {
       _trailAlphas[i] *= 0.85;
     }
 
@@ -583,8 +738,9 @@ class Projectile extends PositionComponent {
     final sprite = spriteCache.getProjectileSprite(color);
     if (sprite != null) {
       // Draw with rotation toward target
-      final direction = targetPosition - position;
-      final angle = direction.length > 0 ? math.atan2(direction.y, direction.x) : 0.0;
+      final dx = targetPosition.x - position.x;
+      final dy = targetPosition.y - position.y;
+      final angle = (dx * dx + dy * dy) > 0 ? math.atan2(dy, dx) : 0.0;
       final spriteScale = size.x / 12.0;
 
       canvas.save();
@@ -613,9 +769,10 @@ class Projectile extends PositionComponent {
 
     // Motion blur trail effect
     canvas.save();
-    final direction = targetPosition - position;
-    if (direction.length > 0) {
-      final angle = math.atan2(direction.y, direction.x);
+    final dx = targetPosition.x - position.x;
+    final dy = targetPosition.y - position.y;
+    if ((dx * dx + dy * dy) > 0) {
+      final angle = math.atan2(dy, dx);
       canvas.rotate(angle);
     }
 
@@ -683,12 +840,10 @@ class Projectile extends PositionComponent {
     _circuitLinePaint.color = palette.o60;
     final innerR = size.x * 0.3;
     final outerR = size.x * 0.7;
-    for (int i = 0; i < 4; i++) {
-      final angle = i * math.pi / 2;
-      final cosA = math.cos(angle);
-      final sinA = math.sin(angle);
-      _tempOffset1 = Offset(cosA * innerR, sinA * innerR);
-      _tempOffset2 = Offset(cosA * outerR, sinA * outerR);
+    for (int i = 0; i < _unitCardinal.length; i++) {
+      final dir = _unitCardinal[i];
+      _tempOffset1 = Offset(dir.dx * innerR, dir.dy * innerR);
+      _tempOffset2 = Offset(dir.dx * outerR, dir.dy * outerR);
       canvas.drawLine(_tempOffset1, _tempOffset2, _circuitLinePaint);
     }
 
@@ -710,8 +865,8 @@ class Projectile extends PositionComponent {
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
 
     for (final segment in _electricSegments) {
-      final startX = math.cos(segment.angle) * size.x * 0.3;
-      final startY = math.sin(segment.angle) * size.x * 0.3;
+      final startX = segment.dirX * size.x * 0.3;
+      final startY = segment.dirY * size.x * 0.3;
 
       // Create zigzag path using reusable path
       _reusableArcPath.reset();
@@ -720,14 +875,12 @@ class Projectile extends PositionComponent {
       const steps = 4;
       for (int i = 1; i <= steps; i++) {
         final progress = i / steps;
-        final endAngle = segment.angle + segment.offset;
-        final baseX = startX + (math.cos(endAngle) * segment.length - startX) * progress;
-        final baseY = startY + (math.sin(endAngle) * segment.length - startY) * progress;
+        final baseX = startX + (segment.endDirX * segment.length - startX) * progress;
+        final baseY = startY + (segment.endDirY * segment.length - startY) * progress;
 
-        final perpendicularAngle = segment.angle + math.pi / 2;
         final jitter = math.sin(_time * 20 + i * 2) * 3;
-        final jitterX = math.cos(perpendicularAngle) * jitter;
-        final jitterY = math.sin(perpendicularAngle) * jitter;
+        final jitterX = segment.perpX * jitter;
+        final jitterY = segment.perpY * jitter;
 
         _reusableArcPath.lineTo(baseX + jitterX, baseY + jitterY);
       }
@@ -745,10 +898,9 @@ class Projectile extends PositionComponent {
     canvas.save();
     canvas.rotate(_spiralPhase);
 
-    for (int i = 0; i < 6; i++) {
-      final runeAngle = i * math.pi / 3;
-      final runeX = math.cos(runeAngle) * size.x * 0.4;
-      final runeY = math.sin(runeAngle) * size.x * 0.4;
+    for (int i = 0; i < _unitHex.length; i++) {
+      final runeX = _unitHex[i].dx * size.x * 0.4;
+      final runeY = _unitHex[i].dy * size.x * 0.4;
       final runeAlpha = 0.5 + math.sin(_pulsePhase + i) * 0.3;
 
       // Diamond rune using reusable path
@@ -782,19 +934,34 @@ class Projectile extends PositionComponent {
 
     final palette = _getPalette(color);
     final pulseScale = 1.0 + math.sin(_pulsePhase * 2) * 0.2;
+    final spiralPhase2 = _spiralPhase * 2;
+    final spiralCos = math.cos(spiralPhase2);
+    final spiralSin = math.sin(spiralPhase2);
+    final pulseSin = math.sin(_pulsePhase);
+    final pulseCos = math.cos(_pulsePhase);
+    final pulse2Sin = math.sin(_pulsePhase * 2);
+    final pulse2Cos = math.cos(_pulsePhase * 2);
 
     // Multiple sparkle particles
     for (int i = 0; i < 8; i++) {
-      final sparkAngle = _spiralPhase * 2 + i * math.pi / 4;
-      final sparkDist = size.x * (0.3 + math.sin(_pulsePhase + i) * 0.2);
-      final sparkX = math.cos(sparkAngle) * sparkDist;
-      final sparkY = math.sin(sparkAngle) * sparkDist;
-      final sparkAlpha = 0.4 + math.sin(_pulsePhase * 2 + i * 1.5) * 0.4;
+      final sinOffset = _glimmerSinOffsets[i];
+      final cosOffset = _glimmerCosOffsets[i];
+      final sinPulseOffset = pulseSin * cosOffset + pulseCos * sinOffset;
+      final sparkDist = size.x * (0.3 + sinPulseOffset * 0.2);
+
+      final base = _unitOct[i];
+      final sparkX = (base.dx * spiralCos - base.dy * spiralSin) * sparkDist;
+      final sparkY = (base.dx * spiralSin + base.dy * spiralCos) * sparkDist;
+
+      final sinOffset2 = _glimmerSinOffsetsFast[i];
+      final cosOffset2 = _glimmerCosOffsetsFast[i];
+      final sinPulse2Offset = pulse2Sin * cosOffset2 + pulse2Cos * sinOffset2;
+      final sparkAlpha = 0.4 + sinPulse2Offset * 0.4;
 
       if (sparkAlpha > 0.2) {
         _tempOffset1 = Offset(sparkX, sparkY);
         _sparkPaint.color = color.withOpacity(sparkAlpha);
-        _drawStar(canvas, _tempOffset1, 2, _sparkPaint.color);
+        _drawStar(canvas, _tempOffset1, 2, _sparkPaint.color, spiralCos, spiralSin);
       }
     }
 
@@ -1047,22 +1214,24 @@ class Projectile extends PositionComponent {
     }
   }
 
-  void _drawStar(Canvas canvas, Offset center, double radius, Color starColor) {
+  void _drawStar(
+    Canvas canvas,
+    Offset center,
+    double radius,
+    Color starColor,
+    double rotCos,
+    double rotSin,
+  ) {
     _reusableStarPath.reset();
-    for (int i = 0; i < 4; i++) {
-      final angle = i * math.pi / 2 + _spiralPhase;
-      final x = center.dx + math.cos(angle) * radius;
-      final y = center.dy + math.sin(angle) * radius;
+    for (int i = 0; i < _starUnitPoints.length; i++) {
+      final p = _starUnitPoints[i];
+      final x = center.dx + (p.dx * rotCos - p.dy * rotSin) * radius;
+      final y = center.dy + (p.dx * rotSin + p.dy * rotCos) * radius;
       if (i == 0) {
         _reusableStarPath.moveTo(x, y);
       } else {
         _reusableStarPath.lineTo(x, y);
       }
-      // Inner point
-      final innerAngle = angle + math.pi / 4;
-      final innerX = center.dx + math.cos(innerAngle) * radius * 0.4;
-      final innerY = center.dy + math.sin(innerAngle) * radius * 0.4;
-      _reusableStarPath.lineTo(innerX, innerY);
     }
     _reusableStarPath.close();
 
@@ -1077,6 +1246,16 @@ class Projectile extends PositionComponent {
     final secondaryColor = _hslSecondaryColor;
     final tertiaryColor = _hslTertiaryColor;
     final complementColor = _hslComplementColor;
+    final ringColor0 = color;
+    final ringColor1 = Color.lerp(color, secondaryColor, 1 / 3)!;
+    final ringColor2 = Color.lerp(color, secondaryColor, 2 / 3)!;
+    final tendrilColor0 = color;
+    final tendrilColor1 = Color.lerp(color, tertiaryColor, 1 / 4)!;
+    final tendrilColor2 = Color.lerp(color, tertiaryColor, 2 / 4)!;
+    final tendrilColor3 = Color.lerp(color, tertiaryColor, 3 / 4)!;
+    final sparkColor0 = Color.lerp(color, const Color(0xFFFFFFFF), 0.3)!;
+    final sparkColor1 = Color.lerp(color, const Color(0xFFFFFFFF), 0.5)!;
+    final sparkColor2 = Color.lerp(color, const Color(0xFFFFFFFF), 0.7)!;
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 1: DEEP OUTER PLASMA GLOW WITH COLOR GRADIENT
@@ -1093,7 +1272,9 @@ class Projectile extends PositionComponent {
         _tempOffset1 = Offset(trailOffset.x, trailOffset.y);
 
         // Outer plasma glow with gradient from primary to secondary color
-        final gradientColor = Color.lerp(color, secondaryColor, progress)!;
+        final gradientColor = _trailBridgeColors.isNotEmpty
+            ? _trailBridgeColors[i]
+            : Color.lerp(color, secondaryColor, progress)!;
         _plasmaOuterGlowPaint.color = gradientColor.withOpacity(alpha * 0.25);
         canvas.drawCircle(_tempOffset1, trailSize * 2.5, _plasmaOuterGlowPaint);
 
@@ -1123,7 +1304,9 @@ class Projectile extends PositionComponent {
         final ringAlpha = alpha * (0.4 - ring * 0.1) * (1 - ringPulse * 0.3);
 
         if (ringAlpha > 0.05) {
-          final ringColor = Color.lerp(color, secondaryColor, ring / 3)!;
+          final ringColor = ring == 0
+              ? ringColor0
+              : (ring == 1 ? ringColor1 : ringColor2);
           _plasmaRingPaint
             ..color = ringColor.withOpacity(ringAlpha)
             ..strokeWidth = 1.5 - ring * 0.3;
@@ -1164,7 +1347,11 @@ class Projectile extends PositionComponent {
         }
 
         if (started) {
-          final tendrilColor = Color.lerp(color, tertiaryColor, tendril / 4)!;
+          final tendrilColor = tendril == 0
+              ? tendrilColor0
+              : (tendril == 1
+                  ? tendrilColor1
+                  : (tendril == 2 ? tendrilColor2 : tendrilColor3));
           _plasmaWispPaint
             ..color = tendrilColor.withOpacity(0.4)
             ..strokeWidth = 2 - tendril * 0.3;
@@ -1324,7 +1511,9 @@ class Projectile extends PositionComponent {
         final sparkX = trailOffset.x + math.cos(sparkAngle) * sparkDist;
         final sparkY = trailOffset.y + math.sin(sparkAngle) * sparkDist;
 
-        final sparkColor = Color.lerp(color, const Color(0xFFFFFFFF), 0.3 + spark * 0.2)!;
+        final sparkColor = spark == 0
+            ? sparkColor0
+            : (spark == 1 ? sparkColor1 : sparkColor2);
         _plasmaSparkPaint.color = sparkColor.withOpacity(alpha * 0.7);
         canvas.drawCircle(Offset(sparkX, sparkY), sparkSize, _plasmaSparkPaint);
       }
@@ -1407,9 +1596,11 @@ class Projectile extends PositionComponent {
       _tempOffset2 = Offset(end.x, end.y);
 
       // Color gradient along the trail
-      final progress = i / _maxTrailLength;
-      final bridgeColor = Color.lerp(color, secondaryColor, progress)!;
-      _trailLinePaint.color = bridgeColor.withOpacity(_trailAlphas[physIdxStart] * 0.5);
+      final bridgeColor = _trailBridgeColors.isNotEmpty
+          ? _trailBridgeColors[i]
+          : Color.lerp(color, secondaryColor, i / _maxTrailLength)!;
+      _trailLinePaint.color =
+          bridgeColor.withOpacity(_trailAlphas[physIdxStart] * 0.5);
       canvas.drawLine(_tempOffset1, _tempOffset2, _trailLinePaint);
     }
   }
@@ -1419,10 +1610,15 @@ class Projectile extends PositionComponent {
     _particlePaint.maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
 
     for (final particle in _particles) {
-      final px = math.cos(particle.angle + _time * particle.speed * 0.1) * particle.offset.x;
-      final py = math.sin(particle.angle + _time * particle.speed * 0.1) * particle.offset.y;
+      final phase = _time * particle.speed * 0.1;
+      final phaseSin = math.sin(phase);
+      final phaseCos = math.cos(phase);
+      final px = (particle.baseCos * phaseCos - particle.baseSin * phaseSin) * particle.offset.x;
+      final py = (particle.baseSin * phaseCos + particle.baseCos * phaseSin) * particle.offset.y;
 
-      _particlePaint.color = color.withOpacity(particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3));
+      _particlePaint.color = color.withOpacity(
+        particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3),
+      );
       _tempOffset1 = Offset(px, py);
       canvas.drawCircle(_tempOffset1, particle.size, _particlePaint);
     }
@@ -1436,16 +1632,37 @@ class _ProjectileParticle {
     required this.angle,
     required this.size,
     required this.alpha,
-  });
+  }) : baseCos = math.cos(angle),
+       baseSin = math.sin(angle);
 
   Vector2 offset;
   double speed;
   double angle;
   double size;
   double alpha;
+  double baseCos;
+  double baseSin;
+
+  void reset({
+    required Vector2 offset,
+    required double speed,
+    required double angle,
+    required double size,
+    required double alpha,
+  }) {
+    this.offset.setFrom(offset);
+    this.speed = speed;
+    this.angle = angle;
+    baseCos = math.cos(angle);
+    baseSin = math.sin(angle);
+    this.size = size;
+    this.alpha = alpha;
+  }
 
   void update(double dt) {
     angle += dt * speed * 0.05;
+    baseCos = math.cos(angle);
+    baseSin = math.sin(angle);
   }
 }
 
@@ -1454,21 +1671,52 @@ class _ElectricSegment {
     required this.angle,
     required this.length,
     required this.offset,
-  });
+  }) {
+    _recomputeDirs();
+  }
 
   double angle;
   double length;
   double offset;
   double _timer = 0;
+  double dirX = 0;
+  double dirY = 0;
+  double perpX = 0;
+  double perpY = 0;
+  double endDirX = 0;
+  double endDirY = 0;
 
-  void update(double dt, math.Random random) {
+  void reset({
+    required double angle,
+    required double length,
+    required double offset,
+  }) {
+    this.angle = angle;
+    this.length = length;
+    this.offset = offset;
+    _timer = 0;
+    _recomputeDirs();
+  }
+
+  void update(double dt, _FastRng random) {
     _timer += dt;
     if (_timer > 0.1) {
       _timer = 0;
       // Randomly adjust angle
       angle += (random.nextDouble() - 0.5) * 0.5;
       offset = random.nextDouble() * math.pi * 2;
+      _recomputeDirs();
     }
+  }
+
+  void _recomputeDirs() {
+    dirX = math.cos(angle);
+    dirY = math.sin(angle);
+    perpX = -dirY;
+    perpY = dirX;
+    final endAngle = angle + offset;
+    endDirX = math.cos(endAngle);
+    endDirY = math.sin(endAngle);
   }
 }
 
@@ -1504,3 +1752,4 @@ class _ColorPalette {
   final Color o85;
   final Color o90;
 }
+

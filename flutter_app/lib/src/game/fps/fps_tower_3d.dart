@@ -12,6 +12,11 @@ class Tower3D {
   double distanceToCamera;
   bool isHovered;
   bool isSelected;
+  TextPainter? _namePainter;
+  TextPainter? _distancePainter;
+  String _distanceText = '';
+  int _distanceValue = -1;
+  final Path _hexPath = Path();
 
   Tower3D({
     required this.tower,
@@ -20,6 +25,40 @@ class Tower3D {
     this.isHovered = false,
     this.isSelected = false,
   });
+
+  static final Paint _shadowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _bodyPaint = Paint();
+  static final Paint _outlinePaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _corePaint = Paint();
+  static final Paint _highlightPaint = Paint();
+  static final Paint _ringPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3;
+  static final Paint _bracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static const TextStyle _nameTextStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: FontWeight.bold,
+    shadows: [
+      Shadow(
+        color: Color(0xCC000000),
+        blurRadius: 4,
+      ),
+    ],
+  );
+  static const TextStyle _distanceTextStyle = TextStyle(
+    color: Color(0xB3FFFFFF),
+    fontSize: 10,
+    shadows: [
+      Shadow(
+        color: Color(0xCC000000),
+        blurRadius: 3,
+      ),
+    ],
+  );
 
   /// Get bounding box for raycasting
   /// Returns (min, max) corners of the box
@@ -68,29 +107,27 @@ class Tower3D {
     final center = Offset(screenPos.x, screenPos.y);
     
     // Base shadow (for depth perception)
-    final shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.3 * scale.clamp(0.0, 1.0))
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-    
+    _shadowPaint.color = Colors.black.withOpacity(0.3 * scale.clamp(0.0, 1.0));
+
     canvas.drawCircle(
       Offset(center.dx, center.dy + size * 0.3),
       size * 0.6,
-      shadowPaint,
+      _shadowPaint,
     );
 
     // Tower body (hexagon)
-    final hexPath = Path();
+    _hexPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = (i / 6) * math.pi * 2 - math.pi / 2;
       final x = center.dx + math.cos(angle) * size * 0.5;
       final y = center.dy + math.sin(angle) * size * 0.5;
       if (i == 0) {
-        hexPath.moveTo(x, y);
+        _hexPath.moveTo(x, y);
       } else {
-        hexPath.lineTo(x, y);
+        _hexPath.lineTo(x, y);
       }
     }
-    hexPath.close();
+    _hexPath.close();
 
     // Gradient for depth
     final gradient = RadialGradient(
@@ -102,33 +139,29 @@ class Tower3D {
       stops: const [0.0, 0.5, 1.0],
     );
 
-    final bodyPaint = Paint()
-      ..shader = gradient.createShader(
-        Rect.fromCircle(center: center, radius: size * 0.5),
-      );
+    _bodyPaint.shader = gradient.createShader(
+      Rect.fromCircle(center: center, radius: size * 0.5),
+    );
 
-    canvas.drawPath(hexPath, bodyPaint);
+    canvas.drawPath(_hexPath, _bodyPaint);
 
     // Outline
-    final outlinePaint = Paint()
+    _outlinePaint
       ..color = tower.color
-      ..style = PaintingStyle.stroke
       ..strokeWidth = 2 * scale.clamp(0.5, 1.0);
 
-    canvas.drawPath(hexPath, outlinePaint);
+    canvas.drawPath(_hexPath, _outlinePaint);
 
     // Energy core
-    final corePaint = Paint()
+    _corePaint
       ..color = tower.color.withOpacity(0.9)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4 * scale);
 
-    canvas.drawCircle(center, size * 0.2, corePaint);
+    canvas.drawCircle(center, size * 0.2, _corePaint);
 
     // Core highlight
-    final highlightPaint = Paint()
-      ..color = Colors.white.withOpacity(0.8);
-
-    canvas.drawCircle(center, size * 0.1, highlightPaint);
+    _highlightPaint.color = Colors.white.withOpacity(0.8);
+    canvas.drawCircle(center, size * 0.1, _highlightPaint);
   }
 
   void _renderIndicator(Canvas canvas, Vector2 screenPos, double size) {
@@ -136,123 +169,93 @@ class Tower3D {
     final color = isSelected ? Colors.red : Colors.yellow;
 
     // Pulsing ring
-    final ringPaint = Paint()
-      ..color = color.withOpacity(0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-
-    canvas.drawCircle(center, size * 0.8, ringPaint);
+    _ringPaint.color = color.withOpacity(0.6);
+    canvas.drawCircle(center, size * 0.8, _ringPaint);
 
     // Corner brackets
     final bracketSize = size * 0.3;
-    final bracketPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2;
+    _bracketPaint.color = color;
 
     // Top-left
     canvas.drawLine(
       Offset(center.dx - size, center.dy - size),
       Offset(center.dx - size + bracketSize, center.dy - size),
-      bracketPaint,
+      _bracketPaint,
     );
     canvas.drawLine(
       Offset(center.dx - size, center.dy - size),
       Offset(center.dx - size, center.dy - size + bracketSize),
-      bracketPaint,
+      _bracketPaint,
     );
 
     // Top-right
     canvas.drawLine(
       Offset(center.dx + size, center.dy - size),
       Offset(center.dx + size - bracketSize, center.dy - size),
-      bracketPaint,
+      _bracketPaint,
     );
     canvas.drawLine(
       Offset(center.dx + size, center.dy - size),
       Offset(center.dx + size, center.dy - size + bracketSize),
-      bracketPaint,
+      _bracketPaint,
     );
 
     // Bottom-left
     canvas.drawLine(
       Offset(center.dx - size, center.dy + size),
       Offset(center.dx - size + bracketSize, center.dy + size),
-      bracketPaint,
+      _bracketPaint,
     );
     canvas.drawLine(
       Offset(center.dx - size, center.dy + size),
       Offset(center.dx - size, center.dy + size - bracketSize),
-      bracketPaint,
+      _bracketPaint,
     );
 
     // Bottom-right
     canvas.drawLine(
       Offset(center.dx + size, center.dy + size),
       Offset(center.dx + size - bracketSize, center.dy + size),
-      bracketPaint,
+      _bracketPaint,
     );
     canvas.drawLine(
       Offset(center.dx + size, center.dy + size),
       Offset(center.dx + size, center.dy + size - bracketSize),
-      bracketPaint,
+      _bracketPaint,
     );
   }
 
   void _renderTowerInfo(Canvas canvas, Vector2 screenPos, double size) {
     if (!isHovered && !isSelected) return;
 
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: tower.type.name,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-          shadows: [
-            Shadow(
-              color: Colors.black.withOpacity(0.8),
-              blurRadius: 4,
-            ),
-          ],
-        ),
-      ),
+    _namePainter ??= (TextPainter(
+      text: TextSpan(text: tower.type.name, style: _nameTextStyle),
       textDirection: TextDirection.ltr,
-    );
+    )..layout());
 
-    textPainter.layout();
-    textPainter.paint(
+    _namePainter!.paint(
       canvas,
       Offset(
-        screenPos.x - textPainter.width / 2,
+        screenPos.x - _namePainter!.width / 2,
         screenPos.y - size - 20,
       ),
     );
 
     // Distance indicator
-    final distText = '${distanceToCamera.toInt()}m';
-    final distPainter = TextPainter(
-      text: TextSpan(
-        text: distText,
-        style: TextStyle(
-          color: Colors.white.withOpacity(0.7),
-          fontSize: 10,
-          shadows: [
-            Shadow(
-              color: Colors.black.withOpacity(0.8),
-              blurRadius: 3,
-            ),
-          ],
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+    final distValue = distanceToCamera.toInt();
+    if (_distancePainter == null || _distanceValue != distValue) {
+      _distanceValue = distValue;
+      _distanceText = '${distValue}m';
+      _distancePainter = TextPainter(
+        text: TextSpan(text: _distanceText, style: _distanceTextStyle),
+        textDirection: TextDirection.ltr,
+      )..layout();
+    }
 
-    distPainter.layout();
-    distPainter.paint(
+    _distancePainter!.paint(
       canvas,
       Offset(
-        screenPos.x - distPainter.width / 2,
+        screenPos.x - _distancePainter!.width / 2,
         screenPos.y + size + 5,
       ),
     );

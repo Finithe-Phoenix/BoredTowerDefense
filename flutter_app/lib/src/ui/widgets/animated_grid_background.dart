@@ -72,31 +72,31 @@ class _GridPainter extends CustomPainter {
     NeonColors.cyan.withOpacity(0.3),
     Colors.transparent,
   ];
+  static double _scanShaderWidth = 0;
+  static Shader? _scanShader;
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     // Draw vertical lines
-    for (double x = 0; x < size.width; x += gridSize) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), _linePaint);
-    }
-
-    // Draw horizontal lines
-    for (double y = 0; y < size.height; y += gridSize) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), _linePaint);
-    }
+    _ensureGridPath(size);
+    canvas.drawPath(_gridPath, _linePaint);
 
     // Animated scan line (horizontal)
     final scanY = (animation * size.height * 2) % (size.height + 100) - 50;
-    _scanPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: _scanColors,
-    ).createShader(Rect.fromLTWH(0, scanY - 30, size.width, 60));
-
-    canvas.drawRect(
-      Rect.fromLTWH(0, scanY - 30, size.width, 60),
-      _scanPaint,
-    );
+    if (_scanShader == null || _scanShaderWidth != size.width) {
+      _scanShaderWidth = size.width;
+      _scanShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: _scanColors,
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 60));
+    }
+    _scanPaint.shader = _scanShader;
+    canvas.save();
+    canvas.translate(0, scanY - 30);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 60), _scanPaint);
+    canvas.restore();
 
     // Corner accents
     _drawCornerAccent(canvas, Offset.zero, size, true, true);
@@ -122,6 +122,24 @@ class _GridPainter extends CustomPainter {
       Offset(corner.dx, corner.dy + length * yDir),
       _accentPaint,
     );
+  }
+
+  static final Path _gridPath = Path();
+  static Size? _gridPathSize;
+  static void _ensureGridPath(Size size) {
+    if (_gridPathSize == size) return;
+    _gridPathSize = size;
+    _gridPath.reset();
+    for (double x = 0; x < size.width; x += gridSize) {
+      _gridPath
+        ..moveTo(x, 0)
+        ..lineTo(x, size.height);
+    }
+    for (double y = 0; y < size.height; y += gridSize) {
+      _gridPath
+        ..moveTo(0, y)
+        ..lineTo(size.width, y);
+    }
   }
 
   @override

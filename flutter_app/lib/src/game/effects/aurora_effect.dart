@@ -57,7 +57,7 @@ class AuroraEffect extends PositionComponent {
     this.lowFx = false,
     this.intensity = 1.0,
     this.horizonY = 0.55,
-  }) : _random = math.Random(42);
+  }) : _rngState = 42;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // SHADER CACHE - Avoid per-frame createShader() allocations
@@ -97,7 +97,13 @@ class AuroraEffect extends PositionComponent {
   /// Horizon position as a fraction of height (0.0 = top, 1.0 = bottom)
   final double horizonY;
 
-  final math.Random _random;
+  int _rngState;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
   double _time = 0;
 
   // Aurora color palette - cyberpunk night theme
@@ -146,12 +152,12 @@ class AuroraEffect extends PositionComponent {
     final starCount = lowFx ? 30 : (reduceFx ? 60 : 120);
     _stars = List.generate(starCount, (i) {
       return _Star(
-        x: _random.nextDouble() * size.x,
-        y: _random.nextDouble() * size.y * horizonY * 0.95,
-        size: 0.5 + _random.nextDouble() * 2,
-        brightness: 0.3 + _random.nextDouble() * 0.7,
-        twinkleSpeed: 1 + _random.nextDouble() * 3,
-        twinklePhase: _random.nextDouble() * math.pi * 2,
+        x: _nextUnit() * size.x,
+        y: _nextUnit() * size.y * horizonY * 0.95,
+        size: 0.5 + _nextUnit() * 2,
+        brightness: 0.3 + _nextUnit() * 0.7,
+        twinkleSpeed: 1 + _nextUnit() * 3,
+        twinklePhase: _nextUnit() * math.pi * 2,
       );
     });
   }
@@ -164,14 +170,14 @@ class AuroraEffect extends PositionComponent {
       final t = i / curtainCount;
       return _AuroraCurtain(
         xOffset: t * size.x * 0.8,
-        width: 150 + _random.nextDouble() * 200,
-        height: size.y * horizonY * (0.4 + _random.nextDouble() * 0.3),
-        waveFrequency: 0.8 + _random.nextDouble() * 0.6,
-        waveAmplitude: 30 + _random.nextDouble() * 50,
-        verticalWaveFrequency: 2 + _random.nextDouble() * 2,
-        speed: 0.3 + _random.nextDouble() * 0.4,
-        colorPhase: _random.nextDouble() * math.pi * 2,
-        colorSpeed: 0.2 + _random.nextDouble() * 0.3,
+        width: 150 + _nextUnit() * 200,
+        height: size.y * horizonY * (0.4 + _nextUnit() * 0.3),
+        waveFrequency: 0.8 + _nextUnit() * 0.6,
+        waveAmplitude: 30 + _nextUnit() * 50,
+        verticalWaveFrequency: 2 + _nextUnit() * 2,
+        speed: 0.3 + _nextUnit() * 0.4,
+        colorPhase: _nextUnit() * math.pi * 2,
+        colorSpeed: 0.2 + _nextUnit() * 0.3,
       );
     });
   }
@@ -183,15 +189,15 @@ class AuroraEffect extends PositionComponent {
     _secondaryCurtains = List.generate(curtainCount, (i) {
       final t = i / curtainCount;
       return _AuroraCurtain(
-        xOffset: t * size.x + _random.nextDouble() * 100,
-        width: 200 + _random.nextDouble() * 300,
-        height: size.y * horizonY * (0.25 + _random.nextDouble() * 0.2),
-        waveFrequency: 0.5 + _random.nextDouble() * 0.4,
-        waveAmplitude: 40 + _random.nextDouble() * 60,
-        verticalWaveFrequency: 1.5 + _random.nextDouble() * 1.5,
-        speed: 0.15 + _random.nextDouble() * 0.25,
-        colorPhase: _random.nextDouble() * math.pi * 2 + math.pi,
-        colorSpeed: 0.15 + _random.nextDouble() * 0.2,
+        xOffset: t * size.x + _nextUnit() * 100,
+        width: 200 + _nextUnit() * 300,
+        height: size.y * horizonY * (0.25 + _nextUnit() * 0.2),
+        waveFrequency: 0.5 + _nextUnit() * 0.4,
+        waveAmplitude: 40 + _nextUnit() * 60,
+        verticalWaveFrequency: 1.5 + _nextUnit() * 1.5,
+        speed: 0.15 + _nextUnit() * 0.25,
+        colorPhase: _nextUnit() * math.pi * 2 + math.pi,
+        colorSpeed: 0.15 + _nextUnit() * 0.2,
       );
     });
   }
@@ -202,15 +208,15 @@ class AuroraEffect extends PositionComponent {
     final particleCount = lowFx ? 0 : (reduceFx ? 15 : 40);
     _particles = List.generate(particleCount, (i) {
       return _AuroraParticle(
-        x: _random.nextDouble() * size.x,
-        y: _random.nextDouble() * size.y * horizonY * 0.8,
-        size: 1 + _random.nextDouble() * 2.5,
-        velocityX: (_random.nextDouble() - 0.5) * 8,
-        velocityY: (_random.nextDouble() - 0.5) * 4,
-        lifetime: 3 + _random.nextDouble() * 4,
-        maxLifetime: 3 + _random.nextDouble() * 4,
-        colorPhase: _random.nextDouble() * math.pi * 2,
-        shimmerSpeed: 3 + _random.nextDouble() * 4,
+        x: _nextUnit() * size.x,
+        y: _nextUnit() * size.y * horizonY * 0.8,
+        size: 1 + _nextUnit() * 2.5,
+        velocityX: (_nextUnit() - 0.5) * 8,
+        velocityY: (_nextUnit() - 0.5) * 4,
+        lifetime: 3 + _nextUnit() * 4,
+        maxLifetime: 3 + _nextUnit() * 4,
+        colorPhase: _nextUnit() * math.pi * 2,
+        shimmerSpeed: 3 + _nextUnit() * 4,
       );
     });
   }
@@ -237,7 +243,9 @@ class AuroraEffect extends PositionComponent {
     _time += dt;
 
     // Update particles
-    _updateParticles(dt);
+    if (_particles.isNotEmpty) {
+      _updateParticles(dt);
+    }
   }
 
   void _updateParticles(double dt) {
@@ -253,11 +261,11 @@ class AuroraEffect extends PositionComponent {
 
       // Respawn if lifetime expired or out of bounds
       if (particle.lifetime <= 0 || particle.y < 0 || particle.y > size.y * horizonY) {
-        particle.x = _random.nextDouble() * size.x;
-        particle.y = _random.nextDouble() * size.y * horizonY * 0.8;
+        particle.x = _nextUnit() * size.x;
+        particle.y = _nextUnit() * size.y * horizonY * 0.8;
         particle.lifetime = particle.maxLifetime;
-        particle.velocityX = (_random.nextDouble() - 0.5) * 8;
-        particle.velocityY = (_random.nextDouble() - 0.5) * 4;
+        particle.velocityX = (_nextUnit() - 0.5) * 8;
+        particle.velocityY = (_nextUnit() - 0.5) * 4;
       }
     }
   }
@@ -270,7 +278,15 @@ class AuroraEffect extends PositionComponent {
     if (lowFx && intensity < 0.3) return;
 
     final globalAlpha = intensity.clamp(0.0, 1.0);
+    if (globalAlpha <= 0.01) return;
     final auroraBottom = size.y * horizonY;
+    if (_stars.isEmpty &&
+        _mainCurtains.isEmpty &&
+        _secondaryCurtains.isEmpty &&
+        _particles.isEmpty &&
+        reduceFx) {
+      return;
+    }
 
     // Clip to aurora region (above horizon)
     canvas.save();
@@ -416,25 +432,28 @@ class AuroraEffect extends PositionComponent {
     // Calculate animated color based on time and curtain phase
     final colorPhase = _time * curtain.colorSpeed + curtain.colorPhase;
     final colorT = (math.sin(colorPhase) + 1) / 2;
+    final colorKey = (colorT * 200).round();
+    final alphaKey = (alpha * 200).round();
+    final quantizedColorT = (colorT * 24).roundToDouble() / 24;
 
     // Color transition: green -> cyan -> purple -> pink -> green
     Color baseColor;
     Color brightColor;
 
-    if (colorT < 0.25) {
-      final t = colorT / 0.25;
+    if (quantizedColorT < 0.25) {
+      final t = quantizedColorT / 0.25;
       baseColor = Color.lerp(_auroraGreen, _auroraCyan, t)!;
       brightColor = Color.lerp(_auroraCyan, Colors.white, 0.3)!;
-    } else if (colorT < 0.5) {
-      final t = (colorT - 0.25) / 0.25;
+    } else if (quantizedColorT < 0.5) {
+      final t = (quantizedColorT - 0.25) / 0.25;
       baseColor = Color.lerp(_auroraCyan, _auroraPurple, t)!;
       brightColor = Color.lerp(_auroraCyan, Colors.white, 0.3)!;
-    } else if (colorT < 0.75) {
-      final t = (colorT - 0.5) / 0.25;
+    } else if (quantizedColorT < 0.75) {
+      final t = (quantizedColorT - 0.5) / 0.25;
       baseColor = Color.lerp(_auroraPurple, _auroraPink, t)!;
       brightColor = Color.lerp(_auroraPink, Colors.white, 0.3)!;
     } else {
-      final t = (colorT - 0.75) / 0.25;
+      final t = (quantizedColorT - 0.75) / 0.25;
       baseColor = Color.lerp(_auroraPink, _auroraGreen, t)!;
       brightColor = Color.lerp(_auroraGreen, Colors.white, 0.3)!;
     }
@@ -508,37 +527,33 @@ class AuroraEffect extends PositionComponent {
       curtain.width + curtain.waveAmplitude * 2,
       curtain.height,
     );
+    final rectW = gradientRect.width.round();
+    final rectH = gradientRect.height.round();
 
     // Outer glow layer
-    outerPaint.shader = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        baseColor.withOpacity(0),
-        baseColor.withOpacity(alpha * 0.2),
-        baseColor.withOpacity(alpha * 0.4),
-        baseColor.withOpacity(alpha * 0.3),
-        baseColor.withOpacity(0),
-      ],
-      stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
-    ).createShader(gradientRect);
+    outerPaint.shader = curtain.getOuterShader(
+      colorKey: colorKey,
+      alphaKey: alphaKey,
+      rectW: rectW,
+      rectH: rectH,
+      baseColor: baseColor,
+      alpha: alpha,
+      rect: gradientRect,
+    );
 
     canvas.drawPath(path, outerPaint);
 
     // Inner brighter core
     if (!reduceFx) {
-      innerPaint.shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          brightColor.withOpacity(0),
-          brightColor.withOpacity(alpha * 0.15),
-          brightColor.withOpacity(alpha * 0.25),
-          brightColor.withOpacity(alpha * 0.15),
-          brightColor.withOpacity(0),
-        ],
-        stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
-      ).createShader(gradientRect);
+      innerPaint.shader = curtain.getInnerShader(
+        colorKey: colorKey,
+        alphaKey: alphaKey,
+        rectW: rectW,
+        rectH: rectH,
+        brightColor: brightColor,
+        alpha: alpha,
+        rect: gradientRect,
+      );
 
       canvas.drawPath(path, innerPaint);
     }
@@ -580,6 +595,7 @@ class AuroraEffect extends PositionComponent {
 
   /// Layer 5: Shimmering particles floating within aurora
   void _renderParticles(Canvas canvas, double globalAlpha) {
+    if (_particles.isEmpty) return;
     for (final particle in _particles) {
       final lifeRatio = particle.lifetime / particle.maxLifetime;
       if (lifeRatio <= 0) continue;
@@ -777,6 +793,85 @@ class _AuroraCurtain {
   final double speed;
   final double colorPhase;
   final double colorSpeed;
+
+  Shader? _outerShader;
+  Shader? _innerShader;
+  int _outerColorKey = -1;
+  int _outerAlphaKey = -1;
+  int _outerW = -1;
+  int _outerH = -1;
+  int _innerColorKey = -1;
+  int _innerAlphaKey = -1;
+  int _innerW = -1;
+  int _innerH = -1;
+
+  Shader getOuterShader({
+    required int colorKey,
+    required int alphaKey,
+    required int rectW,
+    required int rectH,
+    required Color baseColor,
+    required double alpha,
+    required Rect rect,
+  }) {
+    if (_outerShader == null ||
+        _outerColorKey != colorKey ||
+        _outerAlphaKey != alphaKey ||
+        _outerW != rectW ||
+        _outerH != rectH) {
+      _outerShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          baseColor.withOpacity(0),
+          baseColor.withOpacity(alpha * 0.2),
+          baseColor.withOpacity(alpha * 0.4),
+          baseColor.withOpacity(alpha * 0.3),
+          baseColor.withOpacity(0),
+        ],
+        stops: const [0.0, 0.2, 0.5, 0.8, 1.0],
+      ).createShader(rect);
+      _outerColorKey = colorKey;
+      _outerAlphaKey = alphaKey;
+      _outerW = rectW;
+      _outerH = rectH;
+    }
+    return _outerShader!;
+  }
+
+  Shader getInnerShader({
+    required int colorKey,
+    required int alphaKey,
+    required int rectW,
+    required int rectH,
+    required Color brightColor,
+    required double alpha,
+    required Rect rect,
+  }) {
+    if (_innerShader == null ||
+        _innerColorKey != colorKey ||
+        _innerAlphaKey != alphaKey ||
+        _innerW != rectW ||
+        _innerH != rectH) {
+      _innerShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          brightColor.withOpacity(0),
+          brightColor.withOpacity(alpha * 0.15),
+          brightColor.withOpacity(alpha * 0.25),
+          brightColor.withOpacity(alpha * 0.15),
+          brightColor.withOpacity(0),
+        ],
+        stops: const [0.0, 0.3, 0.5, 0.7, 1.0],
+      ).createShader(rect);
+      _innerColorKey = colorKey;
+      _innerAlphaKey = alphaKey;
+      _innerW = rectW;
+      _innerH = rectH;
+    }
+    return _innerShader!;
+  }
 }
 
 /// Particle data for shimmer effect within aurora

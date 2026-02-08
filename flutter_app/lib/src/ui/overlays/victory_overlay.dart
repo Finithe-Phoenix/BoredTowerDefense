@@ -35,7 +35,14 @@ class _VictoryOverlayState extends State<VictoryOverlay>
   late Animation<double> _scaleAnimation;
   late Animation<double> _slideAnimation;
 
-  final _random = math.Random();
+  int _rngState = 0x1b873593;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+
   double _glitchOffset = 0;
   bool _showGlitch = false;
   Timer? _glitchTimer;
@@ -53,10 +60,10 @@ class _VictoryOverlayState extends State<VictoryOverlay>
       duration: const Duration(milliseconds: 100),
       vsync: this,
     )..addListener(() {
-      if (_random.nextDouble() < 0.3) {
+      if (_nextUnit() < 0.3) {
         setState(() {
           _showGlitch = true;
-          _glitchOffset = (_random.nextDouble() - 0.5) * 10;
+          _glitchOffset = (_nextUnit() - 0.5) * 10;
         });
       } else {
         setState(() => _showGlitch = false);
@@ -87,7 +94,7 @@ class _VictoryOverlayState extends State<VictoryOverlay>
       if (mounted) {
         _glitchTimer?.cancel();
         _glitchTimer = Timer(
-          Duration(milliseconds: 2000 + _random.nextInt(3000)),
+          Duration(milliseconds: 2000 + _nextInt(3000)),
           _triggerGlitchCycle,
         );
       }
@@ -304,33 +311,45 @@ class _TronGridPainter extends CustomPainter {
 
   _TronGridPainter({required this.animation, required this.color});
 
+  static final Paint _linePaint = Paint()..strokeWidth = 1;
+  static final Paint _centerGlowPaint = Paint();
+  static final Map<int, Shader> _centerGlowShaders = {};
+
+  int _centerGlowKey(Size size, int opacityStep, int colorKey) {
+    return (size.width.round() << 32) ^ (size.height.round() << 16) ^ (opacityStep << 8) ^ colorKey;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withOpacity(0.05 + animation * 0.03)
-      ..strokeWidth = 1;
-
+    if (size.width <= 0 || size.height <= 0) return;
     const spacing = 40.0;
 
     // Vertical lines
     for (double x = 0; x < size.width; x += spacing) {
       final opacity = 0.03 + (math.sin(x * 0.01 + animation * math.pi * 2) * 0.02);
-      paint.color = color.withOpacity(opacity.clamp(0.01, 0.1));
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+      _linePaint.color = color.withOpacity(opacity.clamp(0.01, 0.1));
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), _linePaint);
     }
 
     // Horizontal lines
     for (double y = 0; y < size.height; y += spacing) {
       final opacity = 0.03 + (math.sin(y * 0.01 + animation * math.pi * 2) * 0.02);
-      paint.color = color.withOpacity(opacity.clamp(0.01, 0.1));
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      _linePaint.color = color.withOpacity(opacity.clamp(0.01, 0.1));
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _linePaint);
     }
 
     // Center glow
-    final centerGlow = Paint()
-      ..shader = RadialGradient(
+    final opacityStep = ((0.1 + animation * 0.05) * 60).round();
+    final colorKey = color.value;
+    final key = _centerGlowKey(size, opacityStep, colorKey);
+    final shader = _centerGlowShaders.putIfAbsent(key, () {
+      if (_centerGlowShaders.length > 32) {
+        _centerGlowShaders.clear();
+      }
+      final opacity = opacityStep / 60.0;
+      return RadialGradient(
         colors: [
-          color.withOpacity(0.1 + animation * 0.05),
+          color.withOpacity(opacity),
           color.withOpacity(0),
         ],
       ).createShader(Rect.fromCenter(
@@ -338,7 +357,9 @@ class _TronGridPainter extends CustomPainter {
         width: size.width * 0.8,
         height: size.height * 0.8,
       ));
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), centerGlow);
+    });
+    _centerGlowPaint.shader = shader;
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _centerGlowPaint);
   }
 
   @override
@@ -351,18 +372,29 @@ class _ScanlinesPainter extends CustomPainter {
 
   _ScanlinesPainter({required this.animation});
 
+  static final Paint _staticPaint = Paint();
+  static final Paint _scanPaint = Paint();
+  static final Map<int, Shader> _scanShaders = {};
+
+  int _scanKey(Size size) => size.width.round();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.black.withOpacity(0.03);
+    if (size.width <= 0 || size.height <= 0) return;
+    _staticPaint.color = Colors.black.withOpacity(0.03);
 
     for (double y = 0; y < size.height; y += 3) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), _staticPaint);
     }
 
     // Moving scanline
     final scanY = (animation * size.height * 2) % size.height;
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
+    final key = _scanKey(size);
+    final shader = _scanShaders.putIfAbsent(key, () {
+      if (_scanShaders.length > 32) {
+        _scanShaders.clear();
+      }
+      return LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
@@ -370,8 +402,13 @@ class _ScanlinesPainter extends CustomPainter {
           Colors.white.withOpacity(0.03),
           Colors.white.withOpacity(0),
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 20, size.width, 40));
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 20, size.width, 40), scanPaint);
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 40));
+    });
+    _scanPaint.shader = shader;
+    canvas.save();
+    canvas.translate(0, scanY - 20);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 40), _scanPaint);
+    canvas.restore();
   }
 
   @override
@@ -385,18 +422,26 @@ class _GlitchOverlayPainter extends CustomPainter {
 
   _GlitchOverlayPainter({required this.offset, required this.color});
 
+  static final Paint _barPaint = Paint();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final random = math.Random(42);
+    if (size.width <= 0 || size.height <= 0) return;
+    int rngState = 42 ^ 0x85ebca6b;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
 
     for (int i = 0; i < 5; i++) {
-      final y = random.nextDouble() * size.height;
-      final height = 2.0 + random.nextDouble() * 8;
-      final xOffset = (random.nextDouble() - 0.5) * 20;
+      final y = nextUnit() * size.height;
+      final height = 2.0 + nextUnit() * 8;
+      final xOffset = (nextUnit() - 0.5) * 20;
 
       canvas.drawRect(
         Rect.fromLTWH(xOffset, y, size.width, height),
-        Paint()..color = color.withOpacity(0.1),
+        _barPaint..color = color.withOpacity(0.1),
       );
     }
   }
@@ -816,25 +861,30 @@ class _CornerPainter extends CustomPainter {
 
   _CornerPainter({required this.color});
 
+  static final Paint _strokePaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _dotPaint = Paint();
+  static final Path _cornerPath = Path();
+
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
+    if (size.width <= 0 || size.height <= 0) return;
+    _strokePaint
       ..color = color.withOpacity(0.5)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
+      ..strokeWidth = 2;
 
-    final path = Path()
+    _cornerPath
+      ..reset()
       ..moveTo(0, size.height * 0.6)
       ..lineTo(0, 0)
       ..lineTo(size.width * 0.6, 0);
 
-    canvas.drawPath(path, paint);
+    canvas.drawPath(_cornerPath, _strokePaint);
 
     // Corner dot
     canvas.drawCircle(
       const Offset(0, 0),
       3,
-      Paint()..color = color,
+      _dotPaint..color = color,
     );
   }
 

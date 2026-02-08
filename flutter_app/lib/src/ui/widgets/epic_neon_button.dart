@@ -274,29 +274,53 @@ class _ScanEffectPainter extends CustomPainter {
   final Color color;
   final double intensity;
 
+  static final Paint _scanPaint = Paint();
+  static final Paint _linePaint = Paint()..strokeWidth = 1;
+  static double _scanShaderHeight = 0;
+  static Shader? _scanShader;
+  static const int _scanIntensityLevels = 32;
+  static final Map<int, ColorFilter> _scanFilterCache = {};
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     if (intensity < 0.1) return;
 
     final x = size.width * progress;
-    final gradient = LinearGradient(
-      colors: [
-        Colors.transparent,
-        color.withOpacity(0.1 * intensity),
-        color.withOpacity(0.3 * intensity),
-        color.withOpacity(0.1 * intensity),
-        Colors.transparent,
-      ],
-    ).createShader(Rect.fromLTWH(x - 60, 0, 120, size.height));
-
-    final paint = Paint()..shader = gradient;
-    canvas.drawRect(Rect.fromLTWH(x - 60, 0, 120, size.height), paint);
+    if (_scanShader == null || _scanShaderHeight != size.height) {
+      _scanShaderHeight = size.height;
+      _scanShader = const LinearGradient(
+        colors: [
+          Colors.transparent,
+          Colors.white,
+          Colors.white,
+          Colors.white,
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, 120, size.height));
+    }
+    _scanPaint.shader = _scanShader;
+    final level = (intensity * _scanIntensityLevels).round().clamp(0, _scanIntensityLevels);
+    final key = (color.value << 6) ^ level;
+    _scanPaint.colorFilter = _scanFilterCache.putIfAbsent(
+      key,
+      () => ColorFilter.mode(
+        color.withOpacity(level / _scanIntensityLevels),
+        BlendMode.modulate,
+      ),
+    );
+    if (_scanFilterCache.length > 64) {
+      _scanFilterCache.clear();
+    }
+    canvas.save();
+    canvas.translate(x - 60, 0);
+    canvas.drawRect(Rect.fromLTWH(0, 0, 120, size.height), _scanPaint);
+    canvas.restore();
+    _scanPaint.colorFilter = null;
 
     // Scan line
-    final linePaint = Paint()
-      ..color = color.withOpacity(0.6 * intensity)
-      ..strokeWidth = 1;
-    canvas.drawLine(Offset(x, 0), Offset(x, size.height), linePaint);
+    _linePaint.color = color.withOpacity(0.6 * intensity);
+    canvas.drawLine(Offset(x, 0), Offset(x, size.height), _linePaint);
   }
 
   @override

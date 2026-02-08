@@ -36,11 +36,12 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   final List<_WorldElement> _elements = [];
-  final math.Random _random = math.Random();
+  int _rngState = 0x6d2b79f5;
 
   @override
   void initState() {
     super.initState();
+    _rngState = 0x6d2b79f5 ^ widget.worldId ^ widget.accentColor.value;
     _controller = AnimationController(
       duration: const Duration(seconds: 10),
       vsync: this,
@@ -82,22 +83,22 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 8; i++) {
       _elements.add(_WorldElement(
         type: ElementType.tower,
-        x: 0.1 + _random.nextDouble() * 0.8,
-        y: 0.5 + _random.nextDouble() * 0.3,
-        scale: 0.3 + _random.nextDouble() * 0.7,
+        x: 0.1 + _nextUnit() * 0.8,
+        y: 0.5 + _nextUnit() * 0.3,
+        scale: 0.3 + _nextUnit() * 0.7,
         color: widget.accentColor,
-        speed: 0.5 + _random.nextDouble() * 0.5,
+        speed: 0.5 + _nextUnit() * 0.5,
       ));
     }
     // Floating data particles
     for (int i = 0; i < 30; i++) {
       _elements.add(_WorldElement(
         type: ElementType.particle,
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        scale: 0.3 + _random.nextDouble() * 0.7,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        scale: 0.3 + _nextUnit() * 0.7,
         color: widget.accentColor,
-        speed: 0.2 + _random.nextDouble() * 0.8,
+        speed: 0.2 + _nextUnit() * 0.8,
       ));
     }
     // Grid lines
@@ -118,22 +119,22 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 5; i++) {
       _elements.add(_WorldElement(
         type: ElementType.rift,
-        x: 0.2 + _random.nextDouble() * 0.6,
-        y: 0.2 + _random.nextDouble() * 0.6,
-        scale: 0.5 + _random.nextDouble() * 0.5,
+        x: 0.2 + _nextUnit() * 0.6,
+        y: 0.2 + _nextUnit() * 0.6,
+        scale: 0.5 + _nextUnit() * 0.5,
         color: widget.accentColor,
-        speed: 0.3 + _random.nextDouble() * 0.4,
+        speed: 0.3 + _nextUnit() * 0.4,
       ));
     }
     // Temporal echoes
     for (int i = 0; i < 15; i++) {
       _elements.add(_WorldElement(
         type: ElementType.echo,
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        scale: 0.2 + _random.nextDouble() * 0.8,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        scale: 0.2 + _nextUnit() * 0.8,
         color: NeonColors.magenta,
-        speed: 0.1 + _random.nextDouble() * 0.3,
+        speed: 0.1 + _nextUnit() * 0.3,
       ));
     }
   }
@@ -143,20 +144,20 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 20; i++) {
       _elements.add(_WorldElement(
         type: ElementType.noise,
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        scale: 0.5 + _random.nextDouble() * 1.5,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        scale: 0.5 + _nextUnit() * 1.5,
         color: widget.accentColor,
-        speed: 0.5 + _random.nextDouble() * 1.0,
+        speed: 0.5 + _nextUnit() * 1.0,
       ));
     }
     // Abandoned structures
     for (int i = 0; i < 4; i++) {
       _elements.add(_WorldElement(
         type: ElementType.ruin,
-        x: 0.1 + _random.nextDouble() * 0.8,
-        y: 0.6 + _random.nextDouble() * 0.2,
-        scale: 0.4 + _random.nextDouble() * 0.6,
+        x: 0.1 + _nextUnit() * 0.8,
+        y: 0.6 + _nextUnit() * 0.2,
+        scale: 0.4 + _nextUnit() * 0.6,
         color: Colors.grey,
         speed: 0,
       ));
@@ -166,10 +167,10 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
       _elements.add(_WorldElement(
         type: ElementType.beacon,
         x: 0.2 + i * 0.3,
-        y: 0.5 + _random.nextDouble() * 0.2,
+        y: 0.5 + _nextUnit() * 0.2,
         scale: 0.5,
         color: widget.accentColor,
-        speed: 1.0 + _random.nextDouble() * 0.5,
+        speed: 1.0 + _nextUnit() * 0.5,
       ));
     }
   }
@@ -179,22 +180,22 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 10; i++) {
       _elements.add(_WorldElement(
         type: ElementType.cloud,
-        x: _random.nextDouble(),
-        y: 0.1 + _random.nextDouble() * 0.3,
-        scale: 0.8 + _random.nextDouble() * 0.4,
+        x: _nextUnit(),
+        y: 0.1 + _nextUnit() * 0.3,
+        scale: 0.8 + _nextUnit() * 0.4,
         color: const Color(0xFF003322),
-        speed: 0.1 + _random.nextDouble() * 0.1,
+        speed: 0.1 + _nextUnit() * 0.1,
       ));
     }
     // Lightning bolts
     for (int i = 0; i < 4; i++) {
       _elements.add(_WorldElement(
         type: ElementType.lightning,
-        x: 0.1 + _random.nextDouble() * 0.8,
+        x: 0.1 + _nextUnit() * 0.8,
         y: 0.3,
-        scale: 0.5 + _random.nextDouble() * 0.5,
+        scale: 0.5 + _nextUnit() * 0.5,
         color: widget.accentColor,
-        speed: 2.0 + _random.nextDouble() * 2.0,
+        speed: 2.0 + _nextUnit() * 2.0,
       ));
     }
     // Crown structure
@@ -210,11 +211,11 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 6; i++) {
       _elements.add(_WorldElement(
         type: ElementType.platform,
-        x: 0.1 + _random.nextDouble() * 0.8,
-        y: 0.5 + _random.nextDouble() * 0.3,
-        scale: 0.3 + _random.nextDouble() * 0.4,
+        x: 0.1 + _nextUnit() * 0.8,
+        y: 0.5 + _nextUnit() * 0.3,
+        scale: 0.3 + _nextUnit() * 0.4,
         color: const Color(0xFF224422),
-        speed: 0.2 + _random.nextDouble() * 0.2,
+        speed: 0.2 + _nextUnit() * 0.2,
       ));
     }
   }
@@ -224,11 +225,11 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 25; i++) {
       _elements.add(_WorldElement(
         type: ElementType.crystal,
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        scale: 0.2 + _random.nextDouble() * 0.6,
-        color: _random.nextBool() ? widget.accentColor : const Color(0xFFFF4444),
-        speed: 0.1 + _random.nextDouble() * 0.3,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        scale: 0.2 + _nextUnit() * 0.6,
+        color: _nextBool() ? widget.accentColor : const Color(0xFFFF4444),
+        speed: 0.1 + _nextUnit() * 0.3,
       ));
     }
     // Vault structure
@@ -237,7 +238,7 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
         type: ElementType.vault,
         x: 0.2 + i * 0.3,
         y: 0.6,
-        scale: 0.6 + _random.nextDouble() * 0.4,
+        scale: 0.6 + _nextUnit() * 0.4,
         color: const Color(0xFF441111),
         speed: 0,
       ));
@@ -246,11 +247,11 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 8; i++) {
       _elements.add(_WorldElement(
         type: ElementType.stream,
-        x: _random.nextDouble(),
+        x: _nextUnit(),
         y: 0,
-        scale: 0.5 + _random.nextDouble() * 0.5,
+        scale: 0.5 + _nextUnit() * 0.5,
         color: widget.accentColor.withOpacity(0.5),
-        speed: 0.5 + _random.nextDouble() * 0.5,
+        speed: 0.5 + _nextUnit() * 0.5,
       ));
     }
   }
@@ -284,11 +285,11 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 20; i++) {
       _elements.add(_WorldElement(
         type: ElementType.debris,
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        scale: 0.2 + _random.nextDouble() * 0.4,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        scale: 0.2 + _nextUnit() * 0.4,
         color: Colors.white.withOpacity(0.5),
-        speed: 0.1 + _random.nextDouble() * 0.2,
+        speed: 0.1 + _nextUnit() * 0.2,
       ));
     }
   }
@@ -297,14 +298,23 @@ class _WorldArtGeneratorState extends State<WorldArtGenerator>
     for (int i = 0; i < 30; i++) {
       _elements.add(_WorldElement(
         type: ElementType.particle,
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        scale: 0.3 + _random.nextDouble() * 0.7,
+        x: _nextUnit(),
+        y: _nextUnit(),
+        scale: 0.3 + _nextUnit() * 0.7,
         color: widget.accentColor,
-        speed: 0.2 + _random.nextDouble() * 0.8,
+        speed: 0.2 + _nextUnit() * 0.8,
       ));
     }
   }
+
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+
+  bool _nextBool() => (_lcgNext() & 1) == 0;
 
   @override
   void dispose() {
@@ -394,7 +404,75 @@ class _WorldArtPainter extends CustomPainter {
   final Color accentColor;
   final List<_WorldElement> elements;
   final double time;
-  final math.Random _random = math.Random(42); // Fixed seed for consistency
+
+  static final Paint _bgPaint = Paint();
+  static final Paint _towerPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _towerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _particlePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _gridLinePaint = Paint()..strokeWidth = 1;
+  static final Paint _riftGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _riftCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _echoPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _noisePaint = Paint();
+  static final Paint _ruinPaint = Paint();
+  static final Paint _beaconGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _beaconCorePaint = Paint();
+  static final Paint _beaconPolePaint = Paint()..strokeWidth = 3;
+  static final Paint _cloudPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _lightningPaint = Paint()
+    ..color = Colors.white
+    ..strokeWidth = 2
+    ..style = PaintingStyle.stroke
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _crownRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _crownGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _platformPaint = Paint();
+  static final Paint _crystalPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _vaultPaint = Paint();
+  static final Paint _streamPaint = Paint()
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _coreOuterPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40);
+  static final Paint _coreMidPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20);
+  static final Paint _corePaint = Paint();
+  static final Paint _energyStreamPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _debrisPaint = Paint();
+  static final Paint _vignettePaint = Paint();
+  static final Paint _borderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+
+  static final Path _towerPath = Path();
+  static final Path _ruinPath = Path();
+  static final Path _lightningPath = Path();
+  static final Path _crystalPath = Path();
+  static final Path _vaultPath = Path();
+
+  static Size? _bgCacheSize;
+  static int? _bgCacheWorldId;
+  static Shader? _bgShader;
+  static Size? _vignetteCacheSize;
+  static Shader? _vignetteShader;
+
+  static int _lcgNext(int state) =>
+      (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
 
   _WorldArtPainter({
     required this.worldId,
@@ -461,14 +539,19 @@ class _WorldArtPainter extends CustomPainter {
         bgColor3 = const Color(0xFF000000);
     }
 
-    final gradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [bgColor1, bgColor2, bgColor3],
-      stops: const [0.0, 0.5, 1.0],
-    ).createShader(rect);
+    if (_bgCacheSize != size || _bgCacheWorldId != worldId) {
+      _bgCacheSize = size;
+      _bgCacheWorldId = worldId;
+      _bgShader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [bgColor1, bgColor2, bgColor3],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(rect);
+    }
 
-    canvas.drawRect(rect, Paint()..shader = gradient);
+    _bgPaint.shader = _bgShader;
+    canvas.drawRect(rect, _bgPaint);
   }
 
   void _drawElement(Canvas canvas, Size size, _WorldElement element) {
@@ -539,27 +622,23 @@ class _WorldArtPainter extends CustomPainter {
     final width = 8 + e.scale * 12;
 
     // Tower body
-    final towerPath = Path()
+    final towerPath = _towerPath..reset();
+    towerPath
       ..moveTo(x - width / 2, y)
       ..lineTo(x - width / 3, y - height)
       ..lineTo(x + width / 3, y - height)
       ..lineTo(x + width / 2, y)
       ..close();
 
-    canvas.drawPath(
-      towerPath,
-      Paint()
-        ..color = e.color.withOpacity(0.6)
-        ..style = PaintingStyle.fill,
-    );
+    _towerPaint.color = e.color.withOpacity(0.6);
+    canvas.drawPath(towerPath, _towerPaint);
 
     // Glow at top
+    _towerGlowPaint.color = e.color.withOpacity(0.8);
     canvas.drawCircle(
       Offset(x, y - height),
       5 * e.scale,
-      Paint()
-        ..color = e.color.withOpacity(0.8)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8),
+      _towerGlowPaint,
     );
   }
 
@@ -570,9 +649,7 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(x, y + offset),
       2 * e.scale,
-      Paint()
-        ..color = e.color.withOpacity(alpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      _particlePaint..color = e.color.withOpacity(alpha),
     );
   }
 
@@ -580,9 +657,7 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawLine(
       Offset(x, 0),
       Offset(x, size.height),
-      Paint()
-        ..color = e.color.withOpacity(0.1)
-        ..strokeWidth = 1,
+      _gridLinePaint..color = e.color.withOpacity(0.1),
     );
   }
 
@@ -594,18 +669,13 @@ class _WorldArtPainter extends CustomPainter {
     // Rift glow
     canvas.drawOval(
       Rect.fromCenter(center: Offset(x, y), width: width * 1.5, height: height * 1.5),
-      Paint()
-        ..color = e.color.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+      _riftGlowPaint..color = e.color.withOpacity(0.3),
     );
 
     // Rift core
     canvas.drawOval(
       Rect.fromCenter(center: Offset(x, y), width: width, height: height),
-      Paint()
-        ..color = e.color.withOpacity(0.8)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+      _riftCorePaint..color = e.color.withOpacity(0.8),
     );
   }
 
@@ -616,14 +686,15 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(x, y),
       10 * e.scale,
-      Paint()
-        ..color = e.color.withOpacity(alpha)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      _echoPaint..color = e.color.withOpacity(alpha),
     );
   }
 
   void _drawNoise(Canvas canvas, double x, double y, _WorldElement e, Size size, double t) {
-    final noiseAlpha = (_random.nextDouble() * 0.3).clamp(0.0, 0.3);
+    int state = ((t * 100000).toInt() ^ (x * 1000).toInt() ^ (y * 1000).toInt()) &
+        0x7fffffff;
+    state = _lcgNext(state);
+    final noiseAlpha = (_lcgUnit(state) * 0.3).clamp(0.0, 0.3);
     if (noiseAlpha < 0.05) return;
 
     final rect = Rect.fromCenter(
@@ -634,7 +705,7 @@ class _WorldArtPainter extends CustomPainter {
 
     canvas.drawRect(
       rect,
-      Paint()..color = e.color.withOpacity(noiseAlpha),
+      _noisePaint..color = e.color.withOpacity(noiseAlpha),
     );
   }
 
@@ -643,7 +714,8 @@ class _WorldArtPainter extends CustomPainter {
     final height = 60 * e.scale;
 
     // Ruined structure
-    final path = Path()
+    final path = _ruinPath..reset();
+    path
       ..moveTo(x - width / 2, y)
       ..lineTo(x - width / 3, y - height * 0.7)
       ..lineTo(x - width / 4, y - height * 0.5)
@@ -652,10 +724,8 @@ class _WorldArtPainter extends CustomPainter {
       ..lineTo(x + width / 2, y)
       ..close();
 
-    canvas.drawPath(
-      path,
-      Paint()..color = e.color.withOpacity(0.4),
-    );
+    _ruinPaint.color = e.color.withOpacity(0.4);
+    canvas.drawPath(path, _ruinPaint);
   }
 
   void _drawBeacon(Canvas canvas, double x, double y, _WorldElement e, double t) {
@@ -665,25 +735,21 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(x, y - 30),
       15 + pulse * 10,
-      Paint()
-        ..color = e.color.withOpacity(0.3 + pulse * 0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+      _beaconGlowPaint..color = e.color.withOpacity(0.3 + pulse * 0.3),
     );
 
     // Beacon core
     canvas.drawCircle(
       Offset(x, y - 30),
       5,
-      Paint()..color = e.color,
+      _beaconCorePaint..color = e.color,
     );
 
     // Beacon pole
     canvas.drawLine(
       Offset(x, y),
       Offset(x, y - 25),
-      Paint()
-        ..color = Colors.grey.withOpacity(0.5)
-        ..strokeWidth = 3,
+      _beaconPolePaint..color = Colors.grey.withOpacity(0.5),
     );
   }
 
@@ -696,9 +762,7 @@ class _WorldArtPainter extends CustomPainter {
         width: 100 * e.scale,
         height: 30 * e.scale,
       ),
-      Paint()
-        ..color = e.color.withOpacity(0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15),
+      _cloudPaint..color = e.color.withOpacity(0.4),
     );
   }
 
@@ -707,23 +771,24 @@ class _WorldArtPainter extends CustomPainter {
     final show = (t * 10 * e.speed) % 1 < 0.1;
     if (!show) return;
 
-    final path = Path()..moveTo(x, y);
+    final path = _lightningPath..reset();
+    path.moveTo(x, y);
 
     var currentY = y;
     var currentX = x;
+    int state = ((t * 10000).toInt() ^ (x * 1000).toInt() ^ (y * 1000).toInt()) &
+        0x7fffffff;
     while (currentY < size.height * 0.8) {
-      currentY += 20 + _random.nextDouble() * 20;
-      currentX += (_random.nextDouble() - 0.5) * 30;
+      state = _lcgNext(state);
+      currentY += 20 + _lcgUnit(state) * 20;
+      state = _lcgNext(state);
+      currentX += (_lcgUnit(state) - 0.5) * 30;
       path.lineTo(currentX, currentY);
     }
 
     canvas.drawPath(
       path,
-      Paint()
-        ..color = e.color
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      _lightningPaint..color = e.color,
     );
   }
 
@@ -734,20 +799,14 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(x, y),
       50 * pulse,
-      Paint()
-        ..color = e.color.withOpacity(0.3)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      _crownRingPaint..color = e.color.withOpacity(0.3),
     );
 
     // Crown glow
     canvas.drawCircle(
       Offset(x, y),
       30,
-      Paint()
-        ..color = e.color.withOpacity(0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+      _crownGlowPaint..color = e.color.withOpacity(0.5),
     );
   }
 
@@ -760,7 +819,7 @@ class _WorldArtPainter extends CustomPainter {
       const Radius.circular(3),
     );
 
-    canvas.drawRRect(rrect, Paint()..color = e.color.withOpacity(0.6));
+    canvas.drawRRect(rrect, _platformPaint..color = e.color.withOpacity(0.6));
   }
 
   void _drawCrystal(Canvas canvas, double x, double y, _WorldElement e, double t) {
@@ -768,7 +827,8 @@ class _WorldArtPainter extends CustomPainter {
     final size = 10 * e.scale;
 
     // Crystal shape (diamond)
-    final path = Path()
+    final path = _crystalPath..reset();
+    path
       ..moveTo(x, y - size)
       ..lineTo(x + size * 0.6, y)
       ..lineTo(x, y + size * 0.4)
@@ -777,9 +837,7 @@ class _WorldArtPainter extends CustomPainter {
 
     canvas.drawPath(
       path,
-      Paint()
-        ..color = e.color.withOpacity(pulse)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+      _crystalPaint..color = e.color.withOpacity(pulse),
     );
   }
 
@@ -788,14 +846,15 @@ class _WorldArtPainter extends CustomPainter {
     final height = 40 * e.scale;
 
     // Vault arch
-    final path = Path()
+    final path = _vaultPath..reset();
+    path
       ..moveTo(x - width / 2, y)
       ..lineTo(x - width / 2, y - height * 0.6)
       ..quadraticBezierTo(x, y - height, x + width / 2, y - height * 0.6)
       ..lineTo(x + width / 2, y)
       ..close();
 
-    canvas.drawPath(path, Paint()..color = e.color.withOpacity(0.5));
+    canvas.drawPath(path, _vaultPaint..color = e.color.withOpacity(0.5));
   }
 
   void _drawStream(Canvas canvas, double x, _WorldElement e, Size size, double t) {
@@ -804,10 +863,7 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawLine(
       Offset(x, y),
       Offset(x, y + 30),
-      Paint()
-        ..color = e.color.withOpacity(0.5)
-        ..strokeWidth = 2
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+      _streamPaint..color = e.color.withOpacity(0.5),
     );
   }
 
@@ -818,25 +874,21 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(x, y),
       80 * pulse,
-      Paint()
-        ..color = e.color.withOpacity(0.1)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 40),
+      _coreOuterPaint..color = e.color.withOpacity(0.1),
     );
 
     // Middle ring
     canvas.drawCircle(
       Offset(x, y),
       40 * pulse,
-      Paint()
-        ..color = e.color.withOpacity(0.3)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20),
+      _coreMidPaint..color = e.color.withOpacity(0.3),
     );
 
     // Core
     canvas.drawCircle(
       Offset(x, y),
       15,
-      Paint()..color = e.color,
+      _corePaint..color = e.color,
     );
   }
 
@@ -851,9 +903,7 @@ class _WorldArtPainter extends CustomPainter {
     canvas.drawCircle(
       Offset(currentX, currentY),
       5,
-      Paint()
-        ..color = e.color.withOpacity(0.7)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      _energyStreamPaint..color = e.color.withOpacity(0.7),
     );
   }
 
@@ -867,7 +917,7 @@ class _WorldArtPainter extends CustomPainter {
 
     canvas.drawRect(
       Rect.fromCenter(center: Offset.zero, width: 8 * e.scale, height: 8 * e.scale),
-      Paint()..color = e.color.withOpacity(0.5),
+      _debrisPaint..color = e.color.withOpacity(0.5),
     );
 
     canvas.restore();
@@ -875,16 +925,20 @@ class _WorldArtPainter extends CustomPainter {
 
   void _drawVignette(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
-    final gradient = RadialGradient(
-      colors: [
-        Colors.transparent,
-        Colors.black.withOpacity(0.4),
-        Colors.black.withOpacity(0.8),
-      ],
-      stops: const [0.3, 0.7, 1.0],
-    ).createShader(rect);
+    if (_vignetteCacheSize != size) {
+      _vignetteCacheSize = size;
+      _vignetteShader = RadialGradient(
+        colors: [
+          Colors.transparent,
+          Colors.black.withOpacity(0.4),
+          Colors.black.withOpacity(0.8),
+        ],
+        stops: const [0.3, 0.7, 1.0],
+      ).createShader(rect);
+    }
 
-    canvas.drawRect(rect, Paint()..shader = gradient);
+    _vignettePaint.shader = _vignetteShader;
+    canvas.drawRect(rect, _vignettePaint);
   }
 
   void _drawBorderGlow(Canvas canvas, Size size) {
@@ -895,10 +949,7 @@ class _WorldArtPainter extends CustomPainter {
 
     canvas.drawRRect(
       rect,
-      Paint()
-        ..color = accentColor.withOpacity(0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2,
+      _borderPaint..color = accentColor.withOpacity(0.5),
     );
   }
 

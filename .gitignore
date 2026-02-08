@@ -12,6 +12,7 @@ Desktop.ini
 .claude/
 tmpclaude-*
 temp_tower.txt
+nul
 
 # Logs
 *.log
@@ -36,3 +37,6 @@ coverage/
 # App-specific (kept explicit)
 flutter_app/.dart_tool/
 flutter_app/build/
+flutter_app/build-output/
+flutter_test_output.txt
+flutter_test_output_after.txt

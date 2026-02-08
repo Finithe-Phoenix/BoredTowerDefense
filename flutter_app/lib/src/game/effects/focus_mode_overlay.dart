@@ -7,13 +7,14 @@ import '../bored_games_game.dart';
 import '../entities/tower.dart';
 import '../../ui/theme/neon_theme.dart';
 
-class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame> {
+class FocusModeOverlay extends PositionComponent
+    with HasGameRef<BoredGamesGame> {
   FocusModeOverlay() {
     anchor = Anchor.topLeft;
     priority = 90;
   }
 
-  final math.Random _random = math.Random();
+  int _rngState = 0x2f6e2b1;
   final List<double> _streakAngles =
       List<double>.generate(12, (i) => (i / 12) * math.pi * 2);
   final List<_HitMarker> _hitMarkers = [];
@@ -51,6 +52,25 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     ..strokeWidth = 1.6
     ..strokeCap = StrokeCap.round;
   final Paint _layerPaint = Paint();
+  final Paint _reticleDecorPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+  final Paint _hitMarkerPaint = Paint()..strokeCap = StrokeCap.square;
+  final Paint _criticalRingPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+
+  int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+
+  double _nextUnit() {
+    _rngState = _lcgNext(_rngState);
+    return _rngState / 0x7fffffff;
+  }
+
+  BoredGamesGame? _resolveGame() {
+    final game = findGame();
+    return game is BoredGamesGame ? game : null;
+  }
 
   void registerHit(Vector2 screenPos, {required bool critical}) {
     if (_hitMarkers.length >= 6) {
@@ -65,6 +85,18 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
   @override
   void update(double dt) {
     super.update(dt);
+    final game = _resolveGame();
+    if (game == null) {
+      _time += dt;
+      for (int i = _hitMarkers.length - 1; i >= 0; i--) {
+        _hitMarkers[i].update(dt);
+        if (_hitMarkers[i].expired) {
+          _hitMarkers.removeAt(i);
+        }
+      }
+      return;
+    }
+    if (!game.focusModeActive && _hitMarkers.isEmpty) return;
     _time += dt;
     for (int i = _hitMarkers.length - 1; i >= 0; i--) {
       _hitMarkers[i].update(dt);
@@ -77,22 +109,24 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
   @override
   void render(Canvas canvas) {
     super.render(canvas);
-    if (!gameRef.focusModeActive) return;
-    if (gameRef.size.isZero()) return;
+    final game = _resolveGame();
+    if (game == null) return;
+    if (!game.focusModeActive) return;
+    if (game.size.isZero()) return;
 
-    final width = gameRef.size.x;
-    final height = gameRef.size.y;
+    final width = game.size.x;
+    final height = game.size.y;
     final center = Offset(width / 2, height / 2);
-    final reduceFx = gameRef.reduceFx;
-    final accent = gameRef.focusTower?.color ?? NeonColors.cyan;
-    final fxPulse = gameRef.focusFxPulse;
+    final reduceFx = game.reduceFx;
+    final accent = game.focusTower?.color ?? NeonColors.cyan;
+    final fxPulse = game.focusFxPulse;
 
     _drawVignette(canvas, width, height, accent, reduceFx);
     _drawFocusWarp(canvas, center, accent, fxPulse, reduceFx);
     if (!reduceFx) {
       _drawSpeedLines(canvas, center, accent);
     }
-    _drawReticle(canvas, center, accent, reduceFx);
+    _drawReticle(canvas, center, accent, reduceFx, game);
     _drawCornerHud(canvas, width, height, accent);
     _drawTargetLock(canvas, accent, reduceFx);
     _drawHitMarkers(canvas, accent);
@@ -155,10 +189,10 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
       canvas.drawLine(start, end, _linePaint);
     }
 
-    if (_random.nextDouble() < 0.12) {
+    if (_nextUnit() < 0.12) {
       _blinkPaint.color = accent.withOpacity(0.3);
-      final angle = _random.nextDouble() * math.pi * 2;
-      final burst = 110 + _random.nextDouble() * 40;
+      final angle = _nextUnit() * math.pi * 2;
+      final burst = 110 + _nextUnit() * 40;
       final start = Offset(
         center.dx + math.cos(angle) * burst,
         center.dy + math.sin(angle) * burst,
@@ -171,7 +205,13 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     }
   }
 
-  void _drawReticle(Canvas canvas, Offset center, Color accent, bool reduceFx) {
+  void _drawReticle(
+    Canvas canvas,
+    Offset center,
+    Color accent,
+    bool reduceFx,
+    BoredGamesGame game,
+  ) {
     final pulse = 0.65 + math.sin(_time * 3.0) * 0.1;
     final ringRadius = 36 + math.sin(_time * 2.2) * 2;
 
@@ -213,7 +253,7 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
       );
     }
 
-    _drawReticleDecor(canvas, center, accent, reduceFx);
+    _drawReticleDecor(canvas, center, accent, reduceFx, game);
   }
 
   void _drawReticleDecor(
@@ -221,17 +261,19 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     Offset center,
     Color accent,
     bool reduceFx,
+    BoredGamesGame game,
   ) {
-    final tower = gameRef.focusTower;
+    final tower = game.focusTower;
     if (tower == null) return;
     final type = tower.type;
     final alpha = 0.5 + math.sin(_time * 2.8) * 0.2;
-    final paint = Paint()
+    final paint = _reticleDecorPaint
       ..color = accent.withOpacity(alpha)
-      ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
     if (!reduceFx) {
       paint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    } else {
+      paint.maskFilter = null;
     }
 
     switch (type) {
@@ -311,11 +353,13 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
   ) {
     if (pulse <= 0) return;
     final intensity = pulse * (reduceFx ? 0.25 : 0.55);
+    if (intensity <= 0.01) return;
     final radius = 140 + pulse * 80;
 
     _blurPaint
       ..color = accent.withOpacity(0.08 * intensity)
-      ..maskFilter = reduceFx ? null : const MaskFilter.blur(BlurStyle.normal, 16);
+      ..maskFilter =
+          reduceFx ? null : const MaskFilter.blur(BlurStyle.normal, 16);
     canvas.drawCircle(center, radius, _blurPaint);
 
     for (int i = 0; i < 6; i++) {
@@ -329,7 +373,8 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
         center.dy + math.sin(angle) * (radius * 0.75),
       );
       _chromaPaint.color = NeonColors.red.withOpacity(0.25 * intensity);
-      canvas.drawLine(start.translate(-2, 0), end.translate(-2, 0), _chromaPaint);
+      canvas.drawLine(
+          start.translate(-2, 0), end.translate(-2, 0), _chromaPaint);
       _chromaPaint.color = NeonColors.cyan.withOpacity(0.25 * intensity);
       canvas.drawLine(start, end, _chromaPaint);
     }
@@ -340,17 +385,17 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     for (final marker in _hitMarkers) {
       final progress = marker.progress;
       final alpha = (1 - progress).clamp(0.0, 1.0);
-      final color = marker.critical
-          ? NeonColors.red
-          : accent;
+      if (alpha <= 0.01) continue;
+      final color = marker.critical ? NeonColors.red : accent;
       final size = marker.critical ? 16.0 : 12.0;
       final width = marker.critical ? 2.4 : 1.6;
-      final paint = Paint()
+      final paint = _hitMarkerPaint
         ..color = color.withOpacity(alpha)
-        ..strokeWidth = width
-        ..strokeCap = StrokeCap.square;
+        ..strokeWidth = width;
       if (!gameRef.reduceFx) {
         paint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+      } else {
+        paint.maskFilter = null;
       }
       final x = marker.position.x;
       final y = marker.position.y;
@@ -376,19 +421,18 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
       );
 
       if (marker.critical) {
+        _criticalRingPaint.color = color.withOpacity(0.25 * alpha);
         canvas.drawCircle(
           Offset(x, y),
           10 + (1 - progress) * 4,
-          Paint()
-            ..color = color.withOpacity(0.25 * alpha)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 1.5,
+          _criticalRingPaint,
         );
       }
     }
   }
 
-  void _drawCornerHud(Canvas canvas, double width, double height, Color accent) {
+  void _drawCornerHud(
+      Canvas canvas, double width, double height, Color accent) {
     const size = 18.0;
     const pad = 12.0;
     NeonEffects.drawCornerBracket(
@@ -438,11 +482,10 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     final lockPulse = 0.5 + math.sin(_time * 5.0) * 0.2;
     final lockColor = Color.lerp(accent, NeonColors.red, 0.35)!;
     final radius = reduceFx ? 18.0 : 24.0;
-    final ringPaint = Paint()
+    _ringPaint
       ..color = lockColor.withOpacity(0.7 * lockPulse)
-      ..style = PaintingStyle.stroke
       ..strokeWidth = 1.6;
-    canvas.drawCircle(Offset(screenPos.x, screenPos.y), radius, ringPaint);
+    canvas.drawCircle(Offset(screenPos.x, screenPos.y), radius, _ringPaint);
 
     final bracketSize = radius + 6;
     NeonEffects.drawCornerBracket(
@@ -478,6 +521,7 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
   void _drawFocusLabel(Canvas canvas, double width, Color accent) {
     final pulse = 0.7 + math.sin(_time * 3.2) * 0.2;
     final labelColor = accent.withOpacity(pulse);
+    if (pulse <= 0.01) return;
 
     // Only recreate TextPainter when color changes significantly
     if (_focusLabelPainter == null || _lastLabelColor != accent) {
@@ -497,8 +541,14 @@ class FocusModeOverlay extends PositionComponent with HasGameRef<BoredGamesGame>
     }
 
     // Apply opacity via saveLayer for cached painter
+    final labelRect = Rect.fromLTWH(
+      width / 2 - _focusLabelPainter!.width / 2 - 12,
+      0,
+      _focusLabelPainter!.width + 24,
+      _focusLabelPainter!.height + 12,
+    );
     _layerPaint.color = Color.fromRGBO(255, 255, 255, pulse);
-    canvas.saveLayer(null, _layerPaint);
+    canvas.saveLayer(labelRect, _layerPaint);
     _focusLabelPainter!.paint(
       canvas,
       Offset(width / 2 - _focusLabelPainter!.width / 2, 6),

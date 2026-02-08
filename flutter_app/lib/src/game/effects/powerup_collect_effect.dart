@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
+import '../entities/enemy.dart';
+
 /// Types of power-ups with their associated colors
 enum PowerUpType {
   /// Health power-up (green)
@@ -34,7 +36,7 @@ class PowerUpCollectEffect extends PositionComponent {
     required PowerUpType powerUpType,
     required String displayText,
     required double duration,
-  }) : _random = math.Random() {
+  }) : _rngState = 0x31415927 {
     _reset(
       position: position,
       powerUpType: powerUpType,
@@ -74,6 +76,10 @@ class PowerUpCollectEffect extends PositionComponent {
       item._cachedPainter?.dispose();
       item._cachedPainter = null;
     }
+    _BurstParticle.clearPool();
+    _SpiralParticle.clearPool();
+    _EnergyRing.clearPool();
+    _ElectricSpark.clearPool();
     _pool.clear();
     _activeCount = 0;
   }
@@ -195,10 +201,17 @@ class PowerUpCollectEffect extends PositionComponent {
   String displayText = '';
   double duration = 1.0;
 
-  final math.Random _random;
+  int _rngState;
+  int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  double _nextUnit() {
+    _rngState = _lcgNext(_rngState);
+    return _rngState / 0x7fffffff;
+  }
   double _timer = 0;
   bool _counted = false;
   bool _inPool = false;
+  double _offscreenAccumulator = 0;
+  static const double _offscreenUpdateInterval = 0.12;
 
   // Particle lists
   final List<_BurstParticle> _burstParticles = [];
@@ -206,9 +219,40 @@ class PowerUpCollectEffect extends PositionComponent {
   final List<_EnergyRing> _energyRings = [];
   final List<_ElectricSpark> _electricSparks = [];
 
+  void _recycleBurstParticles() {
+    for (final particle in _burstParticles) {
+      particle.recycle();
+    }
+    _burstParticles.clear();
+  }
+
+  void _recycleSpiralParticles() {
+    for (final particle in _spiralParticles) {
+      particle.recycle();
+    }
+    _spiralParticles.clear();
+  }
+
+  void _recycleEnergyRings() {
+    for (final ring in _energyRings) {
+      ring.recycle();
+    }
+    _energyRings.clear();
+  }
+
+  void _recycleElectricSparks() {
+    for (final spark in _electricSparks) {
+      spark.recycle();
+    }
+    _electricSparks.clear();
+  }
+
   // Cached TextPainter
   TextPainter? _cachedPainter;
   String _cachedText = '';
+  double _cachedTextWidth = 0;
+  double _cachedTextHeight = 0;
+  Rect? _cachedTextLayerRect;
 
   void _markActive() {
     if (_counted) return;
@@ -231,10 +275,10 @@ class PowerUpCollectEffect extends PositionComponent {
     _timer = 0;
 
     // Clear particle lists
-    _burstParticles.clear();
-    _spiralParticles.clear();
-    _energyRings.clear();
-    _electricSparks.clear();
+    _recycleBurstParticles();
+    _recycleSpiralParticles();
+    _recycleEnergyRings();
+    _recycleElectricSparks();
 
     // Initialize all particle systems
     _initializeBurstParticles();
@@ -295,17 +339,17 @@ class PowerUpCollectEffect extends PositionComponent {
     if (count == 0) return;
 
     for (int i = 0; i < count; i++) {
-      final angle = (i / count) * math.pi * 2 + _random.nextDouble() * 0.3;
-      final speed = 80 + _random.nextDouble() * 100;
-      final size = 2 + _random.nextDouble() * 3;
-      final lifetime = 0.3 + _random.nextDouble() * 0.3;
+      final angle = (i / count) * math.pi * 2 + _nextUnit() * 0.3;
+      final speed = 80 + _nextUnit() * 100;
+      final size = 2 + _nextUnit() * 3;
+      final lifetime = 0.3 + _nextUnit() * 0.3;
 
-      _burstParticles.add(_BurstParticle(
+      _burstParticles.add(_BurstParticle.obtain(
         angle: angle,
         speed: speed,
         size: size,
         lifetime: lifetime,
-        decay: 0.85 + _random.nextDouble() * 0.1,
+        decay: 0.85 + _nextUnit() * 0.1,
       ));
     }
   }
@@ -316,17 +360,17 @@ class PowerUpCollectEffect extends PositionComponent {
 
     for (int i = 0; i < count; i++) {
       final startAngle = (i / count) * math.pi * 2;
-      final startRadius = 40 + _random.nextDouble() * 20;
-      final rotationSpeed = 8 + _random.nextDouble() * 4;
-      final collapseSpeed = 60 + _random.nextDouble() * 30;
+      final startRadius = 40 + _nextUnit() * 20;
+      final rotationSpeed = 8 + _nextUnit() * 4;
+      final collapseSpeed = 60 + _nextUnit() * 30;
 
-      _spiralParticles.add(_SpiralParticle(
+      _spiralParticles.add(_SpiralParticle.obtain(
         startAngle: startAngle,
         startRadius: startRadius,
         rotationSpeed: rotationSpeed * (i % 2 == 0 ? 1 : -1), // Alternate direction
         collapseSpeed: collapseSpeed,
-        size: 2 + _random.nextDouble() * 2,
-        lifetime: 0.6 + _random.nextDouble() * 0.2,
+        size: 2 + _nextUnit() * 2,
+        lifetime: 0.6 + _nextUnit() * 0.2,
       ));
     }
   }
@@ -334,7 +378,7 @@ class PowerUpCollectEffect extends PositionComponent {
   void _initializeEnergyRings() {
     final count = _scaledCount(4);
     for (int i = 0; i < count; i++) {
-      _energyRings.add(_EnergyRing(
+      _energyRings.add(_EnergyRing.obtain(
         startDelay: i * 0.12,
         startRadius: 5 + i * 3,
         endRadius: 50 + i * 15,
@@ -348,16 +392,16 @@ class PowerUpCollectEffect extends PositionComponent {
     if (count == 0) return;
 
     for (int i = 0; i < count; i++) {
-      final angle = (i / count) * math.pi * 2 + _random.nextDouble() * 0.5;
-      final length = 20 + _random.nextDouble() * 30;
+      final angle = (i / count) * math.pi * 2 + _nextUnit() * 0.5;
+      final length = 20 + _nextUnit() * 30;
 
-      _electricSparks.add(_ElectricSpark(
+      _electricSparks.add(_ElectricSpark.obtain(
         baseAngle: angle,
         length: length,
-        lifetime: 0.15 + _random.nextDouble() * 0.15,
-        startDelay: _random.nextDouble() * 0.3,
-        segments: 3 + _random.nextInt(3),
-        hasBranches: _random.nextDouble() > 0.5,
+        lifetime: 0.15 + _nextUnit() * 0.15,
+        startDelay: _nextUnit() * 0.3,
+        segments: 3 + (_nextUnit() * 3).floor(),
+        hasBranches: _nextUnit() > 0.5,
       ));
     }
   }
@@ -377,6 +421,17 @@ class PowerUpCollectEffect extends PositionComponent {
   @override
   void update(double dt) {
     super.update(dt);
+    if (_isOffscreen()) {
+      _offscreenAccumulator += dt;
+      if (_offscreenAccumulator < _offscreenUpdateInterval) {
+        return;
+      }
+      dt = _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    } else if (_offscreenAccumulator > 0) {
+      dt += _offscreenAccumulator;
+      _offscreenAccumulator = 0;
+    }
 
     _timer += dt;
 
@@ -386,20 +441,28 @@ class PowerUpCollectEffect extends PositionComponent {
     }
 
     // Update all particle systems
-    for (final particle in _burstParticles) {
-      particle.update(dt);
+    if (_burstParticles.isNotEmpty) {
+      for (final particle in _burstParticles) {
+        particle.update(dt);
+      }
     }
 
-    for (final particle in _spiralParticles) {
-      particle.update(dt);
+    if (_spiralParticles.isNotEmpty) {
+      for (final particle in _spiralParticles) {
+        particle.update(dt);
+      }
     }
 
-    for (final ring in _energyRings) {
-      ring.update(dt);
+    if (_energyRings.isNotEmpty) {
+      for (final ring in _energyRings) {
+        ring.update(dt);
+      }
     }
 
-    for (final spark in _electricSparks) {
-      spark.update(dt, _timer);
+    if (_electricSparks.isNotEmpty) {
+      for (final spark in _electricSparks) {
+        spark.update(dt, _timer);
+      }
     }
   }
 
@@ -409,6 +472,7 @@ class PowerUpCollectEffect extends PositionComponent {
 
   @override
   void render(Canvas canvas) {
+    if (_isOffscreen()) return;
     super.render(canvas);
 
     if (lowFx) {
@@ -417,12 +481,23 @@ class PowerUpCollectEffect extends PositionComponent {
     }
 
     final progress = (_timer / duration).clamp(0.0, 1.0);
+    if (progress >= 1.0) return;
+    if (_burstParticles.isEmpty &&
+        _spiralParticles.isEmpty &&
+        _energyRings.isEmpty &&
+        _electricSparks.isEmpty &&
+        displayText.isEmpty &&
+        reduceFx) {
+      return;
+    }
 
     // Layer 1: Radial burst particles (behind everything)
-    _drawBurstParticles(canvas, progress);
+    if (_burstParticles.isNotEmpty) {
+      _drawBurstParticles(canvas, progress);
+    }
 
     // Layer 2: Spiral orbiting particles
-    if (!reduceFx) {
+    if (!reduceFx && _spiralParticles.isNotEmpty) {
       _drawSpiralParticles(canvas, progress);
     }
 
@@ -430,10 +505,12 @@ class PowerUpCollectEffect extends PositionComponent {
     _drawAbsorptionGlow(canvas, progress);
 
     // Layer 4: Energy rings expanding outward
-    _drawEnergyRings(canvas, progress);
+    if (_energyRings.isNotEmpty) {
+      _drawEnergyRings(canvas, progress);
+    }
 
     // Layer 5: Electric sparks
-    if (!reduceFx) {
+    if (!reduceFx && _electricSparks.isNotEmpty) {
       _drawElectricSparks(canvas, progress);
     }
 
@@ -444,6 +521,17 @@ class PowerUpCollectEffect extends PositionComponent {
 
     // Layer 7: Final flash with color pulse
     _drawFinalFlash(canvas, progress);
+  }
+
+  bool _isOffscreen({double padding = 90}) {
+    if (Enemy.screenSize.isZero()) return false;
+    if (Enemy.screenScale <= 0) return false;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    return screenX < -padding ||
+        screenY < -padding ||
+        screenX > Enemy.screenSize.x + padding ||
+        screenY > Enemy.screenSize.y + padding;
   }
 
   /// Render simplified version for low FX mode
@@ -478,13 +566,16 @@ class PowerUpCollectEffect extends PositionComponent {
 
         canvas.save();
         canvas.translate(0, yOffset);
-        _textAlphaPaint.color = Color.fromRGBO(255, 255, 255, textAlpha);
-        canvas.saveLayer(null, _textAlphaPaint);
-        _cachedPainter!.paint(
-          canvas,
-          Offset(-_cachedPainter!.width / 2, -_cachedPainter!.height / 2),
-        );
-        canvas.restore();
+        final textOffset = Offset(-_cachedTextWidth / 2, -_cachedTextHeight / 2);
+        final textLayerRect = _cachedTextLayerRect!;
+        if (textAlpha >= 0.99) {
+          _cachedPainter!.paint(canvas, textOffset);
+        } else {
+          _textAlphaPaint.color = Color.fromRGBO(255, 255, 255, textAlpha);
+          canvas.saveLayer(textLayerRect, _textAlphaPaint);
+          _cachedPainter!.paint(canvas, textOffset);
+          canvas.restore();
+        }
         canvas.restore();
       }
     }
@@ -495,6 +586,7 @@ class PowerUpCollectEffect extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _drawBurstParticles(Canvas canvas, double progress) {
+    if (_burstParticles.isEmpty) return;
     for (final particle in _burstParticles) {
       if (!particle.isAlive) continue;
 
@@ -521,6 +613,7 @@ class PowerUpCollectEffect extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _drawSpiralParticles(Canvas canvas, double progress) {
+    if (_spiralParticles.isEmpty) return;
     for (final particle in _spiralParticles) {
       if (!particle.isAlive) continue;
 
@@ -636,6 +729,7 @@ class PowerUpCollectEffect extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _drawEnergyRings(Canvas canvas, double progress) {
+    if (_energyRings.isEmpty) return;
     for (final ring in _energyRings) {
       if (!ring.isActive(_timer)) continue;
 
@@ -670,6 +764,7 @@ class PowerUpCollectEffect extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _drawElectricSparks(Canvas canvas, double progress) {
+    if (_electricSparks.isEmpty) return;
     for (final spark in _electricSparks) {
       if (!spark.isActive(_timer)) continue;
 
@@ -691,7 +786,7 @@ class PowerUpCollectEffect extends PositionComponent {
 
         // Add jitter perpendicular to direction
         final perpAngle = spark.currentAngle + math.pi / 2;
-        final jitter = (i == segments) ? 0 : ((_random.nextDouble() - 0.5) * 10);
+        final jitter = (i == segments) ? 0 : ((_nextUnit() - 0.5) * 10);
         final jitterX = math.cos(perpAngle) * jitter;
         final jitterY = math.sin(perpAngle) * jitter;
 
@@ -702,7 +797,7 @@ class PowerUpCollectEffect extends PositionComponent {
 
         // Draw branches
         if (spark.hasBranches && i == segments ~/ 2) {
-          final branchAngle = spark.currentAngle + (_random.nextDouble() - 0.5) * 1.0;
+          final branchAngle = spark.currentAngle + (_nextUnit() - 0.5) * 1.0;
           final branchLength = spark.length * 0.4;
           final branchEndX = currentX + math.cos(branchAngle) * branchLength;
           final branchEndY = currentY + math.sin(branchAngle) * branchLength;
@@ -749,6 +844,8 @@ class PowerUpCollectEffect extends PositionComponent {
     } else {
       textAlpha = 1.0;
     }
+    if (textAlpha <= 0.01) return;
+    if (_cachedTextWidth <= 0 || _cachedTextHeight <= 0) return;
 
     // Float upward
     final yOffset = -25 - progress * 20;
@@ -767,20 +864,21 @@ class PowerUpCollectEffect extends PositionComponent {
     canvas.translate(0, yOffset);
     canvas.scale(scale, scale);
 
-    final textWidth = _cachedPainter!.width;
-    final textHeight = _cachedPainter!.height;
+    final textWidth = _cachedTextWidth;
+    final textHeight = _cachedTextHeight;
     final textOffset = Offset(-textWidth / 2, -textHeight / 2);
+    final textLayerRect = _cachedTextLayerRect!;
 
     // Glow behind text
     _textGlowPaint.color = _glowColor.withOpacity(textAlpha * 0.4);
-    canvas.saveLayer(null, _textGlowPaint);
+    canvas.saveLayer(textLayerRect, _textGlowPaint);
     _cachedPainter!.paint(canvas, textOffset);
     canvas.restore();
 
     // Secondary glow
     _textShadowPaint.color = _primaryColor.withOpacity(textAlpha * 0.3);
     _textShadowPaint.maskFilter = _blur(10);
-    canvas.saveLayer(null, _textShadowPaint);
+    canvas.saveLayer(textLayerRect, _textShadowPaint);
     _cachedPainter!.paint(canvas, textOffset);
     canvas.restore();
 
@@ -788,23 +886,29 @@ class PowerUpCollectEffect extends PositionComponent {
     final chromaOffset = 1.5 + math.sin(_timer * 10) * 0.5;
 
     _chromaRedPaint.color = const Color(0xFFFF0000).withOpacity(textAlpha * 0.2);
-    canvas.saveLayer(null, _chromaRedPaint);
+    canvas.saveLayer(textLayerRect, _chromaRedPaint);
     _cachedPainter!.paint(canvas, textOffset + Offset(-chromaOffset, 0));
     canvas.restore();
 
     _chromaBluePaint.color = const Color(0xFF0066FF).withOpacity(textAlpha * 0.2);
-    canvas.saveLayer(null, _chromaBluePaint);
+    canvas.saveLayer(textLayerRect, _chromaBluePaint);
     _cachedPainter!.paint(canvas, textOffset + Offset(chromaOffset, 0));
     canvas.restore();
 
     // Main text
-    _textAlphaPaint.color = Color.fromRGBO(255, 255, 255, textAlpha);
-    canvas.saveLayer(null, _textAlphaPaint);
-    _cachedPainter!.paint(canvas, textOffset);
-    canvas.restore();
+    if (textAlpha >= 0.99) {
+      _cachedPainter!.paint(canvas, textOffset);
+    } else {
+      _textAlphaPaint.color = Color.fromRGBO(255, 255, 255, textAlpha);
+      canvas.saveLayer(textLayerRect, _textAlphaPaint);
+      _cachedPainter!.paint(canvas, textOffset);
+      canvas.restore();
+    }
 
     // Scanlines
-    _drawTextScanlines(canvas, textOffset, textWidth, textHeight, textAlpha);
+    if (textAlpha > 0.25) {
+      _drawTextScanlines(canvas, textOffset, textWidth, textHeight, textAlpha);
+    }
 
     canvas.restore();
   }
@@ -816,6 +920,7 @@ class PowerUpCollectEffect extends PositionComponent {
     double textHeight,
     double alpha,
   ) {
+    if (alpha <= 0.01) return;
     final scanlineOffset = (_timer * 40) % 5;
 
     _scanlinePath.reset();
@@ -850,6 +955,14 @@ class PowerUpCollectEffect extends PositionComponent {
       ),
       textDirection: TextDirection.ltr,
     )..layout();
+    _cachedTextWidth = _cachedPainter!.width;
+    _cachedTextHeight = _cachedPainter!.height;
+    _cachedTextLayerRect = Rect.fromLTWH(
+      -_cachedTextWidth / 2 - 24,
+      -_cachedTextHeight / 2 - 24,
+      _cachedTextWidth + 48,
+      _cachedTextHeight + 48,
+    );
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -861,6 +974,9 @@ class PowerUpCollectEffect extends PositionComponent {
     if (progress < 0.1) {
       final flashProgress = progress / 0.1;
       final flashAlpha = (1 - flashProgress) * 0.8;
+      if (flashAlpha <= 0.01) {
+        // Skip early if barely visible and no later stages.
+      } else {
       final flashRadius = 20 + flashProgress * 30;
 
       // Outer flash
@@ -874,12 +990,14 @@ class PowerUpCollectEffect extends PositionComponent {
       // Core flash
       _flashCorePaint.color = Colors.white.withOpacity(flashAlpha);
       canvas.drawCircle(Offset.zero, flashRadius * 0.5, _flashCorePaint);
+      }
     }
 
     // Final pulse at end (0.85-1.0)
     if (progress > 0.85) {
       final pulseProgress = (progress - 0.85) / 0.15;
       final pulseAlpha = math.sin(pulseProgress * math.pi);
+      if (pulseAlpha <= 0.01) return;
       final pulseRadius = 30 + pulseProgress * 40;
 
       // Expanding pulse ring
@@ -913,6 +1031,10 @@ class PowerUpCollectEffect extends PositionComponent {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _recycle() {
+    _recycleBurstParticles();
+    _recycleSpiralParticles();
+    _recycleEnergyRings();
+    _recycleElectricSparks();
     if (_counted) {
       if (_activeCount > 0) {
         _activeCount -= 1;
@@ -928,6 +1050,9 @@ class PowerUpCollectEffect extends PositionComponent {
     _cachedPainter?.dispose();
     _cachedPainter = null;
     _cachedText = '';
+    _cachedTextWidth = 0;
+    _cachedTextHeight = 0;
+    _cachedTextLayerRect = null;
 
     if (_pool.length < maxPool) {
       _inPool = true;
@@ -947,6 +1072,10 @@ class PowerUpCollectEffect extends PositionComponent {
     // Dispose painter on removal
     _cachedPainter?.dispose();
     _cachedPainter = null;
+    _cachedText = '';
+    _cachedTextWidth = 0;
+    _cachedTextHeight = 0;
+    _cachedTextLayerRect = null;
 
     super.onRemove();
   }
@@ -958,25 +1087,81 @@ class PowerUpCollectEffect extends PositionComponent {
 
 /// Burst particle for Layer 1
 class _BurstParticle {
-  _BurstParticle({
+  _BurstParticle._internal({
     required this.angle,
     required this.speed,
     required this.size,
     required this.lifetime,
     required this.decay,
-  }) : _time = 0,
-       distance = 0,
-       currentSize = size;
+  })  : _time = 0,
+        distance = 0,
+        currentSize = size;
 
-  final double angle;
-  final double speed;
-  final double size;
-  final double lifetime;
-  final double decay;
+  static const int _maxPool = 240;
+  static final List<_BurstParticle> _pool = [];
+
+  static _BurstParticle obtain({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double decay,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        angle: angle,
+        speed: speed,
+        size: size,
+        lifetime: lifetime,
+        decay: decay,
+      );
+      return item;
+    }
+    return _BurstParticle._internal(
+      angle: angle,
+      speed: speed,
+      size: size,
+      lifetime: lifetime,
+      decay: decay,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double angle;
+  double speed;
+  double size;
+  double lifetime;
+  double decay;
 
   double _time;
   double distance;
   double currentSize;
+
+  void _reset({
+    required double angle,
+    required double speed,
+    required double size,
+    required double lifetime,
+    required double decay,
+  }) {
+    this.angle = angle;
+    this.speed = speed;
+    this.size = size;
+    this.lifetime = lifetime;
+    this.decay = decay;
+    _time = 0;
+    distance = 0;
+    currentSize = size;
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    _pool.add(this);
+  }
 
   bool get isAlive => _time < lifetime;
   double get alphaValue => isAlive ? (1 - _time / lifetime) : 0;
@@ -990,24 +1175,61 @@ class _BurstParticle {
 
 /// Spiral particle for Layer 2
 class _SpiralParticle {
-  _SpiralParticle({
+  _SpiralParticle._internal({
     required this.startAngle,
     required this.startRadius,
     required this.rotationSpeed,
     required this.collapseSpeed,
     required this.size,
     required this.lifetime,
-  }) : _time = 0,
-       currentAngle = startAngle,
-       currentRadius = startRadius,
-       trailPositions = [];
+  })  : _time = 0,
+        currentAngle = startAngle,
+        currentRadius = startRadius,
+        trailPositions = [];
 
-  final double startAngle;
-  final double startRadius;
-  final double rotationSpeed;
-  final double collapseSpeed;
-  final double size;
-  final double lifetime;
+  static const int _maxPool = 180;
+  static final List<_SpiralParticle> _pool = [];
+
+  static _SpiralParticle obtain({
+    required double startAngle,
+    required double startRadius,
+    required double rotationSpeed,
+    required double collapseSpeed,
+    required double size,
+    required double lifetime,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        startAngle: startAngle,
+        startRadius: startRadius,
+        rotationSpeed: rotationSpeed,
+        collapseSpeed: collapseSpeed,
+        size: size,
+        lifetime: lifetime,
+      );
+      return item;
+    }
+    return _SpiralParticle._internal(
+      startAngle: startAngle,
+      startRadius: startRadius,
+      rotationSpeed: rotationSpeed,
+      collapseSpeed: collapseSpeed,
+      size: size,
+      lifetime: lifetime,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double startAngle;
+  double startRadius;
+  double rotationSpeed;
+  double collapseSpeed;
+  double size;
+  double lifetime;
 
   double _time;
   double currentAngle;
@@ -1018,6 +1240,32 @@ class _SpiralParticle {
 
   bool get isAlive => _time < lifetime && currentRadius > 0;
   double get alphaValue => isAlive ? (1 - _time / lifetime) : 0;
+
+  void _reset({
+    required double startAngle,
+    required double startRadius,
+    required double rotationSpeed,
+    required double collapseSpeed,
+    required double size,
+    required double lifetime,
+  }) {
+    this.startAngle = startAngle;
+    this.startRadius = startRadius;
+    this.rotationSpeed = rotationSpeed;
+    this.collapseSpeed = collapseSpeed;
+    this.size = size;
+    this.lifetime = lifetime;
+    _time = 0;
+    currentAngle = startAngle;
+    currentRadius = startRadius;
+    trailPositions.clear();
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    trailPositions.clear();
+    _pool.add(this);
+  }
 
   void update(double dt) {
     // Store previous position for trail
@@ -1037,17 +1285,65 @@ class _SpiralParticle {
 
 /// Energy ring for Layer 4
 class _EnergyRing {
-  _EnergyRing({
+  _EnergyRing._internal({
     required this.startDelay,
     required this.startRadius,
     required this.endRadius,
     required this.expandDuration,
   });
 
-  final double startDelay;
-  final double startRadius;
-  final double endRadius;
-  final double expandDuration;
+  static const int _maxPool = 80;
+  static final List<_EnergyRing> _pool = [];
+
+  static _EnergyRing obtain({
+    required double startDelay,
+    required double startRadius,
+    required double endRadius,
+    required double expandDuration,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        startDelay: startDelay,
+        startRadius: startRadius,
+        endRadius: endRadius,
+        expandDuration: expandDuration,
+      );
+      return item;
+    }
+    return _EnergyRing._internal(
+      startDelay: startDelay,
+      startRadius: startRadius,
+      endRadius: endRadius,
+      expandDuration: expandDuration,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double startDelay;
+  double startRadius;
+  double endRadius;
+  double expandDuration;
+
+  void _reset({
+    required double startDelay,
+    required double startRadius,
+    required double endRadius,
+    required double expandDuration,
+  }) {
+    this.startDelay = startDelay;
+    this.startRadius = startRadius;
+    this.endRadius = endRadius;
+    this.expandDuration = expandDuration;
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    _pool.add(this);
+  }
 
   bool isActive(double time) {
     return time >= startDelay && time < startDelay + expandDuration;
@@ -1070,7 +1366,7 @@ class _EnergyRing {
 
 /// Electric spark for Layer 5
 class _ElectricSpark {
-  _ElectricSpark({
+  _ElectricSpark._internal({
     required this.baseAngle,
     required this.length,
     required this.lifetime,
@@ -1079,14 +1375,73 @@ class _ElectricSpark {
     required this.hasBranches,
   }) : currentAngle = baseAngle;
 
-  final double baseAngle;
-  final double length;
-  final double lifetime;
-  final double startDelay;
-  final int segments;
-  final bool hasBranches;
+  static const int _maxPool = 120;
+  static final List<_ElectricSpark> _pool = [];
+
+  static _ElectricSpark obtain({
+    required double baseAngle,
+    required double length,
+    required double lifetime,
+    required double startDelay,
+    required int segments,
+    required bool hasBranches,
+  }) {
+    if (_pool.isNotEmpty) {
+      final item = _pool.removeLast();
+      item._reset(
+        baseAngle: baseAngle,
+        length: length,
+        lifetime: lifetime,
+        startDelay: startDelay,
+        segments: segments,
+        hasBranches: hasBranches,
+      );
+      return item;
+    }
+    return _ElectricSpark._internal(
+      baseAngle: baseAngle,
+      length: length,
+      lifetime: lifetime,
+      startDelay: startDelay,
+      segments: segments,
+      hasBranches: hasBranches,
+    );
+  }
+
+  static void clearPool() {
+    _pool.clear();
+  }
+
+  double baseAngle;
+  double length;
+  double lifetime;
+  double startDelay;
+  int segments;
+  bool hasBranches;
 
   double currentAngle;
+
+  void _reset({
+    required double baseAngle,
+    required double length,
+    required double lifetime,
+    required double startDelay,
+    required int segments,
+    required bool hasBranches,
+  }) {
+    this.baseAngle = baseAngle;
+    this.length = length;
+    this.lifetime = lifetime;
+    this.startDelay = startDelay;
+    this.segments = segments;
+    this.hasBranches = hasBranches;
+    currentAngle = baseAngle;
+  }
+
+  void recycle() {
+    if (_pool.length >= _maxPool) return;
+    _pool.add(this);
+  }
 
   bool isActive(double time) {
     return time >= startDelay && time < startDelay + lifetime;

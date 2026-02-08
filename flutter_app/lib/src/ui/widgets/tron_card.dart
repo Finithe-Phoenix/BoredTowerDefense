@@ -59,7 +59,14 @@ class _TronCardState extends State<TronCard>
 
   // Particle system
   final List<_CardParticle> _particles = [];
-  final math.Random _random = math.Random();
+  int _rngState = 0x6f2b79f5;
+  int _lcgNext() {
+    _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
+    return _rngState;
+  }
+  double _nextUnit() => _lcgNext() / 0x7fffffff;
+  int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
+  bool _nextBool() => (_lcgNext() & 1) == 0;
 
   // Electric arc system
   final List<_ElectricArc> _electricArcs = [];
@@ -70,6 +77,7 @@ class _TronCardState extends State<TronCard>
   // Glitch effect
   double _glitchOffset = 0;
   bool _glitchActive = false;
+  double _particleTime = 0;
 
   @override
   void initState() {
@@ -147,13 +155,13 @@ class _TronCardState extends State<TronCard>
   void _initializeParticles() {
     for (int i = 0; i < 30; i++) {
       _particles.add(_CardParticle(
-        x: _random.nextDouble(),
-        y: _random.nextDouble(),
-        vx: (_random.nextDouble() - 0.5) * 0.003,
-        vy: (_random.nextDouble() - 0.5) * 0.003,
-        size: _random.nextDouble() * 2 + 0.5,
-        opacity: _random.nextDouble() * 0.5 + 0.2,
-        type: _random.nextInt(3),
+        x: _nextUnit(),
+        y: _nextUnit(),
+        vx: (_nextUnit() - 0.5) * 0.003,
+        vy: (_nextUnit() - 0.5) * 0.003,
+        size: _nextUnit() * 2 + 0.5,
+        opacity: _nextUnit() * 0.5 + 0.2,
+        type: _nextInt(3),
       ));
     }
   }
@@ -161,17 +169,18 @@ class _TronCardState extends State<TronCard>
   void _initializeDataStreams() {
     for (int i = 0; i < 8; i++) {
       _dataStreams.add(_DataStream(
-        position: _random.nextDouble(),
-        speed: _random.nextDouble() * 0.02 + 0.01,
-        length: _random.nextDouble() * 0.15 + 0.05,
-        isVertical: _random.nextBool(),
-        side: _random.nextInt(4),
+        position: _nextUnit(),
+        speed: _nextUnit() * 0.02 + 0.01,
+        length: _nextUnit() * 0.15 + 0.05,
+        isVertical: _nextBool(),
+        side: _nextInt(4),
       ));
     }
   }
 
   void _updateParticles() {
     if (!mounted) return;
+    _particleTime += 0.016;
     for (final particle in _particles) {
       particle.x += particle.vx;
       particle.y += particle.vy;
@@ -183,7 +192,8 @@ class _TronCardState extends State<TronCard>
       if (particle.y > 1) particle.y = 0;
 
       // Pulsate opacity (centered at 0.35 with amplitude 0.25, range [0.1, 0.6])
-      particle.opacity = (0.35 + math.sin(DateTime.now().millisecondsSinceEpoch * 0.005 + particle.x * 10) * 0.25).clamp(0.0, 1.0);
+      particle.opacity = (0.35 + math.sin(_particleTime * 5 + particle.x * 10) * 0.25)
+          .clamp(0.0, 1.0);
     }
     setState(() {});
   }
@@ -192,12 +202,12 @@ class _TronCardState extends State<TronCard>
     if (!mounted || !_isHovered) return;
 
     // Randomly generate new arcs
-    if (_random.nextDouble() < 0.3) {
-      final side = _random.nextInt(4);
+    if (_nextUnit() < 0.3) {
+      final side = _nextInt(4);
       _electricArcs.add(_ElectricArc(
-        startPos: _random.nextDouble(),
+        startPos: _nextUnit(),
         side: side,
-        segments: List.generate(6, (_) => _random.nextDouble() * 0.04 - 0.02),
+        segments: List.generate(6, (_) => _nextUnit() * 0.04 - 0.02),
         life: 1.0,
       ));
     }
@@ -226,8 +236,8 @@ class _TronCardState extends State<TronCard>
   void _updateGlitch() {
     if (!mounted) return;
     if (_glitchActive) {
-      _glitchOffset = (_random.nextDouble() - 0.5) * 4;
-      if (_random.nextDouble() < 0.2) {
+      _glitchOffset = (_nextUnit() - 0.5) * 4;
+      if (_nextUnit() < 0.2) {
         _glitchActive = false;
         _glitchController.stop();
       }
@@ -236,10 +246,10 @@ class _TronCardState extends State<TronCard>
   }
 
   void _triggerGlitch() {
-    if (!_glitchActive && _random.nextDouble() < 0.1) {
+    if (!_glitchActive && _nextUnit() < 0.1) {
       _glitchActive = true;
       _glitchController.repeat();
-      Future.delayed(Duration(milliseconds: 50 + _random.nextInt(100)), () {
+      Future.delayed(Duration(milliseconds: 50 + _nextInt(100)), () {
         if (mounted) {
           _glitchActive = false;
           _glitchOffset = 0;
@@ -280,7 +290,7 @@ class _TronCardState extends State<TronCard>
     final secondaryColor = widget.secondaryColor ?? const Color(0xFFFF6600);
 
     // Occasionally trigger glitch
-    if (_isMaterialized && _random.nextDouble() < 0.002) {
+    if (_isMaterialized && _nextUnit() < 0.002) {
       _triggerGlitch();
     }
 
@@ -385,8 +395,108 @@ class _EpicTronCardPainter extends CustomPainter {
   final bool glitchActive;
   final double glitchOffset;
 
+  static final List<Paint> _outerGlowPaints = List<Paint>.generate(4, (index) {
+    final level = index + 1;
+    return Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4.0 * level
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 * level);
+  });
+  static final Paint _hoverGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 12
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+  static final Paint _wavePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _matrixPaint = Paint()
+    ..strokeWidth = 0.5
+    ..style = PaintingStyle.stroke;
+  static final Paint _holoBandPaint = Paint();
+  static final Map<int, ui.Shader> _holoBandShaderCache = {};
+  static final Paint _gridPaint = Paint()
+    ..strokeWidth = 0.5
+    ..style = PaintingStyle.stroke;
+  static final Paint _gridAccentPaint = Paint()
+    ..strokeWidth = 0.5
+    ..style = PaintingStyle.stroke;
+  static final Paint _gridNodePaint = Paint();
+  static final Paint _particleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _streamPaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _wireGlowPaint = Paint()
+    ..strokeWidth = 2
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _wireLinePaint = Paint()
+    ..strokeWidth = 1;
+  static final Paint _wirePointPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _innerBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _mainBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _outerBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _arcGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _arcCorePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..strokeCap = StrokeCap.round;
+  static final Paint _pulseGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _pulseCorePaint = Paint();
+  static final Paint _cornerBracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _cornerInnerBracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _cornerOuterGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+  static final Paint _cornerMidGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _cornerInnerGlowPaint = Paint();
+  static final Paint _cornerDimPaint = Paint();
+  static final Paint _scanlinePaint = Paint();
+  static final Paint _scanlineGradientPaint = Paint();
+  static final Map<int, ui.Shader> _scanlineShaderCache = {};
+  static final Path _scanlinePath = Path();
+  static Size? _scanlineSize;
+  static final Paint _chromaticRedPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..blendMode = BlendMode.screen;
+  static final Paint _chromaticBluePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..blendMode = BlendMode.screen;
+  static final Paint _connectorPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _connectorGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _connectorCorePaint = Paint();
+
+  final Path _hexPath = Path();
+  final Path _arcPath = Path();
+  static final Map<int, ui.Shader> _streamShaderCache = {};
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rrect = RRect.fromRectAndRadius(rect, Radius.circular(borderRadius));
 
@@ -452,22 +562,16 @@ class _EpicTronCardPainter extends CustomPainter {
 
     // Multiple glow layers
     for (int i = 4; i >= 1; i--) {
-      final glowPaint = Paint()
-        ..color = primaryColor.withOpacity(glowProgress * glowIntensity * 0.08 * (5 - i) / 4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 4.0 * i
-        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 4.0 * i);
+      final glowPaint = _outerGlowPaints[i - 1];
+      glowPaint.color =
+          primaryColor.withOpacity(glowProgress * glowIntensity * 0.08 * (5 - i) / 4);
       canvas.drawRRect(rrect, glowPaint);
     }
 
     // Secondary color glow when hovered
     if (isHovered) {
-      final hoverGlowPaint = Paint()
-        ..color = secondaryColor.withOpacity(glowProgress * hoverValue * 0.15)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 12
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
-      canvas.drawRRect(rrect, hoverGlowPaint);
+      _hoverGlowPaint.color = secondaryColor.withOpacity(glowProgress * hoverValue * 0.15);
+      canvas.drawRRect(rrect, _hoverGlowPaint);
     }
   }
 
@@ -485,13 +589,9 @@ class _EpicTronCardPainter extends CustomPainter {
       final waveOffset = (time + i * math.pi / 2) % (math.pi * 2);
       final waveRadius = (waveOffset / (math.pi * 2)) * maxRadius;
 
-      final wavePaint = Paint()
-        ..color = primaryColor.withOpacity(fieldProgress * 0.03 * (1 - waveOffset / (math.pi * 2)))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-
-      canvas.drawCircle(center, waveRadius, wavePaint);
+      _wavePaint.color =
+          primaryColor.withOpacity(fieldProgress * 0.03 * (1 - waveOffset / (math.pi * 2)));
+      canvas.drawCircle(center, waveRadius, _wavePaint);
     }
   }
 
@@ -501,10 +601,7 @@ class _EpicTronCardPainter extends CustomPainter {
     final matrixProgress = ((progress - 0.6) / 0.4).clamp(0.0, 1.0);
     final padding = 15.0;
 
-    final matrixPaint = Paint()
-      ..color = primaryColor.withOpacity(matrixProgress * 0.04)
-      ..strokeWidth = 0.5
-      ..style = PaintingStyle.stroke;
+    _matrixPaint.color = primaryColor.withOpacity(matrixProgress * 0.04);
 
     // Hexagonal grid pattern
     final hexSize = 20.0;
@@ -513,13 +610,13 @@ class _EpicTronCardPainter extends CustomPainter {
     for (double y = padding; y < size.height - padding; y += hexHeight * 0.75) {
       for (double x = padding; x < size.width - padding; x += hexSize * 1.5) {
         final offsetX = ((y ~/ (hexHeight * 0.75)) % 2 == 0) ? 0.0 : hexSize * 0.75;
-        _drawHexagon(canvas, Offset(x + offsetX, y), hexSize * 0.4, matrixPaint);
+        _drawHexagon(canvas, Offset(x + offsetX, y), hexSize * 0.4, _matrixPaint);
       }
     }
   }
 
   void _drawHexagon(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path();
+    _hexPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = (i * 60 - 30) * math.pi / 180;
       final point = Offset(
@@ -527,44 +624,55 @@ class _EpicTronCardPainter extends CustomPainter {
         center.dy + radius * math.sin(angle),
       );
       if (i == 0) {
-        path.moveTo(point.dx, point.dy);
+        _hexPath.moveTo(point.dx, point.dy);
       } else {
-        path.lineTo(point.dx, point.dy);
+        _hexPath.lineTo(point.dx, point.dy);
       }
     }
-    path.close();
-    canvas.drawPath(path, paint);
+    _hexPath.close();
+    canvas.drawPath(_hexPath, paint);
   }
 
   void _drawHolographicInterference(Canvas canvas, Size size) {
     if (progress < 0.7 || !isHovered) return;
 
     final holoProgress = ((progress - 0.7) / 0.3).clamp(0.0, 1.0) * hoverValue;
+    if (holoProgress <= 0.01) return;
     final time = pulseValue * math.pi * 2;
 
     // Interference bands
     for (int i = 0; i < 12; i++) {
       final bandY = (time * 0.5 + i * size.height / 12) % size.height;
       final bandOpacity = math.sin((bandY / size.height) * math.pi) * holoProgress * 0.08;
+      if (bandOpacity <= 0.002) continue;
 
-      final bandPaint = Paint()
-        ..shader = ui.Gradient.linear(
-          Offset(0, bandY),
-          Offset(size.width, bandY),
+      final intensityKey = (bandOpacity * 64).round().clamp(0, 64);
+      final key = Object.hash(size.width.round(), primaryColor.value, secondaryColor.value, intensityKey);
+      final shader = _holoBandShaderCache.putIfAbsent(key, () {
+        if (_holoBandShaderCache.length > 64) {
+          _holoBandShaderCache.clear();
+        }
+        final quantOpacity = intensityKey / 64.0;
+        return ui.Gradient.linear(
+          const Offset(0, 0),
+          Offset(size.width, 0),
           [
             primaryColor.withOpacity(0),
-            primaryColor.withOpacity(bandOpacity),
-            secondaryColor.withOpacity(bandOpacity),
+            primaryColor.withOpacity(quantOpacity),
+            secondaryColor.withOpacity(quantOpacity),
             primaryColor.withOpacity(0),
           ],
           [0.0, 0.3, 0.7, 1.0],
         );
+      });
+      _holoBandPaint.shader = shader;
 
       canvas.drawRect(
         Rect.fromLTWH(0, bandY - 2, size.width, 4),
-        bandPaint,
+        _holoBandPaint,
       );
     }
+    _holoBandPaint.shader = null;
   }
 
   void _drawPowerGrid(Canvas canvas, Size size) {
@@ -574,22 +682,15 @@ class _EpicTronCardPainter extends CustomPainter {
     final time = pulseValue * math.pi * 2;
     final padding = 10.0;
 
-    final gridPaint = Paint()
-      ..color = primaryColor.withOpacity(gridProgress * 0.06)
-      ..strokeWidth = 0.5
-      ..style = PaintingStyle.stroke;
-
-    final accentPaint = Paint()
-      ..color = secondaryColor.withOpacity(gridProgress * 0.08)
-      ..strokeWidth = 0.5
-      ..style = PaintingStyle.stroke;
+    _gridPaint.color = primaryColor.withOpacity(gridProgress * 0.06);
+    _gridAccentPaint.color = secondaryColor.withOpacity(gridProgress * 0.08);
 
     // Vertical lines
     final vSpacing = (size.width - padding * 2) / 8;
     for (int i = 0; i <= 8; i++) {
       final x = padding + i * vSpacing;
       final brightness = math.sin(time + i * 0.5) * 0.5 + 0.5;
-      final paint = brightness > 0.7 ? accentPaint : gridPaint;
+      final paint = brightness > 0.7 ? _gridAccentPaint : _gridPaint;
       canvas.drawLine(Offset(x, padding), Offset(x, size.height - padding), paint);
     }
 
@@ -598,13 +699,12 @@ class _EpicTronCardPainter extends CustomPainter {
     for (int i = 0; i <= 6; i++) {
       final y = padding + i * hSpacing;
       final brightness = math.sin(time + i * 0.7) * 0.5 + 0.5;
-      final paint = brightness > 0.7 ? accentPaint : gridPaint;
+      final paint = brightness > 0.7 ? _gridAccentPaint : _gridPaint;
       canvas.drawLine(Offset(padding, y), Offset(size.width - padding, y), paint);
     }
 
     // Grid intersection nodes
-    final nodePaint = Paint()
-      ..color = primaryColor.withOpacity(gridProgress * 0.15);
+    _gridNodePaint.color = primaryColor.withOpacity(gridProgress * 0.15);
 
     for (int i = 0; i <= 8; i++) {
       for (int j = 0; j <= 6; j++) {
@@ -612,7 +712,7 @@ class _EpicTronCardPainter extends CustomPainter {
         final y = padding + j * hSpacing;
         final nodePhase = math.sin(time * 2 + i + j);
         if (nodePhase > 0.5) {
-          canvas.drawCircle(Offset(x, y), 1.5, nodePaint);
+          canvas.drawCircle(Offset(x, y), 1.5, _gridNodePaint);
         }
       }
     }
@@ -622,6 +722,7 @@ class _EpicTronCardPainter extends CustomPainter {
     if (progress < 0.7) return;
 
     final particleProgress = ((progress - 0.7) / 0.3).clamp(0.0, 1.0);
+    if (particleProgress <= 0.01) return;
 
     for (final particle in particles) {
       final x = particle.x * size.width;
@@ -643,16 +744,16 @@ class _EpicTronCardPainter extends CustomPainter {
       canvas.drawCircle(
         Offset(x, y),
         particle.size * 2,
-        Paint()
-          ..color = particleColor.withOpacity(particle.opacity * particleProgress * 0.3)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3),
+        _particleGlowPaint
+          ..color = particleColor.withOpacity(particle.opacity * particleProgress * 0.3),
       );
 
       // Particle core
       canvas.drawCircle(
         Offset(x, y),
         particle.size,
-        Paint()..color = particleColor.withOpacity(particle.opacity * particleProgress),
+        _particleCorePaint
+          ..color = particleColor.withOpacity(particle.opacity * particleProgress),
       );
     }
   }
@@ -661,6 +762,8 @@ class _EpicTronCardPainter extends CustomPainter {
     if (progress < 0.8) return;
 
     final streamProgress = ((progress - 0.8) / 0.2).clamp(0.0, 1.0);
+    if (streamProgress <= 0.01) return;
+    final streamLevel = (streamProgress * 64).round().clamp(0, 64);
 
     for (final stream in dataStreams) {
       Offset start, end;
@@ -683,22 +786,42 @@ class _EpicTronCardPainter extends CustomPainter {
           end = Offset(5, (stream.position + stream.length) * size.height);
       }
 
-      final streamPaint = Paint()
-        ..shader = ui.Gradient.linear(
-          start,
-          end,
+      final lenKey = (stream.length * 1000).round();
+      final key = Object.hash(lenKey, stream.side, primaryColor.value, streamLevel);
+      final shader = _streamShaderCache.putIfAbsent(key, () {
+        if (_streamShaderCache.length > 128) {
+          _streamShaderCache.clear();
+        }
+        final quant = streamLevel / 64.0;
+        final length = stream.length * (stream.isVertical ? size.height : size.width);
+        return ui.Gradient.linear(
+          const Offset(0, 0),
+          Offset(length, 0),
           [
             primaryColor.withOpacity(0),
-            primaryColor.withOpacity(streamProgress * 0.6),
-            Colors.white.withOpacity(streamProgress * 0.8),
+            primaryColor.withOpacity(quant * 0.6),
+            Colors.white.withOpacity(quant * 0.8),
           ],
           [0.0, 0.5, 1.0],
-        )
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-
-      canvas.drawLine(start, end, streamPaint);
+        );
+      });
+      _streamPaint.shader = shader;
+      canvas.save();
+      canvas.translate(start.dx, start.dy);
+      final length = stream.side == 0 || stream.side == 2
+          ? stream.length * size.width
+          : stream.length * size.height;
+      final dir = stream.side == 1 || stream.side == 3;
+      if (dir) {
+        canvas.rotate(math.pi / 2);
+      }
+      canvas.drawLine(
+        Offset.zero,
+        Offset(length, 0),
+        _streamPaint,
+      );
+      canvas.restore();
+      _streamPaint.shader = null;
     }
   }
 
@@ -732,21 +855,17 @@ class _EpicTronCardPainter extends CustomPainter {
         final currentEnd = Offset.lerp(line.start, line.end, lineProgress)!;
 
         // Glow
-        canvas.drawLine(line.start, currentEnd, Paint()
-          ..color = primaryColor.withOpacity(0.2 * wireframeFade)
-          ..strokeWidth = 2
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+        _wireGlowPaint.color = primaryColor.withOpacity(0.2 * wireframeFade);
+        canvas.drawLine(line.start, currentEnd, _wireGlowPaint);
 
         // Line
-        canvas.drawLine(line.start, currentEnd, Paint()
-          ..color = primaryColor.withOpacity(0.5 * wireframeFade)
-          ..strokeWidth = 1);
+        _wireLinePaint.color = primaryColor.withOpacity(0.5 * wireframeFade);
+        canvas.drawLine(line.start, currentEnd, _wireLinePaint);
 
         // Trail point
         if (lineProgress > 0 && lineProgress < 1) {
-          canvas.drawCircle(currentEnd, 3, Paint()
-            ..color = Colors.white.withOpacity(wireframeFade)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2));
+          _wirePointPaint.color = Colors.white.withOpacity(wireframeFade);
+          canvas.drawCircle(currentEnd, 3, _wirePointPaint);
         }
       }
     }
@@ -759,24 +878,21 @@ class _EpicTronCardPainter extends CustomPainter {
     final pulseIntensity = isHovered ? 1.0 : (0.5 + math.sin(pulseValue * math.pi * 2) * 0.3);
 
     // Inner subtle border
-    canvas.drawRRect(rrect.deflate(2), Paint()
-      ..color = primaryColor.withOpacity(borderProgress * 0.15 * pulseIntensity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1);
+    _innerBorderPaint.color =
+        primaryColor.withOpacity(borderProgress * 0.15 * pulseIntensity);
+    canvas.drawRRect(rrect.deflate(2), _innerBorderPaint);
 
     // Main border
-    canvas.drawRRect(rrect, Paint()
-      ..color = primaryColor.withOpacity(borderProgress * (isHovered ? 0.9 : 0.6) * pulseIntensity)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = isHovered ? 2.5 : 1.5);
+    _mainBorderPaint
+      ..color = primaryColor.withOpacity(
+          borderProgress * (isHovered ? 0.9 : 0.6) * pulseIntensity)
+      ..strokeWidth = isHovered ? 2.5 : 1.5;
+    canvas.drawRRect(rrect, _mainBorderPaint);
 
     // Outer energy border
     if (isHovered) {
-      canvas.drawRRect(rrect.inflate(2), Paint()
-        ..color = secondaryColor.withOpacity(borderProgress * hoverValue * 0.4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3));
+      _outerBorderPaint.color = secondaryColor.withOpacity(borderProgress * hoverValue * 0.4);
+      canvas.drawRRect(rrect.inflate(2), _outerBorderPaint);
     }
   }
 
@@ -807,7 +923,9 @@ class _EpicTronCardPainter extends CustomPainter {
           isHorizontal = true;
       }
 
-      final path = Path()..moveTo(start.dx, start.dy);
+      _arcPath
+        ..reset()
+        ..moveTo(start.dx, start.dy);
       Offset current = start;
 
       final direction = arc.side == 1 ? -1.0 : (arc.side == 3 ? 1.0 : (arc.side == 0 ? 1.0 : -1.0));
@@ -825,22 +943,16 @@ class _EpicTronCardPainter extends CustomPainter {
             current.dy + direction * segmentLength,
           );
         }
-        path.lineTo(current.dx, current.dy);
+        _arcPath.lineTo(current.dx, current.dy);
       }
 
       // Arc glow
-      canvas.drawPath(path, Paint()
-        ..color = primaryColor.withOpacity(arcOpacity * 0.5)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      _arcGlowPaint.color = primaryColor.withOpacity(arcOpacity * 0.5);
+      canvas.drawPath(_arcPath, _arcGlowPaint);
 
       // Arc core
-      canvas.drawPath(path, Paint()
-        ..color = Colors.white.withOpacity(arcOpacity * 0.8)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1
-        ..strokeCap = StrokeCap.round);
+      _arcCorePaint.color = Colors.white.withOpacity(arcOpacity * 0.8);
+      canvas.drawPath(_arcPath, _arcCorePaint);
     }
   }
 
@@ -867,13 +979,13 @@ class _EpicTronCardPainter extends CustomPainter {
       }
 
       // Pulse glow
-      canvas.drawCircle(position, 8, Paint()
-        ..color = (i % 2 == 0 ? primaryColor : secondaryColor).withOpacity(pulseProgress * 0.4)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+      _pulseGlowPaint.color =
+          (i % 2 == 0 ? primaryColor : secondaryColor).withOpacity(pulseProgress * 0.4);
+      canvas.drawCircle(position, 8, _pulseGlowPaint);
 
       // Pulse core
-      canvas.drawCircle(position, 3, Paint()
-        ..color = Colors.white.withOpacity(pulseProgress * 0.9));
+      _pulseCorePaint.color = Colors.white.withOpacity(pulseProgress * 0.9);
+      canvas.drawCircle(position, 3, _pulseCorePaint);
     }
   }
 
@@ -897,10 +1009,8 @@ class _EpicTronCardPainter extends CustomPainter {
       final isActive = isHovered || (pulseIntensity > 0.7 && i % 2 == (pulseValue * 4).floor() % 2);
 
       // Corner brackets
-      final bracketPaint = Paint()
-        ..color = primaryColor.withOpacity(cornerProgress * (isHovered ? 0.9 : 0.6))
-        ..strokeWidth = 2
-        ..style = PaintingStyle.stroke;
+      _cornerBracketPaint.color =
+          primaryColor.withOpacity(cornerProgress * (isHovered ? 0.9 : 0.6));
 
       final xDir = (i % 2 == 0) ? 1.0 : -1.0;
       final yDir = (i < 2) ? 1.0 : -1.0;
@@ -909,50 +1019,47 @@ class _EpicTronCardPainter extends CustomPainter {
       canvas.drawLine(
         corner,
         Offset(corner.dx + cornerSize * xDir * cornerProgress, corner.dy),
-        bracketPaint,
+        _cornerBracketPaint,
       );
       canvas.drawLine(
         corner,
         Offset(corner.dx, corner.dy + cornerSize * yDir * cornerProgress),
-        bracketPaint,
+        _cornerBracketPaint,
       );
 
       // Inner bracket
-      final innerBracketPaint = Paint()
-        ..color = secondaryColor.withOpacity(cornerProgress * 0.4 * pulseIntensity)
-        ..strokeWidth = 1
-        ..style = PaintingStyle.stroke;
+      _cornerInnerBracketPaint.color =
+          secondaryColor.withOpacity(cornerProgress * 0.4 * pulseIntensity);
 
       canvas.drawLine(
         Offset(corner.dx + 3 * xDir, corner.dy + 3 * yDir),
         Offset(corner.dx + (cornerSize - 5) * xDir * cornerProgress, corner.dy + 3 * yDir),
-        innerBracketPaint,
+        _cornerInnerBracketPaint,
       );
       canvas.drawLine(
         Offset(corner.dx + 3 * xDir, corner.dy + 3 * yDir),
         Offset(corner.dx + 3 * xDir, corner.dy + (cornerSize - 5) * yDir * cornerProgress),
-        innerBracketPaint,
+        _cornerInnerBracketPaint,
       );
 
       // Power node
       if (isActive) {
         // Outer glow
-        canvas.drawCircle(corner, 8 * cornerProgress, Paint()
-          ..color = primaryColor.withOpacity(cornerProgress * 0.3 * pulseIntensity)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8));
+        _cornerOuterGlowPaint.color =
+            primaryColor.withOpacity(cornerProgress * 0.3 * pulseIntensity);
+        canvas.drawCircle(corner, 8 * cornerProgress, _cornerOuterGlowPaint);
 
         // Middle glow
-        canvas.drawCircle(corner, 5 * cornerProgress, Paint()
-          ..color = primaryColor.withOpacity(cornerProgress * 0.5)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+        _cornerMidGlowPaint.color = primaryColor.withOpacity(cornerProgress * 0.5);
+        canvas.drawCircle(corner, 5 * cornerProgress, _cornerMidGlowPaint);
 
         // Inner glow
-        canvas.drawCircle(corner, 3 * cornerProgress, Paint()
-          ..color = Colors.white.withOpacity(cornerProgress * 0.7));
+        _cornerInnerGlowPaint.color = Colors.white.withOpacity(cornerProgress * 0.7);
+        canvas.drawCircle(corner, 3 * cornerProgress, _cornerInnerGlowPaint);
       } else {
         // Dim node
-        canvas.drawCircle(corner, 2 * cornerProgress, Paint()
-          ..color = primaryColor.withOpacity(cornerProgress * 0.4));
+        _cornerDimPaint.color = primaryColor.withOpacity(cornerProgress * 0.4);
+        canvas.drawCircle(corner, 2 * cornerProgress, _cornerDimPaint);
       }
     }
   }
@@ -961,36 +1068,51 @@ class _EpicTronCardPainter extends CustomPainter {
     if (progress < 0.8) return;
 
     final scanProgress = ((progress - 0.8) / 0.2).clamp(0.0, 1.0);
+    if (scanProgress <= 0.01) return;
 
     canvas.save();
     canvas.clipRRect(rrect);
 
     // Subtle horizontal scanlines
-    for (double y = 0; y < size.height; y += 4) {
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        Paint()..color = Colors.black.withOpacity(scanProgress * 0.03),
-      );
+    _scanlinePaint.color = Colors.black.withOpacity(scanProgress * 0.03);
+    if (_scanlineSize != size) {
+      _scanlineSize = size;
+      _scanlinePath.reset();
+      for (double y = 0; y < size.height; y += 4) {
+        _scanlinePath
+          ..moveTo(0, y)
+          ..lineTo(size.width, y);
+      }
     }
+    canvas.drawPath(_scanlinePath, _scanlinePaint);
 
     // Moving scan line
     final scanY = (pulseValue * size.height * 2) % (size.height * 2);
     if (scanY < size.height) {
+      final intensityKey = (scanProgress * 64).round().clamp(0, 64);
+      final key = Object.hash(size.width.round(), primaryColor.value, intensityKey);
+      final shader = _scanlineShaderCache.putIfAbsent(key, () {
+        if (_scanlineShaderCache.length > 64) {
+          _scanlineShaderCache.clear();
+        }
+        final quant = intensityKey / 64.0;
+        return ui.Gradient.linear(
+          const Offset(0, 0),
+          Offset(size.width, 0),
+          [
+            primaryColor.withOpacity(0),
+            primaryColor.withOpacity(quant * 0.15),
+            primaryColor.withOpacity(0),
+          ],
+          [0.0, 0.5, 1.0],
+        );
+      });
+      _scanlineGradientPaint.shader = shader;
       canvas.drawRect(
         Rect.fromLTWH(0, scanY, size.width, 2),
-        Paint()
-          ..shader = ui.Gradient.linear(
-            Offset(0, scanY),
-            Offset(size.width, scanY),
-            [
-              primaryColor.withOpacity(0),
-              primaryColor.withOpacity(scanProgress * 0.15),
-              primaryColor.withOpacity(0),
-            ],
-            [0.0, 0.5, 1.0],
-          ),
+        _scanlineGradientPaint,
       );
+      _scanlineGradientPaint.shader = null;
     }
 
     canvas.restore();
@@ -998,18 +1120,12 @@ class _EpicTronCardPainter extends CustomPainter {
 
   void _drawChromaticAberration(Canvas canvas, RRect rrect, Size size) {
     // Red channel offset
-    canvas.drawRRect(rrect.shift(Offset(-glitchOffset * 0.5, 0)), Paint()
-      ..color = Colors.red.withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..blendMode = BlendMode.screen);
+    _chromaticRedPaint.color = Colors.red.withOpacity(0.1);
+    canvas.drawRRect(rrect.shift(Offset(-glitchOffset * 0.5, 0)), _chromaticRedPaint);
 
     // Blue channel offset
-    canvas.drawRRect(rrect.shift(Offset(glitchOffset * 0.5, 0)), Paint()
-      ..color = Colors.blue.withOpacity(0.1)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..blendMode = BlendMode.screen);
+    _chromaticBluePaint.color = Colors.blue.withOpacity(0.1);
+    canvas.drawRRect(rrect.shift(Offset(glitchOffset * 0.5, 0)), _chromaticBluePaint);
   }
 
   void _drawEnergyConnectors(Canvas canvas, Size size) {
@@ -1025,22 +1141,17 @@ class _EpicTronCardPainter extends CustomPainter {
     ];
 
     // Diagonal connections
-    final connectionPaint = Paint()
-      ..color = secondaryColor.withOpacity(connectorProgress * 0.2)
-      ..strokeWidth = 1
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    _connectorPaint.color = secondaryColor.withOpacity(connectorProgress * 0.2);
 
-    canvas.drawLine(corners[0], corners[3], connectionPaint);
-    canvas.drawLine(corners[1], corners[2], connectionPaint);
+    canvas.drawLine(corners[0], corners[3], _connectorPaint);
+    canvas.drawLine(corners[1], corners[2], _connectorPaint);
 
     // Center node
     final center = Offset(size.width / 2, size.height / 2);
-    canvas.drawCircle(center, 4, Paint()
-      ..color = secondaryColor.withOpacity(connectorProgress * 0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
-    canvas.drawCircle(center, 2, Paint()
-      ..color = Colors.white.withOpacity(connectorProgress * 0.5));
+    _connectorGlowPaint.color = secondaryColor.withOpacity(connectorProgress * 0.3);
+    canvas.drawCircle(center, 4, _connectorGlowPaint);
+    _connectorCorePaint.color = Colors.white.withOpacity(connectorProgress * 0.5);
+    canvas.drawCircle(center, 2, _connectorCorePaint);
   }
 
   @override

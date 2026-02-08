@@ -451,6 +451,83 @@ class _EpicLevelCardPainter extends CustomPainter {
   // Secondary color (orange for TRON effect)
   Color get secondaryColor => const Color(0xFFFF6600);
 
+  static final Paint _outerGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+  static final Paint _ringPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+  static final Paint _innerGlowPaint = Paint();
+  static final Paint _segmentPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _starGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _starPaint = Paint();
+  static final Paint _starOutlinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Path _starPath = Path();
+  final Path _hexPath = Path();
+
+  static final Paint _wireGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _wireLinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+  static final Paint _wireTrailPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2.5
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _wirePointPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _particleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _particleCorePaint = Paint();
+  static final Paint _bgPaint = Paint();
+  static final Paint _bgGlowPaint = Paint();
+  static final Paint _hexGridPaint = Paint()
+    ..strokeWidth = 0.5
+    ..style = PaintingStyle.stroke;
+  static final Paint _borderGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 5
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _borderPaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _bracketPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeCap = StrokeCap.round
+    ..strokeWidth = 2;
+  static final Paint _bracketDotPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _lockOverlayPaint = Paint();
+  static final Paint _lockBodyPaint = Paint()..style = PaintingStyle.fill;
+  static final Paint _lockShacklePaint = Paint()..style = PaintingStyle.stroke;
+  static final Paint _lockKeyholePaint = Paint();
+  static final Paint _badgeGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
+  static final Paint _badgeBgPaint = Paint();
+  static final Paint _badgeCheckPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
+  static final Paint _scanPaint = Paint();
+  static final Map<int, Shader> _wireTrailShaders = {};
+  static final Map<int, Shader> _bgGlowShaders = {};
+  static final Map<int, Shader> _coreGlowShaders = {};
+  static final Map<int, Shader> _scanlineShaders = {};
+
+  static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
+  static double _lcgUnit(int state) => state / 0x7fffffff;
+  TextPainter? _levelNumberPainter;
+  String _levelNumberText = '';
+  int _levelNumberColorValue = 0;
+  double _levelNumberFontSize = 0;
+  final Path _badgeCheckPath = Path();
+
   @override
   void paint(Canvas canvas, Size size) {
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
@@ -553,19 +630,16 @@ class _EpicLevelCardPainter extends CustomPainter {
         final currentEnd = Offset.lerp(line.start, line.end, lineProgress)!;
 
         // Glow effect
-        final glowPaint = Paint()
+        _wireGlowPaint
           ..color = primaryColor.withOpacity(0.3 * wireframeFade)
-          ..strokeWidth = 3
-          ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-        canvas.drawLine(line.start, currentEnd, glowPaint);
+          ..strokeWidth = 3;
+        canvas.drawLine(line.start, currentEnd, _wireGlowPaint);
 
         // Main line
-        final linePaint = Paint()
+        _wireLinePaint
           ..color = primaryColor.withOpacity(0.7 * wireframeFade)
-          ..strokeWidth = 1.2
-          ..style = PaintingStyle.stroke;
-        canvas.drawLine(line.start, currentEnd, linePaint);
+          ..strokeWidth = 1.2;
+        canvas.drawLine(line.start, currentEnd, _wireLinePaint);
 
         // Light trail at the construction point
         if (lineProgress > 0 && lineProgress < 1) {
@@ -573,26 +647,36 @@ class _EpicLevelCardPainter extends CustomPainter {
           final trailStart = math.max(0.0, lineProgress - trailLength);
           final trailStartPoint = Offset.lerp(line.start, line.end, trailStart)!;
 
-          final trailPaint = Paint()
-            ..shader = LinearGradient(
-              colors: [
-                secondaryColor.withOpacity(0),
-                secondaryColor.withOpacity(0.8),
-                Colors.white,
-              ],
-              stops: const [0.0, 0.6, 1.0],
-            ).createShader(Rect.fromPoints(trailStartPoint, currentEnd))
-            ..strokeWidth = 2.5
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-          canvas.drawLine(trailStartPoint, currentEnd, trailPaint);
+          final dx = currentEnd.dx - trailStartPoint.dx;
+          final dy = currentEnd.dy - trailStartPoint.dy;
+          final length = math.sqrt(dx * dx + dy * dy);
+          if (length > 0.01) {
+            final lenKey = length.round();
+            final shaderKey = (lenKey << 16) ^ secondaryColor.value;
+            final shader = _wireTrailShaders.putIfAbsent(shaderKey, () {
+              final w = lenKey.toDouble();
+              return LinearGradient(
+                colors: [
+                  secondaryColor.withOpacity(0),
+                  secondaryColor.withOpacity(0.8),
+                  Colors.white,
+                ],
+                stops: const [0.0, 0.6, 1.0],
+              ).createShader(Rect.fromLTWH(0, 0, w, 1));
+            });
+            _wireTrailPaint
+              ..shader = shader
+              ..strokeWidth = 2.5;
+            canvas.save();
+            canvas.translate(trailStartPoint.dx, trailStartPoint.dy);
+            canvas.rotate(math.atan2(dy, dx));
+            canvas.drawLine(Offset.zero, Offset(length, 0), _wireTrailPaint);
+            canvas.restore();
+          }
 
           // Bright point at the front
-          final pointPaint = Paint()
-            ..color = Colors.white
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-          canvas.drawCircle(currentEnd, 2.5, pointPaint);
+          _wirePointPaint.color = Colors.white;
+          canvas.drawCircle(currentEnd, 2.5, _wirePointPaint);
         }
       }
     }
@@ -601,19 +685,22 @@ class _EpicLevelCardPainter extends CustomPainter {
   void _drawParticles(Canvas canvas, Size size, Offset center) {
     if (progress < 0.1 || progress > 0.7) return;
 
-    final random = math.Random(42);
+    var state = 42;
     final particleProgress = ((progress - 0.1) / 0.5).clamp(0.0, 1.0);
 
     for (int i = 0; i < 6; i++) {
-      final spawnTime = random.nextDouble() * 0.4;
+      state = _lcgNext(state);
+      final spawnTime = _lcgUnit(state) * 0.4;
       if (particleProgress < spawnTime) continue;
 
       final age = particleProgress - spawnTime;
       if (age > 0.35) continue;
 
       final alpha = (1.0 - age / 0.35).clamp(0.0, 1.0);
-      final angle = random.nextDouble() * math.pi * 2;
-      final distance = random.nextDouble() * size.width * 0.35 * (1 + age);
+      state = _lcgNext(state);
+      final angle = _lcgUnit(state) * math.pi * 2;
+      state = _lcgNext(state);
+      final distance = _lcgUnit(state) * size.width * 0.35 * (1 + age);
 
       final pos = Offset(
         center.dx + math.cos(angle) * distance,
@@ -621,34 +708,38 @@ class _EpicLevelCardPainter extends CustomPainter {
       );
 
       // Glow
-      final glowPaint = Paint()
-        ..color = secondaryColor.withOpacity(alpha * 0.5)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-      canvas.drawCircle(pos, 3, glowPaint);
+      _particleGlowPaint.color = secondaryColor.withOpacity(alpha * 0.5);
+      canvas.drawCircle(pos, 3, _particleGlowPaint);
 
       // Core
-      final corePaint = Paint()
-        ..color = Colors.white.withOpacity(alpha * 0.9);
-      canvas.drawCircle(pos, 1.5, corePaint);
+      _particleCorePaint.color = Colors.white.withOpacity(alpha * 0.9);
+      canvas.drawCircle(pos, 1.5, _particleCorePaint);
     }
   }
 
   void _drawBackground(Canvas canvas, RRect rrect) {
     final bgFade = ((progress - 0.3) / 0.3).clamp(0.0, 1.0);
-    final bgPaint = Paint()
-      ..color = Colors.black.withOpacity(0.85 * bgFade);
-    canvas.drawRRect(rrect, bgPaint);
+    _bgPaint.color = Colors.black.withOpacity(0.85 * bgFade);
+    canvas.drawRRect(rrect, _bgPaint);
 
     // Inner glow
     if (!isLocked && progress > 0.5) {
-      final glowPaint = Paint()
-        ..shader = RadialGradient(
+      final opacityStep = (bgFade * 60).round();
+      final key = (rrect.outerRect.width.round() << 32) ^
+          (rrect.outerRect.height.round() << 16) ^
+          (opacityStep << 8) ^
+          primaryColor.value;
+      final shader = _bgGlowShaders.putIfAbsent(key, () {
+        final scalar = opacityStep / 60.0;
+        return RadialGradient(
           colors: [
-            primaryColor.withOpacity(0.12 * bgFade),
+            primaryColor.withOpacity(0.12 * scalar),
             Colors.transparent,
           ],
         ).createShader(rrect.outerRect);
-      canvas.drawRRect(rrect, glowPaint);
+      });
+      _bgGlowPaint.shader = shader;
+      canvas.drawRRect(rrect, _bgGlowPaint);
     }
   }
 
@@ -656,7 +747,7 @@ class _EpicLevelCardPainter extends CustomPainter {
     final fadeIn = ((progress - 0.4) / 0.3).clamp(0.0, 1.0);
     final opacity = fadeIn * 0.08 * (isHovered ? 1.5 : 1.0);
 
-    final paint = Paint()
+    _hexGridPaint
       ..color = primaryColor.withOpacity(opacity)
       ..strokeWidth = 0.5
       ..style = PaintingStyle.stroke;
@@ -671,26 +762,26 @@ class _EpicLevelCardPainter extends CustomPainter {
         final offsetY = row * hexSize * 1.5;
 
         if (offsetX < size.width && offsetY < size.height) {
-          _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.35, paint);
+          _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.35, _hexGridPaint);
         }
       }
     }
   }
 
   void _drawHexagon(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path();
+    _hexPath.reset();
     for (int i = 0; i < 6; i++) {
       final angle = (i * 60 - 30) * math.pi / 180;
       final x = center.dx + radius * math.cos(angle);
       final y = center.dy + radius * math.sin(angle);
       if (i == 0) {
-        path.moveTo(x, y);
+        _hexPath.moveTo(x, y);
       } else {
-        path.lineTo(x, y);
+        _hexPath.lineTo(x, y);
       }
     }
-    path.close();
-    canvas.drawPath(path, paint);
+    _hexPath.close();
+    canvas.drawPath(_hexPath, paint);
   }
 
   void _drawBorder(Canvas canvas, RRect rrect, Size size) {
@@ -698,63 +789,65 @@ class _EpicLevelCardPainter extends CustomPainter {
     final glowIntensity = isHovered ? 1.0 : (0.4 + pulseValue * 0.3);
 
     // Outer glow
-    final glowPaint = Paint()
+    _borderGlowPaint
       ..color = primaryColor.withOpacity(glowIntensity * 0.4 * borderFade)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-    canvas.drawRRect(rrect, glowPaint);
+      ..strokeWidth = 5;
+    canvas.drawRRect(rrect, _borderGlowPaint);
 
     // Main border
-    final borderPaint = Paint()
+    _borderPaint
       ..color = primaryColor.withOpacity(borderFade * (isHovered ? 1.0 : 0.8))
       ..style = PaintingStyle.stroke
       ..strokeWidth = isHovered ? 2.0 : 1.5;
-    canvas.drawRRect(rrect, borderPaint);
+    canvas.drawRRect(rrect, _borderPaint);
   }
 
   void _drawCornerBrackets(Canvas canvas, Size size) {
     final cornerFade = ((progress - 0.6) / 0.2).clamp(0.0, 1.0);
     final bracketSize = 10.0 * cornerFade;
 
-    final paint = Paint()
-      ..color = primaryColor.withOpacity(cornerFade * (isHovered ? 1.0 : 0.8))
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+    _bracketPaint.color =
+        primaryColor.withOpacity(cornerFade * (isHovered ? 1.0 : 0.8));
 
     // Top-left
-    canvas.drawLine(Offset(3, 3 + bracketSize), const Offset(3, 3), paint);
-    canvas.drawLine(const Offset(3, 3), Offset(3 + bracketSize, 3), paint);
+    canvas.drawLine(Offset(3, 3 + bracketSize), const Offset(3, 3), _bracketPaint);
+    canvas.drawLine(const Offset(3, 3), Offset(3 + bracketSize, 3), _bracketPaint);
 
     // Top-right
     canvas.drawLine(
-        Offset(size.width - 3, 3 + bracketSize), Offset(size.width - 3, 3), paint);
+        Offset(size.width - 3, 3 + bracketSize),
+        Offset(size.width - 3, 3),
+        _bracketPaint);
     canvas.drawLine(
-        Offset(size.width - 3, 3), Offset(size.width - 3 - bracketSize, 3), paint);
+        Offset(size.width - 3, 3),
+        Offset(size.width - 3 - bracketSize, 3),
+        _bracketPaint);
 
     // Bottom-left
     canvas.drawLine(
-        Offset(3, size.height - 3 - bracketSize), Offset(3, size.height - 3), paint);
+        Offset(3, size.height - 3 - bracketSize),
+        Offset(3, size.height - 3),
+        _bracketPaint);
     canvas.drawLine(
-        Offset(3, size.height - 3), Offset(3 + bracketSize, size.height - 3), paint);
+        Offset(3, size.height - 3),
+        Offset(3 + bracketSize, size.height - 3),
+        _bracketPaint);
 
     // Bottom-right
     canvas.drawLine(Offset(size.width - 3, size.height - 3 - bracketSize),
-        Offset(size.width - 3, size.height - 3), paint);
+        Offset(size.width - 3, size.height - 3), _bracketPaint);
     canvas.drawLine(Offset(size.width - 3, size.height - 3),
-        Offset(size.width - 3 - bracketSize, size.height - 3), paint);
+        Offset(size.width - 3 - bracketSize, size.height - 3), _bracketPaint);
 
     // Corner dots when hovered
     if (isHovered && !isLocked) {
-      final dotPaint = Paint()
-        ..color = primaryColor
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+      _bracketDotPaint.color = primaryColor;
 
-      canvas.drawCircle(const Offset(3, 3), 2.5, dotPaint);
-      canvas.drawCircle(Offset(size.width - 3, 3), 2.5, dotPaint);
-      canvas.drawCircle(Offset(3, size.height - 3), 2.5, dotPaint);
-      canvas.drawCircle(Offset(size.width - 3, size.height - 3), 2.5, dotPaint);
+      canvas.drawCircle(const Offset(3, 3), 2.5, _bracketDotPaint);
+      canvas.drawCircle(Offset(size.width - 3, 3), 2.5, _bracketDotPaint);
+      canvas.drawCircle(Offset(3, size.height - 3), 2.5, _bracketDotPaint);
+      canvas.drawCircle(Offset(size.width - 3, size.height - 3), 2.5, _bracketDotPaint);
     }
   }
 
@@ -766,32 +859,39 @@ class _EpicLevelCardPainter extends CustomPainter {
     final pulseRadius = coreRadius * (1.0 + pulseValue * 0.08);
 
     // Outer ring glow
-    final outerGlowPaint = Paint()
-      ..color = primaryColor.withOpacity(0.2 * coreFade * pulseValue)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
-    canvas.drawCircle(center, pulseRadius * 1.4, outerGlowPaint);
+    _outerGlowPaint.color = primaryColor.withOpacity(0.2 * coreFade * pulseValue);
+    canvas.drawCircle(center, pulseRadius * 1.4, _outerGlowPaint);
 
     // Energy ring
-    final ringPaint = Paint()
+    _ringPaint
       ..color = primaryColor.withOpacity(0.5 * coreFade)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    canvas.drawCircle(center, pulseRadius, ringPaint);
+    canvas.drawCircle(center, pulseRadius, _ringPaint);
 
     // Inner glow
-    final innerGlowPaint = Paint()
-      ..shader = RadialGradient(
+    final coreRadiusKey = coreRadius.round();
+    final opacityStep = (coreFade * 60).round();
+    final shaderKey = (coreRadiusKey << 16) ^ (opacityStep << 8) ^ primaryColor.value;
+    final shader = _coreGlowShaders.putIfAbsent(shaderKey, () {
+      final scalar = opacityStep / 60.0;
+      return RadialGradient(
         colors: [
-          primaryColor.withOpacity(0.3 * coreFade),
-          primaryColor.withOpacity(0.08 * coreFade),
+          primaryColor.withOpacity(0.3 * scalar),
+          primaryColor.withOpacity(0.08 * scalar),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: center, radius: coreRadius));
-    canvas.drawCircle(center, coreRadius, innerGlowPaint);
+      ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadiusKey.toDouble()));
+    });
+    _innerGlowPaint.shader = shader;
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.drawCircle(Offset.zero, coreRadiusKey.toDouble(), _innerGlowPaint);
+    canvas.restore();
 
     // Rotating segments when hovered
     if (isHovered) {
-      final segmentPaint = Paint()
+      _segmentPaint
         ..color = primaryColor.withOpacity(0.7 * coreFade)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
@@ -805,7 +905,7 @@ class _EpicLevelCardPainter extends CustomPainter {
           startAngle,
           sweepAngle,
           false,
-          segmentPaint,
+          _segmentPaint,
         );
       }
     }
@@ -813,16 +913,26 @@ class _EpicLevelCardPainter extends CustomPainter {
 
   void _drawLevelNumber(Canvas canvas, Offset center, Size size) {
     final textFade = ((progress - 0.7) / 0.2).clamp(0.0, 1.0);
+    if (textFade <= 0.01) return;
 
     if (isLocked) return;
 
-    final textPainter = TextPainter(
-      text: TextSpan(
-        text: '$levelNumber',
+    final text = '$levelNumber';
+    final fontSize = size.width * 0.28;
+    final textColor = primaryColor.withOpacity(textFade);
+    _levelNumberPainter ??= TextPainter(textDirection: TextDirection.ltr);
+    if (_levelNumberText != text ||
+        _levelNumberColorValue != textColor.value ||
+        _levelNumberFontSize != fontSize) {
+      _levelNumberText = text;
+      _levelNumberColorValue = textColor.value;
+      _levelNumberFontSize = fontSize;
+      _levelNumberPainter!.text = TextSpan(
+        text: text,
         style: TextStyle(
-          fontSize: size.width * 0.28,
+          fontSize: fontSize,
           fontWeight: FontWeight.bold,
-          color: primaryColor.withOpacity(textFade),
+          color: textColor,
           shadows: [
             Shadow(
               color: primaryColor.withOpacity(0.8 * textFade),
@@ -834,22 +944,22 @@ class _EpicLevelCardPainter extends CustomPainter {
             ),
           ],
         ),
-      ),
-      textDirection: TextDirection.ltr,
-    );
+      );
+      _levelNumberPainter!.layout();
+    }
 
-    textPainter.layout();
-    textPainter.paint(
+    _levelNumberPainter!.paint(
       canvas,
       Offset(
-        center.dx - textPainter.width / 2,
-        center.dy - textPainter.height / 2 - 3,
+        center.dx - _levelNumberPainter!.width / 2,
+        center.dy - _levelNumberPainter!.height / 2 - 3,
       ),
     );
   }
 
   void _drawStars(Canvas canvas, Size size) {
     final starFade = ((progress - 0.8) / 0.2).clamp(0.0, 1.0);
+    if (starFade <= 0.01) return;
     final starSize = size.width * 0.1;
     final starY = size.height - starSize * 1.5;
     final startX = size.width / 2 - starSize * 1.3;
@@ -860,28 +970,25 @@ class _EpicLevelCardPainter extends CustomPainter {
 
       if (isFilled) {
         // Glow
-        final glowPaint = Paint()
-          ..color = NeonColors.yellow.withOpacity(0.6 * starFade)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-        _drawStarShape(canvas, Offset(x, starY), starSize * 0.5, glowPaint);
+        _starGlowPaint.color = NeonColors.yellow.withOpacity(0.6 * starFade);
+        _drawStarShape(canvas, Offset(x, starY), starSize * 0.5, _starGlowPaint);
 
         // Star
-        final starPaint = Paint()
-          ..color = NeonColors.yellow.withOpacity(starFade);
-        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, starPaint);
+        _starPaint.color = NeonColors.yellow.withOpacity(starFade);
+        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, _starPaint);
       } else {
         // Empty star outline
-        final emptyPaint = Paint()
+        _starOutlinePaint
           ..color = Colors.grey.withOpacity(0.3 * starFade)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1;
-        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, emptyPaint);
+        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, _starOutlinePaint);
       }
     }
   }
 
   void _drawStarShape(Canvas canvas, Offset center, double radius, Paint paint) {
-    final path = Path();
+    _starPath.reset();
     for (int i = 0; i < 5; i++) {
       final outerAngle = (i * 72 - 90) * math.pi / 180;
       final innerAngle = ((i * 72 + 36) - 90) * math.pi / 180;
@@ -893,32 +1000,30 @@ class _EpicLevelCardPainter extends CustomPainter {
       final innerY = center.dy + radius * 0.4 * math.sin(innerAngle);
 
       if (i == 0) {
-        path.moveTo(outerX, outerY);
+        _starPath.moveTo(outerX, outerY);
       } else {
-        path.lineTo(outerX, outerY);
+        _starPath.lineTo(outerX, outerY);
       }
-      path.lineTo(innerX, innerY);
+      _starPath.lineTo(innerX, innerY);
     }
-    path.close();
-    canvas.drawPath(path, paint);
+    _starPath.close();
+    canvas.drawPath(_starPath, paint);
   }
 
   void _drawLockOverlay(Canvas canvas, Offset center, Size size) {
     final lockFade = ((progress - 0.6) / 0.2).clamp(0.0, 1.0);
+    if (lockFade <= 0.01) return;
 
     // Darken overlay
-    final overlayPaint = Paint()
-      ..color = Colors.black.withOpacity(0.5 * lockFade);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), overlayPaint);
+    _lockOverlayPaint.color = Colors.black.withOpacity(0.5 * lockFade);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _lockOverlayPaint);
 
     // Lock icon
     final lockSize = size.width * 0.22;
     final lockCenter = Offset(center.dx, center.dy - 3);
 
     // Lock body
-    final bodyPaint = Paint()
-      ..color = Colors.grey.withOpacity(0.6 * lockFade)
-      ..style = PaintingStyle.fill;
+    _lockBodyPaint.color = Colors.grey.withOpacity(0.6 * lockFade);
 
     final bodyRect = RRect.fromRectAndRadius(
       Rect.fromCenter(
@@ -928,12 +1033,11 @@ class _EpicLevelCardPainter extends CustomPainter {
       ),
       const Radius.circular(3),
     );
-    canvas.drawRRect(bodyRect, bodyPaint);
+    canvas.drawRRect(bodyRect, _lockBodyPaint);
 
     // Lock shackle
-    final shacklePaint = Paint()
+    _lockShacklePaint
       ..color = Colors.grey.withOpacity(0.6 * lockFade)
-      ..style = PaintingStyle.stroke
       ..strokeWidth = lockSize * 0.12;
 
     canvas.drawArc(
@@ -945,16 +1049,15 @@ class _EpicLevelCardPainter extends CustomPainter {
       math.pi,
       math.pi,
       false,
-      shacklePaint,
+      _lockShacklePaint,
     );
 
     // Keyhole
-    final keyholePaint = Paint()
-      ..color = Colors.black.withOpacity(0.8 * lockFade);
+    _lockKeyholePaint.color = Colors.black.withOpacity(0.8 * lockFade);
     canvas.drawCircle(
       Offset(lockCenter.dx, lockCenter.dy + lockSize * 0.1),
       lockSize * 0.08,
-      keyholePaint,
+      _lockKeyholePaint,
     );
   }
 
@@ -964,35 +1067,30 @@ class _EpicLevelCardPainter extends CustomPainter {
     final badgePos = Offset(size.width - badgeSize - 6, badgeSize + 6);
 
     // Glow
-    final glowPaint = Paint()
-      ..color = NeonColors.green.withOpacity(0.6 * badgeFade)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5);
-    canvas.drawCircle(badgePos, badgeSize * 1.2, glowPaint);
+    _badgeGlowPaint.color = NeonColors.green.withOpacity(0.6 * badgeFade);
+    canvas.drawCircle(badgePos, badgeSize * 1.2, _badgeGlowPaint);
 
     // Badge background
-    final bgPaint = Paint()
-      ..color = NeonColors.green.withOpacity(0.8 * badgeFade);
-    canvas.drawCircle(badgePos, badgeSize * 0.8, bgPaint);
+    _badgeBgPaint.color = NeonColors.green.withOpacity(0.8 * badgeFade);
+    canvas.drawCircle(badgePos, badgeSize * 0.8, _badgeBgPaint);
 
     // Checkmark
-    final checkPaint = Paint()
-      ..color = Colors.white.withOpacity(badgeFade)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2
-      ..strokeCap = StrokeCap.round;
+    _badgeCheckPaint.color = Colors.white.withOpacity(badgeFade);
 
-    final path = Path()
+    _badgeCheckPath
+      ..reset()
       ..moveTo(badgePos.dx - badgeSize * 0.35, badgePos.dy)
       ..lineTo(badgePos.dx - badgeSize * 0.1, badgePos.dy + badgeSize * 0.25)
       ..lineTo(badgePos.dx + badgeSize * 0.35, badgePos.dy - badgeSize * 0.25);
-    canvas.drawPath(path, checkPaint);
+    canvas.drawPath(_badgeCheckPath, _badgeCheckPaint);
   }
 
   void _drawScanLine(Canvas canvas, Size size) {
     final scanY = (pulseValue * size.height * 1.5) - size.height * 0.25;
 
-    final scanPaint = Paint()
-      ..shader = LinearGradient(
+    final key = (size.width.round() << 16) ^ primaryColor.value;
+    final shader = _scanlineShaders.putIfAbsent(key, () {
+      return LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
@@ -1002,9 +1100,13 @@ class _EpicLevelCardPainter extends CustomPainter {
           primaryColor.withOpacity(0.25),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromLTWH(0, scanY - 8, size.width, 16));
-
-    canvas.drawRect(Rect.fromLTWH(0, scanY - 8, size.width, 16), scanPaint);
+      ).createShader(Rect.fromLTWH(0, 0, size.width, 16));
+    });
+    _scanPaint.shader = shader;
+    canvas.save();
+    canvas.translate(0, scanY - 8);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, 16), _scanPaint);
+    canvas.restore();
   }
 
   @override

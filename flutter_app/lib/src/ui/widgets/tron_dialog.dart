@@ -211,8 +211,42 @@ class _TronDialogPainter extends CustomPainter {
   final Color primaryColor;
   final Color secondaryColor;
 
+  static final Paint _borderGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 10
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
+  static final Paint _borderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _wireGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 3
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _wireLinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  static final Paint _trailPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+  static final Paint _pointPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _cornerPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _cornerGlowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 4
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _cornerDotPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Map<int, Shader> _trailShaderCache = {};
+  final Path _cornerPath = Path();
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
     final center = Offset(size.width / 2, size.height / 2);
     final rect = Rect.fromLTWH(0, 0, size.width, size.height);
     final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(8));
@@ -225,19 +259,12 @@ class _TronDialogPainter extends CustomPainter {
       final borderProgress = ((progress - 0.4) / 0.6).clamp(0.0, 1.0);
 
       // Glow
-      final glowPaint = Paint()
-        ..color = primaryColor.withOpacity(0.4 * borderProgress)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 10
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 15);
-      canvas.drawRRect(rrect, glowPaint);
+      _borderGlowPaint.color = primaryColor.withOpacity(0.4 * borderProgress);
+      canvas.drawRRect(rrect, _borderGlowPaint);
 
       // Border
-      final borderPaint = Paint()
-        ..color = primaryColor.withOpacity(borderProgress)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2;
-      canvas.drawRRect(rrect, borderPaint);
+      _borderPaint.color = primaryColor.withOpacity(borderProgress);
+      canvas.drawRRect(rrect, _borderPaint);
     }
 
     // Corner accents
@@ -249,6 +276,7 @@ class _TronDialogPainter extends CustomPainter {
 
   void _drawWireframe(Canvas canvas, Size size, Offset center) {
     if (progress <= 0) return;
+    if (size.width <= 0 || size.height <= 0) return;
 
     final lines = <_DialogLine>[
       // From center outward - horizontal
@@ -281,19 +309,12 @@ class _TronDialogPainter extends CustomPainter {
         final fadeOut = progress > 0.5 ? 1.0 - ((progress - 0.5) / 0.5) : 1.0;
 
         // Glow
-        final glowPaint = Paint()
-          ..color = primaryColor.withOpacity(0.3 * fadeOut)
-          ..strokeWidth = 3
-          ..style = PaintingStyle.stroke
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-        canvas.drawLine(line.start, currentEnd, glowPaint);
+        _wireGlowPaint.color = primaryColor.withOpacity(0.3 * fadeOut);
+        canvas.drawLine(line.start, currentEnd, _wireGlowPaint);
 
         // Line
-        final linePaint = Paint()
-          ..color = primaryColor.withOpacity(0.6 * fadeOut)
-          ..strokeWidth = 1
-          ..style = PaintingStyle.stroke;
-        canvas.drawLine(line.start, currentEnd, linePaint);
+        _wireLinePaint.color = primaryColor.withOpacity(0.6 * fadeOut);
+        canvas.drawLine(line.start, currentEnd, _wireLinePaint);
 
         // Trail effect
         if (lineProgress > 0 && lineProgress < 1) {
@@ -301,25 +322,39 @@ class _TronDialogPainter extends CustomPainter {
           final trailStart = math.max(0.0, lineProgress - trailLength);
           final trailStartPoint = Offset.lerp(line.start, line.end, trailStart)!;
 
-          final trailPaint = Paint()
-            ..shader = LinearGradient(
-              colors: [
-                secondaryColor.withOpacity(0),
-                secondaryColor.withOpacity(0.8),
-                Colors.white,
-              ],
-            ).createShader(Rect.fromPoints(trailStartPoint, currentEnd))
-            ..strokeWidth = 2
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
-          canvas.drawLine(trailStartPoint, currentEnd, trailPaint);
+          final dx = currentEnd.dx - trailStartPoint.dx;
+          final dy = currentEnd.dy - trailStartPoint.dy;
+          final length = math.sqrt(dx * dx + dy * dy);
+          if (length > 0.01) {
+            final lenKey = (length * 4).round();
+            final shaderKey = (secondaryColor.value << 8) ^ lenKey;
+            final shader = _trailShaderCache.putIfAbsent(
+              shaderKey,
+              () {
+                if (_trailShaderCache.length > 128) {
+                  _trailShaderCache.clear();
+                }
+                return LinearGradient(
+                colors: [
+                  secondaryColor.withOpacity(0),
+                  secondaryColor.withOpacity(0.8),
+                  Colors.white,
+                ],
+              ).createShader(Rect.fromLTWH(0, 0, lenKey / 4.0, 1));
+              },
+            );
+            _trailPaint.shader = shader;
+            canvas.save();
+            canvas.translate(trailStartPoint.dx, trailStartPoint.dy);
+            canvas.rotate(math.atan2(dy, dx));
+            canvas.drawLine(Offset.zero, Offset(length, 0), _trailPaint);
+            canvas.restore();
+            _trailPaint.shader = null;
+          }
 
           // Bright point
-          final pointPaint = Paint()
-            ..color = Colors.white
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-          canvas.drawCircle(currentEnd, 2, pointPaint);
+          _pointPaint.color = Colors.white;
+          canvas.drawCircle(currentEnd, 2, _pointPaint);
         }
       }
     }
@@ -327,16 +362,8 @@ class _TronDialogPainter extends CustomPainter {
 
   void _drawCornerAccents(Canvas canvas, Size size, double cornerProgress) {
     const cornerSize = 20.0;
-    final paint = Paint()
-      ..color = primaryColor.withOpacity(cornerProgress)
-      ..strokeWidth = 2
-      ..style = PaintingStyle.stroke;
-
-    final glowPaint = Paint()
-      ..color = primaryColor.withOpacity(0.5 * cornerProgress)
-      ..strokeWidth = 4
-      ..style = PaintingStyle.stroke
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    _cornerPaint.color = primaryColor.withOpacity(cornerProgress);
+    _cornerGlowPaint.color = primaryColor.withOpacity(0.5 * cornerProgress);
 
     // Draw corner L-shapes with glow
     final corners = [
@@ -347,21 +374,21 @@ class _TronDialogPainter extends CustomPainter {
     ];
 
     for (final corner in corners) {
-      final path = Path()
+      _cornerPath
+        ..reset()
         ..moveTo(corner[0].dx, corner[0].dy)
         ..lineTo(corner[1].dx, corner[1].dy)
         ..lineTo(corner[2].dx, corner[2].dy);
 
-      canvas.drawPath(path, glowPaint);
-      canvas.drawPath(path, paint);
+      canvas.drawPath(_cornerPath, _cornerGlowPaint);
+      canvas.drawPath(_cornerPath, _cornerPaint);
 
       // Small dot at the corner
+      _cornerDotPaint.color = primaryColor.withOpacity(cornerProgress);
       canvas.drawCircle(
         corner[1],
         3,
-        Paint()
-          ..color = primaryColor.withOpacity(cornerProgress)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+        _cornerDotPaint,
       );
     }
   }
