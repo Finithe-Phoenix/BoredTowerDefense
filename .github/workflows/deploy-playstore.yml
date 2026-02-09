@@ -83,7 +83,7 @@ jobs:
         uses: r0adkll/upload-google-play@v1
         with:
           serviceAccountJson: service-account.json
-          packageName: com.example.bored_tower_defense
+          packageName: com.boredgames.towerdefense
           releaseFiles: flutter_app/build/app/outputs/bundle/release/app-release.aab
           track: ${{ github.event.inputs.track || 'internal' }}
           status: completed
