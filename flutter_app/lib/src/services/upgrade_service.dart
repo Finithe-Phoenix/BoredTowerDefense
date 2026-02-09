@@ -16,11 +16,7 @@ class _FastRng {
     return _state;
   }
 
-  double nextDouble() => _next() / 0x7fffffff;
-
   int nextInt(int max) => max <= 0 ? 0 : _next() % max;
-
-  bool nextBool() => (_next() & 1) == 0;
 }
 
 class UpgradeService {
@@ -302,4 +298,3 @@ const List<RunUpgradeDefinition> _runUpgrades = [
     maxStacks: 3,
   ),
 ];
-

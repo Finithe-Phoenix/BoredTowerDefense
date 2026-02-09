@@ -1076,8 +1076,7 @@ WorldChronicle? getChronicleByWorldId(int worldId) {
 }
 
 /// Static accessor class for world chronicles
-class WorldChronicles {
-  WorldChronicles._();
+abstract final class WorldChronicles {
 
   static List<WorldChronicle> get all => allWorldChronicles;
 

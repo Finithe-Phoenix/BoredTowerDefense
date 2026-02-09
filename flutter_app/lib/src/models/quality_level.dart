@@ -8,4 +8,7 @@ enum QualityLevel {
 
   /// High quality - maximum visual effects
   high,
+
+  /// Extreme quality - ultra visual effects, highest GPU load
+  extreme,
 }

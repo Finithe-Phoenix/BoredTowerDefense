@@ -22,6 +22,7 @@ void main() {
       expect(cubit.state.showGrid, isTrue);
       expect(cubit.state.particleIntensity, 1.0);
       expect(cubit.state.screenShake, isTrue);
+      expect(cubit.state.graphicsQuality, 'high');
     });
   });
 
@@ -170,6 +171,7 @@ void main() {
       expect(cubit.state.showGrid, isTrue);
       expect(cubit.state.particleIntensity, 1.0);
       expect(cubit.state.screenShake, isTrue);
+      expect(cubit.state.graphicsQuality, 'high');
     });
 
     test('reset is idempotent', () {
@@ -225,6 +227,25 @@ void main() {
     });
   });
 
+  group('SettingsCubit graphics quality profiles', () {
+    test('supports low/medium/high/extreme profiles', () {
+      final cubit = SettingsCubit();
+      addTearDown(() => cubit.close());
+
+      cubit.setGraphicsQuality('low');
+      expect(cubit.state.graphicsQuality, 'low');
+
+      cubit.setGraphicsQuality('medium');
+      expect(cubit.state.graphicsQuality, 'medium');
+
+      cubit.setGraphicsQuality('high');
+      expect(cubit.state.graphicsQuality, 'high');
+
+      cubit.setGraphicsQuality('extreme');
+      expect(cubit.state.graphicsQuality, 'extreme');
+    });
+  });
+
   group('SettingsState equality', () {
     test('equal states are equal', () {
       const s1 = SettingsState(musicVolume: 0.5, sfxVolume: 0.8);
@@ -254,11 +275,12 @@ void main() {
       expect(copied.showGrid, isFalse);
       expect(copied.particleIntensity, 0.5);
       expect(copied.screenShake, isFalse);
+      expect(copied.graphicsQuality, state.graphicsQuality);
     });
 
     test('default state props are complete', () {
       const state = SettingsState();
-      expect(state.props.length, 6); // All 6 fields
+      expect(state.props.length, 7); // All 7 fields
     });
   });
 }

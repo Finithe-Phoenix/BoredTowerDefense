@@ -158,8 +158,9 @@ class StorageService {
     required double sfxVolume,
     required bool showFps,
     required bool showGrid,
-    required bool particlesEnabled,
     required bool screenShake,
+    required double particleIntensity,
+    required String graphicsQuality,
   }) async {
     if (!isReady) return;
 
@@ -168,8 +169,9 @@ class StorageService {
       'sfxVolume': sfxVolume,
       'showFps': showFps,
       'showGrid': showGrid,
-      'particlesEnabled': particlesEnabled,
       'screenShake': screenShake,
+      'particleIntensity': particleIntensity,
+      'graphicsQuality': graphicsQuality,
     };
 
     await _prefs!.setString(_keySettings, jsonEncode(data));

@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// Quality levels that affect entity limits
-enum QualityLevel { high, medium, low }
+enum QualityLevel { low, medium, high, extreme }
 
 /// Constants from ShaderUniformController
 class ShaderConstants {
@@ -24,6 +24,7 @@ class ShaderConstants {
 class EntityLimitCalculator {
   static int calculateLimit(QualityLevel quality) {
     return switch (quality) {
+      QualityLevel.extreme => ShaderConstants.maxEntities,
       QualityLevel.high => ShaderConstants.maxEntities,
       QualityLevel.medium => 6,
       QualityLevel.low => 0,
@@ -58,7 +59,8 @@ class PositionBuffer {
 class TowerPositionFiller {
   static int fillBuffer({
     required Float32List buffer,
-    required List<(double, double, double, double)> towers, // (x, y, sizeX, sizeY)
+    required List<(double, double, double, double)>
+        towers, // (x, y, sizeX, sizeY)
     required int limit,
     required double scale,
     required double offsetX,
@@ -178,20 +180,25 @@ void main() {
   });
 
   group('QualityLevel', () {
-    test('has 3 quality levels', () {
-      expect(QualityLevel.values.length, 3);
+    test('has 4 quality levels', () {
+      expect(QualityLevel.values.length, 4);
     });
 
     test('quality level enum values', () {
-      expect(QualityLevel.values, contains(QualityLevel.high));
       expect(QualityLevel.values, contains(QualityLevel.medium));
       expect(QualityLevel.values, contains(QualityLevel.low));
+      expect(QualityLevel.values, contains(QualityLevel.high));
+      expect(QualityLevel.values, contains(QualityLevel.extreme));
     });
   });
 
   group('EntityLimitCalculator', () {
     test('high quality allows 10 entities', () {
       expect(EntityLimitCalculator.calculateLimit(QualityLevel.high), 10);
+    });
+
+    test('extreme quality allows 10 entities', () {
+      expect(EntityLimitCalculator.calculateLimit(QualityLevel.extreme), 10);
     });
 
     test('medium quality allows 6 entities', () {
@@ -880,7 +887,9 @@ void main() {
       // Simulate full pipeline: tower -> position buffer -> pixel buffer
 
       // 1. Setup tower
-      final towers = [(100.0, 100.0, 50.0, 50.0)]; // Tower at (100,100) size 50x50
+      final towers = [
+        (100.0, 100.0, 50.0, 50.0)
+      ]; // Tower at (100,100) size 50x50
 
       // 2. Fill position buffer
       final positionBuffer = Float32List(20);

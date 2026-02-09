@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:flame/components.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../bloc/settings/settings_cubit.dart';
 import '../../game/bored_games_game.dart';
 import '../../game/entities/tower.dart';
 import '../../models/level_config.dart';
@@ -103,6 +105,15 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       onGameOver: _onBenchmarkEnd,
       onVictory: _onBenchmarkEnd,
     )..hideHud = true; // Hide game HUD in benchmark mode
+
+    // Apply graphics quality and particle intensity from settings
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted && _game != null) {
+        final settings = context.read<SettingsCubit>().state;
+        _game!.setGraphicsQualityFromSettings(settings.graphicsQuality);
+        _game!.setParticleIntensityFromSettings(settings.particleIntensity);
+      }
+    });
 
     // Wait for game to be fully loaded before allowing benchmark to start
     Future.delayed(const Duration(milliseconds: 500), () {

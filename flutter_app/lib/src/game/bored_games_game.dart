@@ -258,9 +258,58 @@ class BoredGamesGame extends FlameGame
 
   QualityLevel get quality => _quality;
 
-  bool get reduceFx => _quality != QualityLevel.high;
+  bool get reduceFx => _quality == QualityLevel.low;
 
-  bool get allowBlur => _quality == QualityLevel.high;
+  bool get allowBlur =>
+      _quality == QualityLevel.high || _quality == QualityLevel.extreme;
+
+  /// Sets the graphics quality from settings
+  /// quality: 'low', 'medium', 'high', 'extreme'
+  void setGraphicsQualityFromSettings(String quality) {
+    switch (quality) {
+      case 'high':
+        autoQuality = false;
+        _quality = QualityLevel.high;
+        break;
+      case 'medium':
+        autoQuality = false;
+        _quality = QualityLevel.medium;
+        break;
+      case 'low':
+        autoQuality = false;
+        _quality = QualityLevel.low;
+        break;
+      case 'extreme':
+        autoQuality = false;
+        _quality = QualityLevel.extreme;
+        break;
+      case 'auto':
+        // Legacy value migration: use high profile instead of dynamic auto mode.
+        autoQuality = false;
+        _quality = QualityLevel.high;
+        break;
+      default:
+        autoQuality = false;
+        _quality = QualityLevel.high;
+    }
+
+    // Apply quality settings to all game systems
+    _applyQuality();
+    _saveQualitySettings();
+  }
+
+  /// Sets the particle intensity from settings
+  /// intensity: 0.0 to 1.0
+  void setParticleIntensityFromSettings(double intensity) {
+    final clampedIntensity = intensity.clamp(0.0, 1.0);
+
+    // Apply to particle system
+    GameParticles.instance.setQuality(
+      burstScale: clampedIntensity,
+      allowGlow: clampedIntensity > 0.3,
+      allowTrails: clampedIntensity > 0.5,
+    );
+  }
 
   bool get sellMode => _sellMode;
 
@@ -296,8 +345,9 @@ class BoredGamesGame extends FlameGame
 
   double get shaderScale {
     return switch (_quality) {
+      QualityLevel.extreme => 1.15,
       QualityLevel.high => 1.0,
-      QualityLevel.medium => 0.75,
+      QualityLevel.medium => 0.8,
       QualityLevel.low => 0.5,
     };
   }
@@ -306,9 +356,11 @@ class BoredGamesGame extends FlameGame
       enableWorldShader && _quality != QualityLevel.low;
 
   bool get particleShaderEnabled =>
-      enableBackgroundParticles && _quality == QualityLevel.high;
+      enableBackgroundParticles &&
+      (_quality == QualityLevel.high || _quality == QualityLevel.extreme);
 
-  bool get postProcessEnabled => _quality == QualityLevel.high;
+  bool get postProcessEnabled =>
+      _quality == QualityLevel.high || _quality == QualityLevel.extreme;
 
   int get pulseCost =>
       math.max(1, (pulseCostBase * _upgradeStats.abilityCostMult).round());
@@ -1809,9 +1861,7 @@ class BoredGamesGame extends FlameGame
     // Emergency mode: force lowest quality if FPS is critically low
     if (_smoothedFps < 20) {
       _quality = QualityLevel.low;
-      enableWorldShader = false;
-      enableBackgroundParticles = false;
-      Tower.lowFx = true;
+      _applyQuality();
       return;
     }
 
@@ -1819,27 +1869,41 @@ class BoredGamesGame extends FlameGame
       _lowFpsTimer += _qualitySampleInterval;
       _highFpsTimer = 0;
       if (_lowFpsTimer >= _qualityDownSeconds) {
-        if (_quality == QualityLevel.high) {
-          _quality = QualityLevel.medium;
-          enableWorldShader = false;
-        } else if (_quality == QualityLevel.medium) {
-          _quality = QualityLevel.low;
-          enableBackgroundParticles = false;
+        switch (_quality) {
+          case QualityLevel.extreme:
+            _quality = QualityLevel.high;
+            break;
+          case QualityLevel.high:
+            _quality = QualityLevel.medium;
+            break;
+          case QualityLevel.medium:
+            _quality = QualityLevel.low;
+            break;
+          case QualityLevel.low:
+            break;
         }
         _lowFpsTimer = 0;
-        Tower.lowFx = _quality != QualityLevel.high;
+        _applyQuality();
       }
-    } else if (_smoothedFps > 50) {
+    } else if (_smoothedFps > 55) {
       _highFpsTimer += _qualitySampleInterval;
       _lowFpsTimer = 0;
       if (_highFpsTimer >= _qualityUpSeconds) {
-        if (_quality == QualityLevel.low) {
-          _quality = QualityLevel.medium;
-        } else if (_quality == QualityLevel.medium) {
-          _quality = QualityLevel.high;
+        switch (_quality) {
+          case QualityLevel.low:
+            _quality = QualityLevel.medium;
+            break;
+          case QualityLevel.medium:
+            _quality = QualityLevel.high;
+            break;
+          case QualityLevel.high:
+            _quality = QualityLevel.extreme;
+            break;
+          case QualityLevel.extreme:
+            break;
         }
         _highFpsTimer = 0;
-        Tower.lowFx = _quality != QualityLevel.high;
+        _applyQuality();
       }
     } else {
       _lowFpsTimer = 0;
@@ -1862,11 +1926,12 @@ class BoredGamesGame extends FlameGame
     particleShaderComponent.enabled = particleShaderEnabled;
     screenPostProcessComponent.enabled = postProcessEnabled;
     shaderUniformController.enabled = worldShaderEnabled;
-    Tower.lowFx = reduceFx;
-    Enemy.forceLowFx = reduceFx;
+    Tower.lowFx = _quality == QualityLevel.low;
+    Enemy.forceLowFx = _quality == QualityLevel.low;
     Enemy.allowBlur = allowBlur;
-    Enemy.throttleOffscreen = reduceFx;
+    Enemy.throttleOffscreen = _quality == QualityLevel.low;
     final particleScale = switch (_quality) {
+      QualityLevel.extreme => 1.2,
       QualityLevel.high => 1.0,
       QualityLevel.medium => 0.7,
       QualityLevel.low => 0.45,
@@ -1874,7 +1939,8 @@ class BoredGamesGame extends FlameGame
     GameParticles.instance.setQuality(
       burstScale: particleScale,
       allowGlow: _quality != QualityLevel.low,
-      allowTrails: _quality == QualityLevel.high,
+      allowTrails:
+          _quality == QualityLevel.high || _quality == QualityLevel.extreme,
     );
     ImpactEffect.fxScale = particleScale;
     ExplosionEffect.fxScale = particleScale;
@@ -1882,7 +1948,8 @@ class BoredGamesGame extends FlameGame
     PixelDisintegrationEffect.reduceFx = _quality == QualityLevel.medium;
     PixelDisintegrationEffect.lowFx = _quality == QualityLevel.low;
     Projectile.lowFx = _quality == QualityLevel.low;
-    Projectile.allowTrails = _quality == QualityLevel.high;
+    Projectile.allowTrails =
+        _quality == QualityLevel.high || _quality == QualityLevel.extreme;
     Projectile.allowGlow = _quality != QualityLevel.low;
     _syncEnemyViewport();
   }
@@ -1896,32 +1963,49 @@ class BoredGamesGame extends FlameGame
     final enemies = enemyManager.aliveCount;
     final bullets = bulletManager.activeCount;
     final towers = towerManager.towerCount;
-    final heavyLoad = enemies >= (isTouchLayout ? 24 : 32) ||
-        bullets >= (isTouchLayout ? 120 : 160) ||
-        towers >= (isTouchLayout ? 18 : 26);
+    final (enemyHeavyThreshold, bulletHeavyThreshold, towerHeavyThreshold) =
+        switch (_quality) {
+      QualityLevel.low => isTouchLayout ? (12, 80, 10) : (20, 110, 14),
+      QualityLevel.medium => isTouchLayout ? (20, 110, 16) : (30, 150, 22),
+      QualityLevel.high => isTouchLayout ? (28, 150, 22) : (40, 210, 32),
+      QualityLevel.extreme => isTouchLayout ? (34, 180, 26) : (50, 270, 40),
+    };
+    final heavyLoad = enemies >= enemyHeavyThreshold ||
+        bullets >= bulletHeavyThreshold ||
+        towers >= towerHeavyThreshold;
+    final severeLoad = enemies >= (enemyHeavyThreshold * 1.35).round() ||
+        bullets >= (bulletHeavyThreshold * 1.35).round() ||
+        towers >= (towerHeavyThreshold * 1.35).round();
 
     final baseScale = switch (_quality) {
+      QualityLevel.extreme => 1.2,
       QualityLevel.high => 1.0,
       QualityLevel.medium => 0.7,
       QualityLevel.low => 0.45,
     };
-    final fxScale = heavyLoad ? baseScale * 0.65 : baseScale;
+    final fxScale = heavyLoad ? baseScale * 0.7 : baseScale;
 
     ImpactEffect.fxScale = fxScale;
     ExplosionEffect.fxScale = fxScale;
     PixelDisintegrationEffect.fxScale = fxScale;
     PixelDisintegrationEffect.reduceFx =
         _quality == QualityLevel.medium || heavyLoad;
-    PixelDisintegrationEffect.lowFx = _quality == QualityLevel.low || heavyLoad;
-    Projectile.lowFx = _quality == QualityLevel.low || heavyLoad;
-    Projectile.allowTrails = _quality == QualityLevel.high && !heavyLoad;
-    Projectile.allowGlow = _quality != QualityLevel.low && !heavyLoad;
-    Tower.lowFx = _quality != QualityLevel.high || heavyLoad;
+    PixelDisintegrationEffect.lowFx =
+        _quality == QualityLevel.low || severeLoad;
+    Projectile.lowFx = _quality == QualityLevel.low || severeLoad;
+    Projectile.allowTrails =
+        (_quality == QualityLevel.high || _quality == QualityLevel.extreme) &&
+            !heavyLoad;
+    Projectile.allowGlow = _quality != QualityLevel.low && !severeLoad;
+    Tower.lowFx = _quality == QualityLevel.low || severeLoad;
+    Enemy.forceLowFx = _quality == QualityLevel.low || severeLoad;
 
     GameParticles.instance.setQuality(
       burstScale: fxScale,
-      allowGlow: _quality == QualityLevel.high && !heavyLoad,
-      allowTrails: _quality == QualityLevel.high && !heavyLoad,
+      allowGlow: _quality != QualityLevel.low && !severeLoad,
+      allowTrails:
+          (_quality == QualityLevel.high || _quality == QualityLevel.extreme) &&
+              !heavyLoad,
     );
   }
 
@@ -1941,6 +2025,10 @@ class BoredGamesGame extends FlameGame
         return QualityLevel.medium;
       case 'high':
         return QualityLevel.high;
+      case 'extreme':
+        return QualityLevel.extreme;
+      case 'auto':
+        return QualityLevel.high;
       default:
         return QualityLevel.high;
     }
@@ -1949,8 +2037,11 @@ class BoredGamesGame extends FlameGame
   void _applyDefaultQuality() {
     if (isTouchLayout) {
       _quality = QualityLevel.medium;
-      autoQuality = true;
+      autoQuality = false;
+      return;
     }
+    _quality = QualityLevel.high;
+    autoQuality = false;
   }
 
   bool isWorldPointVisible(Vector2 worldPos, {double padding = 40}) {
@@ -2001,10 +2092,7 @@ class BoredGamesGame extends FlameGame
     final qualitySettings = StorageService.instance.loadQualitySettings();
     if (qualitySettings != null) {
       _quality = _parseQualityPreset(qualitySettings['preset'] as String?);
-      final auto = qualitySettings['autoQuality'];
-      if (auto is bool) {
-        autoQuality = auto;
-      }
+      autoQuality = false;
     } else {
       _applyDefaultQuality();
     }

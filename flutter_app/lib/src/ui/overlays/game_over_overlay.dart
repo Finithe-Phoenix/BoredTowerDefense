@@ -29,6 +29,7 @@ class _GameOverOverlayState extends State<GameOverOverlay>
   late AnimationController _glitchController;
   late AnimationController _pulseController;
   late AnimationController _shakeController;
+  late AnimationController _shatterController;
   late Animation<double> _fadeAnimation;
 
   int _rngState = 0x1234abcd;
@@ -50,10 +51,16 @@ class _GameOverOverlayState extends State<GameOverOverlay>
   void initState() {
     super.initState();
 
+    // Shatter entrance animation
+    _shatterController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
     _mainController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
-    )..forward();
+    );
 
     _glitchController = AnimationController(
       duration: const Duration(milliseconds: 150),
@@ -70,8 +77,12 @@ class _GameOverOverlayState extends State<GameOverOverlay>
       vsync: this,
     )..repeat();
 
-    // Start aggressive glitch cycle
-    _glitchTimer = Timer(const Duration(milliseconds: 200), _triggerGlitchCycle);
+    // Start with shatter effect, then main animation
+    _shatterController.forward().then((_) {
+      _mainController.forward();
+      // Start aggressive glitch cycle after shatter
+      _glitchTimer = Timer(const Duration(milliseconds: 200), _triggerGlitchCycle);
+    });
 
     _fadeAnimation = CurvedAnimation(
       parent: _mainController,
@@ -116,6 +127,7 @@ class _GameOverOverlayState extends State<GameOverOverlay>
     _glitchController.dispose();
     _pulseController.dispose();
     _shakeController.dispose();
+    _shatterController.dispose();
     super.dispose();
   }
 
@@ -149,6 +161,19 @@ class _GameOverOverlayState extends State<GameOverOverlay>
               ),
               child: Stack(
                 children: [
+                  // Screen shatter entrance
+                  AnimatedBuilder(
+                    animation: _shatterController,
+                    builder: (context, child) {
+                      return CustomPaint(
+                        painter: _ScreenShatterPainter(
+                          animation: _shatterController.value,
+                        ),
+                        size: Size.infinite,
+                      );
+                    },
+                  ),
+
                   // Danger grid background
                   CustomPaint(
                     painter: _DangerGridPainter(
@@ -282,33 +307,37 @@ class _GameOverOverlayState extends State<GameOverOverlay>
       Positioned(
         top: 30,
         left: 30,
-        child: _WarningCorner(
+        child: _MalfunctionCorner(
           rotation: 0,
           pulseController: _pulseController,
+          message: 'DEFENSE GRID: OFFLINE',
         ),
       ),
       Positioned(
         top: 30,
         right: 30,
-        child: _WarningCorner(
+        child: _MalfunctionCorner(
           rotation: math.pi / 2,
           pulseController: _pulseController,
+          message: 'CORE INTEGRITY: 0%',
         ),
       ),
       Positioned(
         bottom: 30,
         left: 30,
-        child: _WarningCorner(
+        child: _MalfunctionCorner(
           rotation: -math.pi / 2,
           pulseController: _pulseController,
+          message: 'ENERGY RESERVES: DEPLETED',
         ),
       ),
       Positioned(
         bottom: 30,
         right: 30,
-        child: _WarningCorner(
+        child: _MalfunctionCorner(
           rotation: math.pi,
           pulseController: _pulseController,
+          message: 'SYSTEM STATUS: CRITICAL',
         ),
       ),
     ];
@@ -970,13 +999,15 @@ class _WarningBorders extends StatelessWidget {
   }
 }
 
-class _WarningCorner extends StatelessWidget {
+class _MalfunctionCorner extends StatelessWidget {
   final double rotation;
   final AnimationController pulseController;
+  final String message;
 
-  const _WarningCorner({
+  const _MalfunctionCorner({
     required this.rotation,
     required this.pulseController,
+    required this.message,
   });
 
   @override
@@ -986,14 +1017,58 @@ class _WarningCorner extends StatelessWidget {
       builder: (context, child) {
         return Transform.rotate(
           angle: rotation,
-          child: SizedBox(
-            width: 50,
-            height: 50,
-            child: CustomPaint(
-              painter: _WarningCornerPainter(
-                opacity: 0.5 + pulseController.value * 0.5,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 50,
+                height: 50,
+                child: Stack(
+                  children: [
+                    // Corner bracket with glow
+                    CustomPaint(
+                      painter: _WarningCornerPainter(
+                        opacity: 0.5 + pulseController.value * 0.5,
+                      ),
+                    ),
+                    // Sparking effects
+                    CustomPaint(
+                      painter: _ElectricSparksPainter(
+                        animation: pulseController.value,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              const SizedBox(height: 8),
+              // Error message
+              Transform.rotate(
+                angle: -rotation, // Counter-rotate text to keep it readable
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    border: Border.all(
+                      color: NeonColors.red.withOpacity(0.5 + pulseController.value * 0.3),
+                      width: 1,
+                    ),
+                  ),
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: NeonColors.red.withOpacity(0.9),
+                      fontSize: 9,
+                      fontFamily: 'monospace',
+                      letterSpacing: 0.5,
+                      shadows: [
+                        Shadow(color: NeonColors.red, blurRadius: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         );
       },
@@ -1055,4 +1130,121 @@ class _WarningCornerPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _WarningCornerPainter oldDelegate) =>
       oldDelegate.opacity != opacity;
+}
+
+class _ScreenShatterPainter extends CustomPainter {
+  final double animation;
+
+  _ScreenShatterPainter({required this.animation});
+
+  static final Paint _crackPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 2;
+  static final Paint _fragmentPaint = Paint()..style = PaintingStyle.fill;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0 || animation >= 1.0) return;
+
+    final center = Offset(size.width / 2, size.height / 2);
+    final maxRadius = math.sqrt(size.width * size.width + size.height * size.height) / 2;
+    final currentRadius = maxRadius * animation;
+
+    // Draw cracks expanding from center
+    int rngState = 0x12345678;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
+
+    for (int i = 0; i < 12; i++) {
+      final angle = (i / 12) * 2 * math.pi + nextUnit() * 0.3;
+      final endX = center.dx + math.cos(angle) * currentRadius;
+      final endY = center.dy + math.sin(angle) * currentRadius;
+
+      // Main crack
+      _crackPaint.color = NeonColors.red.withOpacity(0.6 * (1 - animation));
+      canvas.drawLine(center, Offset(endX, endY), _crackPaint);
+
+      // Sub-cracks
+      if (animation > 0.3) {
+        final subAngle1 = angle + 0.3;
+        final subAngle2 = angle - 0.3;
+        final subLength = currentRadius * 0.4;
+        final midX = center.dx + math.cos(angle) * (currentRadius * 0.6);
+        final midY = center.dy + math.sin(angle) * (currentRadius * 0.6);
+
+        _crackPaint.color = NeonColors.orange.withOpacity(0.4 * (1 - animation));
+        canvas.drawLine(
+          Offset(midX, midY),
+          Offset(midX + math.cos(subAngle1) * subLength, midY + math.sin(subAngle1) * subLength),
+          _crackPaint,
+        );
+        canvas.drawLine(
+          Offset(midX, midY),
+          Offset(midX + math.cos(subAngle2) * subLength, midY + math.sin(subAngle2) * subLength),
+          _crackPaint,
+        );
+      }
+    }
+
+    // Dark energy seeping through
+    if (animation > 0.5) {
+      final seepProgress = (animation - 0.5) * 2;
+      _fragmentPaint.color = const Color(0xFF2a0a0a).withOpacity(0.7 * seepProgress);
+      canvas.drawCircle(center, currentRadius * 0.8, _fragmentPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ScreenShatterPainter oldDelegate) =>
+      oldDelegate.animation != animation;
+}
+
+class _ElectricSparksPainter extends CustomPainter {
+  final double animation;
+
+  _ElectricSparksPainter({required this.animation});
+
+  static final Paint _sparkPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
+    int rngState = (animation * 1000).toInt() ^ 0xabcdef;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
+
+    // Electric sparks from corner
+    for (int i = 0; i < 3; i++) {
+      if (nextUnit() > 0.7) continue; // Random spark appearance
+
+      final startX = nextUnit() * size.width * 0.3;
+      final startY = nextUnit() * size.height * 0.3;
+      final path = Path()..moveTo(startX, startY);
+
+      // Jagged lightning path
+      var currentX = startX;
+      var currentY = startY;
+      for (int j = 0; j < 4; j++) {
+        currentX += (nextUnit() - 0.5) * 10;
+        currentY += (nextUnit() - 0.5) * 10;
+        path.lineTo(currentX, currentY);
+      }
+
+      _sparkPaint.color = NeonColors.yellow.withOpacity(0.6 + animation * 0.4);
+      canvas.drawPath(path, _sparkPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ElectricSparksPainter oldDelegate) =>
+      oldDelegate.animation != animation;
 }

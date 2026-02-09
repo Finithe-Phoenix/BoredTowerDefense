@@ -23,6 +23,7 @@ void main() {
     final recorder = PictureRecorder();
     final canvas = Canvas(recorder);
     component.render(canvas);
+    component.render(canvas);
     recorder.endRecording();
   });
 }
