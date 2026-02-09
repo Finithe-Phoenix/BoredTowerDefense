@@ -1,0 +1,201 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="14" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <radialGradient id="bgGrad" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#1a1a2e" />
+      <stop offset="100%" style="stop-color:#0a0a18" />
+    </radialGradient>
+
+    <radialGradient id="explosionGrad" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFFFF" />
+      <stop offset="30%" style="stop-color:#FF6600" />
+      <stop offset="70%" style="stop-color:#FF00FF" />
+      <stop offset="100%" style="stop-color:transparent" />
+    </radialGradient>
+
+    <linearGradient id="energyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00FFFF" />
+      <stop offset="50%" style="stop-color:#FF00FF" />
+      <stop offset="100%" style="stop-color:#FF6600" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="1080" height="1920" fill="url(#bgGrad)"/>
+
+  <!-- TÍTULO -->
+  <text
+    x="540"
+    y="160"
+    text-anchor="middle"
+    font-family="Arial Black, sans-serif"
+    font-size="56"
+    font-weight="900"
+    letter-spacing="2"
+    fill="url(#energyGrad)"
+    filter="url(#strongGlow)"
+  >GRÁFICOS ÉPICOS</text>
+
+  <!-- EXPLOSIÓN CENTRAL MASIVA -->
+  <circle cx="540" cy="700" r="300" fill="url(#explosionGrad)" opacity="0.6" filter="url(#strongGlow)"/>
+  <circle cx="540" cy="700" r="220" fill="url(#explosionGrad)" opacity="0.7" filter="url(#strongGlow)"/>
+  <circle cx="540" cy="700" r="150" fill="#FFFFFF" opacity="0.8" filter="url(#strongGlow)"/>
+
+  <!-- Rayos de energía desde el centro -->
+  <g opacity="0.8">
+    <line x1="540" y1="700" x2="540" y2="300" stroke="#00FFFF" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="800" y2="500" stroke="#FF00FF" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="900" y2="700" stroke="#FF6600" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="800" y2="900" stroke="#00FFFF" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="540" y2="1100" stroke="#FF00FF" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="280" y2="900" stroke="#FF6600" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="180" y2="700" stroke="#00FFFF" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+    <line x1="540" y1="700" x2="280" y2="500" stroke="#FF00FF" stroke-width="6" stroke-linecap="round" filter="url(#strongGlow)"/>
+  </g>
+
+  <!-- Partículas de energía (círculos brillantes) -->
+  <g filter="url(#glow)">
+    <!-- Partículas cyan -->
+    <circle cx="300" cy="400" r="8" fill="#00FFFF" opacity="0.9"/>
+    <circle cx="450" cy="350" r="6" fill="#00FFFF" opacity="0.85"/>
+    <circle cx="650" cy="420" r="10" fill="#00FFFF" opacity="0.95"/>
+    <circle cx="780" cy="380" r="7" fill="#00FFFF" opacity="0.9"/>
+
+    <!-- Partículas magenta -->
+    <circle cx="250" cy="650" r="9" fill="#FF00FF" opacity="0.9"/>
+    <circle cx="380" cy="720" r="7" fill="#FF00FF" opacity="0.85"/>
+    <circle cx="700" cy="680" r="11" fill="#FF00FF" opacity="0.95"/>
+    <circle cx="850" cy="620" r="8" fill="#FF00FF" opacity="0.9"/>
+
+    <!-- Partículas naranja -->
+    <circle cx="320" cy="900" r="10" fill="#FF6600" opacity="0.9"/>
+    <circle cx="480" cy="950" r="8" fill="#FF6600" opacity="0.85"/>
+    <circle cx="620" cy="920" r="9" fill="#FF6600" opacity="0.95"/>
+    <circle cx="760" cy="880" r="7" fill="#FF6600" opacity="0.9"/>
+
+    <!-- Más partículas esparcidas -->
+    <circle cx="180" cy="550" r="6" fill="#00FFFF" opacity="0.8"/>
+    <circle cx="900" cy="750" r="7" fill="#FF00FF" opacity="0.85"/>
+    <circle cx="420" cy="550" r="5" fill="#FF6600" opacity="0.8"/>
+    <circle cx="660" cy="850" r="6" fill="#00FFFF" opacity="0.85"/>
+  </g>
+
+  <!-- Ondas de choque -->
+  <g opacity="0.4" fill="none" stroke-width="4" filter="url(#glow)">
+    <circle cx="540" cy="700" r="180" stroke="#00FFFF"/>
+    <circle cx="540" cy="700" r="240" stroke="#FF00FF"/>
+    <circle cx="540" cy="700" r="300" stroke="#FF6600"/>
+  </g>
+
+  <!-- Enemigos fragmentándose -->
+  <!-- Fragmento 1 -->
+  <g transform="translate(220, 550)" opacity="0.7">
+    <polygon points="0,-30 26,15 -26,15" fill="#FF0066" opacity="0.4" filter="url(#glow)"/>
+    <polygon points="0,-26 23,13 -23,13" fill="#1a0a18" stroke="#FF00FF" stroke-width="2"/>
+    <circle cy="-8" r="10" fill="#FF0066" opacity="0.8"/>
+  </g>
+
+  <!-- Fragmento 2 -->
+  <g transform="translate(860, 600)" opacity="0.6">
+    <circle r="28" fill="#FF0066" opacity="0.3" filter="url(#glow)"/>
+    <circle r="25" fill="#1a0a18" stroke="#FF6600" stroke-width="2"/>
+    <circle r="10" fill="#FF6600" opacity="0.8"/>
+  </g>
+
+  <!-- Fragmento 3 -->
+  <g transform="translate(350, 850)" opacity="0.65">
+    <polygon points="0,-28 24,14 -24,14" fill="#FF0066" opacity="0.4" filter="url(#glow)"/>
+    <polygon points="0,-24 21,12 -21,12" fill="#1a0a18" stroke="#FF00FF" stroke-width="2"/>
+    <circle cy="-7" r="9" fill="#FF00FF" opacity="0.8"/>
+  </g>
+
+  <!-- Fragmento 4 -->
+  <g transform="translate(730, 820)" opacity="0.6">
+    <circle r="26" fill="#FF0066" opacity="0.3" filter="url(#glow)"/>
+    <circle r="23" fill="#1a0a18" stroke="#FF0066" stroke-width="2"/>
+    <circle r="9" fill="#FF0066" opacity="0.8"/>
+  </g>
+
+  <!-- Torres disparando -->
+  <!-- Torre izquierda -->
+  <g transform="translate(200, 1100)">
+    <circle r="70" fill="none" stroke="#00FFFF" stroke-width="25" opacity="0.08" filter="url(#strongGlow)"/>
+    <polygon points="0,-50 43,-25 43,25 0,50 -43,25 -43,-25" fill="#00CCCC" stroke="#00FFFF" stroke-width="2" filter="url(#glow)"/>
+    <circle r="18" fill="#00FFFF" opacity="0.95" filter="url(#glow)"/>
+  </g>
+
+  <!-- Torre derecha -->
+  <g transform="translate(880, 1100)">
+    <circle r="70" fill="none" stroke="#FF00FF" stroke-width="25" opacity="0.08" filter="url(#strongGlow)"/>
+    <polygon points="0,-50 43,-25 43,25 0,50 -43,25 -43,-25" fill="#CC00CC" stroke="#FF00FF" stroke-width="2" filter="url(#glow)"/>
+    <circle r="18" fill="#FF00FF" opacity="0.95" filter="url(#glow)"/>
+  </g>
+
+  <!-- Rayos de disparo desde las torres -->
+  <line x1="200" y1="1100" x2="540" y2="700" stroke="#00FFFF" stroke-width="5" opacity="0.9" stroke-dasharray="10,5" filter="url(#strongGlow)"/>
+  <line x1="880" y1="1100" x2="540" y2="700" stroke="#FF00FF" stroke-width="5" opacity="0.9" stroke-dasharray="10,5" filter="url(#strongGlow)"/>
+
+  <!-- TEXTO PRINCIPAL -->
+  <text
+    x="540"
+    y="1430"
+    text-anchor="middle"
+    font-family="Arial Black, sans-serif"
+    font-size="52"
+    font-weight="900"
+    letter-spacing="2"
+    fill="#00FFFF"
+    filter="url(#strongGlow)"
+  >EFECTOS INCREÍBLES</text>
+
+  <text
+    x="540"
+    y="1520"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="38"
+    font-weight="700"
+    letter-spacing="1.5"
+    fill="#FF00FF"
+    opacity="0.95"
+    filter="url(#glow)"
+  >Partículas y explosiones</text>
+
+  <text
+    x="540"
+    y="1600"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="38"
+    font-weight="700"
+    letter-spacing="1.5"
+    fill="#FF6600"
+    opacity="0.95"
+    filter="url(#glow)"
+  >en cada batalla épica</text>
+
+  <!-- Brackets decorativos -->
+  <g opacity="0.7">
+    <path d="M 50,50 L 50,140 M 50,50 L 140,50" stroke="#00FFFF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 1030,50 L 1030,140 M 1030,50 L 940,50" stroke="#FF00FF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 50,1870 L 50,1780 M 50,1870 L 140,1870" stroke="#FF6600" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 1030,1870 L 1030,1780 M 1030,1870 L 940,1870" stroke="#00FFFF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+  </g>
+
+</svg>

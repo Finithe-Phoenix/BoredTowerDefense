@@ -1,0 +1,279 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Filters -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="15" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Gradientes -->
+    <radialGradient id="bgGradient" cx="50%" cy="40%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a0a18;stop-opacity:1" />
+    </radialGradient>
+
+    <linearGradient id="titleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00FFFF;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#FF00FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FF6600;stop-opacity:1" />
+    </linearGradient>
+
+    <radialGradient id="towerCore" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#00FFFF;stop-opacity:1" />
+      <stop offset="70%" style="stop-color:#00CCCC;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#0099AA;stop-opacity:0.5" />
+    </radialGradient>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="1080" height="1920" fill="url(#bgGradient)"/>
+
+  <!-- Grid pattern -->
+  <g opacity="0.1">
+    <line x1="0" y1="480" x2="1080" y2="480" stroke="#00FFFF" stroke-width="1"/>
+    <line x1="0" y1="960" x2="1080" y2="960" stroke="#00FFFF" stroke-width="1"/>
+    <line x1="0" y1="1440" x2="1080" y2="1440" stroke="#00FFFF" stroke-width="1"/>
+    <line x1="270" y1="0" x2="270" y2="1920" stroke="#00FFFF" stroke-width="1"/>
+    <line x1="540" y1="0" x2="540" y2="1920" stroke="#00FFFF" stroke-width="1"/>
+    <line x1="810" y1="0" x2="810" y2="1920" stroke="#00FFFF" stroke-width="1"/>
+  </g>
+
+  <!-- Estrellas -->
+  <circle cx="150" cy="200" r="2" fill="#00FFFF" opacity="0.6"/>
+  <circle cx="900" cy="300" r="1.5" fill="#FF00FF" opacity="0.5"/>
+  <circle cx="200" cy="800" r="2" fill="#FF6600" opacity="0.7"/>
+  <circle cx="850" cy="1200" r="1.5" fill="#00FFFF" opacity="0.6"/>
+  <circle cx="300" cy="1600" r="2" fill="#FF00FF" opacity="0.5"/>
+
+  <!-- TORRE PRINCIPAL MASIVA -->
+  <g transform="translate(540, 750)">
+    <!-- Glow exterior gigante -->
+    <circle r="280" fill="none" stroke="#00FFFF" stroke-width="60" opacity="0.08" filter="url(#strongGlow)"/>
+
+    <!-- Hexágono exterior -->
+    <polygon
+      points="0,-220 190.5,-110 190.5,110 0,220 -190.5,110 -190.5,-110"
+      fill="none"
+      stroke="#00FFFF"
+      stroke-width="4"
+      opacity="0.6"
+      filter="url(#glow)"
+    />
+
+    <!-- Hexágono medio -->
+    <polygon
+      points="0,-180 156,-90 156,90 0,180 -156,90 -156,-90"
+      fill="#0a0a18"
+      stroke="#FF00FF"
+      stroke-width="3.5"
+      opacity="0.9"
+      filter="url(#glow)"
+    />
+
+    <!-- Líneas internas -->
+    <line x1="-156" y1="-90" x2="0" y2="0" stroke="#00FFFF" stroke-width="2" opacity="0.4"/>
+    <line x1="156" y1="-90" x2="0" y2="0" stroke="#00FFFF" stroke-width="2" opacity="0.4"/>
+    <line x1="156" y1="90" x2="0" y2="0" stroke="#00FFFF" stroke-width="2" opacity="0.4"/>
+    <line x1="-156" y1="90" x2="0" y2="0" stroke="#00FFFF" stroke-width="2" opacity="0.4"/>
+
+    <!-- Torre interna -->
+    <polygon
+      points="0,-130 112.5,-65 112.5,65 0,130 -112.5,65 -112.5,-65"
+      fill="#00CCCC"
+      stroke="#00FFFF"
+      stroke-width="3"
+      filter="url(#glow)"
+    />
+
+    <!-- Detalles de segmentos -->
+    <line x1="-112.5" y1="-65" x2="-112.5" y2="65" stroke="#0a0a18" stroke-width="3" opacity="0.5"/>
+    <line x1="112.5" y1="-65" x2="112.5" y2="65" stroke="#0a0a18" stroke-width="3" opacity="0.5"/>
+    <line x1="-112.5" y1="0" x2="112.5" y2="0" stroke="#0a0a18" stroke-width="3" opacity="0.3"/>
+
+    <!-- Core de energía -->
+    <circle r="70" fill="url(#towerCore)" filter="url(#strongGlow)"/>
+    <circle r="70" fill="none" stroke="#FFFFFF" stroke-width="3" opacity="0.9" filter="url(#glow)"/>
+    <circle r="60" fill="none" stroke="#00FFFF" stroke-width="2.5" opacity="0.7"/>
+    <circle r="50" fill="none" stroke="#FF00FF" stroke-width="2" opacity="0.6"/>
+
+    <!-- Puntos orbitales -->
+    <circle cx="85" cy="0" r="8" fill="#00FFFF" opacity="0.95" filter="url(#glow)"/>
+    <circle cx="-85" cy="0" r="8" fill="#FF00FF" opacity="0.95" filter="url(#glow)"/>
+    <circle cx="0" cy="85" r="8" fill="#FF6600" opacity="0.95" filter="url(#glow)"/>
+    <circle cx="0" cy="-85" r="8" fill="#00FFFF" opacity="0.95" filter="url(#glow)"/>
+  </g>
+
+  <!-- ENEMIGOS AMENAZANTES -->
+  <!-- Enemigo izquierdo superior -->
+  <g transform="translate(200, 400)">
+    <circle r="80" fill="none" stroke="#FF0066" stroke-width="25" opacity="0.12" filter="url(#strongGlow)"/>
+    <circle r="60" fill="#FF0066" opacity="0.25" filter="url(#glow)"/>
+    <circle r="55" fill="#1a0a18" stroke="#FF00FF" stroke-width="3" opacity="0.9"/>
+
+    <!-- Púas -->
+    <g opacity="0.85" filter="url(#glow)">
+      <line x1="0" y1="-55" x2="0" y2="-85" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="39" y1="-39" x2="60" y2="-60" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="55" y1="0" x2="85" y2="0" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="39" y1="39" x2="60" y2="60" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="0" y1="55" x2="0" y2="85" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-39" y1="39" x2="-60" y2="60" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-55" y1="0" x2="-85" y2="0" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+      <line x1="-39" y1="-39" x2="-60" y2="-60" stroke="#FF00FF" stroke-width="4" stroke-linecap="round"/>
+    </g>
+
+    <circle r="25" fill="#FF0066" opacity="0.9" filter="url(#glow)"/>
+  </g>
+
+  <!-- Enemigo derecho superior -->
+  <g transform="translate(880, 500)">
+    <circle r="70" fill="none" stroke="#FF6600" stroke-width="22" opacity="0.12" filter="url(#strongGlow)"/>
+    <polygon points="0,-65 56,32.5 -56,32.5" fill="#FF0066" opacity="0.25" filter="url(#glow)"/>
+    <polygon points="0,-60 52,30 -52,30" fill="#1a0a18" stroke="#FF6600" stroke-width="3" opacity="0.9" filter="url(#glow)"/>
+
+    <line x1="0" y1="-60" x2="0" y2="-90" stroke="#FF6600" stroke-width="4" stroke-linecap="round" filter="url(#glow)"/>
+    <line x1="52" y1="30" x2="75" y2="45" stroke="#FF6600" stroke-width="4" stroke-linecap="round" filter="url(#glow)"/>
+    <line x1="-52" y1="30" x2="-75" y2="45" stroke="#FF6600" stroke-width="4" stroke-linecap="round" filter="url(#glow)"/>
+
+    <circle cy="-15" r="22" fill="#FF6600" opacity="0.85" filter="url(#glow)"/>
+  </g>
+
+  <!-- TÍTULO DEL JUEGO -->
+  <g transform="translate(540, 1250)">
+    <!-- Sombra del título -->
+    <text
+      text-anchor="middle"
+      font-family="Arial Black, sans-serif"
+      font-size="72"
+      font-weight="900"
+      letter-spacing="3"
+      fill="url(#titleGradient)"
+      opacity="0.3"
+      filter="url(#strongGlow)"
+    >BORED TOWER</text>
+
+    <text
+      y="85"
+      text-anchor="middle"
+      font-family="Arial Black, sans-serif"
+      font-size="72"
+      font-weight="900"
+      letter-spacing="3"
+      fill="url(#titleGradient)"
+      opacity="0.3"
+      filter="url(#strongGlow)"
+    >DEFENSE</text>
+
+    <!-- Título principal -->
+    <text
+      text-anchor="middle"
+      font-family="Arial Black, sans-serif"
+      font-size="72"
+      font-weight="900"
+      letter-spacing="3"
+      fill="url(#titleGradient)"
+      filter="url(#glow)"
+    >BORED TOWER</text>
+
+    <text
+      y="85"
+      text-anchor="middle"
+      font-family="Arial Black, sans-serif"
+      font-size="72"
+      font-weight="900"
+      letter-spacing="3"
+      fill="url(#titleGradient)"
+      filter="url(#glow)"
+    >DEFENSE</text>
+
+    <!-- Outline -->
+    <text
+      text-anchor="middle"
+      font-family="Arial Black, sans-serif"
+      font-size="72"
+      font-weight="900"
+      letter-spacing="3"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-width="1.5"
+      opacity="0.6"
+    >BORED TOWER</text>
+
+    <text
+      y="85"
+      text-anchor="middle"
+      font-family="Arial Black, sans-serif"
+      font-size="72"
+      font-weight="900"
+      letter-spacing="3"
+      fill="none"
+      stroke="#FFFFFF"
+      stroke-width="1.5"
+      opacity="0.6"
+    >DEFENSE</text>
+  </g>
+
+  <!-- FRASE LLAMATIVA 1 -->
+  <text
+    x="540"
+    y="1500"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="42"
+    font-weight="700"
+    letter-spacing="2"
+    fill="#00FFFF"
+    opacity="0.95"
+    filter="url(#glow)"
+  >¡DEFIENDE TU BASE!</text>
+
+  <!-- FRASE LLAMATIVA 2 -->
+  <text
+    x="540"
+    y="1580"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="32"
+    font-weight="600"
+    letter-spacing="1.5"
+    fill="#FF00FF"
+    opacity="0.9"
+    filter="url(#glow)"
+  >10 Mundos • Enemigos Épicos</text>
+
+  <!-- FRASE LLAMATIVA 3 -->
+  <text
+    x="540"
+    y="1650"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="32"
+    font-weight="600"
+    letter-spacing="1.5"
+    fill="#FF6600"
+    opacity="0.9"
+    filter="url(#glow)"
+  >Gráficos Cyberpunk Increíbles</text>
+
+  <!-- Brackets decorativos -->
+  <g opacity="0.7">
+    <path d="M 50,50 L 50,150 M 50,50 L 150,50" stroke="#00FFFF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 1030,50 L 1030,150 M 1030,50 L 930,50" stroke="#FF00FF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 50,1870 L 50,1770 M 50,1870 L 150,1870" stroke="#FF6600" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 1030,1870 L 1030,1770 M 1030,1870 L 930,1870" stroke="#00FFFF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+  </g>
+
+</svg>
