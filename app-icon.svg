@@ -1,0 +1,160 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Definiciones de gradientes y filtros -->
+  <defs>
+    <!-- Glow effect -->
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Gradiente radial para el fondo -->
+    <radialGradient id="bgGradient" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a0a18;stop-opacity:1" />
+    </radialGradient>
+
+    <!-- Gradiente para la torre -->
+    <linearGradient id="towerGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#00FFFF;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#00CCCC;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0099AA;stop-opacity:1" />
+    </linearGradient>
+
+    <!-- Gradiente para el core -->
+    <radialGradient id="coreGradient" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="30%" style="stop-color:#00FFFF;stop-opacity:0.9" />
+      <stop offset="70%" style="stop-color:#FF00FF;stop-opacity:0.6" />
+      <stop offset="100%" style="stop-color:#FF6600;stop-opacity:0.3" />
+    </radialGradient>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="512" height="512" fill="url(#bgGradient)"/>
+
+  <!-- Estrellas de fondo -->
+  <circle cx="80" cy="80" r="1.5" fill="#00FFFF" opacity="0.6"/>
+  <circle cx="420" cy="90" r="1" fill="#FF00FF" opacity="0.5"/>
+  <circle cx="450" cy="150" r="1.2" fill="#00FFFF" opacity="0.7"/>
+  <circle cx="100" cy="400" r="1" fill="#FF6600" opacity="0.6"/>
+  <circle cx="400" cy="420" r="1.3" fill="#00FFFF" opacity="0.5"/>
+  <circle cx="70" cy="300" r="1" fill="#FF00FF" opacity="0.6"/>
+  <circle cx="440" cy="280" r="1.5" fill="#00FFFF" opacity="0.7"/>
+
+  <!-- Grid lines (sutiles) -->
+  <line x1="0" y1="256" x2="512" y2="256" stroke="#00FFFF" stroke-width="0.5" opacity="0.1"/>
+  <line x1="256" y1="0" x2="256" y2="512" stroke="#00FFFF" stroke-width="0.5" opacity="0.1"/>
+
+  <!-- Anillos de energía externos (sutiles) -->
+  <circle cx="256" cy="256" r="220" fill="none" stroke="#00FFFF" stroke-width="1" opacity="0.15" stroke-dasharray="10,5"/>
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#FF00FF" stroke-width="1" opacity="0.1" stroke-dasharray="8,4"/>
+
+  <!-- TORRE PRINCIPAL - Hexágono con diseño cyberpunk -->
+  <g transform="translate(256, 256)">
+
+    <!-- Glow exterior grande -->
+    <circle r="130" fill="none" stroke="#00FFFF" stroke-width="30" opacity="0.08" filter="url(#strongGlow)"/>
+
+    <!-- Hexágono exterior (base) -->
+    <polygon
+      points="0,-120 104,-60 104,60 0,120 -104,60 -104,-60"
+      fill="none"
+      stroke="#00FFFF"
+      stroke-width="3"
+      opacity="0.6"
+      filter="url(#glow)"
+    />
+
+    <!-- Hexágono medio -->
+    <polygon
+      points="0,-100 87,-50 87,50 0,100 -87,50 -87,-50"
+      fill="#0a0a18"
+      stroke="#FF00FF"
+      stroke-width="2.5"
+      opacity="0.8"
+      filter="url(#glow)"
+    />
+
+    <!-- Líneas diagonales internas (detalles) -->
+    <line x1="-87" y1="-50" x2="0" y2="0" stroke="#00FFFF" stroke-width="1.5" opacity="0.4"/>
+    <line x1="87" y1="-50" x2="0" y2="0" stroke="#00FFFF" stroke-width="1.5" opacity="0.4"/>
+    <line x1="87" y1="50" x2="0" y2="0" stroke="#00FFFF" stroke-width="1.5" opacity="0.4"/>
+    <line x1="-87" y1="50" x2="0" y2="0" stroke="#00FFFF" stroke-width="1.5" opacity="0.4"/>
+
+    <!-- Hexágono interior (torre) -->
+    <polygon
+      points="0,-70 61,-35 61,35 0,70 -61,35 -61,-35"
+      fill="url(#towerGradient)"
+      stroke="#00FFFF"
+      stroke-width="2"
+      filter="url(#glow)"
+    />
+
+    <!-- Detalles de segmentos en la torre -->
+    <line x1="-61" y1="-35" x2="-61" y2="35" stroke="#0a0a18" stroke-width="2" opacity="0.5"/>
+    <line x1="61" y1="-35" x2="61" y2="35" stroke="#0a0a18" stroke-width="2" opacity="0.5"/>
+    <line x1="-61" y1="0" x2="61" y2="0" stroke="#0a0a18" stroke-width="2" opacity="0.3"/>
+
+    <!-- Core de energía central -->
+    <circle r="35" fill="url(#coreGradient)" filter="url(#strongGlow)"/>
+
+    <!-- Anillo del core -->
+    <circle r="35" fill="none" stroke="#FFFFFF" stroke-width="2" opacity="0.8" filter="url(#glow)"/>
+    <circle r="30" fill="none" stroke="#00FFFF" stroke-width="1.5" opacity="0.6"/>
+    <circle r="25" fill="none" stroke="#FF00FF" stroke-width="1" opacity="0.5"/>
+
+    <!-- Puntos de energía orbitando -->
+    <circle cx="45" cy="0" r="3" fill="#00FFFF" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="-45" cy="0" r="3" fill="#FF00FF" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="0" cy="45" r="3" fill="#FF6600" opacity="0.9" filter="url(#glow)"/>
+    <circle cx="0" cy="-45" r="3" fill="#00FFFF" opacity="0.9" filter="url(#glow)"/>
+
+    <!-- Esquinas decorativas (brackets) -->
+    <!-- Top -->
+    <path d="M -10,-120 L -10,-100 M 10,-120 L 10,-100" stroke="#FF6600" stroke-width="2.5" opacity="0.7" stroke-linecap="round" filter="url(#glow)"/>
+    <!-- Bottom -->
+    <path d="M -10,120 L -10,100 M 10,120 L 10,100" stroke="#FF6600" stroke-width="2.5" opacity="0.7" stroke-linecap="round" filter="url(#glow)"/>
+
+    <!-- Pequeño enemigo en la esquina (opcional) -->
+    <g transform="translate(90, -90) scale(0.4)">
+      <circle r="15" fill="#FF0066" opacity="0.3" filter="url(#glow)"/>
+      <circle r="12" fill="#FF0066" stroke="#FF00FF" stroke-width="1.5" opacity="0.8"/>
+      <!-- Púas del enemigo -->
+      <line x1="0" y1="-12" x2="0" y2="-20" stroke="#FF00FF" stroke-width="2" opacity="0.7"/>
+      <line x1="0" y1="12" x2="0" y2="20" stroke="#FF00FF" stroke-width="2" opacity="0.7"/>
+      <line x1="-12" y1="0" x2="-20" y2="0" stroke="#FF00FF" stroke-width="2" opacity="0.7"/>
+      <line x1="12" y1="0" x2="20" y2="0" stroke="#FF00FF" stroke-width="2" opacity="0.7"/>
+    </g>
+
+  </g>
+
+  <!-- Bordes decorativos de la esquina (TRON style) -->
+  <!-- Top-left -->
+  <path d="M 20,20 L 20,60 M 20,20 L 60,20" stroke="#00FFFF" stroke-width="3" opacity="0.6" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M 15,15 L 15,65 M 15,15 L 65,15" stroke="#00FFFF" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
+
+  <!-- Top-right -->
+  <path d="M 492,20 L 492,60 M 492,20 L 452,20" stroke="#FF00FF" stroke-width="3" opacity="0.6" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M 497,15 L 497,65 M 497,15 L 447,15" stroke="#FF00FF" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
+
+  <!-- Bottom-left -->
+  <path d="M 20,492 L 20,452 M 20,492 L 60,492" stroke="#FF6600" stroke-width="3" opacity="0.6" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M 15,497 L 15,447 M 15,497 L 65,497" stroke="#FF6600" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
+
+  <!-- Bottom-right -->
+  <path d="M 492,492 L 492,452 M 492,492 L 452,492" stroke="#00FFFF" stroke-width="3" opacity="0.6" stroke-linecap="round" filter="url(#glow)"/>
+  <path d="M 497,497 L 497,447 M 497,497 L 447,497" stroke="#00FFFF" stroke-width="1" opacity="0.3" stroke-linecap="round"/>
+
+</svg>

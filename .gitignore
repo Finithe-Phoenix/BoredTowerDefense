@@ -33,6 +33,15 @@ coverage/
 **/android/**/GeneratedPluginRegistrant.java
 **/android/key.properties
 *.jks
+*.keystore
+**/upload-keystore.jks
+
+# CI/CD secrets (IMPORTANT: Never commit these!)
+service-account.json
+*-service-account.json
+*.base64.txt
+keystore.base64.txt
+service-account.base64.txt
 
 # App-specific (kept explicit)
 flutter_app/.dart_tool/
