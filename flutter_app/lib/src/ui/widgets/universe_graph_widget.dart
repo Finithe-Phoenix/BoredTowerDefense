@@ -24,14 +24,20 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
   late AnimationController _materializeController;
   late AnimationController _warpController;
   late AnimationController _glitchController;
+  late AnimationController _planetEntranceController;
+  late AnimationController _selectionController;
+  late AnimationController _exitController;
 
   int? _hoveredWorld;
+  int? _selectedWorld;
+  bool _isExiting = false;
   final List<_Star> _stars = [];
   final List<_WarpLine> _warpLines = [];
   final List<_EnergyParticle> _particles = [];
   final List<_Constellation> _constellations = [];
   late final _FastRng _rng = _FastRng(DateTime.now().millisecondsSinceEpoch);
   double _glitchIntensity = 0;
+  final List<double> _planetEntranceProgress = [];
 
   @override
   void initState() {
@@ -67,6 +73,29 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
       vsync: this,
     );
 
+    // Planet entrance animation (staggered orbital insertion)
+    _planetEntranceController = AnimationController(
+      duration: const Duration(milliseconds: 3000),
+      vsync: this,
+    )..forward();
+
+    // Selection animation (zoom and energy pulse)
+    _selectionController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+
+    // Exit animation (planets disperse)
+    _exitController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    // Initialize planet entrance progress for each world
+    for (int i = 0; i < widget.worlds.length; i++) {
+      _planetEntranceProgress.add(0);
+    }
+
     // Initialize stars (distant background)
     for (int i = 0; i < 200; i++) {
       _stars.add(_Star.random(_rng));
@@ -95,6 +124,9 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
     _materializeController.dispose();
     _warpController.dispose();
     _glitchController.dispose();
+    _planetEntranceController.dispose();
+    _selectionController.dispose();
+    _exitController.dispose();
     super.dispose();
   }
 
@@ -122,11 +154,15 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
               _pulseController,
               _materializeController,
               _warpController,
+              _planetEntranceController,
+              _selectionController,
+              _exitController,
             ]),
             builder: (context, child) {
               // Update animations
               _updateParticles();
               _updateWarpLines();
+              _updatePlanetEntrance();
 
               return GestureDetector(
                 onTapUp: (details) => _handleTap(details.localPosition, center, radius),
@@ -141,11 +177,15 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
                     center: center,
                     radius: radius,
                     hoveredWorld: _hoveredWorld,
+                    selectedWorld: _selectedWorld,
                     stars: _stars,
                     warpLines: _warpLines,
                     particles: _particles,
                     constellations: _constellations,
                     glitchIntensity: _glitchIntensity,
+                    planetEntranceProgress: _planetEntranceProgress,
+                    selectionProgress: _selectionController.value,
+                    exitProgress: _exitController.value,
                   ),
                 ),
               );
@@ -165,6 +205,17 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
   void _updateWarpLines() {
     for (final line in _warpLines) {
       line.update(0.016);
+    }
+  }
+
+  void _updatePlanetEntrance() {
+    final globalProgress = _planetEntranceController.value;
+    for (int i = 0; i < widget.worlds.length; i++) {
+      // Stagger each planet's entrance
+      final delay = i * 0.08;
+      final duration = 0.5;
+      final planetProgress = ((globalProgress - delay) / duration).clamp(0.0, 1.0);
+      _planetEntranceProgress[i] = planetProgress;
     }
   }
 
@@ -195,10 +246,23 @@ class _UniverseGraphWidgetState extends State<UniverseGraphWidget>
   }
 
   void _handleTap(Offset tapPos, Offset center, double radius) {
+    if (_isExiting || _selectedWorld != null) return;
+
     for (int i = 0; i < widget.worlds.length; i++) {
       final nodePos = _getWorldPosition(i, center, radius);
       if ((tapPos - nodePos).distance < 55) {
-        widget.onWorldSelected(widget.worlds[i].id);
+        setState(() => _selectedWorld = widget.worlds[i].id);
+
+        // Play selection animation
+        _selectionController.forward(from: 0).then((_) {
+          // Start exit animation
+          setState(() => _isExiting = true);
+          _exitController.forward(from: 0).then((_) {
+            if (mounted) {
+              widget.onWorldSelected(widget.worlds[i].id);
+            }
+          });
+        });
         break;
       }
     }
@@ -407,11 +471,15 @@ class _UltraEpicUniversePainter extends CustomPainter {
   final Offset center;
   final double radius;
   final int? hoveredWorld;
+  final int? selectedWorld;
   final List<_Star> stars;
   final List<_WarpLine> warpLines;
   final List<_EnergyParticle> particles;
   final List<_Constellation> constellations;
   final double glitchIntensity;
+  final List<double> planetEntranceProgress;
+  final double selectionProgress;
+  final double exitProgress;
 
   _UltraEpicUniversePainter({
     required this.worlds,
@@ -422,11 +490,15 @@ class _UltraEpicUniversePainter extends CustomPainter {
     required this.center,
     required this.radius,
     required this.hoveredWorld,
+    required this.selectedWorld,
     required this.stars,
     required this.warpLines,
     required this.particles,
     required this.constellations,
     required this.glitchIntensity,
+    required this.planetEntranceProgress,
+    required this.selectionProgress,
+    required this.exitProgress,
   });
 
   static final Paint _bgBasePaint = Paint();
@@ -967,6 +1039,20 @@ class _UltraEpicUniversePainter extends CustomPainter {
     for (int i = 0; i < 2; i++) {
       final orbitR = radius * (i == 0 ? 0.75 : 0.95);
 
+      // Check if any world on this orbit is hovered
+      bool orbitHovered = false;
+      if (hoveredWorld != null) {
+        for (int w = 0; w < worlds.length; w++) {
+          if (worlds[w].id == hoveredWorld && w % 2 == i) {
+            orbitHovered = true;
+            break;
+          }
+        }
+      }
+
+      final orbitIntensity = orbitHovered ? 0.4 : 0.15;
+      final orbitWidth = orbitHovered ? 2.0 : 1.0;
+
       // Dashed orbit ring
       final segmentCount = 60;
       for (int seg = 0; seg < segmentCount; seg++) {
@@ -975,8 +1061,9 @@ class _UltraEpicUniversePainter extends CustomPainter {
         final startAngle = (seg / segmentCount) * math.pi * 2;
         final sweepAngle = (1 / segmentCount) * math.pi * 2 * 0.8;
 
-        _orbitPaint.color =
-            NeonColors.cyan.withOpacity(0.15 * orbitFade * (1 - i * 0.3));
+        _orbitPaint
+          ..color = NeonColors.cyan.withOpacity(orbitIntensity * orbitFade * (1 - i * 0.3))
+          ..strokeWidth = orbitWidth;
 
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: orbitR),
@@ -988,15 +1075,16 @@ class _UltraEpicUniversePainter extends CustomPainter {
       }
 
       // Moving markers on orbit
-      for (int m = 0; m < 3; m++) {
-        final markerAngle = mainAnimation * math.pi * 2 * 0.5 + m * math.pi * 2 / 3;
+      final markerCount = orbitHovered ? 5 : 3;
+      for (int m = 0; m < markerCount; m++) {
+        final markerAngle = mainAnimation * math.pi * 2 * 0.5 + m * math.pi * 2 / markerCount;
         final markerPos = Offset(
           center.dx + orbitR * math.cos(markerAngle),
           center.dy + orbitR * math.sin(markerAngle),
         );
 
-        _markerPaint.color = NeonColors.cyan.withOpacity(0.4 * orbitFade);
-        canvas.drawCircle(markerPos, 2, _markerPaint);
+        _markerPaint.color = NeonColors.cyan.withOpacity((orbitHovered ? 0.7 : 0.4) * orbitFade);
+        canvas.drawCircle(markerPos, orbitHovered ? 3 : 2, _markerPaint);
       }
     }
   }
@@ -1087,41 +1175,88 @@ class _UltraEpicUniversePainter extends CustomPainter {
     final nodeFade = ((materializeValue - 0.65 - index * 0.02) / 0.25).clamp(0.0, 1.0);
     if (nodeFade <= 0) return;
 
-    final planetRadius = isHovered ? 42.0 : 35.0;
+    // Get entrance animation progress for this planet
+    final entranceProgress = index < planetEntranceProgress.length ? planetEntranceProgress[index] : 1.0;
+    if (entranceProgress <= 0) return;
+
+    // Apply entrance easing (elastic ease-out for bounce effect)
+    final easedEntrance = _elasticOut(entranceProgress);
+
+    // Calculate entrance position (fly in from outer space)
+    final entranceAngle = (index / worlds.length) * math.pi * 2 - math.pi / 2;
+    final entranceDistance = radius * 3.0 * (1 - easedEntrance);
+    final entranceOffset = Offset(
+      math.cos(entranceAngle) * entranceDistance,
+      math.sin(entranceAngle) * entranceDistance,
+    );
+    final animatedPos = pos + entranceOffset;
+
+    final isSelected = selectedWorld == world.id;
+    final baseRadius = 35.0;
+    final hoverScale = isHovered ? 1.12 : 1.0;
+    final selectionScale = isSelected ? (1.0 + selectionProgress * 0.3) : 1.0;
+    final exitScale = exitProgress > 0 ? (1.0 + exitProgress * 2.0) : 1.0;
+
+    final planetRadius = baseRadius * hoverScale * selectionScale * exitScale;
     final pulse = 0.9 + 0.1 * math.sin(mainAnimation * math.pi * 4 + index);
-    final scale = isHovered ? 1.12 : 1.0;
+
+    // Exit animation: fade and fly away
+    final exitOpacity = exitProgress > 0 ? (1.0 - exitProgress) : 1.0;
+    final exitAngle = (index / worlds.length) * math.pi * 2 + exitProgress * math.pi * 4;
+    final exitDistance = radius * 4.0 * exitProgress * exitProgress;
+    final exitOffset = Offset(
+      math.cos(exitAngle) * exitDistance,
+      math.sin(exitAngle) * exitDistance,
+    );
+    final finalPos = animatedPos + exitOffset;
 
     canvas.save();
-    canvas.translate(pos.dx, pos.dy);
-    canvas.scale(scale * pulse);
-    canvas.translate(-pos.dx, -pos.dy);
+    canvas.translate(finalPos.dx, finalPos.dy);
+    canvas.scale(pulse * easedEntrance);
+    canvas.translate(-finalPos.dx, -finalPos.dy);
+
+    // Selection pulse rings
+    if (isSelected && selectionProgress > 0) {
+      for (int i = 0; i < 3; i++) {
+        final ringProgress = (selectionProgress * 2 - i * 0.3).clamp(0.0, 1.0);
+        final ringRadius = planetRadius * (1.0 + ringProgress * 2.5);
+        final ringOpacity = (1.0 - ringProgress) * 0.6;
+
+        _planetAuraPaint
+          ..shader = null
+          ..color = world.accent.withOpacity(ringOpacity * exitOpacity);
+        canvas.drawCircle(finalPos, ringRadius, _planetAuraPaint);
+      }
+    }
 
     // Outer energy aura
     final auraRadius = planetRadius * 2.2;
     final nodeLevel = (nodeFade * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
     final auraLevel = isHovered ? _planetFadeLevels : nodeLevel;
+    final auraOpacity = isSelected ? 0.8 : (isHovered ? 0.5 : 0.25);
     final auraKey = (world.accent.value << 8) ^
         (auraLevel << 16) ^
         (isHovered ? 1 : 0) ^
+        (isSelected ? 2 : 0) ^
         (auraRadius * 2).round();
     _planetAuraPaint.shader = _planetAuraShaderCache.putIfAbsent(
       auraKey,
       () => RadialGradient(
         colors: [
-          world.accent.withOpacity(isHovered ? 0.5 : 0.25 * (auraLevel / _planetFadeLevels)),
-          world.accent.withOpacity(isHovered ? 0.2 : 0.1 * (auraLevel / _planetFadeLevels)),
+          world.accent.withOpacity(auraOpacity * (auraLevel / _planetFadeLevels)),
+          world.accent.withOpacity(auraOpacity * 0.4 * (auraLevel / _planetFadeLevels)),
           Colors.transparent,
         ],
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: auraRadius)),
     );
     canvas.save();
-    canvas.translate(pos.dx, pos.dy);
+    canvas.translate(finalPos.dx, finalPos.dy);
     canvas.drawCircle(Offset.zero, auraRadius, _planetAuraPaint);
     canvas.restore();
 
     // Planet ring (Saturn-style) for some worlds
     if (index % 2 == 0) {
-      _drawPlanetRing(canvas, pos, planetRadius * 1.6, world.accent, nodeFade, isHovered);
+      _drawPlanetRing(canvas, finalPos, planetRadius * 1.6, world.accent, nodeFade * exitOpacity, isHovered);
     }
 
     // Planet body with gradient
@@ -1131,35 +1266,35 @@ class _UltraEpicUniversePainter extends CustomPainter {
       () => RadialGradient(
         center: const Alignment(-0.3, -0.3),
         colors: [
-          world.accent.withOpacity(0.9 * (nodeLevel / _planetFadeLevels)),
-          world.accent.withOpacity(0.5 * (nodeLevel / _planetFadeLevels)),
-          Colors.black.withOpacity(0.8 * (nodeLevel / _planetFadeLevels)),
+          world.accent.withOpacity(0.9 * (nodeLevel / _planetFadeLevels) * exitOpacity),
+          world.accent.withOpacity(0.5 * (nodeLevel / _planetFadeLevels) * exitOpacity),
+          Colors.black.withOpacity(0.8 * (nodeLevel / _planetFadeLevels) * exitOpacity),
         ],
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: planetRadius)),
     );
     canvas.save();
-    canvas.translate(pos.dx, pos.dy);
+    canvas.translate(finalPos.dx, finalPos.dy);
     canvas.drawCircle(Offset.zero, planetRadius, _planetBodyPaint);
     canvas.restore();
 
     // Planet surface detail (bands)
     for (int band = 0; band < 3; band++) {
-      final bandY = pos.dy - planetRadius * 0.5 + band * planetRadius * 0.5;
-      _planetBandPaint.color = world.accent.withOpacity(0.3 * nodeFade);
+      final bandY = finalPos.dy - planetRadius * 0.5 + band * planetRadius * 0.5;
+      _planetBandPaint.color = world.accent.withOpacity(0.3 * nodeFade * exitOpacity);
 
       // Curved band
       final bandPath = _bandPath..reset();
-      bandPath.moveTo(pos.dx - planetRadius * 0.8, bandY);
+      bandPath.moveTo(finalPos.dx - planetRadius * 0.8, bandY);
       bandPath.quadraticBezierTo(
-        pos.dx, bandY + 5,
-        pos.dx + planetRadius * 0.8, bandY,
+        finalPos.dx, bandY + 5,
+        finalPos.dx + planetRadius * 0.8, bandY,
       );
       canvas.drawPath(bandPath, _planetBandPaint);
     }
 
     // Atmosphere glow
-    _planetAtmoPaint.color = world.accent.withOpacity(0.4 * nodeFade);
-    canvas.drawCircle(pos, planetRadius, _planetAtmoPaint);
+    _planetAtmoPaint.color = world.accent.withOpacity(0.4 * nodeFade * exitOpacity);
+    canvas.drawCircle(finalPos, planetRadius, _planetAtmoPaint);
 
     // Specular highlight
     final specKey = (nodeLevel << 16) ^ (planetRadius * 2).round();
@@ -1169,24 +1304,25 @@ class _UltraEpicUniversePainter extends CustomPainter {
         center: const Alignment(-0.5, -0.5),
         radius: 0.5,
         colors: [
-          Colors.white.withOpacity(0.5 * (nodeLevel / _planetFadeLevels)),
+          Colors.white.withOpacity(0.5 * (nodeLevel / _planetFadeLevels) * exitOpacity),
           Colors.transparent,
         ],
       ).createShader(Rect.fromCircle(center: Offset.zero, radius: planetRadius)),
     );
     canvas.save();
-    canvas.translate(pos.dx, pos.dy);
+    canvas.translate(finalPos.dx, finalPos.dy);
     canvas.drawCircle(Offset.zero, planetRadius * 0.5, _planetSpecularPaint);
     canvas.restore();
 
     // Small moon for some worlds
     if (index % 3 == 0) {
-      _drawMoon(canvas, pos, planetRadius, mainAnimation, world.accent, nodeFade);
+      _drawMoon(canvas, finalPos, planetRadius, mainAnimation, world.accent, nodeFade * exitOpacity);
     }
 
     // World identifier
     final idLevel = (nodeFade * _planetFadeLevels).round().clamp(0, _planetFadeLevels);
-    final idKey = (world.id << 16) ^ (idLevel << 1) ^ (isHovered ? 1 : 0);
+    final idSize = isSelected ? 18.0 : (isHovered ? 16.0 : 13.0);
+    final idKey = (world.id << 16) ^ (idLevel << 1) ^ (isHovered ? 1 : 0) ^ (isSelected ? 2 : 0);
     final idPainter = _idPainterCache.putIfAbsent(
       idKey,
       () {
@@ -1194,13 +1330,13 @@ class _UltraEpicUniversePainter extends CustomPainter {
         painter.text = TextSpan(
           text: 'W${world.id}',
           style: TextStyle(
-            fontSize: isHovered ? 16 : 13,
+            fontSize: idSize,
             fontWeight: FontWeight.bold,
             letterSpacing: 2,
-            color: Colors.white.withOpacity(idLevel / _planetFadeLevels),
+            color: Colors.white.withOpacity((idLevel / _planetFadeLevels) * exitOpacity),
             shadows: [
-              Shadow(color: world.accent.withOpacity(0.9), blurRadius: 10),
-              Shadow(color: world.accent.withOpacity(0.5), blurRadius: 20),
+              Shadow(color: world.accent.withOpacity(0.9 * exitOpacity), blurRadius: 10),
+              Shadow(color: world.accent.withOpacity(0.5 * exitOpacity), blurRadius: 20),
             ],
           ),
         );
@@ -1210,20 +1346,64 @@ class _UltraEpicUniversePainter extends CustomPainter {
     );
     idPainter.paint(
       canvas,
-      pos - Offset(idPainter.width / 2, idPainter.height / 2),
+      finalPos - Offset(idPainter.width / 2, idPainter.height / 2),
     );
 
     // Holographic info panel when hovered
-    if (isHovered) {
-      _drawHolographicPanel(canvas, pos, planetRadius, world, nodeFade);
-      _drawTargetingBrackets(canvas, pos, planetRadius * 1.5, world.accent, nodeFade);
-      _drawOrbitingParticles(canvas, pos, planetRadius * 1.4, world.accent, nodeFade);
+    if (isHovered && exitProgress == 0) {
+      _drawHolographicPanel(canvas, finalPos, planetRadius, world, nodeFade);
+      _drawTargetingBrackets(canvas, finalPos, planetRadius * 1.5, world.accent, nodeFade);
+      _drawOrbitingParticles(canvas, finalPos, planetRadius * 1.4, world.accent, nodeFade);
     }
 
     // Pulsar beacon
-    _drawPulsarBeacon(canvas, pos, planetRadius, world.accent, nodeFade, index);
+    _drawPulsarBeacon(canvas, finalPos, planetRadius, world.accent, nodeFade * exitOpacity, index);
+
+    // Entrance trail effect
+    if (entranceProgress < 1.0) {
+      _drawEntranceTrail(canvas, finalPos, pos, world.accent, 1.0 - entranceProgress);
+    }
 
     canvas.restore();
+  }
+
+  // Elastic ease-out function for bouncy entrance
+  double _elasticOut(double t) {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    const p = 0.3;
+    return math.pow(2, -10 * t) * math.sin((t - p / 4) * (2 * math.pi) / p) + 1;
+  }
+
+  void _drawEntranceTrail(Canvas canvas, Offset start, Offset end, Color color, double intensity) {
+    if (intensity <= 0) return;
+
+    final paint = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          color.withOpacity(0.6 * intensity),
+          color.withOpacity(0.3 * intensity),
+          Colors.transparent,
+        ],
+      ).createShader(Rect.fromPoints(start, end))
+      ..strokeWidth = 3
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+
+    canvas.drawLine(start, end, paint);
+
+    // Trail particles
+    for (int i = 0; i < 5; i++) {
+      final t = i / 5.0;
+      final particlePos = Offset.lerp(start, end, t)!;
+      final particleSize = 2.0 * (1.0 - t) * intensity;
+
+      final particlePaint = Paint()
+        ..color = color.withOpacity((1.0 - t) * 0.8 * intensity)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+
+      canvas.drawCircle(particlePos, particleSize, particlePaint);
+    }
   }
 
   void _drawPlanetRing(Canvas canvas, Offset center, double radius, Color color, double opacity, bool isHovered) {

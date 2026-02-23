@@ -41,6 +41,11 @@ void main() {
       final cubit = SettingsCubit();
       expect(cubit.state.screenShake, isTrue);
     });
+
+    test('initial graphicsQuality is high', () {
+      final cubit = SettingsCubit();
+      expect(cubit.state.graphicsQuality, 'high');
+    });
   });
 
   group('SettingsCubit setMusicVolume', () {
@@ -270,6 +275,7 @@ void main() {
       expect(cubit.state.showGrid, isTrue);
       expect(cubit.state.particleIntensity, 1.0);
       expect(cubit.state.screenShake, isTrue);
+      expect(cubit.state.graphicsQuality, 'high');
     });
 
     test('resetToDefaults can be called multiple times', () {
@@ -278,6 +284,37 @@ void main() {
       cubit.resetToDefaults();
       cubit.resetToDefaults();
       expect(cubit.state, const SettingsState());
+    });
+  });
+
+  group('SettingsCubit setGraphicsQuality', () {
+    test('accepts low, medium, high and extreme', () {
+      final cubit = SettingsCubit();
+
+      cubit.setGraphicsQuality('low');
+      expect(cubit.state.graphicsQuality, 'low');
+
+      cubit.setGraphicsQuality('medium');
+      expect(cubit.state.graphicsQuality, 'medium');
+
+      cubit.setGraphicsQuality('high');
+      expect(cubit.state.graphicsQuality, 'high');
+
+      cubit.setGraphicsQuality('extreme');
+      expect(cubit.state.graphicsQuality, 'extreme');
+    });
+
+    test('rejects unknown values', () {
+      final cubit = SettingsCubit();
+      final before = cubit.state.graphicsQuality;
+      cubit.setGraphicsQuality('ultra');
+      expect(cubit.state.graphicsQuality, before);
+    });
+
+    test('legacy auto is migrated to high', () {
+      final cubit = SettingsCubit();
+      cubit.setGraphicsQuality('auto');
+      expect(cubit.state.graphicsQuality, 'high');
     });
   });
 

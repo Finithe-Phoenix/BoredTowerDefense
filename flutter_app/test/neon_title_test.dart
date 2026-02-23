@@ -143,5 +143,29 @@ void main() {
 
       expect(find.byType(NeonTitle), findsNWidgets(2));
     });
+
+    testWidgets('handles shadow cache eviction when cache grows too much',
+        (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: SingleChildScrollView(
+            child: Column(
+              children: List.generate(
+                70,
+                (i) => NeonTitle(
+                  text: 'TITLE_$i',
+                  color: Color(0xFF000000 | i),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump(const Duration(milliseconds: 16));
+
+      expect(find.byType(NeonTitle), findsNWidgets(70));
+    });
   });
 }

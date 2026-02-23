@@ -8,7 +8,8 @@ import '../../entities/enemy.dart';
 import '../../../models/quality_level.dart';
 
 /// Collects tower / enemy positions and exposes them as Float32Lists for shaders.
-class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> {
+class ShaderUniformController extends Component
+    with HasGameRef<BoredGamesGame> {
   static const int maxEntities = 10;
   static const int _textureWidth = maxEntities;
   static const int _textureHeight = 2;
@@ -20,8 +21,7 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
 
   final Float32List towerPositionBuffer = Float32List(maxEntities * 2);
   final Float32List enemyPositionBuffer = Float32List(maxEntities * 2);
-  final Uint8List _pixelBuffer =
-      Uint8List(_textureWidth * _textureHeight * 4);
+  final Uint8List _pixelBuffer = Uint8List(_textureWidth * _textureHeight * 4);
 
   int towerCount = 0;
   int enemyCount = 0;
@@ -42,8 +42,8 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
       enemyCount = 0;
       return;
     }
-    final hasEntities =
-        gameRef.towerManager.towerCount > 0 || gameRef.enemyManager.aliveCount > 0;
+    final hasEntities = gameRef.towerManager.towerCount > 0 ||
+        gameRef.enemyManager.aliveCount > 0;
     if (!hasEntities) {
       if (towerCount != 0 || enemyCount != 0) {
         _updatePositions();
@@ -64,6 +64,7 @@ class ShaderUniformController extends Component with HasGameRef<BoredGamesGame> 
 
   int _entityLimit() {
     return switch (gameRef.quality) {
+      QualityLevel.extreme => maxEntities,
       QualityLevel.high => maxEntities,
       QualityLevel.medium => 6,
       QualityLevel.low => 0,

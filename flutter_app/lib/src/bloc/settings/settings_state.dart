@@ -8,6 +8,7 @@ class SettingsState extends Equatable {
     this.showGrid = true,
     this.particleIntensity = 1.0,
     this.screenShake = true,
+    this.graphicsQuality = 'high', // 'low', 'medium', 'high', 'extreme'
   });
 
   final double musicVolume;
@@ -16,6 +17,7 @@ class SettingsState extends Equatable {
   final bool showGrid;
   final double particleIntensity;
   final bool screenShake;
+  final String graphicsQuality;
 
   SettingsState copyWith({
     double? musicVolume,
@@ -24,6 +26,7 @@ class SettingsState extends Equatable {
     bool? showGrid,
     double? particleIntensity,
     bool? screenShake,
+    String? graphicsQuality,
   }) {
     return SettingsState(
       musicVolume: musicVolume ?? this.musicVolume,
@@ -32,6 +35,7 @@ class SettingsState extends Equatable {
       showGrid: showGrid ?? this.showGrid,
       particleIntensity: particleIntensity ?? this.particleIntensity,
       screenShake: screenShake ?? this.screenShake,
+      graphicsQuality: graphicsQuality ?? this.graphicsQuality,
     );
   }
 
@@ -43,5 +47,6 @@ class SettingsState extends Equatable {
         showGrid,
         particleIntensity,
         screenShake,
+        graphicsQuality,
       ];
 }

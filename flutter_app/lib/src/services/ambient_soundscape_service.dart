@@ -46,7 +46,7 @@ class AmbientSoundscapeService {
   // State
   bool _initialized = false;
   bool _isPlaying = false;
-  double _volume = 0.5; // Ambient should be subtle
+  double _volume = 0.65; // Ambient volume increased for better atmosphere
   double _intensity = 0.5; // 0.0 = calm, 1.0 = intense
   int _currentWorld = 0;
 
@@ -188,6 +188,14 @@ class AmbientSoundscapeService {
         return 'SHARD VAULT';
       case 6:
         return 'FINAL GATE';
+      case 7:
+        return 'CORE HUNT';
+      case 8:
+        return 'OMEGA GRID';
+      case 9:
+        return 'STORM TOWER';
+      case 10:
+        return 'THE END';
       default:
         return 'UNKNOWN';
     }
@@ -715,6 +723,346 @@ class AmbientSoundscapeService {
   }
 
   // ============================================================
+  // WORLD 7: CORE HUNT - Digital Hunt Atmosphere
+  // Predator and prey dynamics, scanning pulses, tracking signals
+  // ============================================================
+
+  Uint8List _generateWorld7Drone(
+      int samples, Float32List left, Float32List right) {
+    // Tense, hunting drone - E2 with aggressive edge
+    const baseFreq = 82.41; // E2
+
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Hunt tension LFO - stalking rhythm
+      final huntLfo = math.sin(2 * math.pi * 0.06 * t) * 0.5 + 0.5;
+      final stalkLfo = math.sin(2 * math.pi * 0.09 * t);
+
+      // Aggressive fundamental with edge
+      final fundamental = math.sin(2 * math.pi * baseFreq * t) * 0.35;
+
+      // Sawtooth for aggressive hunt character
+      final saw = 2.0 * ((baseFreq * t) % 1.0) - 1.0;
+
+      // Tritone (diminished fifth) - the devil's interval for unease
+      final tritone =
+          math.sin(2 * math.pi * baseFreq * 1.414 * t) * 0.15 * huntLfo;
+
+      // Pulsing sub-bass - heartbeat of the hunt
+      final huntPulse = math.sin(2 * math.pi * 0.7 * t);
+      final subPulse = math.sin(2 * math.pi * 41 * t) * 0.2 * huntPulse.abs();
+
+      final sample =
+          (fundamental * 0.7 + saw * 0.2 * stalkLfo.abs() + tritone + subPulse) *
+              0.45;
+
+      // Aggressive stereo panning
+      final pan = math.sin(2 * math.pi * 0.08 * t) * 0.4;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  Uint8List _generateWorld7Texture(
+      int samples, Float32List left, Float32List right) {
+    // Scanning pulses and tracking signals
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Radar sweep pulses
+      final sweepLfo = math.sin(2 * math.pi * 0.6 * t);
+      final sweep = sweepLfo > 0.8
+          ? math.sin(2 * math.pi * (400 + (sweepLfo - 0.8) * 2000) * t) *
+              0.025 *
+              (1.0 - sweepLfo)
+          : 0.0;
+
+      // Target lock signals
+      final lockLfo = math.sin(2 * math.pi * 0.35 * t);
+      final lock = lockLfo > 0.9
+          ? math.sin(2 * math.pi * 1600 * t) * 0.015 * (lockLfo - 0.9) * 10
+          : 0.0;
+
+      // Hunt tension noise
+      final tensionNoise = _pinkNoise() * 0.02 * (0.6 + sweepLfo.abs() * 0.4);
+
+      final sample = sweep + lock + tensionNoise;
+
+      // Dynamic stereo
+      final pan = math.sin(2 * math.pi * 0.12 * t) * 0.5;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  // ============================================================
+  // WORLD 8: OMEGA GRID - Final Grid Atmosphere
+  // Grid collapse, system strain, terminal pressure
+  // ============================================================
+
+  Uint8List _generateWorld8Drone(
+      int samples, Float32List left, Float32List right) {
+    // Heavy, oppressive drone - B1 with weight
+    const baseFreq = 61.74; // B1
+
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // System strain LFO
+      final strainLfo = math.sin(2 * math.pi * 0.04 * t) * 0.5 + 0.5;
+      final collapseLfo = math.sin(2 * math.pi * 0.015 * t);
+
+      // Heavy fundamental
+      final fundamental = math.sin(2 * math.pi * baseFreq * t) * 0.4;
+
+      // Multiple detuned layers for thickness
+      double layers = 0;
+      for (int v = 0; v < 7; v++) {
+        final detune = (v - 3) * 0.3;
+        final phase = (v * 0.15);
+        layers += math.sin(2 * math.pi * (baseFreq + detune) * t + phase) / 7.0;
+      }
+
+      // Massive sub-bass - the weight of the grid
+      final sub = math.sin(2 * math.pi * 30.87 * t) * 0.3;
+
+      // System overload harmonics
+      final overload = math.sin(2 * math.pi * baseFreq * 2 * t) *
+          0.1 *
+          (collapseLfo * 0.5 + 0.5);
+
+      final sample =
+          (fundamental * 0.6 + layers * 0.25 + sub + overload * strainLfo) * 0.5;
+
+      // Heavy stereo
+      final pan = math.sin(2 * math.pi * 0.02 * t) * 0.3;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  Uint8List _generateWorld8Texture(
+      int samples, Float32List left, Float32List right) {
+    // Grid hum and system warnings
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Grid power hum (lower frequency for massive scale)
+      final gridHum = math.sin(2 * math.pi * 90 * t) *
+          0.025 *
+          (0.7 + math.sin(2 * math.pi * 0.08 * t) * 0.3);
+
+      // System warning tones
+      final warningLfo = math.sin(2 * math.pi * 0.18 * t);
+      final warning = warningLfo > 0.75
+          ? math.sin(2 * math.pi * 440 * t) * 0.02 * (warningLfo - 0.75) * 4
+          : 0.0;
+
+      // Heavy pressure noise
+      final pressure = _pinkNoise() * 0.025;
+
+      final sample = gridHum + warning + pressure;
+
+      // Solid stereo
+      final pan = math.sin(2 * math.pi * 0.05 * t) * 0.4;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  // ============================================================
+  // WORLD 9: STORM TOWER - Chaotic Storm Atmosphere
+  // Violent weather, electrical chaos, destructive power
+  // ============================================================
+
+  Uint8List _generateWorld9Drone(
+      int samples, Float32List left, Float32List right) {
+    // Chaotic, storm drone - G#1 with violence
+    const baseFreq = 51.91; // G#1
+
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Violent storm LFOs
+      final stormLfo1 = math.sin(2 * math.pi * 0.11 * t);
+      final stormLfo2 = math.sin(2 * math.pi * 0.17 * t + 0.8);
+      final stormLfo3 = math.sin(2 * math.pi * 0.07 * t + 1.5);
+
+      // Chaotic frequency modulation
+      final freqMod = baseFreq + stormLfo1 * 8 + stormLfo2 * 5 + stormLfo3 * 12;
+
+      // Fundamental with chaos
+      final fundamental = math.sin(2 * math.pi * freqMod * t) * 0.35;
+
+      // Sawtooth for harsh storm character
+      final saw = 2.0 * ((freqMod * t) % 1.0) - 1.0;
+
+      // Lightning harmonics - high and violent
+      final lightning1 = math.sin(2 * math.pi * baseFreq * 7 * t) *
+          0.08 *
+          (stormLfo1 > 0.7 ? 1.0 : 0.0);
+      final lightning2 = math.sin(2 * math.pi * baseFreq * 11 * t) *
+          0.05 *
+          (stormLfo2 > 0.8 ? 1.0 : 0.0);
+
+      // Thunder sub-bass
+      final thunder = math.sin(2 * math.pi * 26 * t) *
+          0.25 *
+          (0.6 + stormLfo3.abs() * 0.4);
+
+      final sample =
+          (fundamental + saw * 0.25 + lightning1 + lightning2 + thunder) * 0.5;
+
+      // Chaotic stereo
+      final pan = stormLfo1 * 0.6;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  Uint8List _generateWorld9Texture(
+      int samples, Float32List left, Float32List right) {
+    // Storm violence and lightning
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Violent wind
+      final windLfo = math.sin(2 * math.pi * 0.13 * t) * 0.5 + 0.5;
+      final wind = _pinkNoise() * 0.04 * windLfo;
+
+      // Lightning strikes
+      final lightningChance = _random.nextDouble();
+      final lightning = lightningChance > 0.997
+          ? (_random.nextDouble() * 2 - 1) * 0.5 * math.exp(-(i % 2205) / 441.0)
+          : 0.0;
+
+      // Thunder rumble with decay
+      final thunderLfo = math.sin(2 * math.pi * 0.06 * t);
+      final thunderAmt = thunderLfo > 0.8 ? (thunderLfo - 0.8) * 5 : 0.0;
+      final thunder =
+          _pinkNoise() * 0.035 * thunderAmt + math.sin(2 * math.pi * 35 * t) * 0.025 * thunderAmt;
+
+      final sample = wind + lightning + thunder;
+
+      // Violent stereo movement
+      final pan = math.sin(2 * math.pi * 0.09 * t) * 0.7;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  // ============================================================
+  // WORLD 10: THE END - Apocalyptic Atmosphere
+  // System death, digital apocalypse, the final collapse
+  // ============================================================
+
+  Uint8List _generateWorld10Drone(
+      int samples, Float32List left, Float32List right) {
+    // Apocalyptic drone - C1 (lowest) with darkness
+    const baseFreq = 32.70; // C1 - the abyss
+
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Apocalypse breathing - extremely slow
+      final apocalypseLfo = math.sin(2 * math.pi * 0.003 * t) * 0.5 + 0.5;
+      final deathLfo = math.sin(2 * math.pi * 0.001 * t);
+
+      // Deep fundamental - the void
+      final fundamental = math.sin(2 * math.pi * baseFreq * t) * 0.35;
+
+      // Octave for depth
+      final octave = math.sin(2 * math.pi * baseFreq * 2 * t) * 0.2;
+
+      // Dissonant intervals - the death chord
+      final minor2nd =
+          math.sin(2 * math.pi * baseFreq * 1.06 * t) * 0.15 * apocalypseLfo;
+      final tritone = math.sin(2 * math.pi * baseFreq * 1.414 * t) *
+          0.12 *
+          (deathLfo * 0.5 + 0.5);
+
+      // Deep sub-bass - primordial
+      final abyss = math.sin(2 * math.pi * 16.35 * t) * 0.25;
+
+      // High noise shimmer - digital decay
+      final decay =
+          _pinkNoise() * 0.01 * (apocalypseLfo > 0.5 ? apocalypseLfo : 0);
+
+      final sample = (fundamental +
+              octave +
+              minor2nd +
+              tritone +
+              abyss +
+              decay) *
+          0.5;
+
+      // Minimal stereo - collapsing space
+      final pan = math.sin(2 * math.pi * 0.005 * t) * 0.2;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  Uint8List _generateWorld10Texture(
+      int samples, Float32List left, Float32List right) {
+    // System death and glitch decay
+    for (int i = 0; i < samples; i++) {
+      final t = i / _sampleRate;
+
+      // Digital glitches - system failure
+      final glitchChance = _random.nextDouble();
+      double glitch = 0;
+      if (glitchChance > 0.992) {
+        final glitchFreq = 100 + _random.nextDouble() * 2000;
+        final glitchDecay = math.exp(-((i % 4410) / 882.0));
+        glitch = math.sin(2 * math.pi * glitchFreq * t) * 0.05 * glitchDecay;
+      }
+
+      // System flatline - dying tones
+      final flatlineLfo = math.sin(2 * math.pi * 0.004 * t);
+      final flatline = flatlineLfo > 0.92
+          ? math.sin(2 * math.pi * 800 * t) *
+              0.02 *
+              math.exp(-(flatlineLfo - 0.92) * 125)
+          : 0.0;
+
+      // Void noise - sparse and dark
+      final voidNoise = _pinkNoise() *
+          0.015 *
+          (math.sin(2 * math.pi * 0.006 * t).abs());
+
+      // Death rattle harmonics
+      final rattle = math.sin(2 * math.pi * 20 * t) *
+          0.01 *
+          (flatlineLfo > 0.85 ? 1.0 : 0.0);
+
+      final sample = glitch + flatline + voidNoise + rattle;
+
+      // Collapsing stereo
+      final pan = math.sin(2 * math.pi * 0.003 * t) * 0.3;
+      left[i] += sample * (0.5 - pan);
+      right[i] += sample * (0.5 + pan);
+    }
+
+    return Uint8List(0);
+  }
+
+  // ============================================================
   // LAYER GENERATION - Combines world-specific elements
   // ============================================================
 
@@ -743,6 +1091,18 @@ class AmbientSoundscapeService {
         break;
       case 6:
         _generateWorld6Drone(samples, leftChannel, rightChannel);
+        break;
+      case 7:
+        _generateWorld7Drone(samples, leftChannel, rightChannel);
+        break;
+      case 8:
+        _generateWorld8Drone(samples, leftChannel, rightChannel);
+        break;
+      case 9:
+        _generateWorld9Drone(samples, leftChannel, rightChannel);
+        break;
+      case 10:
+        _generateWorld10Drone(samples, leftChannel, rightChannel);
         break;
       default:
         _generateWorld1Drone(samples, leftChannel, rightChannel);
@@ -776,6 +1136,18 @@ class AmbientSoundscapeService {
         break;
       case 6:
         _generateWorld6Texture(samples, leftChannel, rightChannel);
+        break;
+      case 7:
+        _generateWorld7Texture(samples, leftChannel, rightChannel);
+        break;
+      case 8:
+        _generateWorld8Texture(samples, leftChannel, rightChannel);
+        break;
+      case 9:
+        _generateWorld9Texture(samples, leftChannel, rightChannel);
+        break;
+      case 10:
+        _generateWorld10Texture(samples, leftChannel, rightChannel);
         break;
       default:
         _generateWorld1Texture(samples, leftChannel, rightChannel);
@@ -854,6 +1226,36 @@ class AmbientSoundscapeService {
           }
           pan = math.sin(2 * math.pi * 0.007 * t) * 0.25;
           break;
+
+        case 7: // Digital hunt pulses
+          final hunt = math.sin(2 * math.pi * 0.4 * t);
+          sample = hunt > 0.85 ? math.sin(2 * math.pi * 600 * t) * 0.025 * (hunt - 0.85) * 6.67 : 0;
+          pan = math.sin(2 * math.pi * 0.06 * t) * 0.4;
+          break;
+
+        case 8: // Omega grid hum
+          final grid = math.sin(2 * math.pi * 0.15 * t);
+          sample = math.sin(2 * math.pi * 180 * t) * 0.02 * (0.5 + grid * 0.5);
+          sample += _random.nextDouble() > 0.996 ? _random.nextDouble() * 0.08 : 0;
+          pan = math.sin(2 * math.pi * 0.04 * t) * 0.5;
+          break;
+
+        case 9: // Storm chaos
+          final storm = math.sin(2 * math.pi * 0.25 * t);
+          sample = _pinkNoise() * 0.03 * (0.7 + storm * 0.3);
+          sample += _random.nextDouble() > 0.995 ? (_random.nextDouble() * 2 - 1) * 0.15 : 0;
+          pan = (_random.nextDouble() - 0.5) * 0.9;
+          break;
+
+        case 10: // Apocalyptic glitches
+          final glitch = math.sin(2 * math.pi * 0.08 * t);
+          if (_random.nextDouble() > 0.993) {
+            final glitchFreq = 200 + _random.nextDouble() * 1800;
+            sample = math.sin(2 * math.pi * glitchFreq * t) * 0.04;
+          }
+          sample += math.sin(2 * math.pi * 40 * t) * 0.015 * glitch.abs();
+          pan = (_random.nextDouble() - 0.5) * 0.7;
+          break;
       }
 
       left[i] += sample * (0.5 - pan);
@@ -920,6 +1322,23 @@ class AmbientSoundscapeService {
                 math.sin(2 * math.pi * (300 + a * 50) * t) * 0.015 * envelope;
             sample +=
                 math.sin(2 * math.pi * (600 + a * 100) * t) * 0.008 * envelope;
+            break;
+          case 7: // Hunt siren
+            final huntSweep = 400 + progress * 600;
+            sample = math.sin(2 * math.pi * huntSweep * t) * 0.018 * envelope;
+            break;
+          case 8: // Grid pulse
+            sample = math.sin(2 * math.pi * (150 + a * 30) * t) * 0.02 * envelope;
+            sample += math.sin(2 * math.pi * 900 * t) * 0.01 * envelope * (1 - progress);
+            break;
+          case 9: // Storm crash
+            sample = _pinkNoise() * 0.04 * envelope;
+            sample += math.sin(2 * math.pi * 50 * t) * 0.025 * envelope;
+            break;
+          case 10: // Digital scream
+            final screamFreq = 2000 - progress * 1500;
+            sample = math.sin(2 * math.pi * screamFreq * t) * 0.025 * envelope;
+            sample += _pinkNoise() * 0.015 * envelope * progress;
             break;
         }
 
@@ -1018,7 +1437,7 @@ class AmbientSoundscapeService {
   Future<void> reset() async {
     await stop();
     _currentWorld = 0;
-    _volume = 0.5;
+    _volume = 0.65;
     _intensity = 0.5;
 
     if (kDebugMode) {

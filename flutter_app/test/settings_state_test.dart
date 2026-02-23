@@ -12,6 +12,7 @@ void main() {
       expect(state.showGrid, isTrue);
       expect(state.particleIntensity, 1.0);
       expect(state.screenShake, isTrue);
+      expect(state.graphicsQuality, 'high');
     });
 
     test('can create with all default values', () {
@@ -49,6 +50,11 @@ void main() {
     test('can create with screenShake false', () {
       const state = SettingsState(screenShake: false);
       expect(state.screenShake, isFalse);
+    });
+
+    test('can create with custom graphicsQuality', () {
+      const state = SettingsState(graphicsQuality: 'extreme');
+      expect(state.graphicsQuality, 'extreme');
     });
 
     test('can create with all custom values', () {
@@ -92,6 +98,7 @@ void main() {
       expect(updated.showGrid, isFalse);
       expect(updated.particleIntensity, 0.8);
       expect(updated.screenShake, isFalse);
+      expect(updated.graphicsQuality, 'high');
     });
 
     test('copyWith with no arguments preserves all values', () {
@@ -112,6 +119,7 @@ void main() {
       expect(copy.showGrid, base.showGrid);
       expect(copy.particleIntensity, base.particleIntensity);
       expect(copy.screenShake, base.screenShake);
+      expect(copy.graphicsQuality, base.graphicsQuality);
     });
 
     test('copyWith can update musicVolume only', () {
@@ -162,6 +170,14 @@ void main() {
       expect(updated.particleIntensity, base.particleIntensity);
     });
 
+    test('copyWith can update graphicsQuality only', () {
+      const base = SettingsState();
+      final updated = base.copyWith(graphicsQuality: 'extreme');
+
+      expect(updated.graphicsQuality, 'extreme');
+      expect(updated.musicVolume, base.musicVolume);
+    });
+
     test('copyWith can update all fields', () {
       const base = SettingsState();
       final updated = base.copyWith(
@@ -171,6 +187,7 @@ void main() {
         showGrid: false,
         particleIntensity: 0.3,
         screenShake: false,
+        graphicsQuality: 'extreme',
       );
 
       expect(updated.musicVolume, 0.1);
@@ -179,6 +196,7 @@ void main() {
       expect(updated.showGrid, isFalse);
       expect(updated.particleIntensity, 0.3);
       expect(updated.screenShake, isFalse);
+      expect(updated.graphicsQuality, 'extreme');
     });
 
     test('copyWith returns new instance', () {
@@ -248,6 +266,13 @@ void main() {
       expect(a, isNot(equals(b)));
     });
 
+    test('different graphicsQuality creates different state', () {
+      const a = SettingsState(graphicsQuality: 'high');
+      const b = SettingsState(graphicsQuality: 'extreme');
+
+      expect(a, isNot(equals(b)));
+    });
+
     test('props includes all fields', () {
       const state = SettingsState(
         musicVolume: 0.5,
@@ -256,13 +281,15 @@ void main() {
         showGrid: false,
         particleIntensity: 0.7,
         screenShake: false,
+        graphicsQuality: 'extreme',
       );
 
-      expect(state.props.length, 6);
+      expect(state.props.length, 7);
       expect(state.props, contains(0.5));
       expect(state.props, contains(0.6));
       expect(state.props, contains(false));
       expect(state.props, contains(0.7));
+      expect(state.props, contains('extreme'));
     });
   });
 

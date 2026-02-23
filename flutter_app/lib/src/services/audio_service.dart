@@ -7,6 +7,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 
 import '../game/entities/tower.dart';
+import 'ambient_soundscape_service.dart';
 
 class _FastRng {
   int _state;
@@ -93,6 +94,10 @@ class AudioService {
 
     // Pre-cache core sounds
     await _cacheAllSounds();
+
+    // Initialize ambient soundscape service with current music volume
+    await AmbientSoundscapeService.instance.initialize();
+    await AmbientSoundscapeService.instance.setVolume(_musicVolume);
 
     _initialized = true;
     if (kDebugMode) {
@@ -1339,6 +1344,8 @@ class AudioService {
   /// Set music volume (0.0 - 1.0)
   void setMusicVolume(double volume) {
     _musicVolume = volume.clamp(0.0, 1.0);
+    // Also update ambient soundscape volume
+    AmbientSoundscapeService.instance.setVolume(_musicVolume);
   }
 
   /// Set SFX volume (0.0 - 1.0)
@@ -1400,8 +1407,8 @@ class AudioService {
   /// UI button click
   void playButton() => _playCached('button');
 
-  /// Enemy reaches base - warning
-  void playEnemyLeak() => _playCached('enemy_leak');
+  /// Enemy reaches base - warning (DISABLED - sound removed)
+  void playEnemyLeak() {} // No-op: enemy leak sound disabled
 
   /// Gold earned
   void playGoldEarned() => _playCached('gold');

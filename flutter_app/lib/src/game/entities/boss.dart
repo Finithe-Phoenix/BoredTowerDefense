@@ -1084,14 +1084,27 @@ class Boss extends Enemy {
   void _renderBossCrown(Canvas canvas) {
     final allowBlur = Enemy.allowBlur;
     final radius = size.x / 2;
-    final crownRadius = radius * 2.2;
+    final crownRadius = radius * 2.4; // Increased from 2.2 for larger presence
+
+    // ENHANCED BOSS CROWN - More intimidating and menacing
+    final pulse = 0.9 + math.sin(_mechanicState.ultimateTimer * 3) * 0.1;
+    final crownColor = healthPercent < 0.3
+        ? const Color(0xFFFF0000) // Red when enraged/low health
+        : const Color(0xFFFF0066); // Default boss pink
+
+    // OUTER DARK AURA - Creates ominous atmosphere
+    _crownPaint
+      ..color = Colors.black.withOpacity(0.6 * pulse)
+      ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 25) : null;
+    canvas.drawCircle(Offset.zero, crownRadius * 1.2, _crownPaint);
 
     // Epic crown for boss using cached path
     _crownPath.reset();
-    const spikes = 12;
+    const spikes = 16; // Increased from 12 for more menacing appearance
     for (int i = 0; i < spikes * 2; i++) {
-      final angle = (i / (spikes * 2)) * math.pi * 2;
-      final r = (i % 2 == 0) ? crownRadius : crownRadius * 0.85;
+      final angle = (i / (spikes * 2)) * math.pi * 2 + _mechanicState.ultimateTimer * 0.2;
+      // More aggressive spike profile
+      final r = (i % 2 == 0) ? crownRadius * pulse : crownRadius * 0.75;
       final x = math.cos(angle) * r;
       final y = math.sin(angle) * r;
 
@@ -1103,16 +1116,39 @@ class Boss extends Enemy {
     }
     _crownPath.close();
 
-    // Gradient crown
-    _crownPaint.color = const Color(0xFFFF0066).withOpacity(0.4);
-    _crownPaint.maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 6) : null;
-
+    // ENHANCED GRADIENT CROWN with pulsing
+    _crownPaint
+      ..color = crownColor.withOpacity(0.6 * pulse) // Increased from 0.4
+      ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 8) : null;
     canvas.drawPath(_crownPath, _crownPaint);
 
-    // Crown outline
-    _crownOutlinePaint.color = const Color(0xFFFF0066).withOpacity(0.8);
-
+    // BRIGHTER CROWN OUTLINE for better definition
+    _crownOutlinePaint
+      ..color = crownColor.withOpacity(1.0 * pulse) // Increased from 0.8
+      ..strokeWidth = 2.5; // Thicker outline
     canvas.drawPath(_crownPath, _crownOutlinePaint);
+
+    // ADD INNER ROTATING RING for extra menace
+    _crownPaint
+      ..color = crownColor.withOpacity(0.5)
+      ..maskFilter = allowBlur ? const MaskFilter.blur(BlurStyle.normal, 4) : null;
+    final innerRadius = crownRadius * 0.6;
+    final innerSpikes = 8;
+    for (int i = 0; i < innerSpikes; i++) {
+      final angle = (i / innerSpikes) * math.pi * 2 - _mechanicState.ultimateTimer * 0.3;
+      final x1 = math.cos(angle) * innerRadius;
+      final y1 = math.sin(angle) * innerRadius;
+      final x2 = math.cos(angle) * (innerRadius * 1.2);
+      final y2 = math.sin(angle) * (innerRadius * 1.2);
+
+      canvas.drawLine(
+        Offset(x1, y1),
+        Offset(x2, y2),
+        _crownOutlinePaint..strokeWidth = 3.0
+      );
+    }
+
+    _crownPaint.maskFilter = null;
   }
 }
 

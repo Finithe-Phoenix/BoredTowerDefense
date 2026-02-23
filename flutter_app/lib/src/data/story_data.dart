@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import '../ui/theme/neon_theme.dart';
 
 /// Complete story and lore data for Neon Defense
-class StoryData {
-  StoryData._();
+abstract final class StoryData {
 
   // ============================================================
   // MAIN CHARACTERS

@@ -1,0 +1,213 @@
+<svg width="1080" height="1920" viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+      <feGaussianBlur stdDeviation="10" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <radialGradient id="bgGrad" cx="50%" cy="50%">
+      <stop offset="0%" style="stop-color:#1a1a2e" />
+      <stop offset="100%" style="stop-color:#0a0a18" />
+    </radialGradient>
+
+    <linearGradient id="titleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00FFFF" />
+      <stop offset="50%" style="stop-color:#FF00FF" />
+      <stop offset="100%" style="stop-color:#FF6600" />
+    </linearGradient>
+
+    <linearGradient id="upgradeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00FF88" />
+      <stop offset="100%" style="stop-color:#00FFFF" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo -->
+  <rect width="1080" height="1920" fill="url(#bgGrad)"/>
+
+  <!-- Estrellas -->
+  <circle cx="150" cy="200" r="2" fill="#00FFFF" opacity="0.6"/>
+  <circle cx="930" cy="250" r="1.5" fill="#FF00FF" opacity="0.5"/>
+  <circle cx="200" cy="1700" r="2" fill="#FF6600" opacity="0.7"/>
+
+  <!-- TÍTULO -->
+  <text
+    x="540"
+    y="160"
+    text-anchor="middle"
+    font-family="Arial Black, sans-serif"
+    font-size="56"
+    font-weight="900"
+    letter-spacing="2"
+    fill="url(#titleGrad)"
+    filter="url(#strongGlow)"
+  >MEJORA TU PODER</text>
+
+  <!-- TARJETAS DE UPGRADES -->
+  <!-- Upgrade 1: Damage -->
+  <g>
+    <rect x="120" y="300" width="320" height="240" rx="16" fill="#0a0a18" opacity="0.95" stroke="#00FFFF" stroke-width="3" filter="url(#glow)"/>
+
+    <!-- Icono -->
+    <g transform="translate(180, 370)">
+      <circle r="35" fill="none" stroke="#00FFFF" stroke-width="15" opacity="0.1" filter="url(#strongGlow)"/>
+      <polygon points="0,-28 24,-14 24,14 0,28 -24,14 -24,-14" fill="#00CCCC" stroke="#00FFFF" stroke-width="2" filter="url(#glow)"/>
+      <circle r="10" fill="#00FFFF" opacity="0.9"/>
+    </g>
+
+    <text x="280" y="360" font-family="Arial, sans-serif" font-size="28" font-weight="900" fill="#00FFFF">DAÑO</text>
+    <text x="280" y="400" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="#FFFFFF" opacity="0.7">+25%</text>
+    <text x="150" y="500" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#00FFFF" opacity="0.8">NIVEL 5/10</text>
+
+    <!-- Barra de progreso -->
+    <rect x="150" y="460" width="260" height="12" rx="6" fill="#1a1a2e" stroke="#00FFFF" stroke-width="1"/>
+    <rect x="150" y="460" width="130" height="12" rx="6" fill="url(#upgradeGrad)" filter="url(#glow)"/>
+  </g>
+
+  <!-- Upgrade 2: Fire Rate -->
+  <g>
+    <rect x="640" y="300" width="320" height="240" rx="16" fill="#0a0a18" opacity="0.95" stroke="#FF00FF" stroke-width="3" filter="url(#glow)"/>
+
+    <!-- Icono -->
+    <g transform="translate(700, 370)">
+      <circle r="35" fill="none" stroke="#FF00FF" stroke-width="15" opacity="0.1" filter="url(#strongGlow)"/>
+      <circle r="28" fill="#CC00CC" stroke="#FF00FF" stroke-width="2" filter="url(#glow)"/>
+      <circle r="10" fill="#FF00FF" opacity="0.9"/>
+      <!-- Rayos -->
+      <line x1="0" y1="-28" x2="0" y2="-40" stroke="#FF00FF" stroke-width="2" filter="url(#glow)"/>
+      <line x1="20" y1="-20" x2="28" y2="-28" stroke="#FF00FF" stroke-width="2" filter="url(#glow)"/>
+      <line x1="28" y1="0" x2="40" y2="0" stroke="#FF00FF" stroke-width="2" filter="url(#glow)"/>
+    </g>
+
+    <text x="800" y="360" font-family="Arial, sans-serif" font-size="28" font-weight="900" fill="#FF00FF">VELOCIDAD</text>
+    <text x="800" y="400" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="#FFFFFF" opacity="0.7">+40%</text>
+    <text x="670" y="500" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#FF00FF" opacity="0.8">NIVEL 7/10</text>
+
+    <!-- Barra de progreso -->
+    <rect x="670" y="460" width="260" height="12" rx="6" fill="#1a1a2e" stroke="#FF00FF" stroke-width="1"/>
+    <rect x="670" y="460" width="182" height="12" rx="6" fill="#FF00FF" filter="url(#glow)"/>
+  </g>
+
+  <!-- Upgrade 3: Range -->
+  <g>
+    <rect x="120" y="620" width="320" height="240" rx="16" fill="#0a0a18" opacity="0.95" stroke="#FF6600" stroke-width="3" filter="url(#glow)"/>
+
+    <!-- Icono -->
+    <g transform="translate(180, 690)">
+      <circle r="35" fill="none" stroke="#FF6600" stroke-width="15" opacity="0.1" filter="url(#strongGlow)"/>
+      <circle r="30" fill="none" stroke="#FF6600" stroke-width="2" opacity="0.6" filter="url(#glow)"/>
+      <circle r="22" fill="none" stroke="#FF6600" stroke-width="2" opacity="0.8" filter="url(#glow)"/>
+      <circle r="10" fill="#FF6600" opacity="0.9"/>
+    </g>
+
+    <text x="280" y="680" font-family="Arial, sans-serif" font-size="28" font-weight="900" fill="#FF6600">RANGO</text>
+    <text x="280" y="720" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="#FFFFFF" opacity="0.7">+30%</text>
+    <text x="150" y="820" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#FF6600" opacity="0.8">NIVEL 6/10</text>
+
+    <!-- Barra de progreso -->
+    <rect x="150" y="780" width="260" height="12" rx="6" fill="#1a1a2e" stroke="#FF6600" stroke-width="1"/>
+    <rect x="150" y="780" width="156" height="12" rx="6" fill="#FF6600" filter="url(#glow)"/>
+  </g>
+
+  <!-- Upgrade 4: Special Power -->
+  <g>
+    <rect x="640" y="620" width="320" height="240" rx="16" fill="#0a0a18" opacity="0.95" stroke="#FFFF00" stroke-width="3" filter="url(#glow)"/>
+
+    <!-- Icono -->
+    <g transform="translate(700, 690)">
+      <circle r="35" fill="none" stroke="#FFFF00" stroke-width="15" opacity="0.1" filter="url(#strongGlow)"/>
+      <circle r="28" fill="#CCCC00" stroke="#FFFF00" stroke-width="2" filter="url(#glow)"/>
+      <!-- Estrella -->
+      <polygon points="0,-12 3,-4 12,-4 5,2 8,10 0,5 -8,10 -5,2 -12,-4 -3,-4" fill="#FFFF00" opacity="0.9"/>
+    </g>
+
+    <text x="800" y="680" font-family="Arial, sans-serif" font-size="28" font-weight="900" fill="#FFFF00">HABILIDAD</text>
+    <text x="800" y="720" font-family="Arial, sans-serif" font-size="22" font-weight="600" fill="#FFFFFF" opacity="0.7">+50%</text>
+    <text x="670" y="820" font-family="Arial, sans-serif" font-size="18" font-weight="600" fill="#FFFF00" opacity="0.8">NIVEL 8/10</text>
+
+    <!-- Barra de progreso -->
+    <rect x="670" y="780" width="260" height="12" rx="6" fill="#1a1a2e" stroke="#FFFF00" stroke-width="1"/>
+    <rect x="670" y="780" width="208" height="12" rx="6" fill="#FFFF00" filter="url(#glow)"/>
+  </g>
+
+  <!-- Moneda/Currency -->
+  <g>
+    <rect x="240" y="960" width="600" height="120" rx="16" fill="#0a0a18" opacity="0.95" stroke="url(#titleGrad)" stroke-width="4" filter="url(#strongGlow)"/>
+
+    <g transform="translate(340, 1020)">
+      <circle r="40" fill="none" stroke="#FFD700" stroke-width="20" opacity="0.15" filter="url(#strongGlow)"/>
+      <circle r="32" fill="#FFD700" opacity="0.3" filter="url(#glow)"/>
+      <circle r="28" fill="#1a1a2e" stroke="#FFD700" stroke-width="3" opacity="0.95"/>
+      <text y="12" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" font-weight="900" fill="#FFD700">$</text>
+    </g>
+
+    <text x="420" y="1010" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#FFFFFF" opacity="0.7">MONEDAS</text>
+    <text x="420" y="1048" font-family="Arial, sans-serif" font-size="42" font-weight="900" fill="#FFD700" filter="url(#glow)">12,580</text>
+  </g>
+
+  <!-- TEXTO PRINCIPAL -->
+  <text
+    x="540"
+    y="1280"
+    text-anchor="middle"
+    font-family="Arial Black, sans-serif"
+    font-size="52"
+    font-weight="900"
+    letter-spacing="2"
+    fill="#00FFFF"
+    filter="url(#strongGlow)"
+  >MEJORAS PERMANENTES</text>
+
+  <text
+    x="540"
+    y="1370"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="38"
+    font-weight="700"
+    letter-spacing="1.5"
+    fill="#FF00FF"
+    opacity="0.95"
+    filter="url(#glow)"
+  >Aumenta tu poder entre</text>
+
+  <text
+    x="540"
+    y="1450"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="38"
+    font-weight="700"
+    letter-spacing="1.5"
+    fill="#FF6600"
+    opacity="0.95"
+    filter="url(#glow)"
+  >partidas y domina el juego</text>
+
+  <!-- Stats extra -->
+  <g opacity="0.9">
+    <text x="540" y="1580" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="700" fill="#00FF88" filter="url(#glow)">+125% Total de Mejoras</text>
+    <text x="540" y="1640" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" font-weight="600" fill="#FFFFFF" opacity="0.6">¡Hazte imparable!</text>
+  </g>
+
+  <!-- Brackets decorativos -->
+  <g opacity="0.7">
+    <path d="M 50,50 L 50,140 M 50,50 L 140,50" stroke="#00FFFF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 1030,50 L 1030,140 M 1030,50 L 940,50" stroke="#FF00FF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 50,1870 L 50,1780 M 50,1870 L 140,1870" stroke="#FF6600" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+    <path d="M 1030,1870 L 1030,1780 M 1030,1870 L 940,1870" stroke="#00FFFF" stroke-width="5" stroke-linecap="round" filter="url(#glow)"/>
+  </g>
+
+</svg>

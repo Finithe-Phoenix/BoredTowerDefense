@@ -11,6 +11,7 @@ import '../world/game_world.dart';
 import '../bored_games_game.dart';
 import '../balance/difficulty_curve.dart';
 import '../../services/audio_service.dart';
+import '../../models/quality_level.dart';
 
 /// Callback types for wave events
 typedef EnemyKilledCallback = void Function(Enemy enemy, int goldReward);
@@ -293,8 +294,13 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   @override
   void update(double dt) {
     super.update(dt);
-    final threshold = gameRef.isTouchLayout ? 12 : 18;
-    Enemy.lowFx = _aliveCount > threshold || gameRef.reduceFx;
+    final threshold = switch (gameRef.quality) {
+      QualityLevel.low => gameRef.isTouchLayout ? 8 : 12,
+      QualityLevel.medium => gameRef.isTouchLayout ? 14 : 20,
+      QualityLevel.high => gameRef.isTouchLayout ? 20 : 28,
+      QualityLevel.extreme => gameRef.isTouchLayout ? 26 : 36,
+    };
+    Enemy.lowFx = _aliveCount > threshold;
     Enemy.throttleOffscreen = Enemy.lowFx;
     _updateThreatPulse(dt);
     if (!spawning || world.waypoints.isEmpty || remaining <= 0) return;

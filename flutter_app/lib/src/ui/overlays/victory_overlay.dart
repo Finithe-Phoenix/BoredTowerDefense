@@ -32,6 +32,7 @@ class _VictoryOverlayState extends State<VictoryOverlay>
   late AnimationController _mainController;
   late AnimationController _glitchController;
   late AnimationController _pulseController;
+  late AnimationController _particleExplosionController;
   late Animation<double> _scaleAnimation;
   late Animation<double> _slideAnimation;
 
@@ -51,10 +52,16 @@ class _VictoryOverlayState extends State<VictoryOverlay>
   void initState() {
     super.initState();
 
+    // Particle explosion entrance
+    _particleExplosionController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+
     _mainController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
-    )..forward();
+    );
 
     _glitchController = AnimationController(
       duration: const Duration(milliseconds: 100),
@@ -75,8 +82,12 @@ class _VictoryOverlayState extends State<VictoryOverlay>
       vsync: this,
     )..repeat(reverse: true);
 
-    // Trigger glitch periodically
-    _glitchTimer = Timer(const Duration(milliseconds: 500), _triggerGlitchCycle);
+    // Start with particle explosion, then main animation
+    _particleExplosionController.forward().then((_) {
+      _mainController.forward();
+      // Trigger glitch periodically
+      _glitchTimer = Timer(const Duration(milliseconds: 500), _triggerGlitchCycle);
+    });
 
     _scaleAnimation = CurvedAnimation(
       parent: _mainController,
@@ -107,6 +118,7 @@ class _VictoryOverlayState extends State<VictoryOverlay>
     _mainController.dispose();
     _glitchController.dispose();
     _pulseController.dispose();
+    _particleExplosionController.dispose();
     super.dispose();
   }
 
@@ -137,6 +149,19 @@ class _VictoryOverlayState extends State<VictoryOverlay>
             ),
             child: Stack(
               children: [
+                // Golden particle explosion entrance
+                AnimatedBuilder(
+                  animation: _particleExplosionController,
+                  builder: (context, child) {
+                    return CustomPaint(
+                      painter: _GoldenParticleExplosionPainter(
+                        animation: _particleExplosionController.value,
+                      ),
+                      size: Size.infinite,
+                    );
+                  },
+                ),
+
                 // Animated grid background
                 CustomPaint(
                   painter: _TronGridPainter(
@@ -267,22 +292,42 @@ class _VictoryOverlayState extends State<VictoryOverlay>
       Positioned(
         top: 20,
         left: 20,
-        child: _CornerDecoration(color: NeonColors.green, rotation: 0),
+        child: _VictoryCorner(
+          color: NeonColors.green,
+          rotation: 0,
+          pulseController: _pulseController,
+          message: 'DEFENSE GRID: OPTIMAL',
+        ),
       ),
       Positioned(
         top: 20,
         right: 20,
-        child: _CornerDecoration(color: NeonColors.green, rotation: math.pi / 2),
+        child: _VictoryCorner(
+          color: NeonColors.green,
+          rotation: math.pi / 2,
+          pulseController: _pulseController,
+          message: 'CORE INTEGRITY: 100%',
+        ),
       ),
       Positioned(
         bottom: 20,
         left: 20,
-        child: _CornerDecoration(color: NeonColors.green, rotation: -math.pi / 2),
+        child: _VictoryCorner(
+          color: NeonColors.green,
+          rotation: -math.pi / 2,
+          pulseController: _pulseController,
+          message: 'ENEMY FORCE: ELIMINATED',
+        ),
       ),
       Positioned(
         bottom: 20,
         right: 20,
-        child: _CornerDecoration(color: NeonColors.green, rotation: math.pi),
+        child: _VictoryCorner(
+          color: NeonColors.green,
+          rotation: math.pi,
+          pulseController: _pulseController,
+          message: 'SYSTEM STATUS: EXCELLENT',
+        ),
       ),
     ];
   }
@@ -832,26 +877,86 @@ class _AnimatedButton extends StatelessWidget {
   }
 }
 
-class _CornerDecoration extends StatelessWidget {
+class _VictoryCorner extends StatelessWidget {
   final Color color;
   final double rotation;
+  final AnimationController pulseController;
+  final String message;
 
-  const _CornerDecoration({
+  const _VictoryCorner({
     required this.color,
     required this.rotation,
+    required this.pulseController,
+    required this.message,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Transform.rotate(
-      angle: rotation,
-      child: SizedBox(
-        width: 40,
-        height: 40,
-        child: CustomPaint(
-          painter: _CornerPainter(color: color),
-        ),
-      ),
+    return AnimatedBuilder(
+      animation: pulseController,
+      builder: (context, child) {
+        return Transform.rotate(
+          angle: rotation,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: Stack(
+                  children: [
+                    // Corner bracket
+                    CustomPaint(
+                      painter: _CornerPainter(color: color),
+                    ),
+                    // Golden glow particles
+                    CustomPaint(
+                      painter: _VictoryParticlesPainter(
+                        animation: pulseController.value,
+                        color: NeonColors.yellow,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              // Success message
+              Transform.rotate(
+                angle: -rotation, // Counter-rotate text to keep it readable
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.7),
+                    border: Border.all(
+                      color: color.withOpacity(0.6 + pulseController.value * 0.3),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.3),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    message,
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 9,
+                      fontFamily: 'monospace',
+                      letterSpacing: 0.5,
+                      shadows: [
+                        Shadow(color: color, blurRadius: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -890,4 +995,114 @@ class _CornerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _GoldenParticleExplosionPainter extends CustomPainter {
+  final double animation;
+
+  _GoldenParticleExplosionPainter({required this.animation});
+
+  static final Paint _particlePaint = Paint();
+  static final Paint _glowPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0 || animation >= 1.0) return;
+
+    final center = Offset(size.width / 2, size.height / 2);
+
+    // Generate 200+ particles
+    int rngState = 0x98765432;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
+
+    for (int i = 0; i < 250; i++) {
+      final angle = nextUnit() * 2 * math.pi;
+      final speed = 100 + nextUnit() * 300;
+      final distance = speed * animation;
+
+      final x = center.dx + math.cos(angle) * distance;
+      final y = center.dy + math.sin(angle) * distance;
+
+      // Skip particles outside the screen
+      if (x < -50 || x > size.width + 50 || y < -50 || y > size.height + 50) continue;
+
+      final particleSize = 2 + nextUnit() * 3;
+      final opacity = (1 - animation) * (0.6 + nextUnit() * 0.4);
+
+      // Particle glow
+      _glowPaint.color = NeonColors.yellow.withOpacity(opacity * 0.5);
+      canvas.drawCircle(Offset(x, y), particleSize * 2, _glowPaint);
+
+      // Particle core
+      _particlePaint.color = NeonColors.yellow.withOpacity(opacity);
+      canvas.drawCircle(Offset(x, y), particleSize, _particlePaint);
+
+      // Some particles are white/gold
+      if (i % 5 == 0) {
+        _particlePaint.color = Colors.white.withOpacity(opacity);
+        canvas.drawCircle(Offset(x, y), particleSize * 0.5, _particlePaint);
+      }
+    }
+
+    // Central flash
+    if (animation < 0.3) {
+      final flashProgress = animation / 0.3;
+      final flashOpacity = (1 - flashProgress) * 0.8;
+      final flashRadius = 50 + flashProgress * 150;
+
+      _glowPaint.color = Colors.white.withOpacity(flashOpacity);
+      canvas.drawCircle(center, flashRadius, _glowPaint);
+
+      _particlePaint.color = NeonColors.yellow.withOpacity(flashOpacity * 0.6);
+      canvas.drawCircle(center, flashRadius * 0.7, _particlePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _GoldenParticleExplosionPainter oldDelegate) =>
+      oldDelegate.animation != animation;
+}
+
+class _VictoryParticlesPainter extends CustomPainter {
+  final double animation;
+  final Color color;
+
+  _VictoryParticlesPainter({required this.animation, required this.color});
+
+  static final Paint _particlePaint = Paint();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
+    int rngState = (animation * 1000).toInt() ^ 0x54321;
+    int lcgNext() {
+      rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
+      return rngState;
+    }
+    double nextUnit() => lcgNext() / 0x7fffffff;
+
+    // Victory particles floating upward
+    for (int i = 0; i < 8; i++) {
+      final x = nextUnit() * size.width;
+      final baseY = nextUnit() * size.height;
+      final y = baseY - (animation * 30) % size.height;
+
+      if (y < 0 || y > size.height) continue;
+
+      final particleSize = 1 + nextUnit() * 2;
+      final opacity = 0.3 + nextUnit() * 0.5;
+
+      _particlePaint.color = color.withOpacity(opacity);
+      canvas.drawCircle(Offset(x, y), particleSize, _particlePaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _VictoryParticlesPainter oldDelegate) =>
+      oldDelegate.animation != animation;
 }

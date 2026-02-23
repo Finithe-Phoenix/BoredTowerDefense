@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/neon_theme.dart';
+import '../../bloc/settings/settings_cubit.dart';
 import '../../services/audio_service.dart';
 import '../../services/procedural_music_service.dart';
 import '../../services/sprite_cache_service.dart';
@@ -191,6 +193,11 @@ class _LoadingScreenState extends State<LoadingScreen>
       _progress = 0.2;
     });
     await StorageService.instance.initialize();
+
+    // Load saved settings after storage is ready
+    if (mounted) {
+      await context.read<SettingsCubit>().loadSettings();
+    }
     await Future.delayed(const Duration(milliseconds: 300));
 
     // Stage 2: Level Service

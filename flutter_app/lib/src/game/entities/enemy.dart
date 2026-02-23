@@ -1724,6 +1724,16 @@ class Enemy extends PositionComponent {
       _renderThreatCrown(canvas, radius, phantomOpacity, allowBlur, reduceFx);
     }
 
+    // SCARY EYES - Always render for intimidation factor
+    if (!reduceFx) {
+      _renderMenacingEyes(canvas, radius, phantomOpacity, allowBlur);
+    }
+
+    // SHARP SPIKES/TEETH - Make enemies more aggressive
+    if (!reduceFx) {
+      _renderAggressiveSpikes(canvas, radius, phantomOpacity, allowBlur);
+    }
+
     if (!reduceFx) {
       // Walking legs/tentacles effect (type-specific)
       _renderWalkingEffect(canvas, radius, phantomOpacity, allowBlur);
@@ -5045,54 +5055,89 @@ class Enemy extends PositionComponent {
 
   void _renderCorruptionAura(
       Canvas canvas, double radius, double opacity, bool allowBlur) {
-    final corruption = ((1 - healthPercent) * 0.7 +
-            threatTier * 0.08 +
-            (isPhantom ? 0.2 : 0.0))
-        .clamp(0.2, 1.0);
-    final pulse = 0.6 + math.sin(_animationTimer * 8) * 0.2;
-    final intensity = (corruption * pulse).clamp(0.2, 1.0);
-    final auraColor = Color.lerp(
-        type.color, const Color(0xFFFF005A), 0.45 + corruption * 0.3)!;
+    // ENHANCED CORRUPTION - More threatening and visible
+    final corruption = ((1 - healthPercent) * 0.85 + // Increased from 0.7
+            threatTier * 0.12 + // Increased from 0.08
+            (isPhantom ? 0.3 : 0.0)) // Increased from 0.2
+        .clamp(0.3, 1.0); // Minimum increased from 0.2
+    final pulse = 0.6 + math.sin(_animationTimer * 8) * 0.3; // More pronounced pulse
+    final intensity = (corruption * pulse).clamp(0.3, 1.0);
 
+    // DARKER, MORE MENACING COLORS
+    final auraColor = Color.lerp(
+        type.color, const Color(0xFFFF0033), 0.6 + corruption * 0.3)!; // More red shift
+
+    // Outer dark aura ring - creates ominous atmosphere
     _bracePaint
-      ..color = auraColor.withOpacity(0.28 * opacity * intensity)
+      ..color = Colors.black.withOpacity(0.5 * opacity * intensity)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..strokeCap = StrokeCap.square
-      ..maskFilter = _blur(allowBlur, 3);
-    for (int i = 0; i < 6; i++) {
-      final angle = (i / 6) * math.pi * 2 + _animationTimer * 0.4;
-      final dist = radius * (1.1 + i * 0.03);
+      ..strokeWidth = 4.0
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = _blur(allowBlur, 15); // Larger blur for ominous effect
+    canvas.drawCircle(Offset.zero, radius * 1.4, _bracePaint);
+
+    // Corruption braces - more prominent
+    _bracePaint
+      ..color = auraColor.withOpacity(0.45 * opacity * intensity) // Increased from 0.28
+      ..strokeWidth = 2.0 // Increased from 1.4
+      ..maskFilter = _blur(allowBlur, 4);
+    for (int i = 0; i < 8; i++) { // Increased from 6
+      final angle = (i / 8) * math.pi * 2 + _animationTimer * 0.4;
+      final dist = radius * (1.15 + i * 0.04); // Spread further
       final x = math.cos(angle) * dist;
       final y = math.sin(angle) * dist;
       canvas.save();
       canvas.translate(x, y);
       canvas.rotate(angle);
       canvas.drawLine(
-        Offset(-radius * 0.12, 0),
-        Offset(radius * 0.12, 0),
+        Offset(-radius * 0.18, 0), // Longer brackets
+        Offset(radius * 0.18, 0),
         _bracePaint,
       );
       canvas.restore();
     }
 
-    final spikeCount = 6 + (corruption * 6).round();
+    // AGGRESSIVE ENERGY SPIKES - more menacing
+    final spikeCount = 8 + (corruption * 8).round(); // Increased from 6
     _spikePaint
-      ..color = auraColor.withOpacity(0.35 * opacity * intensity)
-      ..strokeWidth = 1.6
-      ..strokeCap = StrokeCap.square
+      ..color = auraColor.withOpacity(0.55 * opacity * intensity) // Increased from 0.35
+      ..strokeWidth = 2.2 // Increased from 1.6
+      ..strokeCap = StrokeCap.round // Rounded for more organic look
       ..style = PaintingStyle.stroke
-      ..maskFilter = null;
+      ..maskFilter = _blur(allowBlur, 3);
     for (int i = 0; i < spikeCount; i++) {
       final angle = (i / spikeCount) * math.pi * 2 + _animationTimer * 0.7;
-      final inner = radius * 1.02;
-      final outer = radius * (1.25 + 0.15 * math.sin(_animationTimer * 5 + i));
+      final inner = radius * 1.05;
+      final outer = radius * (1.35 + 0.25 * math.sin(_animationTimer * 5 + i)); // Extended further
       canvas.drawLine(
         Offset(math.cos(angle) * inner, math.sin(angle) * inner),
         Offset(math.cos(angle) * outer, math.sin(angle) * outer),
         _spikePaint,
       );
+
+      // Add glow tips to spikes for extra menace
+      _eyePaint
+        ..color = auraColor.withOpacity(0.8 * opacity)
+        ..maskFilter = _blur(allowBlur, 8);
+      canvas.drawCircle(
+        Offset(math.cos(angle) * outer, math.sin(angle) * outer),
+        radius * 0.06,
+        _eyePaint
+      );
     }
+
+    // Add pulsing dark matter effect for MAXIMUM SCARY
+    if (corruption > 0.6) {
+      final darkPulse = math.sin(_animationTimer * 10) * 0.5 + 0.5;
+      _eyePaint
+        ..color = Colors.black.withOpacity(0.3 * darkPulse * opacity)
+        ..maskFilter = _blur(allowBlur, 20);
+      canvas.drawCircle(Offset.zero, radius * 1.2, _eyePaint);
+    }
+
+    _spikePaint.maskFilter = null;
+    _bracePaint.maskFilter = null;
+    _eyePaint.maskFilter = null;
   }
 
   void _renderGlitchOverlay(
@@ -5262,47 +5307,66 @@ class Enemy extends PositionComponent {
 
     switch (shape) {
       case _BodyShape.dart:
-        // Aerodynamic dart hull (runners, fast types)
-        _reusableBodyPath.moveTo(radius * 1.05, 0);
-        _reusableBodyPath.lineTo(radius * 0.3, -radius * 0.65);
-        _reusableBodyPath.lineTo(-radius * 0.45, -radius * 0.45);
-        _reusableBodyPath.lineTo(-radius * 0.85, 0);
-        _reusableBodyPath.lineTo(-radius * 0.45, radius * 0.45);
-        _reusableBodyPath.lineTo(radius * 0.3, radius * 0.65);
+        // AGGRESSIVE BLADE DART - Sharp piercing edges, no curves!
+        _reusableBodyPath.moveTo(radius * 1.3, 0); // MUCH longer sharp point
+        _reusableBodyPath.lineTo(radius * 0.5, -radius * 0.85); // Sharper angle
+        _reusableBodyPath.lineTo(radius * 0.2, -radius * 0.95); // Razor edge
+        _reusableBodyPath.lineTo(-radius * 0.3, -radius * 0.6);
+        _reusableBodyPath.lineTo(-radius * 1.0, -radius * 0.2); // Serrated back
+        _reusableBodyPath.lineTo(-radius * 0.9, 0); // Sharp tail point
+        _reusableBodyPath.lineTo(-radius * 1.0, radius * 0.2); // Serrated back
+        _reusableBodyPath.lineTo(-radius * 0.3, radius * 0.6);
+        _reusableBodyPath.lineTo(radius * 0.2, radius * 0.95); // Razor edge
+        _reusableBodyPath.lineTo(radius * 0.5, radius * 0.85); // Sharper angle
         break;
 
       case _BodyShape.fractured:
-        // Fractured polygon (overloaded, glitchy types)
-        final shift = math.sin(_animationTimer * 6) * radius * 0.12;
-        final glitch = math.cos(_animationTimer * 4) * radius * 0.08;
-        _reusableBodyPath.moveTo(radius * 0.8 + shift, -radius * 0.15);
-        _reusableBodyPath.lineTo(radius * 0.2, -radius * 0.85);
-        _reusableBodyPath.lineTo(-radius * 0.6, -radius * 0.55 + glitch);
-        _reusableBodyPath.lineTo(-radius * 0.9, 0);
-        _reusableBodyPath.lineTo(-radius * 0.5, radius * 0.7);
-        _reusableBodyPath.lineTo(radius * 0.25, radius * 0.55 - shift);
-        _reusableBodyPath.lineTo(radius * 0.9 + glitch, radius * 0.12);
+        // CHAOTIC SHATTERED CRYSTAL - Broken glass nightmare!
+        final shift = math.sin(_animationTimer * 6) * radius * 0.25; // More glitch
+        final glitch = math.cos(_animationTimer * 4) * radius * 0.2; // Intense chaos
+        _reusableBodyPath.moveTo(radius * 1.1 + shift, -radius * 0.3);
+        _reusableBodyPath.lineTo(radius * 0.8, -radius * 0.95); // Jagged spike
+        _reusableBodyPath.lineTo(radius * 0.3, -radius * 1.1 + glitch); // Broken tip
+        _reusableBodyPath.lineTo(-radius * 0.2, -radius * 0.8);
+        _reusableBodyPath.lineTo(-radius * 0.7 + shift, -radius * 0.65 + glitch);
+        _reusableBodyPath.lineTo(-radius * 1.05, -radius * 0.25); // Sharp protrusion
+        _reusableBodyPath.lineTo(-radius * 0.95, radius * 0.1 + glitch);
+        _reusableBodyPath.lineTo(-radius * 0.6, radius * 0.85 - shift); // Chaotic edge
+        _reusableBodyPath.lineTo(-radius * 0.1, radius * 1.0);
+        _reusableBodyPath.lineTo(radius * 0.4, radius * 0.75 + glitch);
+        _reusableBodyPath.lineTo(radius * 0.95 + shift, radius * 0.45);
+        _reusableBodyPath.lineTo(radius * 1.15 + glitch, radius * 0.1); // Jutting blade
         break;
 
       case _BodyShape.armored:
-        // Beveled armored hull (tanks, heavy types)
-        final inset = radius * 0.35;
-        _reusableBodyPath.moveTo(radius, -inset);
-        _reusableBodyPath.lineTo(radius * 0.65, -radius);
-        _reusableBodyPath.lineTo(-radius * 0.65, -radius);
-        _reusableBodyPath.lineTo(-radius, -inset);
-        _reusableBodyPath.lineTo(-radius, inset);
-        _reusableBodyPath.lineTo(-radius * 0.65, radius);
-        _reusableBodyPath.lineTo(radius * 0.65, radius);
-        _reusableBodyPath.lineTo(radius, inset);
+        // BRUTAL SIEGE FORTRESS - Angular nightmare with ram spikes!
+        final inset = radius * 0.25;
+        _reusableBodyPath.moveTo(radius * 1.2, -inset); // Forward ram spike
+        _reusableBodyPath.lineTo(radius * 1.0, -radius * 0.5); // Upper armor bevel
+        _reusableBodyPath.lineTo(radius * 0.7, -radius * 1.15); // Jutting spike
+        _reusableBodyPath.lineTo(radius * 0.3, -radius * 1.0);
+        _reusableBodyPath.lineTo(-radius * 0.3, -radius * 1.05); // Serrated top
+        _reusableBodyPath.lineTo(-radius * 0.7, -radius * 0.95);
+        _reusableBodyPath.lineTo(-radius * 1.1, -inset); // Side spike
+        _reusableBodyPath.lineTo(-radius * 1.0, 0); // Angular cut
+        _reusableBodyPath.lineTo(-radius * 1.1, inset); // Side spike
+        _reusableBodyPath.lineTo(-radius * 0.7, radius * 0.95);
+        _reusableBodyPath.lineTo(-radius * 0.3, radius * 1.05); // Serrated bottom
+        _reusableBodyPath.lineTo(radius * 0.3, radius * 1.0);
+        _reusableBodyPath.lineTo(radius * 0.7, radius * 1.15); // Jutting spike
+        _reusableBodyPath.lineTo(radius * 1.0, radius * 0.5); // Lower armor bevel
+        _reusableBodyPath.lineTo(radius * 1.2, inset); // Forward ram spike
         break;
 
       case _BodyShape.star:
-        // Phase-shifted star (phantom, spectral types)
-        const points = 6;
+        // VOID REAPER BLADES - Wicked rotating scythe star!
+        const points = 7; // Prime number for unsettling asymmetry
         for (int i = 0; i < points * 2; i++) {
-          final wobble = math.sin(_animationTimer * 3 + i) * radius * 0.06;
-          final r = i.isEven ? radius * 0.9 + wobble : radius * 0.55 + wobble;
+          final wobble = math.sin(_animationTimer * 3 + i) * radius * 0.15; // More phase shift
+          // MUCH more extreme alternation - long deadly scythe blades vs sharp inner points
+          final r = i.isEven
+              ? radius * 1.35 + wobble  // LONG scythe blades
+              : radius * 0.35 + wobble; // Sharp inner claws
           final angle = i * math.pi / points + _animationTimer * 1.6;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
@@ -5314,40 +5378,61 @@ class Enemy extends PositionComponent {
         break;
 
       case _BodyShape.hexagon:
-        // Hexagonal (crystal, gem types)
+        // JAGGED CRYSTAL HORROR - Fractured gem with blade edges!
         for (int i = 0; i < 6; i++) {
           final angle = (i / 6) * math.pi * 2 - math.pi / 6;
-          final pulse = 1.0 + math.sin(_animationTimer * 2 + i) * 0.05;
-          final x = math.cos(angle) * radius * pulse;
-          final y = math.sin(angle) * radius * pulse;
-          if (i == 0)
-            _reusableBodyPath.moveTo(x, y);
-          else
-            _reusableBodyPath.lineTo(x, y);
+          final pulse = 1.0 + math.sin(_animationTimer * 2 + i) * 0.12; // More pulsing
+
+          // Main hexagon point (enlarged and sharper)
+          final mainX = math.cos(angle) * radius * 1.2 * pulse;
+          final mainY = math.sin(angle) * radius * 1.2 * pulse;
+
+          if (i == 0) {
+            _reusableBodyPath.moveTo(mainX, mainY);
+          } else {
+            _reusableBodyPath.lineTo(mainX, mainY);
+          }
+
+          // Add serrated edge spikes between main points
+          final midAngle = angle + (math.pi / 6);
+          final spikeX = math.cos(midAngle) * radius * 0.85;
+          final spikeY = math.sin(midAngle) * radius * 0.85;
+          _reusableBodyPath.lineTo(spikeX, spikeY);
         }
         break;
 
       case _BodyShape.mechanical:
-        // Mechanical box (robots, mechs)
-        final pulse = math.sin(_animationTimer * 4) * radius * 0.03;
-        _reusableBodyPath.moveTo(radius * 0.9 + pulse, -radius * 0.5);
-        _reusableBodyPath.lineTo(radius * 0.5, -radius * 0.9);
-        _reusableBodyPath.lineTo(-radius * 0.5, -radius * 0.9);
-        _reusableBodyPath.lineTo(-radius * 0.9 - pulse, -radius * 0.5);
-        _reusableBodyPath.lineTo(-radius * 0.9 - pulse, radius * 0.5);
-        _reusableBodyPath.lineTo(-radius * 0.5, radius * 0.9);
-        _reusableBodyPath.lineTo(radius * 0.5, radius * 0.9);
-        _reusableBodyPath.lineTo(radius * 0.9 + pulse, radius * 0.5);
+        // KILLER MECH CHASSIS - Angular death machine with cutting edges!
+        final pulse = math.sin(_animationTimer * 4) * radius * 0.08; // More mechanical motion
+        _reusableBodyPath.moveTo(radius * 1.15 + pulse, -radius * 0.4); // Forward blade
+        _reusableBodyPath.lineTo(radius * 0.9, -radius * 0.8); // Top corner bevel
+        _reusableBodyPath.lineTo(radius * 0.6, -radius * 1.05); // Top spike
+        _reusableBodyPath.lineTo(radius * 0.2, -radius * 1.0);
+        _reusableBodyPath.lineTo(-radius * 0.2, -radius * 1.05);
+        _reusableBodyPath.lineTo(-radius * 0.6, -radius * 1.0);
+        _reusableBodyPath.lineTo(-radius * 0.95 - pulse, -radius * 0.6); // Side panel
+        _reusableBodyPath.lineTo(-radius * 1.1, -radius * 0.2); // Side blade
+        _reusableBodyPath.lineTo(-radius * 1.05, radius * 0.2); // Angular cut
+        _reusableBodyPath.lineTo(-radius * 0.95 - pulse, radius * 0.6); // Side panel
+        _reusableBodyPath.lineTo(-radius * 0.6, radius * 1.0);
+        _reusableBodyPath.lineTo(-radius * 0.2, radius * 1.05);
+        _reusableBodyPath.lineTo(radius * 0.2, radius * 1.0);
+        _reusableBodyPath.lineTo(radius * 0.6, radius * 1.05); // Bottom spike
+        _reusableBodyPath.lineTo(radius * 0.9, radius * 0.8); // Bottom corner bevel
+        _reusableBodyPath.lineTo(radius * 1.15 + pulse, radius * 0.4); // Forward blade
         break;
 
       case _BodyShape.electric:
-        // Spiky electric (plasma, electric types)
-        const spikes = 8;
+        // PLASMA NIGHTMARE - Violent electric arcs with razor spikes!
+        const spikes = 10; // More spikes for more chaos
         for (int i = 0; i < spikes * 2; i++) {
           final angle = (i / (spikes * 2)) * math.pi * 2;
           final jitter =
-              math.sin(_animationTimer * 12 + i * 0.5) * radius * 0.08;
-          final r = i.isEven ? radius * 0.95 + jitter : radius * 0.6;
+              math.sin(_animationTimer * 12 + i * 0.5) * radius * 0.25; // MUCH more erratic
+          // EXTREME alternation - long lightning bolts vs deep cuts
+          final r = i.isEven
+              ? radius * 1.4 + jitter  // LONG electric spikes
+              : radius * 0.4 + jitter * 0.5; // Sharp inner cuts
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
           if (i == 0)
@@ -5358,12 +5443,15 @@ class Enemy extends PositionComponent {
         break;
 
       case _BodyShape.storm:
-        // Swirling storm shape
-        const spiralPoints = 12;
+        // HURRICANE TERROR - Chaotic rotating blades of wind!
+        const spiralPoints = 9; // Odd number for asymmetry = more menacing
         for (int i = 0; i < spiralPoints; i++) {
           final angle = (i / spiralPoints) * math.pi * 2 + _animationTimer * 2;
-          final wobble = math.sin(_animationTimer * 4 + i) * radius * 0.1;
-          final r = radius * (0.7 + (i % 2) * 0.25) + wobble;
+          final wobble = math.sin(_animationTimer * 4 + i) * radius * 0.25; // More chaos
+
+          // Create violent spiral with sharp blades jutting out
+          final baseRadius = (i % 3 == 0) ? 1.3 : (i % 3 == 1) ? 0.5 : 0.9;
+          final r = radius * baseRadius + wobble;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
           if (i == 0)
@@ -5374,13 +5462,16 @@ class Enemy extends PositionComponent {
         break;
 
       case _BodyShape.void_:
-        // Void/abyss - irregular dark shape
-        const voidPoints = 7;
+        // ABYSS HORROR - Writhing tentacle nightmare from darkness!
+        const voidPoints = 9; // More points for more tentacles
         for (int i = 0; i < voidPoints; i++) {
           final angle = (i / voidPoints) * math.pi * 2;
           final pulse =
-              math.sin(_animationTimer * 1.5 + i * 0.8) * radius * 0.15;
-          final r = radius * (0.75 + (i % 2) * 0.2) + pulse;
+              math.sin(_animationTimer * 1.5 + i * 0.8) * radius * 0.3; // More writhing
+
+          // Create irregular tentacle-like protrusions
+          final tentacleLength = (i % 3 == 0) ? 1.25 : (i % 3 == 1) ? 0.4 : 0.85;
+          final r = radius * tentacleLength + pulse;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
           if (i == 0)
@@ -5391,16 +5482,21 @@ class Enemy extends PositionComponent {
         break;
 
       case _BodyShape.omega:
-        // Ultimate omega shape - complex polygon
-        const omegaPoints = 10;
+        // ULTIMATE DESTROYER - Multi-layered nightmare with every horror!
+        const omegaPoints = 16; // MANY points for ultimate complexity
         for (int i = 0; i < omegaPoints; i++) {
           final angle = (i / omegaPoints) * math.pi * 2;
-          final layer = (i % 3 == 0)
-              ? 1.0
-              : (i % 3 == 1)
-                  ? 0.8
-                  : 0.9;
-          final pulse = math.sin(_animationTimer * 3 + i) * radius * 0.08;
+
+          // Complex multi-layered pattern with jutting blades
+          final layer = (i % 4 == 0)
+              ? 1.5  // Long deadly blades
+              : (i % 4 == 1)
+                  ? 0.45  // Sharp inner cuts
+                  : (i % 4 == 2)
+                      ? 1.15  // Medium spikes
+                      : 0.7;  // Irregular edges
+
+          final pulse = math.sin(_animationTimer * 3 + i) * radius * 0.2; // More motion
           final r = radius * layer + pulse;
           final x = math.cos(angle) * r;
           final y = math.sin(angle) * r;
@@ -5594,6 +5690,141 @@ class Enemy extends PositionComponent {
     _reusableOverlayPath.lineTo(-chillSize, 0);
     _reusableOverlayPath.close();
     canvas.drawPath(_reusableOverlayPath, _slowAuraPaint);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MENACING EYES - Make enemies look scary and alive
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _renderMenacingEyes(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    final eyeSize = radius * 0.15;
+    final eyeSpacing = radius * 0.4;
+    final pupilSize = eyeSize * 0.5;
+
+    // Determine eye color based on enemy type and health
+    final healthFactor = healthPercent;
+    final eyeGlow = healthFactor < 0.3
+        ? const Color(0xFFFF0000) // Red when low health (ENRAGED)
+        : const Color(0xFFFF6600); // Orange normally (MENACING)
+
+    // Eye position - slightly offset based on movement for tracking effect
+    final eyeY = -radius * 0.2;
+    final leftEyeX = -eyeSpacing / 2;
+    final rightEyeX = eyeSpacing / 2;
+
+    // Pulsing effect when damaged
+    final damagePulse = healthFactor < 0.5
+        ? 1.0 + math.sin(_animationTimer * 8) * 0.3
+        : 1.0;
+
+    // Draw outer glow (makes eyes glow menacingly)
+    _eyePaint
+      ..color = eyeGlow.withOpacity(0.7 * opacity * damagePulse)
+      ..maskFilter = _blur(allowBlur, 12);
+    canvas.drawCircle(Offset(leftEyeX, eyeY), eyeSize * 1.5, _eyePaint);
+    canvas.drawCircle(Offset(rightEyeX, eyeY), eyeSize * 1.5, _eyePaint);
+
+    // Draw eye whites
+    _eyePaint
+      ..color = Colors.black.withOpacity(0.9 * opacity)
+      ..maskFilter = null;
+    canvas.drawCircle(Offset(leftEyeX, eyeY), eyeSize, _eyePaint);
+    canvas.drawCircle(Offset(rightEyeX, eyeY), eyeSize, _eyePaint);
+
+    // Draw glowing pupils (tracking effect)
+    final pupilOffset = math.sin(_animationTimer * 1.5) * eyeSize * 0.3;
+    _eyePaint.color = eyeGlow.withOpacity(opacity);
+    canvas.drawCircle(
+      Offset(leftEyeX + pupilOffset, eyeY),
+      pupilSize * damagePulse,
+      _eyePaint
+    );
+    canvas.drawCircle(
+      Offset(rightEyeX + pupilOffset, eyeY),
+      pupilSize * damagePulse,
+      _eyePaint
+    );
+
+    // Add highlight shine for realism
+    _eyePaint.color = Colors.white.withOpacity(0.6 * opacity);
+    final shineSize = pupilSize * 0.4;
+    canvas.drawCircle(
+      Offset(leftEyeX + pupilOffset - pupilSize * 0.3, eyeY - pupilSize * 0.3),
+      shineSize,
+      _eyePaint
+    );
+    canvas.drawCircle(
+      Offset(rightEyeX + pupilOffset - pupilSize * 0.3, eyeY - pupilSize * 0.3),
+      shineSize,
+      _eyePaint
+    );
+
+    _eyePaint.maskFilter = null;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // AGGRESSIVE SPIKES - Sharp threatening geometry
+  // ═══════════════════════════════════════════════════════════════════════════
+  void _renderAggressiveSpikes(Canvas canvas, double radius, double opacity, bool allowBlur) {
+    // MANY MORE spikes for terror!
+    final spikeCount = (12 + (type.sizeMult * 6).round() + (healthPercent < 0.5 ? 8 : 0)).clamp(12, 24);
+    // MUCH LONGER SPIKES - Make them scary!
+    final spikeLength = radius * (0.55 + (1.0 - healthPercent) * 0.35); // 2x longer!
+    final baseRadius = radius * 1.0; // Start from body edge
+
+    // Darker, more menacing spike color
+    final spikeColor = Color.lerp(type.color, Colors.black, 0.6)!;
+
+    // More aggressive pulsing
+    final pulse = 1.0 + math.sin(_animationTimer * 6) * 0.2;
+
+    _strokePaint
+      ..color = spikeColor.withOpacity(0.95 * opacity)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = radius * 0.12 * pulse // THICKER spikes
+      ..strokeCap = StrokeCap.round
+      ..maskFilter = _blur(allowBlur, 3);
+
+    // Draw rotating spikes - MUCH more visible
+    final rotationOffset = _animationTimer * 0.8;
+    for (int i = 0; i < spikeCount; i++) {
+      final angle = (i / spikeCount) * math.pi * 2 + rotationOffset;
+
+      // More dramatic length variation
+      final length = i % 3 == 0 ? spikeLength * 1.3 : (i % 3 == 1 ? spikeLength * 0.6 : spikeLength);
+
+      final x1 = math.cos(angle) * baseRadius;
+      final y1 = math.sin(angle) * baseRadius;
+      final x2 = math.cos(angle) * (baseRadius + length);
+      final y2 = math.sin(angle) * (baseRadius + length);
+
+      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), _strokePaint);
+
+      // BIGGER sharp point glow at tip
+      _eyePaint
+        ..color = type.color.withOpacity(0.95 * opacity)
+        ..maskFilter = _blur(allowBlur, 8);
+      canvas.drawCircle(Offset(x2, y2), radius * 0.08 * pulse, _eyePaint); // 2x bigger glow
+    }
+
+    // Draw MORE prominent inner teeth/mandibles
+    _strokePaint
+      ..color = Colors.red.withOpacity(0.85 * opacity)
+      ..strokeWidth = radius * 0.1; // THICKER teeth
+
+    final mouthY = radius * 0.4;
+    final teethCount = 8; // MORE teeth!
+    for (int i = 0; i < teethCount; i++) {
+      final x = (i / (teethCount - 1)) * radius * 1.4 - radius * 0.7;
+      final toothHeight = radius * (0.25 + (i == teethCount ~/ 2 ? 0.15 : 0)); // LONGER teeth
+      canvas.drawLine(
+        Offset(x, mouthY),
+        Offset(x, mouthY + toothHeight),
+        _strokePaint
+      );
+    }
+
+    _strokePaint.maskFilter = null;
+    _eyePaint.maskFilter = null;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -6877,17 +7108,19 @@ class Enemy extends PositionComponent {
   void _drawHull(Canvas canvas, double radius, Color color, double opacity,
       bool allowBlur) {
     final hullPath = _createBodyPath(radius * 0.95);
-    final baseColor = Color.lerp(color.withOpacity(1), Colors.black, 0.45)!;
-    _hullPaint.color = baseColor.withOpacity(opacity * 0.65);
+    // DARKER, MORE MENACING HULL - Increased black blend from 0.45 to 0.65
+    final baseColor = Color.lerp(color.withOpacity(1), Colors.black, 0.65)!;
+    _hullPaint.color = baseColor.withOpacity(opacity * 0.75); // Increased from 0.65
     _hullPaint.style = PaintingStyle.fill;
     canvas.drawPath(hullPath, _hullPaint);
 
-    _outlinePaint.color = _worldEdgeColor.withOpacity(opacity * 0.85);
+    // BRIGHTER, MORE PROMINENT OUTLINE for better silhouette
+    _outlinePaint.color = _worldEdgeColor.withOpacity(opacity * 0.95); // Increased from 0.85
     _outlinePaint.style = PaintingStyle.stroke;
-    _outlinePaint.strokeWidth = 1.4;
+    _outlinePaint.strokeWidth = 1.8; // Increased from 1.4 for more definition
     _outlinePaint.strokeCap = StrokeCap.square;
     _outlinePaint.maskFilter =
-        (allowBlur && !Enemy.lowFx) ? _blur(true, 3) : null;
+        (allowBlur && !Enemy.lowFx) ? _blur(true, 4) : null; // Increased blur from 3
     canvas.drawPath(hullPath, _outlinePaint);
   }
 

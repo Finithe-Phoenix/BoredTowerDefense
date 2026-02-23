@@ -2,6 +2,9 @@ import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../bloc/settings/settings_cubit.dart';
+import '../../bloc/settings/settings_state.dart';
 import '../../game/bored_games_game.dart';
 import '../../models/level_config.dart';
 import '../../services/level_service.dart';
@@ -45,6 +48,16 @@ class _GameScreenState extends State<GameScreen> {
       onGameOver: _handleGameOver,
       onVictory: _handleVictory,
     );
+
+    // Apply initial graphics quality and particle intensity from settings
+    // Must be done after build to access context
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final settings = context.read<SettingsCubit>().state;
+        _game.setGraphicsQualityFromSettings(settings.graphicsQuality);
+        _game.setParticleIntensityFromSettings(settings.particleIntensity);
+      }
+    });
 
     // Start procedural music for this world
     _startMusic();
@@ -143,6 +156,12 @@ class _GameScreenState extends State<GameScreen> {
         onVictory: _handleVictory,
       );
     });
+
+    // Apply graphics quality and particle intensity to new game instance
+    final settings = context.read<SettingsCubit>().state;
+    _game.setGraphicsQualityFromSettings(settings.graphicsQuality);
+    _game.setParticleIntensityFromSettings(settings.particleIntensity);
+
     // Restart music for this world
     _startMusic();
   }
@@ -193,15 +212,21 @@ class _GameScreenState extends State<GameScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return KeyboardListener(
-      focusNode: _focusNode,
-      onKeyEvent: (event) {
-        if (event is KeyDownEvent &&
-            event.logicalKey == LogicalKeyboardKey.escape) {
-          _togglePause();
-        }
+    return BlocListener<SettingsCubit, SettingsState>(
+      listener: (context, state) {
+        // Apply graphics quality and particle intensity changes in real-time
+        _game.setGraphicsQualityFromSettings(state.graphicsQuality);
+        _game.setParticleIntensityFromSettings(state.particleIntensity);
       },
-      child: Scaffold(
+      child: KeyboardListener(
+        focusNode: _focusNode,
+        onKeyEvent: (event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape) {
+            _togglePause();
+          }
+        },
+        child: Scaffold(
         body: SafeArea(
           child: Stack(
             children: [
@@ -275,7 +300,8 @@ class _GameScreenState extends State<GameScreen> {
             ],
           ),
         ),
-      ),
-    );
+        ), // Scaffold
+      ), // KeyboardListener
+    ); // BlocListener
   }
 }
