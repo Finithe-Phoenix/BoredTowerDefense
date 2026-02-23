@@ -1,8 +1,39 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:bored_games/src/game/effects/shaders/shader_presets.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  void mockAssets(Map<String, String> assets) {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMessageHandler('flutter/assets', (ByteData? message) async {
+      if (message == null) {
+        return null;
+      }
+
+      final key = utf8.decode(message.buffer.asUint8List());
+      final assetValue = assets[key];
+      if (assetValue == null) {
+        return null;
+      }
+
+      final bytes = Uint8List.fromList(utf8.encode(assetValue));
+      return ByteData.view(bytes.buffer);
+    });
+  }
+
+  void clearMockAssets() {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMessageHandler('flutter/assets', null);
+  }
+
+  tearDown(clearMockAssets);
+
   group('ShaderPreset', () {
     test('can be created with all required parameters', () {
       const preset = ShaderPreset(
@@ -193,6 +224,82 @@ void main() {
       expect(config.presets.length, 5);
       expect(config.preset('Ultra Low').gridIterations, 0);
       expect(config.preset('Ultra').gridIterations, 4);
+    });
+  });
+
+  group('ShaderPresetConfig.load', () {
+    test('loads preset map from asset and applies numeric fallbacks', () async {
+      const assetPath = 'assets/test/shader_presets_case_1.json';
+      mockAssets({
+        assetPath: jsonEncode({
+          'presets': {
+            'Balanced': {
+              'gridIterations': 3,
+              'glowIntensity': 0.65,
+              'scanlineFrequency': 'invalid',
+              'particleIntensity': 1,
+              'chromaIntensity': 0.4,
+            },
+            'Extreme': {
+              // gridIterations intentionally omitted to use default 1
+              'glowIntensity': null,
+              'scanlineFrequency': 0.2,
+              'particleIntensity': 'bad',
+              'chromaIntensity': 0.8,
+            },
+          },
+        }),
+      });
+
+      final config = await ShaderPresetConfig.load(assetPath);
+
+      expect(config.presets.length, 2);
+
+      final balanced = config.preset('Balanced');
+      expect(balanced.gridIterations, 3);
+      expect(balanced.glowIntensity, 0.65);
+      expect(balanced.scanlineFrequency, 0.5);
+      expect(balanced.particleIntensity, 1.0);
+      expect(balanced.chromaIntensity, 0.4);
+
+      final extreme = config.preset('Extreme');
+      expect(extreme.gridIterations, 1);
+      expect(extreme.glowIntensity, 0.5);
+      expect(extreme.scanlineFrequency, 0.2);
+      expect(extreme.particleIntensity, 0.5);
+      expect(extreme.chromaIntensity, 0.8);
+    });
+
+    test('falls back to built-in Balanced preset when presets are empty',
+        () async {
+      const assetPath = 'assets/test/shader_presets_case_2.json';
+      mockAssets({
+        assetPath: jsonEncode({'presets': {}}),
+      });
+
+      final config = await ShaderPresetConfig.load(assetPath);
+      final balanced = config.preset('Balanced');
+
+      expect(config.presets.keys, contains('Balanced'));
+      expect(config.presets.length, 1);
+      expect(balanced.gridIterations, 2);
+      expect(balanced.glowIntensity, 0.7);
+      expect(balanced.scanlineFrequency, 0.7);
+      expect(balanced.particleIntensity, 0.7);
+      expect(balanced.chromaIntensity, 0.6);
+    });
+
+    test('falls back to built-in Balanced preset when key is missing',
+        () async {
+      const assetPath = 'assets/test/shader_presets_case_3.json';
+      mockAssets({
+        assetPath: jsonEncode({'version': 1}),
+      });
+
+      final config = await ShaderPresetConfig.load(assetPath);
+
+      expect(config.presets.keys, contains('Balanced'));
+      expect(config.presets.length, 1);
     });
   });
 }

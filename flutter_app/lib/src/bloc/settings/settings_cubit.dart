@@ -36,7 +36,9 @@ class SettingsCubit extends Cubit<SettingsState> {
 
       // Apply audio settings immediately
       ProceduralMusicService.instance.setVolume(musicVolume);
+      ProceduralMusicService.instance.setMixProfile(graphicsQuality);
       AudioService.instance.setSfxVolume(sfxVolume);
+      AudioService.instance.setSoundProfile(graphicsQuality);
     }
   }
 
@@ -93,6 +95,8 @@ class SettingsCubit extends Cubit<SettingsState> {
     if (normalized.isEmpty) {
       return;
     }
+    ProceduralMusicService.instance.setMixProfile(normalized);
+    AudioService.instance.setSoundProfile(normalized);
     emit(state.copyWith(graphicsQuality: normalized));
     _saveSettings();
   }
@@ -117,6 +121,8 @@ class SettingsCubit extends Cubit<SettingsState> {
     _saveSettings();
     // Apply defaults to services
     ProceduralMusicService.instance.setVolume(0.7);
+    ProceduralMusicService.instance.setMixProfile('high');
     AudioService.instance.setSfxVolume(0.8);
+    AudioService.instance.setSoundProfile('high');
   }
 }

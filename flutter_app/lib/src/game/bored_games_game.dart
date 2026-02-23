@@ -204,9 +204,11 @@ class BoredGamesGame extends FlameGame
   double _fxBudgetTimer = 0;
   double _ambientIntensityTimer = 0;
   double _lastAmbientIntensity = 0.5;
+  double _lastMusicIntensity = 0.5;
   static const double _focusZoom = 2.5;
   static const double _ambientIntensityInterval = 0.6;
   static const double _ambientIntensityMaxStep = 0.08;
+  static const double _musicIntensityMaxStep = 0.07;
   static const double sellRefundRate = 0.2;
   QualityLevel _quality = QualityLevel.high;
   bool autoQuality = true;
@@ -418,6 +420,8 @@ class BoredGamesGame extends FlameGame
 
     // Apply time scale for speed control
     final scaledDt = dt * timeScale;
+    _updateThreatShake(scaledDt);
+    _syncEnemyViewport();
     super.update(scaledDt);
 
     // Update game time
@@ -440,7 +444,6 @@ class BoredGamesGame extends FlameGame
     _updateAutoWave(scaledDt);
     _updateQuality(scaledDt);
     _updateFxBudget(scaledDt);
-    _updateThreatShake(scaledDt);
     _updateFocusFx(scaledDt);
     _updateFocusTimer(scaledDt);
     _updateLongPress(scaledDt);
@@ -617,6 +620,30 @@ class BoredGamesGame extends FlameGame
     if ((smoothed - _lastAmbientIntensity).abs() > 0.01) {
       AmbientSoundscapeService.instance.setIntensity(smoothed);
       _lastAmbientIntensity = smoothed;
+    }
+
+    final comboLevel = killComboDisplay.currentCombo;
+    AudioService.instance.setBattleSnapshot(
+      enemyCount: enemyManager.aliveCount,
+      waveProgress: spawnProgress,
+      bossActive: bossPresent,
+      comboLevel: comboLevel,
+    );
+
+    var musicTarget =
+        smoothed * 0.7 + enemyDensity * 0.16 + spawnProgress * 0.1;
+    musicTarget += (comboLevel / 16.0).clamp(0.0, 0.14);
+    if (bossPresent) {
+      musicTarget += 0.18;
+    }
+    musicTarget = musicTarget.clamp(0.2, 1.0);
+    final musicDelta = musicTarget - _lastMusicIntensity;
+    final musicStep =
+        musicDelta.clamp(-_musicIntensityMaxStep, _musicIntensityMaxStep);
+    final musicSmoothed = (_lastMusicIntensity + musicStep).clamp(0.2, 1.0);
+    if ((musicSmoothed - _lastMusicIntensity).abs() > 0.01) {
+      ProceduralMusicService.instance.setIntensity(musicSmoothed);
+      _lastMusicIntensity = musicSmoothed;
     }
   }
 
@@ -1040,15 +1067,37 @@ class BoredGamesGame extends FlameGame
     score += 10;
 
     // Register kill in combo display
-    killComboDisplay.registerKill(
+    final comboMilestone = killComboDisplay.registerKill(
       isCritical: enemy.isBoss,
       isMultiKill: false,
+    );
+    if (comboMilestone != null) {
+      AudioService.instance.triggerEpicMoment(
+        duration: const Duration(milliseconds: 820),
+        boostScale: 0.2,
+      );
+      AudioService.instance.playComboMilestone(comboMilestone);
+    }
+    AudioService.instance.playKillChain(
+      combo: killComboDisplay.currentCombo,
+      boss: enemy.isBoss,
+      pan: _audioPanForWorld(enemy.position),
+      distance: _audioDistanceForWorld(enemy.position),
     );
 
     // Notify event feed for boss kills or big gold rewards
     if (enemy.isBoss) {
       gameEventFeed.bossDefeated(enemy.displayName);
       battleDialogue.onBossDefeated(enemy.displayName);
+      ProceduralMusicService.instance.setBossLeitmotif(
+        active: false,
+        worldId: _worldId,
+        phase: 1,
+      );
+      ProceduralMusicService.instance.triggerCinematicDucking(
+        duration: const Duration(milliseconds: 900),
+        amount: 0.22,
+      );
 
       // Check if this was the final boss
       final wasFinalBoss =
@@ -1093,6 +1142,14 @@ class BoredGamesGame extends FlameGame
     if (lives <= 0) {
       lives = 0;
       _gameEnded = true;
+      AudioService.instance.triggerPriorityDucking(
+        duration: const Duration(milliseconds: 2200),
+        combatScale: 0.28,
+      );
+      ProceduralMusicService.instance.triggerCinematicDucking(
+        duration: const Duration(milliseconds: 2300),
+        amount: 0.38,
+      );
       AudioService.instance.playGameOver();
       onGameOver?.call();
     }
@@ -1102,6 +1159,29 @@ class BoredGamesGame extends FlameGame
     // Notify event feed and battle dialogue
     gameEventFeed.bossSpawned(bossName);
     battleDialogue.onBossSpawn(bossName);
+    AudioService.instance.setBattleSnapshot(
+      enemyCount: enemyManager.aliveCount,
+      waveProgress: enemyManager.waveProgress,
+      bossActive: true,
+      comboLevel: killComboDisplay.currentCombo,
+    );
+    AudioService.instance.triggerEpicMoment(
+      duration: const Duration(milliseconds: 2200),
+      boostScale: 0.34,
+    );
+    AudioService.instance.triggerPriorityDucking(
+      duration: const Duration(milliseconds: 1800),
+      combatScale: 0.34,
+    );
+    ProceduralMusicService.instance.setBossLeitmotif(
+      active: true,
+      worldId: _worldId,
+      phase: 1,
+    );
+    ProceduralMusicService.instance.triggerCinematicDucking(
+      duration: const Duration(milliseconds: 1700),
+      amount: 0.34,
+    );
     AudioService.instance.playBossSpawn();
 
     // Check if this is the final boss (Decompiler) - play epic theme
@@ -1123,6 +1203,23 @@ class BoredGamesGame extends FlameGame
     // Phase 2 = 50% health (triggers at 75% -> 50% transition)
     if (phase == 2) {
       battleDialogue.onBossHalfHealth(bossName);
+      AudioService.instance.triggerEpicMoment(
+        duration: const Duration(milliseconds: 1300),
+        boostScale: 0.24,
+      );
+      AudioService.instance.triggerPriorityDucking(
+        duration: const Duration(milliseconds: 1400),
+        combatScale: 0.4,
+      );
+      ProceduralMusicService.instance.setBossLeitmotif(
+        active: true,
+        worldId: _worldId,
+        phase: phase,
+      );
+      ProceduralMusicService.instance.triggerCinematicDucking(
+        duration: const Duration(milliseconds: 1400),
+        amount: 0.28,
+      );
       AudioService.instance.playBossPhase();
     }
   }
@@ -1185,6 +1282,18 @@ class BoredGamesGame extends FlameGame
     final screenPos = worldToScreen(hitWorld);
     focusOverlay.registerHit(screenPos, critical: killed);
     if (killed) {
+      AudioService.instance.triggerEpicMoment(
+        duration: const Duration(milliseconds: 380),
+        boostScale: 0.14,
+      );
+      AudioService.instance.triggerPriorityDucking(
+        duration: const Duration(milliseconds: 420),
+        combatScale: 0.65,
+      );
+      ProceduralMusicService.instance.triggerCinematicDucking(
+        duration: const Duration(milliseconds: 320),
+        amount: 0.16,
+      );
       AudioService.instance.playCriticalHit();
       screenEffects.triggerFlash(
         color: NeonColors.magenta,
@@ -1211,9 +1320,33 @@ class BoredGamesGame extends FlameGame
     // Check for victory
     if (waveNumber >= _totalWaves) {
       _gameEnded = true;
+      AudioService.instance.triggerEpicMoment(
+        duration: const Duration(milliseconds: 2400),
+        boostScale: 0.36,
+      );
+      AudioService.instance.triggerPriorityDucking(
+        duration: const Duration(milliseconds: 2200),
+        combatScale: 0.3,
+      );
+      ProceduralMusicService.instance.triggerCinematicDucking(
+        duration: const Duration(milliseconds: 2200),
+        amount: 0.36,
+      );
       AudioService.instance.playVictory();
       onVictory?.call();
     } else {
+      AudioService.instance.triggerEpicMoment(
+        duration: const Duration(milliseconds: 900),
+        boostScale: 0.18,
+      );
+      AudioService.instance.triggerPriorityDucking(
+        duration: const Duration(milliseconds: 700),
+        combatScale: 0.5,
+      );
+      ProceduralMusicService.instance.triggerCinematicDucking(
+        duration: const Duration(milliseconds: 850),
+        amount: 0.2,
+      );
       AudioService.instance.playWaveComplete();
     }
 
@@ -1273,6 +1406,18 @@ class BoredGamesGame extends FlameGame
 
     // Notify event feed
     gameEventFeed.waveStarted(enemyManager.currentWave);
+    AudioService.instance.triggerEpicMoment(
+      duration: const Duration(milliseconds: 720),
+      boostScale: 0.16,
+    );
+    AudioService.instance.triggerPriorityDucking(
+      duration: const Duration(milliseconds: 650),
+      combatScale: 0.55,
+    );
+    ProceduralMusicService.instance.triggerCinematicDucking(
+      duration: const Duration(milliseconds: 700),
+      amount: 0.22,
+    );
     AudioService.instance.playWaveStart();
 
     // Battle dialogue for big waves
@@ -1770,6 +1915,20 @@ class BoredGamesGame extends FlameGame
     return worldRoot.position + (world * _worldScale);
   }
 
+  double _audioPanForWorld(Vector2 worldPos) {
+    final screenPos = worldToScreen(worldPos);
+    final width = size.x <= 0 ? 1.0 : size.x;
+    return ((screenPos.x / width) * 2.0 - 1.0).clamp(-1.0, 1.0);
+  }
+
+  double _audioDistanceForWorld(Vector2 worldPos) {
+    final screenPos = worldToScreen(worldPos);
+    final center = Vector2(size.x * 0.5, size.y * 0.5);
+    final maxDist = math.sqrt(center.x * center.x + center.y * center.y);
+    if (maxDist <= 0) return 0.0;
+    return ((screenPos - center).length / maxDist).clamp(0.0, 1.0);
+  }
+
   void _reflowWorld() {
     if (!_worldLayoutReady) return;
     if (worldLayer.mapWidth == 0 || worldLayer.mapHeight == 0) return;
@@ -1831,7 +1990,7 @@ class BoredGamesGame extends FlameGame
             decay,
       );
     } else {
-      _threatShakeOffset = Vector2.zero();
+      _threatShakeOffset.setValues(0.0, 0.0);
       _threatShakeIntensity = 0;
     }
 
@@ -1951,6 +2110,8 @@ class BoredGamesGame extends FlameGame
     Projectile.allowTrails =
         _quality == QualityLevel.high || _quality == QualityLevel.extreme;
     Projectile.allowGlow = _quality != QualityLevel.low;
+    AudioService.instance.setSoundProfile(_quality.name);
+    ProceduralMusicService.instance.setMixProfile(_quality.name);
     _syncEnemyViewport();
   }
 
@@ -1999,6 +2160,10 @@ class BoredGamesGame extends FlameGame
     Projectile.allowGlow = _quality != QualityLevel.low && !severeLoad;
     Tower.lowFx = _quality == QualityLevel.low || severeLoad;
     Enemy.forceLowFx = _quality == QualityLevel.low || severeLoad;
+    AudioService.instance.setCombatLoad(
+      heavyLoad: heavyLoad,
+      severeLoad: severeLoad,
+    );
 
     GameParticles.instance.setQuality(
       burstScale: fxScale,

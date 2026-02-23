@@ -211,7 +211,7 @@ class _CodexScreenState extends State<CodexScreen> with TickerProviderStateMixin
 
   Widget _buildCategoryTabs() {
     return Container(
-      height: 50,
+      height: 112,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: ListView(
         scrollDirection: Axis.horizontal,

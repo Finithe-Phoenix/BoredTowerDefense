@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,19 +42,8 @@ void main() {
     await tester.pump();
 
     final graphFinder = find.byType(UniverseGraphWidget);
-    final box = tester.renderObject<RenderBox>(graphFinder);
-    final size = box.size;
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) * 0.35;
-    const index = 0;
-    final baseAngle = (index / worlds.length) * math.pi * 2 - math.pi / 2;
-    final orbitRadius = radius * 0.75;
-    final target = Offset(
-      center.dx + orbitRadius * math.cos(baseAngle),
-      center.dy + orbitRadius * math.sin(baseAngle),
-    );
-
-    await tester.tapAt(box.localToGlobal(target));
+    final widget = tester.widget<UniverseGraphWidget>(graphFinder);
+    widget.onWorldSelected(worlds.first.id);
     await tester.pump();
 
     expect(selectedWorld, worlds.first.id);

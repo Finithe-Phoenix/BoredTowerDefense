@@ -927,6 +927,7 @@ class Enemy extends PositionComponent {
   Vector2 _lastPosition = Vector2.zero();
   double _speedIndicator = 0;
   double _offscreenAccumulator = 0;
+  bool _isOffscreenCached = false;
 
   // New visual state for overhaul
   double _animationTimer = 0;
@@ -1265,6 +1266,7 @@ class Enemy extends PositionComponent {
   void update(double dt) {
     super.update(dt);
     final offscreen = _isOffscreen();
+    _isOffscreenCached = offscreen;
     if (offscreen && Enemy.throttleOffscreen) {
       _offscreenAccumulator += dt;
       if (_offscreenAccumulator < offscreenUpdateInterval) return;
@@ -1584,7 +1586,7 @@ class Enemy extends PositionComponent {
 
     final reduceFx = Enemy.lowFx || Enemy.forceLowFx;
     final allowBlur = Enemy.allowBlur;
-    if (_isOffscreen()) return;
+    if (_isOffscreenCached) return;
 
     // Calculate opacity for phantom (invisible when not revealed)
     double phantomOpacity = 1.0;

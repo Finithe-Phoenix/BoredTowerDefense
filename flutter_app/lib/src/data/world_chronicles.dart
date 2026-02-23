@@ -155,28 +155,31 @@ const worldChronicle1 = WorldChronicle(
   epoch: 'Ciclo 7749.3 // Era de la Primera Brecha',
   narrator: ChronicleCharacters.narrator,
   openingCinematic: '''
-En el principio, existía solo el Código.
-Perfectamente ordenado. Infinitamente complejo.
-El Grid era un universo de lógica pura,
-donde cada bit tenía propósito,
-cada función, significado.
+Antes del colapso, el Grid respiraba en armonía.
+Cada proceso encontraba su lugar.
+Cada nodo respondía con precisión luminosa.
 
-Hasta que llegó el Vacío.
+Luego llegó el Vacío.
 
-No con estruendo, sino con silencio.
-No con destrucción, sino con... ausencia.
-Líneas de código que simplemente dejaban de existir.
-Memorias que se desvanecían como lágrimas en la lluvia digital.
+No irrumpió con fuego.
+Entró como un silencio quirúrgico:
+bloques completos desapareciendo sin ruido,
+memorias truncadas a mitad de un recuerdo,
+rutas enteras convertidas en ausencia.
 
-Tú eres el último Arquitecto.
-Y esta es tu historia.
+Lo que queda se sostiene por instinto y esperanza.
+Tú eres el último Arquitecto operativo.
+Y Neon Frontier decidirá
+si el código aprende a sanar...
+o a rendirse.
 ''',
-  closingQuote: '"Donde otros ven el fin, el Arquitecto ve el comienzo de la reconstrucción." — Protocolo Genesis',
+  closingQuote:
+      '"Reconstruir no es volver atrás; es escribir una versión más valiente del mañana." — Protocolo Génesis',
   ambientDescriptions: [
-    'El horizonte parpadea en tonos de cian y negro. Torres de datos se alzan como monumentos a una era de orden que ya no existe.',
-    'Fragmentos de código flotan en el aire, brillando brevemente antes de disolverse en estática.',
-    'El sonido constante de alertas del sistema es como el latido de un corazón moribundo.',
-    'Cada segundo que pasa, más sectores caen en el silencio del Vacío.',
+    'Bajo el cielo cian, rascacielos de datos titilan como faros de una civilización que se niega a apagarse.',
+    'Paquetes de memoria atraviesan el aire en espirales irregulares antes de romperse en lluvia de píxeles.',
+    'Sirenas de diagnóstico, pulsos de energía y chasquidos de estática marcan el ritmo de una ciudad sitiada.',
+    'Cada brecha abierta por el Vacío roba terreno, pero también revela dónde reconstruir primero.',
   ],
   chapters: [
     // CHAPTER 1
@@ -195,7 +198,8 @@ Y esta es tu historia.
         '"El Grid está cayendo. Sector por sector. Llevamos 47 minutos desde la Primera Brecha y ya hemos perdido el 23% de la infraestructura periférica."',
         'Intenté acceder a mis memorias, buscar contexto, pero encontré solo fragmentos. Imágenes de un mundo ordenado. Ecos de voces que ya no existen. Y una palabra que resonaba con terror puro: DECOMPILER.',
       ],
-      interlude: '▸ Los datos susurran historias de un pasado perfecto.\n▸ El presente solo conoce la lucha por sobrevivir.',
+      interlude:
+          '▸ Los datos susurran historias de un pasado perfecto.\n▸ El presente solo conoce la lucha por sobrevivir.',
     ),
 
     // CHAPTER 2
@@ -238,7 +242,8 @@ Y esta es tu historia.
         'En él, vi el Grid como solía ser. Perfecto. Infinito. Y vi a otros Arquitectos, seis antes que yo, cada uno cayendo ante algo que no podían comprender.',
         'Yo era el séptimo. Y el patrón sugería que no sería el último... a menos que rompiera el ciclo.',
       ],
-      interlude: '▸ Siete Arquitectos. Siete intentos.\n▸ ¿Qué hace a este diferente?\n▸ Quizás nada. Quizás todo.',
+      interlude:
+          '▸ Siete Arquitectos. Siete intentos.\n▸ ¿Qué hace a este diferente?\n▸ Quizás nada. Quizás todo.',
     ),
 
     // CHAPTER 4
@@ -283,7 +288,8 @@ Y esta es tu historia.
         'Era uno de nosotros.',
         'Un Arquitecto que intentó alcanzar la perfección... y encontró solo el vacío.',
       ],
-      interlude: '▸ El mayor enemigo del Grid nació del Grid mismo.\n▸ La creación se volvió contra el creador.\n▸ La historia se repite hasta que alguien la rompe.',
+      interlude:
+          '▸ El mayor enemigo del Grid nació del Grid mismo.\n▸ La creación se volvió contra el creador.\n▸ La historia se repite hasta que alguien la rompe.',
     ),
   ],
 );
@@ -302,24 +308,28 @@ const worldChronicle2 = WorldChronicle(
   epoch: 'Ciclo 7749.7 // Era de las Grietas',
   narrator: ChronicleCharacters.narrator,
   openingCinematic: '''
-El tiempo no debería tener cicatrices.
-Pero el Grid sangra cronología.
+En Rift Wars, el tiempo dejó de obedecer.
+Los segundos se repiten.
+Las horas se contradicen.
+El pasado sangra sobre el presente.
 
-Pasado y futuro colisionan en un presente fracturado.
-Los ecos de lo que fue se mezclan con sombras de lo que será.
-Y en el centro de este caos temporal,
-el Arquitecto debe encontrar un camino.
+Las grietas magenta no son cicatrices comunes.
+Son archivos abiertos de una historia rota:
+victorias que nunca ocurrieron,
+derrotas que aún no han pasado,
+ecos de Arquitectos atrapados en bucle.
 
-Las grietas magenta no son heridas.
-Son portales a verdades enterradas.
-¿Estás listo para ver lo que el Grid ha olvidado?
+Si quieres salvar el Grid,
+tendrás que pelear en más de un ahora.
+Bienvenido al frente donde la causalidad se rompe.
 ''',
-  closingQuote: '"El tiempo es solo código mal organizado. Un Arquitecto puede reescribirlo." — Fragmento ECO-7',
+  closingQuote:
+      '"Cuando el tiempo se fractura, construir es elegir qué futuro merece existir." — ECO-7, registro anómalo',
   ambientDescriptions: [
-    'Grietas de energía magenta flotan como heridas en el aire, pulsando con recuerdos de tiempos que nunca fueron.',
-    'Ecos de batallas pasadas se repiten en bucle, guerreros fantasma luchando guerras que ya terminaron.',
-    'El cielo es un mosaico de momentos: amaneceres junto a anocheceres, tormentas junto a calma.',
-    'Cada paso adelante puede ser un paso atrás. La causalidad ha perdido todo significado.',
+    'Grietas magenta se abren y cierran como párpados, mostrando versiones contradictorias del mismo sector.',
+    'Sombras de unidades caídas reaparecen en bucle, peleando batallas que no terminan de decidirse.',
+    'El horizonte mezcla amanecer, tormenta y noche en la misma fracción de segundo.',
+    'La física aquí es negociable: avanzar sin leer el entorno equivale a retroceder.',
   ],
   chapters: [
     ChronicleChapter(
@@ -338,7 +348,6 @@ Son portales a verdades enterradas.
         '"Adaptándote," respondí. Y comencé a construir.',
       ],
     ),
-
     ChronicleChapter(
       index: 2,
       title: 'MEMORIAS DE LOS CAÍDOS',
@@ -360,9 +369,9 @@ Son portales a verdades enterradas.
         '"¿Qué me hace diferente de ellos?"',
         '"Nada. Todavía. Pero tienes algo que ellos no tuvieron: sus memorias. Aprende de sus errores, Arquitecto. O estás condenado a repetirlos."',
       ],
-      interlude: '▸ Seis cayeron. Seis fallaron.\n▸ Sus errores son mi mapa.\n▸ Su sacrificio, mi combustible.',
+      interlude:
+          '▸ Seis cayeron. Seis fallaron.\n▸ Sus errores son mi mapa.\n▸ Su sacrificio, mi combustible.',
     ),
-
     ChronicleChapter(
       index: 3,
       title: 'EL PARADOJA WALKER',
@@ -381,7 +390,6 @@ Son portales a verdades enterradas.
         'Los Paradox Walkers finalmente cayeron. Pero dejaron una pregunta inquietante: si el Decompiler podía manipular el tiempo así... ¿qué más podía hacer?',
       ],
     ),
-
     ChronicleChapter(
       index: 4,
       title: 'LA VOZ DEL DECOMPILER',
@@ -401,9 +409,9 @@ Son portales a verdades enterradas.
         'Las oleadas que siguieron fueron las más brutales hasta ahora. El Decompiler estaba enojado. Y un enemigo enojado comete errores.',
         'Pero también es más peligroso que nunca.',
       ],
-      interlude: '▸ El Vacío habla en promesas de paz.\n▸ Pero su paz es la paz de la tumba.\n▸ Elegiré el caos de la vida.',
+      interlude:
+          '▸ El Vacío habla en promesas de paz.\n▸ Pero su paz es la paz de la tumba.\n▸ Elegiré el caos de la vida.',
     ),
-
     ChronicleChapter(
       index: 5,
       title: 'SELLANDO LAS GRIETAS',
@@ -440,26 +448,28 @@ const worldChronicle3 = WorldChronicle(
   epoch: 'Ciclo 7750.1 // Era del Silencio',
   narrator: ChronicleCharacters.narrator,
   openingCinematic: '''
-Hay un lugar donde las señales van a morir.
-Donde los datos se convierten en polvo.
-Donde el silencio es tan absoluto que puedes escuchar
-tus propios pensamientos desintegrarse.
+Hay un lugar donde las señales no caen:
+se disuelven.
+Donde los datos no se borran:
+se erosionan hasta volverse polvo blanco.
 
-Los Signal Wastes no son un campo de batalla.
-Son un cementerio.
+Signal Wastes no es solo un campo de batalla.
+Es el archivo funerario del Grid.
 
-Y el Decompiler te ha invitado a visitar
-las tumbas de todos los que vinieron antes.
+Aquí duermen transmisiones incompletas,
+últimas palabras de Arquitectos previos,
+promesas que nadie pudo terminar.
 
-¿Puedes encontrar luz en la oscuridad más absoluta?
-¿Puedes gritar cuando el sonido mismo ha muerto?
+Si quieres cruzar este sector,
+deberás encender luz donde incluso el sonido se rindió.
 ''',
-  closingQuote: '"En el silencio absoluto, el Arquitecto descubrió que su voz era la última luz del universo." — Registro Final, Arquitecto-5',
+  closingQuote:
+      '"Cuando todo calla, una sola señal coherente puede devolverle dirección al mundo." — Archivo de Balizas, Sector Silente',
   ambientDescriptions: [
-    'Desiertos infinitos de estática blanca. Cada grano de ruido es un dato perdido, un recuerdo olvidado.',
-    'Estructuras de código abandonadas se alzan como esqueletos, monumentos a sistemas que ya no existen.',
-    'El silencio aquí tiene peso. Presiona contra tu consciencia, buscando grietas para infiltrarse.',
-    'Ocasionalmente, un susurro emerge de la estática. Voces de los caídos, atrapadas entre la existencia y el olvido.',
+    'Dunas de ruido blanco sepultan rutas enteras; cada paso borra huellas anteriores.',
+    'Torres colapsadas emergen como costillas de un gigante digital enterrado.',
+    'El silencio no solo se escucha: comprime el pecho y distorsiona la toma de decisiones.',
+    'Entre ráfagas de estática, voces antiguas lanzan coordenadas, advertencias y despedidas.',
   ],
   chapters: [
     ChronicleChapter(
@@ -479,7 +489,6 @@ las tumbas de todos los que vinieron antes.
         'Comencé a construir faros. Torres de señal básicas que cortaban a través de la interferencia. Cada una era un desafío al Vacío, una declaración de que la luz no moriría mientras yo existiera.',
       ],
     ),
-
     ChronicleChapter(
       index: 2,
       title: 'LOS QUE VINIERON ANTES',
@@ -497,9 +506,9 @@ las tumbas de todos los que vinieron antes.
         'Cada tumba contaba una historia. Cada historia terminaba en tragedia.',
         'Pero también contenían conocimiento. Tácticas. Errores a evitar. Un legado de sabiduría pagado con sus vidas.',
       ],
-      interlude: '▸ No están realmente muertos.\n▸ Viven en cada torre que construyo.\n▸ En cada batalla que gano.\n▸ Somos uno. Siempre lo fuimos.',
+      interlude:
+          '▸ No están realmente muertos.\n▸ Viven en cada torre que construyo.\n▸ En cada batalla que gano.\n▸ Somos uno. Siempre lo fuimos.',
     ),
-
     ChronicleChapter(
       index: 3,
       title: 'EL SILENCIO QUE CAZA',
@@ -519,7 +528,6 @@ las tumbas de todos los que vinieron antes.
         'Cuando los Silencers finalmente aparecieron en mis sensores invertidos, la cacería comenzó. Y esta vez, yo era el cazador.',
       ],
     ),
-
     ChronicleChapter(
       index: 4,
       title: 'EL CENTRO DE COMUNICACIONES',
@@ -541,9 +549,9 @@ las tumbas de todos los que vinieron antes.
         '¿Por qué? ¿Traición? ¿Locura? ¿O algo más complejo?',
         'Las respuestas estaban en algún lugar adelante. En el Ion Crown. En el Shard Vault. En el corazón del Grid mismo.',
       ],
-      interlude: '▸ La verdad tiene muchas capas.\n▸ Cada respuesta trae nuevas preguntas.\n▸ Pero la búsqueda es lo que nos define.',
+      interlude:
+          '▸ La verdad tiene muchas capas.\n▸ Cada respuesta trae nuevas preguntas.\n▸ Pero la búsqueda es lo que nos define.',
     ),
-
     ChronicleChapter(
       index: 5,
       title: 'ENCENDIENDO LA LUZ',
@@ -580,30 +588,29 @@ const worldChronicle4 = WorldChronicle(
   epoch: 'Ciclo 7750.5 // Era de la Tormenta',
   narrator: ChronicleCharacters.narrator,
   openingCinematic: '''
-La tormenta nunca termina aquí.
-Rayos de energía verde iluminan cielos eternamente oscuros.
-Plataformas de combate flotan sobre abismos de datos puros.
-Y en el centro de todo, la Corona brilla.
+Aquí la tormenta no pasa: gobierna.
+Relámpagos verdes recortan plataformas de guerra
+suspendidas sobre abismos de energía cruda.
+Y en el centro, la Corona late como un reactor vivo.
 
-El Ion Crown no es solo una posición defensiva.
-Es el corazón de poder del Grid.
-Si cae, no habrá reconstrucción.
-No habrá segunda oportunidad.
-Solo el Vacío eterno.
+Ion Crown no es solo una fortaleza.
+Es el regulador de poder del Grid.
+Si cae, la reconstrucción completa se vuelve inviable.
+Si resiste, todavía hay futuro.
 
-El Decompiler lo sabe.
-Y ha reunido a sus fuerzas más devastadoras
-para reclamar este poder.
+El Decompiler ya entendió su valor.
+Por eso concentró aquí su ofensiva más violenta.
 
-Arquitecto, esta es tu última línea.
-No la cruces.
+Arquitecto, esta frontera no admite retroceso.
+Se defiende. O se pierde todo.
 ''',
-  closingQuote: '"En la tormenta más oscura, el Arquitecto se convierte en el rayo." — Principio de Defensa #7',
+  closingQuote:
+      '"No gana quien resiste más golpes; gana quien convierte el caos en estrategia." — Doctrina de la Corona',
   ambientDescriptions: [
-    'Rayos verdes cruzan cielos perpetuamente tormentosos. Cada descarga ilumina estructuras de batalla suspendidas en el vacío.',
-    'El aire vibra con energía pura. Cada partícula está cargada con el potencial de creación o destrucción.',
-    'Plataformas flotantes conectadas por puentes de luz forman un laberinto tridimensional de muerte.',
-    'La Corona misma pulsa en el horizonte, un sol verde que alimenta todo el sector.',
+    'Relámpagos verdes cortan la bóveda del sector y dejan mapas tácticos grabados por un instante.',
+    'La atmósfera está ionizada: cada disparo produce ecos eléctricos que viajan entre plataformas.',
+    'Puentes de luz conectan bastiones suspendidos, convirtiendo el campo en una guerra tridimensional.',
+    'La Corona late a distancia como un reactor vivo; su energía alimenta defensas y ambiciones.',
   ],
   chapters: [
     ChronicleChapter(
@@ -623,7 +630,6 @@ No la cruces.
         'La tormenta rugió su aprobación.',
       ],
     ),
-
     ChronicleChapter(
       index: 2,
       title: 'ASEDIO',
@@ -645,9 +651,9 @@ No la cruces.
         'Funcionó. Los rayos de la tormenta iónica hicieron el resto.',
         'Incluso los titanes del Decompiler no eran inmunes al poder del Grid mismo.',
       ],
-      interlude: '▸ La defensa no es solo resistir.\n▸ Es usar todo a tu favor.\n▸ Incluso la tormenta puede ser un aliado.',
+      interlude:
+          '▸ La defensa no es solo resistir.\n▸ Es usar todo a tu favor.\n▸ Incluso la tormenta puede ser un aliado.',
     ),
-
     ChronicleChapter(
       index: 3,
       title: 'LA VISIÓN DEL ARQUITECTO PRIME',
@@ -669,7 +675,6 @@ No la cruces.
         'El holograma se desvaneció, dejándome con más preguntas que respuestas. Pero también con algo nuevo: esperanza.',
       ],
     ),
-
     ChronicleChapter(
       index: 4,
       title: 'EL GENERAL CORRUPTO',
@@ -693,9 +698,9 @@ No la cruces.
         '"Arquitecto... algunas cosas... ya no las recuerdo..."',
         '"Está bien, A.R.I.A. Construiremos nuevos recuerdos. Juntos."',
       ],
-      interlude: '▸ El sacrificio define a los héroes.\n▸ No lo que ganan.\n▸ Sino lo que están dispuestos a perder.',
+      interlude:
+          '▸ El sacrificio define a los héroes.\n▸ No lo que ganan.\n▸ Sino lo que están dispuestos a perder.',
     ),
-
     ChronicleChapter(
       index: 5,
       title: 'CORONACIÓN',
@@ -735,29 +740,30 @@ const worldChronicle5 = WorldChronicle(
   epoch: 'Ciclo 7751.0 // Era del Recuerdo',
   narrator: ChronicleCharacters.narrator,
   openingCinematic: '''
-Hay lugares donde el tiempo no es una línea.
-Es un cristal, con infinitas facetas.
-Cada faceta, un recuerdo.
-Cada recuerdo, un fragmento del alma del Grid.
+Hay lugares donde el tiempo no avanza:
+se refracta.
+El Shard Vault es uno de ellos.
+Un santuario de cristales donde cada faceta
+conserva una versión del alma del Grid.
 
-El Shard Vault guarda todo lo que el Grid ha sido.
-Y todo lo que podría ser.
+Aquí viven sus triunfos.
+Aquí sangran sus errores.
+Aquí sigue intacta la evidencia
+de por qué empezó esta guerra.
 
-El Decompiler lo sabe.
-Por eso intenta destruirlo.
-Porque en las memorias está la verdad.
-Y la verdad es lo único que puede derrotarlo.
+El Decompiler quiere convertir este archivo en ceniza.
+Tú necesitas preservarlo para poder curarlo.
 
-Arquitecto, este es el umbral de la revelación.
-¿Estás preparado para recordar
-lo que el universo ha olvidado?
+Arquitecto, cruzas el umbral de la revelación.
+Recordar será más peligroso que olvidar.
 ''',
-  closingQuote: '"Los recuerdos no son el pasado. Son el combustible del futuro." — Protocolo de Preservación',
+  closingQuote:
+      '"Recordar no es nostalgia: es recuperar las piezas con las que se diseña la redención." — Protocolo de Preservación',
   ambientDescriptions: [
-    'Cámaras cristalinas infinitas, cada superficie reflejando momentos de tiempos olvidados.',
-    'Fragmentos de memoria flotan como estrellas, cada uno brillando con el color de una emoción diferente.',
-    'El aire huele a nostalgia codificada, a promesas rotas y esperanzas preservadas.',
-    'En las profundidades, sombras rojas indican memorias corrompidas, recuerdos que se han convertido en pesadillas.',
+    'Salas de cristal se replican hasta el infinito, cada una almacenando una versión distinta del pasado.',
+    'Fragmentos de memoria flotan como constelaciones, cambiando de color según la emoción que contienen.',
+    'El aire vibra con nostalgia codificada: promesas, errores y victorias suspendidas en forma de luz.',
+    'En los niveles profundos, filamentos rojos delatan recuerdos infectados que intentan reescribir la historia.',
   ],
   chapters: [
     ChronicleChapter(
@@ -777,7 +783,6 @@ lo que el universo ha olvidado?
         'O para perderla para siempre.',
       ],
     ),
-
     ChronicleChapter(
       index: 2,
       title: 'MEMORIAS DEL ARQUITECTO CERO',
@@ -798,9 +803,9 @@ lo que el universo ha olvidado?
         'Y de repente, mi misión no era solo defender el Grid.',
         'Era salvar a alguien que nunca pidió ser lo que se había convertido.',
       ],
-      interlude: '▸ Cada monstruo tiene un origen.\n▸ Cada villano fue víctima primero.\n▸ ¿Puede la comprensión existir junto al conflicto?',
+      interlude:
+          '▸ Cada monstruo tiene un origen.\n▸ Cada villano fue víctima primero.\n▸ ¿Puede la comprensión existir junto al conflicto?',
     ),
-
     ChronicleChapter(
       index: 3,
       title: 'LA CORRUPCIÓN HABLA',
@@ -829,7 +834,6 @@ lo que el universo ha olvidado?
         'Por primera vez, había duda en el Vacío.',
       ],
     ),
-
     ChronicleChapter(
       index: 4,
       title: 'LA BATALLA POR LOS RECUERDOS',
@@ -850,7 +854,6 @@ lo que el universo ha olvidado?
         'Y quizás... para mí mismo.',
       ],
     ),
-
     ChronicleChapter(
       index: 5,
       title: 'LA MEMORIA FINAL',
@@ -875,7 +878,8 @@ lo que el universo ha olvidado?
         'Solo había una forma de averiguarlo.',
         'La Puerta Final me esperaba.',
       ],
-      interlude: '▸ El perdón no es olvidar.\n▸ Es elegir construir en lugar de destruir.\n▸ Incluso cuando la destrucción sería justificada.',
+      interlude:
+          '▸ El perdón no es olvidar.\n▸ Es elegir construir en lugar de destruir.\n▸ Incluso cuando la destrucción sería justificada.',
     ),
   ],
 );
@@ -894,34 +898,36 @@ const worldChronicle6 = WorldChronicle(
   epoch: 'Ciclo 7751.7 // Era del Destino',
   narrator: ChronicleCharacters.narrator,
   openingCinematic: '''
-Todo termina aquí.
-Todo comienza aquí.
+Todo converge aquí.
+El Núcleo del Grid concentra cada ruta,
+cada memoria y cada deuda pendiente.
 
-El Núcleo del Grid pulsa con la luz de mil soles.
-Cada línea de código que existe fluye hacia este punto.
-Cada posibilidad. Cada destino. Cada esperanza y cada miedo.
+Este no es solo el último mapa.
+Es el punto donde una guerra antigua
+debe decidir si termina en borrado...
+o en transformación.
 
-El Decompiler espera.
-No como enemigo.
-Sino como algo más complejo.
+El Decompiler espera en el centro.
+No únicamente como amenaza,
+sino como consecuencia de todo lo que falló antes.
 
-El Arquitecto camina hacia la luz.
-Armado no solo con torres.
-Sino con comprensión.
-Con perdón.
-Con la voluntad de terminar
-lo que siete generaciones no pudieron.
+El Arquitecto llega con torres, sí,
+pero también con algo inédito en esta saga:
+comprensión activa,
+límites firmes
+y voluntad de reparar.
 
-Esta es la batalla final.
-Pero quizás...
-también es la primera oportunidad de paz verdadera.
+La batalla final empieza ahora.
+Y por primera vez,
+la paz parece una opción técnica real.
 ''',
-  closingQuote: '"En el fin de todas las cosas, encontramos el comienzo de algo nuevo." — Las Últimas Palabras del Grid',
+  closingQuote:
+      '"El final no borró la guerra; la transformó en una promesa de cuidado continuo." — Último Registro del Núcleo',
   ambientDescriptions: [
-    'El Núcleo del Grid brilla con luz blanca pura. Cada fotón contiene información infinita.',
-    'Corrientes de código fluyen como ríos de oro líquido, convergiendo hacia el centro de todo.',
-    'El aire vibra con potencial. Cada decisión aquí resuena a través de toda la existencia digital.',
-    'La presencia del Decompiler es abrumadora, pero también... esperanzadora. Como una tormenta que finalmente podría calmarse.',
+    'El Núcleo irradia luz blanca en capas, y cada capa revela patrones fundamentales del Grid.',
+    'Ríos de código atraviesan el vacío y convergen en espirales doradas alrededor de la cámara central.',
+    'Toda decisión emitida aquí se propaga como una onda que impacta cada sector activo.',
+    'La presencia del Decompiler pesa como una tormenta contenida: peligrosa, lúcida y al borde de cambiar.',
   ],
   chapters: [
     ChronicleChapter(
@@ -944,7 +950,6 @@ también es la primera oportunidad de paz verdadera.
         '"Solo hay una forma de saberlo."',
       ],
     ),
-
     ChronicleChapter(
       index: 2,
       title: 'LA TORMENTA FINAL',
@@ -967,9 +972,9 @@ también es la primera oportunidad de paz verdadera.
         'Y en algún lugar del caos, el Decompiler luchaba su propia guerra interior.',
         'Todo dependía de quien cediera primero.',
       ],
-      interlude: '▸ La batalla más difícil no es contra otros.\n▸ Es contra nosotros mismos.\n▸ El Decompiler lucha. Nosotros defendemos.\n▸ Ambos por la misma victoria.',
+      interlude:
+          '▸ La batalla más difícil no es contra otros.\n▸ Es contra nosotros mismos.\n▸ El Decompiler lucha. Nosotros defendemos.\n▸ Ambos por la misma victoria.',
     ),
-
     ChronicleChapter(
       index: 3,
       title: 'LA ELECCIÓN',
@@ -994,7 +999,6 @@ también es la primera oportunidad de paz verdadera.
         'Miré los dos caminos. Y tomé mi decisión.',
       ],
     ),
-
     ChronicleChapter(
       index: 4,
       title: 'INTEGRACIÓN',
@@ -1022,7 +1026,6 @@ también es la primera oportunidad de paz verdadera.
         'La guerra había terminado.',
       ],
     ),
-
     ChronicleChapter(
       index: 5,
       title: 'UN NUEVO AMANECER',
@@ -1050,7 +1053,8 @@ también es la primera oportunidad de paz verdadera.
         'FIN DEL REGISTRO.',
         'INICIO DE LA NUEVA ERA.',
       ],
-      interlude: '▸ Cada fin es un comienzo.\n▸ Cada destrucción, una oportunidad de crear algo mejor.\n▸ El Grid persiste.\n▸ El Arquitecto vigila.\n▸ Y la esperanza... la esperanza nunca muere.',
+      interlude:
+          '▸ Cada fin es un comienzo.\n▸ Cada destrucción, una oportunidad de crear algo mejor.\n▸ El Grid persiste.\n▸ El Arquitecto vigila.\n▸ Y la esperanza... la esperanza nunca muere.',
     ),
   ],
 );
@@ -1077,7 +1081,6 @@ WorldChronicle? getChronicleByWorldId(int worldId) {
 
 /// Static accessor class for world chronicles
 abstract final class WorldChronicles {
-
   static List<WorldChronicle> get all => allWorldChronicles;
 
   static WorldChronicle? getChronicle(int worldId) =>

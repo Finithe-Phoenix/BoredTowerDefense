@@ -151,7 +151,12 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     }
 
     // Play build sound
-    AudioService.instance.playBuild();
+    final buildCenter = pos + Vector2(tileSize / 2, tileSize / 2);
+    AudioService.instance.playBuild(
+      type: selectedTowerType,
+      pan: _soundPanForWorld(buildCenter),
+      distance: _soundDistanceForWorld(buildCenter),
+    );
 
     gameRef.notifyTutorialTowerPlaced();
 
@@ -174,10 +179,24 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     // Resonance Siphon doesn't fire bullets
     if (tower.type == TowerType.resonanceSiphon) return;
 
+    final shootPan = _soundPanForWorld(tower.centerPosition);
+    final shootDistance = _soundDistanceForWorld(tower.centerPosition);
+
     if (tower.type == TowerType.teslaTerminal) {
-       _fireTeslaLightning(tower, target);
-       return;
+      _fireTeslaLightning(tower, target);
+      AudioService.instance.playShoot(
+        type: tower.type,
+        pan: shootPan,
+        distance: shootDistance,
+      );
+      return;
     }
+
+    AudioService.instance.playShoot(
+      type: tower.type,
+      pan: shootPan,
+      distance: shootDistance,
+    );
 
     bulletManager?.fire(
       from: tower.centerPosition,
@@ -187,8 +206,15 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       color: tower.color,
       target: target,
       onHit: (enemy, hitPosition, killed) {
-        if (tower.type == TowerType.neuralDisruptor && !killed && _random.nextDouble() < 0.25) {
-           enemy.applySlow(0.9, 1.5); // Neural disruption = heavy slow/stun
+        AudioService.instance.playHit(
+          type: tower.type,
+          pan: _soundPanForWorld(hitPosition),
+          distance: _soundDistanceForWorld(hitPosition),
+        );
+        if (tower.type == TowerType.neuralDisruptor &&
+            !killed &&
+            _random.nextDouble() < 0.25) {
+          enemy.applySlow(0.9, 1.5); // Neural disruption = heavy slow/stun
         }
         gameRef.registerFocusHit(
           tower: tower,
@@ -201,30 +227,34 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
       slowDuration: tower.slowDuration,
       towerType: tower.type,
     );
-    // Sound removed - too many projectiles cause audio overload
   }
 
   void _fireTeslaLightning(Tower tower, Enemy target) {
     // Tesla Terminal: Instant hit + chain to 2 nearby enemies
     final damage = tower.damage;
     target.takeDamage(damage);
+    AudioService.instance.playHit(
+      type: tower.type,
+      pan: _soundPanForWorld(target.position),
+      distance: _soundDistanceForWorld(target.position),
+    );
 
     // Chain logic
     final nearby = _teslaNearbyScratch;
     enemyManager?.queryEnemiesInRange(target.position, 60, nearby);
     int chained = 0;
     for (final e in nearby) {
-       if (e != target && chained < 2) {
-           e.takeDamage(damage * 0.7);
-           chained++;
-       }
+      if (e != target && chained < 2) {
+        e.takeDamage(damage * 0.7);
+        chained++;
+      }
     }
     nearby.clear();
-    // Sound removed - Tesla fires too rapidly
   }
 
   void _showPlacementFeedback(String message, math.Point<int> cell) {
-    final position = gridToWorld(cell, tileSize) + Vector2(tileSize / 2, tileSize / 2);
+    final position =
+        gridToWorld(cell, tileSize) + Vector2(tileSize / 2, tileSize / 2);
     final text = FloatingText(
       position: position,
       text: message,
@@ -268,6 +298,20 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
         cell.x < world.isBuildable[cell.y].length;
   }
 
+  double _soundPanForWorld(Vector2 worldPos) {
+    final screenPos = gameRef.worldToScreen(worldPos);
+    final width = gameRef.size.x <= 0 ? 1.0 : gameRef.size.x;
+    return ((screenPos.x / width) * 2.0 - 1.0).clamp(-1.0, 1.0);
+  }
+
+  double _soundDistanceForWorld(Vector2 worldPos) {
+    final screenPos = gameRef.worldToScreen(worldPos);
+    final center = Vector2(gameRef.size.x * 0.5, gameRef.size.y * 0.5);
+    final maxDist = math.sqrt(center.x * center.x + center.y * center.y);
+    if (maxDist <= 0) return 0.0;
+    return ((screenPos - center).length / maxDist).clamp(0.0, 1.0);
+  }
+
   @override
   void update(double dt) {
     super.update(dt);
@@ -304,26 +348,29 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
   void _updateResonanceFields() {
     // Clear all boosts first
     for (final t in _towers) {
-       t.resetResonanceBoost();
+      t.resetResonanceBoost();
     }
 
     // Use squared distance to avoid per-comparison sqrt()
     const resonanceRangeSq = 100.0 * 100.0;
 
     for (final siphon in _towers) {
-       if (siphon.type != TowerType.resonanceSiphon) continue;
-       for (final tower in _towers) {
-          if (tower == siphon) continue;
-          if (tower.position.distanceToSquared(siphon.position) < resonanceRangeSq) {
-             tower.setResonanceBoost(true);
-          }
-       }
+      if (siphon.type != TowerType.resonanceSiphon) continue;
+      for (final tower in _towers) {
+        if (tower == siphon) continue;
+        if (tower.position.distanceToSquared(siphon.position) <
+            resonanceRangeSq) {
+          tower.setResonanceBoost(true);
+        }
+      }
     }
   }
 
   // Cached paints for tower placement rendering
-  final Paint _paintAllowedFill = Paint()..color = NeonColors.cyan.withOpacity(0.04);
-  final Paint _paintBlockedFill = Paint()..color = NeonColors.magenta.withOpacity(0.06);
+  final Paint _paintAllowedFill = Paint()
+    ..color = NeonColors.cyan.withOpacity(0.04);
+  final Paint _paintBlockedFill = Paint()
+    ..color = NeonColors.magenta.withOpacity(0.06);
   final Paint _paintAllowed = Paint()
     ..color = NeonColors.cyan.withOpacity(0.12)
     ..style = PaintingStyle.stroke
@@ -333,8 +380,10 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 0.8;
   final Paint _paintGhost = Paint();
-  final Paint _paintGhostBlocked = Paint()..color = NeonColors.magenta.withOpacity(0.35);
-  final Paint _paintWarning = Paint()..color = NeonColors.orange.withOpacity(0.22);
+  final Paint _paintGhostBlocked = Paint()
+    ..color = NeonColors.magenta.withOpacity(0.35);
+  final Paint _paintWarning = Paint()
+    ..color = NeonColors.orange.withOpacity(0.22);
   final Paint _paintRange = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
@@ -368,7 +417,8 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
             tileSize,
           );
           final isBuildable = rows[y][x];
-          canvas.drawRect(rect, isBuildable ? _paintAllowedFill : _paintBlockedFill);
+          canvas.drawRect(
+              rect, isBuildable ? _paintAllowedFill : _paintBlockedFill);
           canvas.drawRect(rect, isBuildable ? _paintAllowed : _paintBlocked);
         }
       }
@@ -376,43 +426,43 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
 
     if (ghostPosition != null) {
       final cell = screenToGrid(ghostPosition!, tileSize);
-        if (_isCellWithin(cell)) {
-          final topLeft = gridToWorld(cell, tileSize);
-          final rect = Rect.fromLTWH(
-            topLeft.x,
-            topLeft.y,
-            tileSize,
-            tileSize,
-          );
-          final canBuild =
-              rows[cell.y][cell.x] && !occupied.contains(cell);
-          _paintGhost.color = selectedTowerType.color.withOpacity(0.25);
-          canvas.drawRect(rect, canBuild ? _paintGhost : _paintGhostBlocked);
-          if (!canBuild && blockRejected) {
-            canvas.drawRect(rect, _paintWarning);
-          }
+      if (_isCellWithin(cell)) {
+        final topLeft = gridToWorld(cell, tileSize);
+        final rect = Rect.fromLTWH(
+          topLeft.x,
+          topLeft.y,
+          tileSize,
+          tileSize,
+        );
+        final canBuild = rows[cell.y][cell.x] && !occupied.contains(cell);
+        _paintGhost.color = selectedTowerType.color.withOpacity(0.25);
+        canvas.drawRect(rect, canBuild ? _paintGhost : _paintGhostBlocked);
+        if (!canBuild && blockRejected) {
+          canvas.drawRect(rect, _paintWarning);
+        }
 
-          // Draw range preview for ghost (even on blocked tiles).
-          final rangeColor = canBuild ? selectedTowerType.color : NeonColors.magenta;
-          _paintRange.color = rangeColor.withOpacity(canBuild ? 0.18 : 0.12);
-          final range = gameRef.towerRange(selectedTowerType);
+        // Draw range preview for ghost (even on blocked tiles).
+        final rangeColor =
+            canBuild ? selectedTowerType.color : NeonColors.magenta;
+        _paintRange.color = rangeColor.withOpacity(canBuild ? 0.18 : 0.12);
+        final range = gameRef.towerRange(selectedTowerType);
+        canvas.drawCircle(
+          Offset(topLeft.x + tileSize / 2, topLeft.y + tileSize / 2),
+          range,
+          _paintRange,
+        );
+
+        if (canBuild) {
+          final explosionRadius = tileSize * 0.35 + math.sin(_ghostPulse) * 6;
+          _paintPulse.color = selectedTowerType.color.withOpacity(0.25);
           canvas.drawCircle(
             Offset(topLeft.x + tileSize / 2, topLeft.y + tileSize / 2),
-            range,
-            _paintRange,
+            explosionRadius,
+            _paintPulse,
           );
-
-          if (canBuild) {
-            final explosionRadius = tileSize * 0.35 + math.sin(_ghostPulse) * 6;
-            _paintPulse.color = selectedTowerType.color.withOpacity(0.25);
-            canvas.drawCircle(
-              Offset(topLeft.x + tileSize / 2, topLeft.y + tileSize / 2),
-              explosionRadius,
-              _paintPulse,
-            );
-          }
         }
       }
+    }
   }
 
   bool _wouldKeepPathOpen(math.Point<int> candidate) {
@@ -421,4 +471,3 @@ class TowerManager extends Component with HasGameRef<BoredGamesGame> {
     return world.tileTypes[candidate.y][candidate.x] != 2;
   }
 }
-

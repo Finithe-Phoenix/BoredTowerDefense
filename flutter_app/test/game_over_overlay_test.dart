@@ -27,9 +27,17 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1500));
 
-    await tester.tap(find.widgetWithText(NeonButton, 'REINICIAR SISTEMA'));
+    tester
+        .widget<NeonButton>(
+          find.widgetWithText(NeonButton, 'REINICIAR SISTEMA'),
+        )
+        .onPressed();
     await tester.pump();
-    await tester.tap(find.widgetWithText(NeonButton, 'ABORTAR MISION'));
+    tester
+        .widget<NeonButton>(
+          find.widgetWithText(NeonButton, 'ABORTAR MISION'),
+        )
+        .onPressed();
     await tester.pump();
 
     expect(restarted, 1);

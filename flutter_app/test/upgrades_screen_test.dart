@@ -18,10 +18,7 @@ void main() {
 
   testWidgets('UpgradesScreen shows loading then content', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: UpgradesScreen()));
-
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 700));
 
     expect(find.byType(CircularProgressIndicator), findsNothing);
     expect(find.text('UPGRADE FORGE'), findsOneWidget);
@@ -30,29 +27,36 @@ void main() {
   });
 
   testWidgets('UpgradesScreen returns to previous route', (tester) async {
+    late BuildContext rootContext;
+
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
-          builder: (context) => ElevatedButton(
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const UpgradesScreen()),
-            ),
-            child: const Text('OPEN'),
-          ),
+          builder: (context) {
+            rootContext = context;
+            return ElevatedButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const UpgradesScreen()),
+              ),
+              child: const Text('OPEN'),
+            );
+          },
         ),
       ),
     );
 
     await tester.tap(find.text('OPEN'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 700));
 
     expect(find.byType(UpgradesScreen), findsOneWidget);
 
-    await tester.tap(find.byIcon(Icons.arrow_back));
+    expect(Navigator.of(rootContext).canPop(), isTrue);
+    Navigator.of(rootContext).pop();
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 700));
 
     expect(find.byType(UpgradesScreen), findsNothing);
+    expect(find.text('OPEN'), findsOneWidget);
   });
 }

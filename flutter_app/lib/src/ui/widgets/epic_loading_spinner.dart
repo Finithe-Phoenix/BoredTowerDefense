@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
@@ -92,6 +93,8 @@ class _EpicLoadingSpinnerState extends State<EpicLoadingSpinner>
   late AnimationController _pulseController;
   late AnimationController _particleController;
   late AnimationController _glitchController;
+  final math.Random _random = math.Random();
+  Timer? _glitchTimer;
 
   @override
   void initState() {
@@ -126,7 +129,9 @@ class _EpicLoadingSpinnerState extends State<EpicLoadingSpinner>
   }
 
   void _scheduleRandomGlitch() {
-    Future.delayed(Duration(milliseconds: 800 + math.Random().nextInt(1200)), () {
+    _glitchTimer?.cancel();
+    _glitchTimer =
+        Timer(Duration(milliseconds: 800 + _random.nextInt(1200)), () {
       if (mounted) {
         _glitchController.forward(from: 0.0);
         _scheduleRandomGlitch();
@@ -136,6 +141,7 @@ class _EpicLoadingSpinnerState extends State<EpicLoadingSpinner>
 
   @override
   void dispose() {
+    _glitchTimer?.cancel();
     _rotationController.dispose();
     _pulseController.dispose();
     _particleController.dispose();
@@ -379,7 +385,8 @@ class _OrbitingParticlesPainter extends CustomPainter {
     final orbitRadius = size.width * 0.38;
 
     for (int i = 0; i < particleCount; i++) {
-      final particleAngle = (math.pi * 2 / particleCount) * i + (progress * math.pi * 2);
+      final particleAngle =
+          (math.pi * 2 / particleCount) * i + (progress * math.pi * 2);
       final orbitOffset = _random.nextDouble() * 0.1 - 0.05;
       final currentRadius = orbitRadius * (1.0 + orbitOffset);
 
@@ -432,12 +439,15 @@ class _DataStreamSegmentsPainter extends CustomPainter {
     final radius = size.width * 0.42;
 
     for (int i = 0; i < segmentCount; i++) {
-      final baseAngle = (math.pi * 2 / segmentCount) * i + (progress * math.pi * 2);
+      final baseAngle =
+          (math.pi * 2 / segmentCount) * i + (progress * math.pi * 2);
       final segmentLength = math.pi / 12; // ~15 degrees
 
       // Calculate opacity based on rotation position
       final normalizedAngle = (baseAngle % (math.pi * 2)) / (math.pi * 2);
-      final opacity = 0.3 + math.sin(normalizedAngle * math.pi * 2) * 0.4;
+      final opacity = (0.3 + math.sin(normalizedAngle * math.pi * 2) * 0.4)
+          .clamp(0.0, 1.0)
+          .toDouble();
 
       paint.color = accentColor.withOpacity(opacity);
 

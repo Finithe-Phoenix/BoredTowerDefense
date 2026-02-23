@@ -6,7 +6,8 @@ import 'package:flutter/material.dart';
 import '../bored_games_game.dart';
 
 /// Displays kill combos with subtle, elegant animations
-class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame> {
+class KillComboDisplay extends PositionComponent
+    with HasGameRef<BoredGamesGame> {
   KillComboDisplay() {
     anchor = Anchor.topRight;
   }
@@ -29,8 +30,9 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
   String _comboText = '';
   int _comboColorValue = 0;
   double _comboAlpha = -1;
+  int get currentCombo => _currentCombo;
 
-  void registerKill({bool isCritical = false, bool isMultiKill = false}) {
+  int? registerKill({bool isCritical = false, bool isMultiKill = false}) {
     _currentCombo++;
     _comboTimer = comboTimeout;
     _displayTimer = displayDuration;
@@ -39,19 +41,24 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
     // Only show notifications at exact milestone (not >=)
     String message = '';
     Color color = const Color(0xFF00FF88);
+    int? milestone;
 
     if (_currentCombo == 10) {
       message = 'UNSTOPPABLE';
       color = const Color(0xFFFF00FF);
+      milestone = 10;
     } else if (_currentCombo == 7) {
       message = 'RAMPAGE';
       color = const Color(0xFFFF6600);
+      milestone = 7;
     } else if (_currentCombo == 5) {
       message = 'SPREE';
       color = const Color(0xFFFFCC00);
+      milestone = 5;
     } else if (_currentCombo == 3) {
       message = 'TRIPLE';
       color = const Color(0xFF00FFFF);
+      milestone = 3;
     }
 
     if (message.isNotEmpty) {
@@ -60,6 +67,8 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
       }
       _notifications.add(_KillNotification(message, color));
     }
+
+    return milestone;
   }
 
   void reset() {
@@ -127,9 +136,14 @@ class KillComboDisplay extends PositionComponent with HasGameRef<BoredGamesGame>
 
   void _renderNotifications(Canvas canvas, double x, double y) {
     var offsetY = 0.0;
-    for (final notif in _notifications.reversed.take(_maxNotifications)) {
+    var rendered = 0;
+    for (int i = _notifications.length - 1;
+        i >= 0 && rendered < _maxNotifications;
+        i--) {
+      final notif = _notifications[i];
       notif.render(canvas, x, y - offsetY);
       offsetY += 20;
+      rendered++;
     }
   }
 
@@ -213,7 +227,8 @@ class _KillNotification {
   static final Paint _pillBorderPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1;
-  final TextPainter _textPainter = TextPainter(textDirection: TextDirection.ltr);
+  final TextPainter _textPainter =
+      TextPainter(textDirection: TextDirection.ltr);
   String _cachedText = '';
   int _cachedColorValue = 0;
   double _cachedAlpha = -1;

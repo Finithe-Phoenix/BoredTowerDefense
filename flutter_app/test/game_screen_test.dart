@@ -2,10 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:bored_games/src/bloc/settings/settings_cubit.dart';
 import 'package:bored_games/src/ui/screens/game_screen.dart';
 import 'package:bored_games/src/services/level_service.dart';
 import 'package:bored_games/src/services/storage_service.dart';
@@ -45,6 +47,10 @@ void main() {
     PathProviderPlatform.instance = _FakePathProviderPlatform(tempDir.path);
     await ProceduralMusicService.instance.initialize();
     await AudioService.instance.initialize();
+    await StorageService.instance.saveQualitySettings(
+      preset: 'low',
+      autoQuality: false,
+    );
   });
 
   tearDown(() async {
@@ -53,14 +59,19 @@ void main() {
   });
 
   Widget buildTestWidget({int levelId = 1}) {
-    return MaterialApp(
-      home: GameScreen(levelId: levelId),
-      routes: {
-        '/game': (context) {
-          final args = ModalRoute.of(context)?.settings.arguments as int?;
-          return GameScreen(levelId: args ?? 1);
+    return BlocProvider(
+      create: (_) => SettingsCubit()
+        ..setGraphicsQuality('low')
+        ..setParticleIntensity(0.4),
+      child: MaterialApp(
+        home: GameScreen(levelId: levelId),
+        routes: {
+          '/game': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments as int?;
+            return GameScreen(levelId: args ?? 1);
+          },
         },
-      },
+      ),
     );
   }
 

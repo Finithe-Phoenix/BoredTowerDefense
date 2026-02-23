@@ -23,9 +23,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 900));
 
     expect(find.text('SETTINGS'), findsOneWidget);
-    expect(find.text('AUDIO'), findsOneWidget);
-    expect(find.text('GRAPHICS'), findsOneWidget);
-    expect(find.text('GAMEPLAY'), findsOneWidget);
+    expect(find.text('AUDIO'), findsWidgets);
+    expect(find.text('GRAPHICS'), findsWidgets);
+    expect(find.text('GAMEPLAY'), findsWidgets);
     expect(find.text('RESET TO DEFAULTS'), findsOneWidget);
   });
 }

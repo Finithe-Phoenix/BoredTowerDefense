@@ -30,7 +30,8 @@ class StoryScreen extends StatefulWidget {
   State<StoryScreen> createState() => _StoryScreenState();
 }
 
-class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin {
+class _StoryScreenState extends State<StoryScreen>
+    with TickerProviderStateMixin {
   static const int _levelsPerWorld = 10;
 
   late AnimationController _masterController;
@@ -45,6 +46,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
     return _rngState;
   }
+
   double _nextUnit() => _lcgNext() / 0x7fffffff;
   int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
   double _glitchIntensity = 0;
@@ -57,9 +59,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       title: 'NEON FRONTIER',
       subtitle: 'ERROR_01: EL ORIGEN DEL VACÍO',
       beats: [
-        'El "Decompiler" ha perforado el Sector 0. La realidad digital se desmorona en fragmentos de ruido.',
-        'Como el Arquitecto, tu misión es anclar la red antes de que la corrupción sea irreversible.',
-        'Cada torre es un cortafuegos. Cada disparo, una línea de código recuperada.',
+        'El Decompiler abrió la Primera Brecha en Sector 0. Barrios enteros del Grid se apagan en silencio.',
+        'Tu tarea no es solo resistir: debes reconstruir bajo fuego antes de que la caída se vuelva irreversible.',
+        'Aquí nace la doctrina del Arquitecto: cada torre recupera territorio, cada baja devuelve señal.',
       ],
       accent: NeonColors.cyan,
       icon: Icons.blur_on,
@@ -69,9 +71,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       title: 'RIFT WARS',
       subtitle: 'ERROR_02: CASCADA DE MEMORIA',
       beats: [
-        'El virus ha creado anomalías temporales. Los datos del pasado se filtran en el presente.',
-        'Las grietas de energía magenta son cicatrices en la malla. Debes sellarlas con pura potencia de fuego.',
-        'El ruido se vuelve más denso. La red grita pidiendo restauración.',
+        'Tras estabilizar Frontier, la guerra se mueve a grietas temporales donde pasado y futuro colisionan.',
+        'Los Phantoms no avanzan: irrumpen desde líneas de tiempo rotas. Necesitas precisión y ritmo quirúrgico.',
+        'Si sellas Rift Wars, recuperas historia. Si fallas, el Decompiler reescribirá quiénes fuimos.',
       ],
       accent: NeonColors.magenta,
       icon: Icons.waves,
@@ -81,9 +83,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       title: 'SIGNAL WASTES',
       subtitle: 'ERROR_03: ECO EN EL VACÍO',
       beats: [
-        'Desiertos de estática donde la señal muere. El Decompiler acecha en las sombras del código.',
-        'Sin visibilidad total, las torres son faros en una tormenta de bits perdidos.',
-        'Si la luz se apaga aquí, el Grid caerá en el silencio eterno.',
+        'La señal muere por sectores: vastos desiertos de estática convierten la defensa en combate a ciegas.',
+        'Cada torre funciona como faro táctico para detectar enjambres que no deberían existir en el radar.',
+        'Mantener un solo canal vivo aquí significa conservar la voz del Grid.',
       ],
       accent: NeonColors.yellow,
       icon: Icons.signal_cellular_null,
@@ -93,9 +95,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       title: 'ION CROWN',
       subtitle: 'ERROR_04: LA CORONA DE TORMENTA',
       beats: [
-        'La última línea de defensa antes del Núcleo Central. Tormentas iónicas azotan la infraestructura.',
-        'El enemigo ha movilizado a sus unidades de asedio más pesadas. El tiempo de corrección se agota.',
-        'Solo una voluntad de hierro puede sostener la corona de energía.',
+        'Ion Crown protege el acceso al Núcleo. Tormentas iónicas y asedios pesados castigan cada error.',
+        'El Decompiler presiona con unidades élite: sostener líneas y rotar recursos importa más que nunca.',
+        'Caer aquí abre un corredor directo al corazón del sistema.',
       ],
       accent: NeonColors.green,
       icon: Icons.electric_bolt,
@@ -105,8 +107,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       title: 'SHARD VAULT',
       subtitle: 'ERROR_05: MEMORIAS CORRUPTAS',
       beats: [
-        'Bóvedas de seguridad donde se guardan las funciones raíz. El virus intenta borrarlas para siempre.',
-        'Recupera los fragmentos de memoria. Evoluciona tus sistemas. No permitas que el pasado desaparezca.',
+        'En Shard Vault se guardan funciones raíz y memorias fundacionales del Grid.',
+        'La corrupción ya no solo destruye: altera archivos clave para romper identidad y propósito.',
+        'Recuperar estos fragmentos desbloquea poder, contexto y ventaja para el cierre de la campaña.',
       ],
       accent: NeonColors.red,
       icon: Icons.memory,
@@ -116,9 +119,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
       title: 'FINAL GATE',
       subtitle: 'SYS_FINAL: EL ÚLTIMO UMBRAL',
       beats: [
-        'Todo converge al Núcleo. El Decompiler está materializando su forma final.',
-        'Si la Puerta Final cae, el sistema entero será formateado al Vacío.',
-        'Es hora de ejecutar la secuencia final. Por el Grid.',
+        'Todas las rutas convergen en Final Gate: el Decompiler compila su forma definitiva.',
+        'Ya no peleas por una zona; peleas por la continuidad completa de la realidad digital.',
+        'Última secuencia: sincroniza defensa, economía y precisión. Esta vez, el Grid no retrocede.',
       ],
       accent: NeonColors.white,
       icon: Icons.door_front_door,
@@ -151,7 +154,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     _particleController = AnimationController(
       duration: const Duration(milliseconds: 50),
       vsync: this,
-    )..addListener(_updateParticles)..repeat();
+    )
+      ..addListener(_updateParticles)
+      ..repeat();
 
     // Glitch controller
     _glitchController = AnimationController(
@@ -165,7 +170,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     }
 
     // Card reveal sequence
-    _cardRevealTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+    _cardRevealTimer =
+        Timer.periodic(const Duration(milliseconds: 200), (timer) {
       if (_revealedCardIndex < _chapters.length) {
         setState(() => _revealedCardIndex++);
       } else {
@@ -226,6 +232,198 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     );
   }
 
+  Map<int, _WorldProgress> _buildProgressByWorld(LevelService service) {
+    final map = <int, _WorldProgress>{};
+    for (final chapter in _chapters) {
+      map[chapter.worldId] = _worldProgress(service, chapter.worldId);
+    }
+    return map;
+  }
+
+  _StoryOverview _buildStoryOverview(Map<int, _WorldProgress> progressByWorld) {
+    var unlocked = 0;
+    var cleared = 0;
+    var totalCompletedLevels = 0;
+    var totalLevels = 0;
+    var focusWorldId = 1;
+    var bestProgress = -1.0;
+
+    for (final chapter in _chapters) {
+      final progress = progressByWorld[chapter.worldId] ??
+          const _WorldProgress(total: 0, completed: 0, unlocked: false);
+
+      totalCompletedLevels += progress.completed;
+      totalLevels += progress.total;
+
+      if (progress.unlocked) {
+        unlocked++;
+        if (progress.total > 0 && progress.completed >= progress.total) {
+          cleared++;
+        }
+      }
+
+      if (!progress.unlocked || progress.total <= 0) continue;
+      final ratio = progress.completed / progress.total;
+      if (ratio > bestProgress) {
+        bestProgress = ratio;
+        focusWorldId = chapter.worldId;
+      }
+    }
+
+    return _StoryOverview(
+      totalWorlds: _chapters.length,
+      unlockedWorlds: unlocked,
+      clearedWorlds: cleared,
+      completedLevels: totalCompletedLevels,
+      totalLevels: totalLevels,
+      focusWorldId: focusWorldId,
+    );
+  }
+
+  String _systemStatusText(_StoryOverview overview) {
+    if (overview.clearedWorlds >= overview.totalWorlds &&
+        overview.totalWorlds > 0) {
+      return 'ESTADO DEL SISTEMA: ESTABLE - GRID RESTAURADO';
+    }
+    if (overview.unlockedWorlds <= 1) {
+      return 'ESTADO DEL SISTEMA: CRÍTICO - BRECHA ACTIVA EN SECTOR CERO';
+    }
+    if (overview.clearedWorlds >= 3) {
+      return 'ESTADO DEL SISTEMA: INESTABLE - RECONSTRUCCIÓN EN CURSO';
+    }
+    return 'ESTADO DEL SISTEMA: ALERTA - CORRUPCIÓN EN MÚLTIPLES FRENTES';
+  }
+
+  String _extractNarrativeHook(String input) {
+    final lines = input.split('\n');
+    final nonEmpty = <String>[];
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isNotEmpty) {
+        nonEmpty.add(trimmed);
+      }
+      if (nonEmpty.length == 2) break;
+    }
+    if (nonEmpty.isNotEmpty) {
+      final merged = nonEmpty.join(' ');
+      if (merged.length <= 170) return merged;
+      return '${merged.substring(0, 167)}...';
+    }
+    return input.trim();
+  }
+
+  Widget _buildNarrativeDeck(_StoryOverview overview) {
+    final focusChronicle = WorldChronicles.getChronicle(overview.focusWorldId);
+    final focusHook = focusChronicle == null
+        ? 'No hay señal narrativa disponible para este sector.'
+        : _extractNarrativeHook(focusChronicle.openingCinematic);
+    final completionRatio = overview.totalLevels == 0
+        ? 0.0
+        : overview.completedLevels / overview.totalLevels;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: NeonColors.surfaceBg.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: NeonColors.cyan.withOpacity(0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: NeonColors.cyan.withOpacity(0.18),
+            blurRadius: 12,
+            spreadRadius: -3,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.sensors,
+                color: NeonColors.cyan.withOpacity(0.9),
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'NARRATIVE LINK // WORLD ${overview.focusWorldId.toString().padLeft(2, '0')}',
+                style: NeonTextStyles.small.copyWith(
+                  color: NeonColors.cyan.withOpacity(0.9),
+                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${overview.completedLevels}/${overview.totalLevels} NODOS',
+                style: NeonTextStyles.small.copyWith(
+                  color: NeonColors.white.withOpacity(0.7),
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            focusHook,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: NeonTextStyles.body.copyWith(
+              color: NeonColors.white.withOpacity(0.82),
+              fontSize: 12,
+              height: 1.45,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: LinearProgressIndicator(
+              value: completionRatio.clamp(0.0, 1.0),
+              minHeight: 4,
+              backgroundColor: Colors.black.withOpacity(0.45),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Color.lerp(
+                    NeonColors.magenta, NeonColors.green, completionRatio)!,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'MUNDOS DESBLOQUEADOS: ${overview.unlockedWorlds}/${overview.totalWorlds}  |  LIMPIADOS: ${overview.clearedWorlds}',
+            style: NeonTextStyles.small.copyWith(
+              color: NeonColors.white.withOpacity(0.62),
+              letterSpacing: 0.9,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _openChronicleReader(overview.focusWorldId),
+              style: TextButton.styleFrom(
+                foregroundColor: NeonColors.cyan,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                minimumSize: const Size(0, 32),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              icon: const Icon(Icons.menu_book_rounded, size: 16),
+              label: Text(
+                'LEER INFORME ACTIVO',
+                style: NeonTextStyles.small.copyWith(
+                  color: NeonColors.cyan.withOpacity(0.9),
+                  letterSpacing: 1.1,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openChronicleReader(int worldId) {
     _triggerGlitch();
 
@@ -254,6 +452,8 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     final levelService = LevelService.instance;
+    final progressByWorld = _buildProgressByWorld(levelService);
+    final overview = _buildStoryOverview(progressByWorld);
 
     return Scaffold(
       body: AnimatedBuilder(
@@ -297,8 +497,10 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
                       const SizedBox(height: 16),
 
                       // Epic Title with data corruption effect
-                      _buildEpicHeader(),
+                      _buildEpicHeader(overview),
 
+                      const SizedBox(height: 16),
+                      _buildNarrativeDeck(overview),
                       const SizedBox(height: 16),
 
                       // Story cards list
@@ -306,27 +508,39 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
                         child: ListView.separated(
                           padding: const EdgeInsets.only(bottom: 20),
                           itemCount: _chapters.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 16),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 16),
                           itemBuilder: (context, index) {
                             final chapter = _chapters[index];
-                            final progress = _worldProgress(levelService, chapter.worldId);
+                            final progress = progressByWorld[chapter.worldId] ??
+                                const _WorldProgress(
+                                  total: 0,
+                                  completed: 0,
+                                  unlocked: false,
+                                );
                             final isRevealed = index < _revealedCardIndex;
+                            final chronicle =
+                                WorldChronicles.getChronicle(chapter.worldId);
 
                             return AnimatedOpacity(
                               duration: const Duration(milliseconds: 400),
                               opacity: isRevealed ? 1.0 : 0.0,
                               child: AnimatedSlide(
                                 duration: const Duration(milliseconds: 500),
-                                offset: isRevealed ? Offset.zero : const Offset(0.3, 0),
+                                offset: isRevealed
+                                    ? Offset.zero
+                                    : const Offset(0.3, 0),
                                 curve: Curves.easeOutCubic,
                                 child: _EpicStoryCard(
                                   chapter: chapter,
+                                  chronicle: chronicle,
                                   progress: progress,
                                   pulseValue: _pulseController.value,
                                   scanProgress: _scanlineController.value,
                                   onTap: _triggerGlitch,
                                   cardIndex: index,
-                                  onReadChronicle: () => _openChronicleReader(chapter.worldId),
+                                  onReadChronicle: () =>
+                                      _openChronicleReader(chapter.worldId),
                                 ),
                               ),
                             );
@@ -342,7 +556,6 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
                   ),
                 ),
               ),
-
             ],
           );
         },
@@ -350,8 +563,9 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
     );
   }
 
-  Widget _buildEpicHeader() {
-    final fadeIn = Curves.easeOut.transform(_masterController.value.clamp(0.0, 0.5) * 2);
+  Widget _buildEpicHeader(_StoryOverview overview) {
+    final fadeIn =
+        Curves.easeOut.transform(_masterController.value.clamp(0.0, 0.5) * 2);
     final glitchOffset = _glitchIntensity * (_nextUnit() - 0.5) * 6;
 
     return Transform.translate(
@@ -374,6 +588,7 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
           Opacity(
             opacity: fadeIn,
             child: _AnimatedStatusBar(
+              statusText: _systemStatusText(overview),
               pulseValue: _pulseController.value,
               scanProgress: _scanlineController.value,
             ),
@@ -412,10 +627,12 @@ class _StoryScreenState extends State<StoryScreen> with TickerProviderStateMixin
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _AnimatedStatusBar extends StatefulWidget {
+  final String statusText;
   final double pulseValue;
   final double scanProgress;
 
   const _AnimatedStatusBar({
+    required this.statusText,
     required this.pulseValue,
     required this.scanProgress,
   });
@@ -428,13 +645,13 @@ class _AnimatedStatusBarState extends State<_AnimatedStatusBar> {
   String _displayText = '';
   int _charIndex = 0;
   Timer? _typewriterTimer;
-  static const _fullText = 'ESTADO DEL SISTEMA: CRÍTICO - RECURSIVE_DECOMPILE_DETECTED';
   static const _glitchChars = r'!@#$%^&*()_+-=[]{}|;:<>/?01';
   int _rngState = 0x5bd1e995;
   int _lcgNext() {
     _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
     return _rngState;
   }
+
   int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
 
   @override
@@ -444,19 +661,33 @@ class _AnimatedStatusBarState extends State<_AnimatedStatusBar> {
   }
 
   @override
+  void didUpdateWidget(covariant _AnimatedStatusBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.statusText != widget.statusText) {
+      _startTypewriter(reset: true);
+    }
+  }
+
+  @override
   void dispose() {
     _typewriterTimer?.cancel();
     super.dispose();
   }
 
-  void _startTypewriter() {
-    _typewriterTimer = Timer.periodic(const Duration(milliseconds: 35), (timer) {
-      if (_charIndex < _fullText.length) {
+  void _startTypewriter({bool reset = false}) {
+    _typewriterTimer?.cancel();
+    if (reset) {
+      _charIndex = 0;
+      _displayText = '';
+    }
+    _typewriterTimer =
+        Timer.periodic(const Duration(milliseconds: 35), (timer) {
+      if (_charIndex < widget.statusText.length) {
         setState(() {
           _charIndex++;
-          _displayText = _fullText.substring(0, _charIndex);
+          _displayText = widget.statusText.substring(0, _charIndex);
           // Add random glitch char at end
-          if (_charIndex < _fullText.length) {
+          if (_charIndex < widget.statusText.length) {
             _displayText += _glitchChars[_nextInt(_glitchChars.length)];
           }
         });
@@ -564,6 +795,7 @@ class _BlinkingCursor extends StatelessWidget {
 
 class _EpicStoryCard extends StatefulWidget {
   final _StoryChapter chapter;
+  final WorldChronicle? chronicle;
   final _WorldProgress progress;
   final double pulseValue;
   final double scanProgress;
@@ -573,6 +805,7 @@ class _EpicStoryCard extends StatefulWidget {
 
   const _EpicStoryCard({
     required this.chapter,
+    required this.chronicle,
     required this.progress,
     required this.pulseValue,
     required this.scanProgress,
@@ -626,7 +859,8 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
 
   String get _statusLabel {
     if (!widget.progress.unlocked) return 'LOCKED';
-    if (widget.progress.total > 0 && widget.progress.completed >= widget.progress.total) {
+    if (widget.progress.total > 0 &&
+        widget.progress.completed >= widget.progress.total) {
       return 'CLEARED';
     }
     if (widget.progress.completed > 0) return 'IN PROGRESS';
@@ -635,11 +869,36 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
 
   Color get _statusColor {
     if (!widget.progress.unlocked) return NeonColors.red;
-    if (widget.progress.total > 0 && widget.progress.completed >= widget.progress.total) {
+    if (widget.progress.total > 0 &&
+        widget.progress.completed >= widget.progress.total) {
       return NeonColors.green;
     }
     if (widget.progress.completed > 0) return NeonColors.cyan;
     return NeonColors.magenta;
+  }
+
+  String get _chronicleActionLabel {
+    if (widget.progress.total > 0 &&
+        widget.progress.completed >= widget.progress.total) {
+      return 'RELEER CRÓNICA';
+    }
+    if (widget.progress.completed > 0) {
+      return 'SEGUIR LEYENDO CRÓNICA';
+    }
+    return 'LEER CRÓNICA COMPLETA';
+  }
+
+  String? _chronicleHook() {
+    final chronicle = widget.chronicle;
+    if (chronicle == null) return null;
+    final lines = chronicle.openingCinematic.split('\n');
+    for (final line in lines) {
+      final clean = line.trim();
+      if (clean.isNotEmpty) return clean;
+    }
+    final fallback = chronicle.openingCinematic.trim();
+    if (fallback.isEmpty) return null;
+    return fallback;
   }
 
   @override
@@ -647,7 +906,8 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
     final chapter = widget.chapter;
     final progress = widget.progress;
     final opacity = progress.unlocked ? 1.0 : 0.55;
-    final progressRatio = progress.total == 0 ? 0.0 : progress.completed / progress.total;
+    final progressRatio =
+        progress.total == 0 ? 0.0 : progress.completed / progress.total;
     final borderGlow = 0.4 + widget.pulseValue * 0.2 + (_isHovered ? 0.3 : 0);
 
     return MouseRegion(
@@ -722,6 +982,10 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
                           letterSpacing: 1.2,
                         ),
                       ),
+                      if (widget.chronicle != null) ...[
+                        const SizedBox(height: 10),
+                        _buildChronicleIntel(widget.chronicle!, opacity),
+                      ],
                       const SizedBox(height: 14),
 
                       // Story beats with typewriter reveal
@@ -741,7 +1005,8 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
     );
   }
 
-  Widget _buildHeader(_StoryChapter chapter, _WorldProgress progress, double opacity) {
+  Widget _buildHeader(
+      _StoryChapter chapter, _WorldProgress progress, double opacity) {
     return Row(
       children: [
         // World identifier with hex decoration
@@ -975,6 +1240,59 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
     }).toList();
   }
 
+  Widget _buildChronicleIntel(WorldChronicle chronicle, double opacity) {
+    final hook =
+        _chronicleHook() ?? 'Registro disponible en el archivo principal.';
+    final moodNames = chronicle.chapters
+        .map((c) => c.mood.name.toUpperCase())
+        .toSet()
+        .take(3)
+        .join(' / ');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.28),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+            color: chronicle.accentColor.withOpacity(0.32 * opacity)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${chronicle.codename}  //  ${chronicle.epoch}',
+            style: NeonTextStyles.small.copyWith(
+              color: chronicle.accentColor.withOpacity(0.82 * opacity),
+              letterSpacing: 1.0,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            hook,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: NeonTextStyles.body.copyWith(
+              color: NeonColors.white.withOpacity(0.78 * opacity),
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${chronicle.chapters.length} CAPÍTULOS  |  TONO: $moodNames',
+            style: NeonTextStyles.small.copyWith(
+              color: NeonColors.white.withOpacity(0.58 * opacity),
+              letterSpacing: 0.9,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReadChronicleButton(Color accent, double opacity) {
     return Padding(
       padding: const EdgeInsets.only(top: 16),
@@ -1017,7 +1335,7 @@ class _EpicStoryCardState extends State<_EpicStoryCard>
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    'LEER CRÓNICA COMPLETA',
+                    _chronicleActionLabel,
                     style: NeonTextStyles.body.copyWith(
                       color: accent.withOpacity(opacity),
                       fontSize: 13,
@@ -1100,7 +1418,10 @@ class _HolographicCardPainter extends CustomPainter {
   static final Map<int, Shader> _scanlineShaders = {};
 
   static int _innerGradientKey(Size size, int opacityStep, int colorValue) {
-    return (size.width.round() << 32) ^ (size.height.round() << 16) ^ (opacityStep << 8) ^ colorValue;
+    return (size.width.round() << 32) ^
+        (size.height.round() << 16) ^
+        (opacityStep << 8) ^
+        colorValue;
   }
 
   static int _scanlineKey(Size size, int opacityStep, int colorValue) {
@@ -1190,7 +1511,8 @@ class _HolographicCardPainter extends CustomPainter {
     _drawDataStream(canvas, size, accent, opacity);
   }
 
-  void _drawCornerAccents(Canvas canvas, Size size, Color color, double opacity) {
+  void _drawCornerAccents(
+      Canvas canvas, Size size, Color color, double opacity) {
     const cornerSize = 12.0;
     final cornerPaint = Paint()
       ..color = color.withOpacity(0.7 * opacity)
@@ -1371,7 +1693,8 @@ class _CyberScanOverlayPainter extends CustomPainter {
     // Secondary scan line (opposite direction)
     final scan2Y = (1 - scanProgress) * size.height;
     _scanline2Paint.color = NeonColors.magenta.withOpacity(0.1 * masterOpacity);
-    canvas.drawRect(Rect.fromLTWH(0, scan2Y - 1, size.width, 2), _scanline2Paint);
+    canvas.drawRect(
+        Rect.fromLTWH(0, scan2Y - 1, size.width, 2), _scanline2Paint);
 
     // CRT scanlines (subtle horizontal lines)
     _crtLinePaint.color = Colors.black.withOpacity(0.05 * masterOpacity);
@@ -1387,11 +1710,15 @@ class _CyberScanOverlayPainter extends CustomPainter {
   }
 
   void _drawGlitch(Canvas canvas, Size size) {
-    int rngState = ((scanProgress * 100000).round() ^ (glitchIntensity * 1000).round() ^ 0x9e3779b9) & 0x7fffffff;
+    int rngState = ((scanProgress * 100000).round() ^
+            (glitchIntensity * 1000).round() ^
+            0x9e3779b9) &
+        0x7fffffff;
     int lcgNext() {
       rngState = (1664525 * rngState + 1013904223) & 0x7fffffff;
       return rngState;
     }
+
     double nextUnit() => lcgNext() / 0x7fffffff;
 
     for (int i = 0; i < 8; i++) {
@@ -1405,7 +1732,8 @@ class _CyberScanOverlayPainter extends CustomPainter {
         Rect.fromLTWH(-offsetX, y, size.width, height),
         _glitchRedPaint,
       );
-      _glitchCyanPaint.color = NeonColors.cyan.withOpacity(0.15 * glitchIntensity);
+      _glitchCyanPaint.color =
+          NeonColors.cyan.withOpacity(0.15 * glitchIntensity);
       canvas.drawRect(
         Rect.fromLTWH(offsetX, y, size.width, height),
         _glitchCyanPaint,
@@ -1436,6 +1764,24 @@ class _CyberScanOverlayPainter extends CustomPainter {
 // ═══════════════════════════════════════════════════════════════════════════
 // DATA MODELS
 // ═══════════════════════════════════════════════════════════════════════════
+
+class _StoryOverview {
+  const _StoryOverview({
+    required this.totalWorlds,
+    required this.unlockedWorlds,
+    required this.clearedWorlds,
+    required this.completedLevels,
+    required this.totalLevels,
+    required this.focusWorldId,
+  });
+
+  final int totalWorlds;
+  final int unlockedWorlds;
+  final int clearedWorlds;
+  final int completedLevels;
+  final int totalLevels;
+  final int focusWorldId;
+}
 
 class _StoryChapter {
   const _StoryChapter({
@@ -1492,10 +1838,12 @@ class _EnergyParticle {
     _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
     return _rngState;
   }
+
   double _nextUnit() => _lcgNext() / 0x7fffffff;
   int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
 
-  factory _EnergyParticle.random(double Function() nextUnit, int Function(int) nextInt) {
+  factory _EnergyParticle.random(
+      double Function() nextUnit, int Function(int) nextInt) {
     final colors = [
       NeonColors.cyan,
       NeonColors.magenta,

@@ -14,6 +14,9 @@ import '../theme/neon_theme.dart';
 import '../widgets/cyber_grid_background.dart';
 import '../widgets/tron_button.dart';
 
+typedef BenchmarkGameFactory = BoredGamesGame Function(
+    LevelConfig levelConfig, VoidCallback onBenchmarkEnd);
+
 class _FastRng {
   int _state;
 
@@ -24,23 +27,37 @@ class _FastRng {
     return _state;
   }
 
-  double nextDouble() => _next() / 0x7fffffff;
-
   int nextInt(int max) => max <= 0 ? 0 : _next() % max;
-
-  bool nextBool() => (_next() & 1) == 0;
 }
 
 /// Benchmark screen that auto-plays the game to stress test
 /// both device performance and game functionality
 class BenchmarkScreen extends StatefulWidget {
-  const BenchmarkScreen({super.key});
+  const BenchmarkScreen({
+    super.key,
+    this.gameFactory,
+    this.settingsApplyDelay = const Duration(milliseconds: 100),
+    this.gameReadyDelay = const Duration(milliseconds: 500),
+    this.benchmarkStartDelay = const Duration(milliseconds: 1500),
+    this.autoPlayInterval = const Duration(milliseconds: 200),
+    this.statsInterval = const Duration(milliseconds: 100),
+    this.uiUpdateInterval = const Duration(milliseconds: 500),
+  });
+
+  final BenchmarkGameFactory? gameFactory;
+  final Duration settingsApplyDelay;
+  final Duration gameReadyDelay;
+  final Duration benchmarkStartDelay;
+  final Duration autoPlayInterval;
+  final Duration statsInterval;
+  final Duration uiUpdateInterval;
 
   @override
   State<BenchmarkScreen> createState() => _BenchmarkScreenState();
 }
 
-class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderStateMixin {
+class _BenchmarkScreenState extends State<BenchmarkScreen>
+    with TickerProviderStateMixin {
   BoredGamesGame? _game;
   LevelConfig? _levelConfig;
   bool _gameReady = false;
@@ -76,12 +93,12 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
 
   // Tower placement order for auto-play (prioritize damage dealers)
   final List<TowerType> _towerOrder = [
-    TowerType.pulseArcher,    // Fast, cheap, good early
-    TowerType.circuitCannon,  // AOE damage
-    TowerType.teslaTerminal,  // Chain lightning
-    TowerType.ionSniper,      // High single target
-    TowerType.phaseMage,      // Magic damage
-    TowerType.glimmerField,   // Support/slow
+    TowerType.pulseArcher, // Fast, cheap, good early
+    TowerType.circuitCannon, // AOE damage
+    TowerType.teslaTerminal, // Chain lightning
+    TowerType.ionSniper, // High single target
+    TowerType.phaseMage, // Magic damage
+    TowerType.glimmerField, // Support/slow
   ];
 
   @override
@@ -96,18 +113,24 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
     _levelConfig = level ?? LevelService.instance.levels.first;
     _gameReady = false;
 
-    _game = BoredGamesGame(
-      levelConfig: _levelConfig!.copyWith(
-        waves: 50, // 50 waves for stress testing
-        startingGold: 999999, // Infinite gold for auto-placement
-        startingLives: 9999, // Lots of lives - we want to stress test, not end early
-      ),
-      onGameOver: _onBenchmarkEnd,
-      onVictory: _onBenchmarkEnd,
-    )..hideHud = true; // Hide game HUD in benchmark mode
+    final benchmarkConfig = _levelConfig!.copyWith(
+      waves: 50, // 50 waves for stress testing
+      startingGold: 999999, // Infinite gold for auto-placement
+      startingLives:
+          9999, // Lots of lives - we want to stress test, not end early
+    );
+
+    final game = widget.gameFactory != null
+        ? widget.gameFactory!(benchmarkConfig, _onBenchmarkEnd)
+        : BoredGamesGame(
+            levelConfig: benchmarkConfig,
+            onGameOver: _onBenchmarkEnd,
+            onVictory: _onBenchmarkEnd,
+          );
+    _game = game..hideHud = true; // Hide game HUD in benchmark mode
 
     // Apply graphics quality and particle intensity from settings
-    Future.delayed(const Duration(milliseconds: 100), () {
+    Future.delayed(widget.settingsApplyDelay, () {
       if (mounted && _game != null) {
         final settings = context.read<SettingsCubit>().state;
         _game!.setGraphicsQualityFromSettings(settings.graphicsQuality);
@@ -116,7 +139,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
     });
 
     // Wait for game to be fully loaded before allowing benchmark to start
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(widget.gameReadyDelay, () {
       if (mounted) {
         setState(() {
           _gameReady = true;
@@ -150,7 +173,7 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
     });
 
     // Wait a bit for game to fully initialize, then start timers
-    Future.delayed(const Duration(milliseconds: 1500), () {
+    Future.delayed(widget.benchmarkStartDelay, () {
       if (!mounted || !_isRunning) return;
       _gameReady = true;
 
@@ -158,11 +181,12 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       _calculateSmartTowerPositions();
 
       // Start auto-play timer (place towers and manage game) - fast interval for aggressive stress testing
-      _autoPlayTimer = async.Timer.periodic(const Duration(milliseconds: 200), _autoPlayTick);
+      _autoPlayTimer =
+          async.Timer.periodic(widget.autoPlayInterval, _autoPlayTick);
       // Stats collection timer (frequent, but doesn't call setState)
-      _statsTimer = async.Timer.periodic(const Duration(milliseconds: 100), _collectStats);
+      _statsTimer = async.Timer.periodic(widget.statsInterval, _collectStats);
       // UI update timer (less frequent to avoid setState issues)
-      _uiUpdateTimer = async.Timer.periodic(const Duration(milliseconds: 500), (_) {
+      _uiUpdateTimer = async.Timer.periodic(widget.uiUpdateInterval, (_) {
         if (mounted && _needsUiUpdate) {
           _needsUiUpdate = false;
           setState(() {});
@@ -207,7 +231,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
               final tileY = (pathPoint.y / tileSize).floor() + dy;
 
               // Check bounds
-              if (tileX < 0 || tileY < 0 ||
+              if (tileX < 0 ||
+                  tileY < 0 ||
                   tileX >= gameWorld.isBuildable.length ||
                   tileY >= gameWorld.isBuildable[0].length) continue;
 
@@ -245,7 +270,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
 
   void _autoPlayTick(async.Timer timer) {
     if (!_isRunning || _isComplete || _game == null || !_gameReady) {
-      timer.cancel();
       return;
     }
 
@@ -272,7 +296,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       if (currentEnemies < enemyThreshold && !game.enemyManager.spawning) {
         // Progressive difficulty: exponential increase in enemy count
         final baseEnemies = 10 + (waveNumber * 3);
-        final enemyCount = math.min(baseEnemies, 40); // Cap at 40 enemies per wave for extreme stress
+        final enemyCount = math.min(
+            baseEnemies, 40); // Cap at 40 enemies per wave for extreme stress
         game.startWave(count: enemyCount);
       }
 
@@ -301,7 +326,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       if (_goodTowerPositions.isNotEmpty) {
         // Try positions from our smart list
         int attempts = 0;
-        while (attempts < 10 && _nextPositionIndex < _goodTowerPositions.length) {
+        while (
+            attempts < 10 && _nextPositionIndex < _goodTowerPositions.length) {
           final pos = _goodTowerPositions[_nextPositionIndex];
           _nextPositionIndex++;
 
@@ -346,7 +372,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
 
   void _collectStats(async.Timer timer) {
     if (!_isRunning || _isComplete || _game == null || !_gameReady) {
-      timer.cancel();
       return;
     }
 
@@ -416,15 +441,6 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
     });
   }
 
-  void _cycleSpeed() {
-    final currentIndex = _speedOptions.indexOf(_gameSpeed);
-    final nextIndex = (currentIndex + 1) % _speedOptions.length;
-    setState(() {
-      _gameSpeed = _speedOptions[nextIndex];
-    });
-    _game?.timeScale = _gameSpeed;
-  }
-
   void _setSpeed(double speed) {
     setState(() {
       _gameSpeed = speed;
@@ -452,7 +468,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
         children: [
           // Background - only show when no game
           if (!isRunning && !isComplete)
-            const Positioned.fill(child: CyberGridBackground(child: SizedBox.expand())),
+            const Positioned.fill(
+                child: CyberGridBackground(child: SizedBox.expand())),
 
           // Game view
           if ((isRunning || isComplete) && game != null)
@@ -482,11 +499,9 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
                 ),
 
                 // Start screen / Results overlay
-                if (!isRunning && !isComplete)
-                  _buildStartScreen(),
+                if (!isRunning && !isComplete) _buildStartScreen(),
 
-                if (isComplete)
-                  _buildResultsOverlay(),
+                if (isComplete) _buildResultsOverlay(),
               ],
             ),
           ),
@@ -509,7 +524,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildGlowingIcon(Icons.speed_rounded, const Color(0xFFFF6600), 80),
+                    _buildGlowingIcon(
+                        Icons.speed_rounded, const Color(0xFFFF6600), 80),
                     const SizedBox(height: 24),
                     Text(
                       'BENCHMARK MODE',
@@ -561,7 +577,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.6),
-        border: Border.all(color: const Color(0xFFFF6600).withOpacity(0.5), width: 2),
+        border: Border.all(
+            color: const Color(0xFFFF6600).withOpacity(0.5), width: 2),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFFFF6600).withOpacity(0.2),
@@ -576,7 +593,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
           const SizedBox(height: 12),
           _buildInfoRow(Icons.waves, 'Oleadas progresivas'),
           const SizedBox(height: 12),
-          _buildInfoRow(Icons.analytics_outlined, 'Estadísticas en tiempo real'),
+          _buildInfoRow(
+              Icons.analytics_outlined, 'Estadísticas en tiempo real'),
           const SizedBox(height: 12),
           _buildInfoRow(Icons.timer, 'Test de estrés del dispositivo'),
         ],
@@ -594,7 +612,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
             text,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: NeonTextStyles.body.copyWith(color: NeonColors.white.withOpacity(0.9)),
+            style: NeonTextStyles.body
+                .copyWith(color: NeonColors.white.withOpacity(0.9)),
           ),
         ),
       ],
@@ -606,7 +625,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(color: color.withOpacity(0.6), blurRadius: 30, spreadRadius: 5),
+          BoxShadow(
+              color: color.withOpacity(0.6), blurRadius: 30, spreadRadius: 5),
         ],
       ),
       child: Icon(icon, color: color, size: size),
@@ -620,7 +640,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.7),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFFF6600).withOpacity(0.6), width: 1),
+        border: Border.all(
+            color: const Color(0xFFFF6600).withOpacity(0.6), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -662,12 +683,17 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
                   child: GestureDetector(
                     onTap: () => _setSpeed(speed),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFFFF6600) : Colors.transparent,
+                        color: isSelected
+                            ? const Color(0xFFFF6600)
+                            : Colors.transparent,
                         borderRadius: BorderRadius.circular(4),
                         border: Border.all(
-                          color: isSelected ? const Color(0xFFFF6600) : Colors.white24,
+                          color: isSelected
+                              ? const Color(0xFFFF6600)
+                              : Colors.white24,
                           width: 1,
                         ),
                       ),
@@ -695,9 +721,14 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCompactStat('TIME', '${_elapsedTime.toStringAsFixed(0)}s', NeonColors.cyan),
-                  _buildCompactStat('FPS', _avgFps.toStringAsFixed(0), _getFpsColor(_avgFps)),
-                  _buildCompactStat('MIN', _minFps.isFinite ? _minFps.toStringAsFixed(0) : '-', Colors.white54),
+                  _buildCompactStat('TIME',
+                      '${_elapsedTime.toStringAsFixed(0)}s', NeonColors.cyan),
+                  _buildCompactStat(
+                      'FPS', _avgFps.toStringAsFixed(0), _getFpsColor(_avgFps)),
+                  _buildCompactStat(
+                      'MIN',
+                      _minFps.isFinite ? _minFps.toStringAsFixed(0) : '-',
+                      Colors.white54),
                 ],
               ),
               const SizedBox(width: 16),
@@ -705,9 +736,15 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildCompactStat('WAVE', '$_wavesCompleted', NeonColors.magenta),
+                  _buildCompactStat(
+                      'WAVE', '$_wavesCompleted', NeonColors.magenta),
                   _buildCompactStat('TWR', '$_towersPlaced', NeonColors.yellow),
-                  _buildCompactStat('BLT', '$_currentBullets', _currentBullets > 200 ? NeonColors.red : NeonColors.green),
+                  _buildCompactStat(
+                      'BLT',
+                      '$_currentBullets',
+                      _currentBullets > 200
+                          ? NeonColors.red
+                          : NeonColors.green),
                 ],
               ),
             ],
@@ -760,11 +797,13 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       children: [
         if (_isRunning)
           IconButton(
-            icon: const Icon(Icons.stop_rounded, color: Color(0xFFFF6600), size: 36),
+            icon: const Icon(Icons.stop_rounded,
+                color: Color(0xFFFF6600), size: 36),
             onPressed: _stopBenchmark,
           ),
         IconButton(
-          icon: Icon(Icons.arrow_back_rounded, color: NeonColors.cyan, size: 32),
+          icon:
+              Icon(Icons.arrow_back_rounded, color: NeonColors.cyan, size: 32),
           onPressed: () => Navigator.pop(context),
         ),
       ],
@@ -794,7 +833,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildGlowingIcon(Icons.analytics_rounded, const Color(0xFFFF6600), 60),
+              _buildGlowingIcon(
+                  Icons.analytics_rounded, const Color(0xFFFF6600), 60),
               const SizedBox(height: 20),
               Text(
                 'BENCHMARK COMPLETO',
@@ -808,11 +848,13 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
 
               // Grade
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
                 decoration: BoxDecoration(
                   border: Border.all(color: grade.color, width: 2),
                   boxShadow: [
-                    BoxShadow(color: grade.color.withOpacity(0.5), blurRadius: 20),
+                    BoxShadow(
+                        color: grade.color.withOpacity(0.5), blurRadius: 20),
                   ],
                 ),
                 child: Text(
@@ -861,33 +903,51 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
       children: [
         Row(
           children: [
-            Expanded(child: _buildResultCard('TIEMPO', '${_elapsedTime.toStringAsFixed(1)}s', Icons.timer)),
+            Expanded(
+                child: _buildResultCard('TIEMPO',
+                    '${_elapsedTime.toStringAsFixed(1)}s', Icons.timer)),
             const SizedBox(width: 16),
-            Expanded(child: _buildResultCard('FPS PROM', _avgFps.toStringAsFixed(1), Icons.speed)),
+            Expanded(
+                child: _buildResultCard(
+                    'FPS PROM', _avgFps.toStringAsFixed(1), Icons.speed)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildResultCard('FPS MIN', _minFps.isFinite ? _minFps.toStringAsFixed(1) : '-', Icons.trending_down)),
+            Expanded(
+                child: _buildResultCard(
+                    'FPS MIN',
+                    _minFps.isFinite ? _minFps.toStringAsFixed(1) : '-',
+                    Icons.trending_down)),
             const SizedBox(width: 16),
-            Expanded(child: _buildResultCard('FPS MAX', _maxFps.toStringAsFixed(1), Icons.trending_up)),
+            Expanded(
+                child: _buildResultCard(
+                    'FPS MAX', _maxFps.toStringAsFixed(1), Icons.trending_up)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildResultCard('TORRES', '$_towersPlaced', Icons.cell_tower)),
+            Expanded(
+                child: _buildResultCard(
+                    'TORRES', '$_towersPlaced', Icons.cell_tower)),
             const SizedBox(width: 16),
-            Expanded(child: _buildResultCard('OLEADAS', '$_wavesCompleted', Icons.waves)),
+            Expanded(
+                child: _buildResultCard(
+                    'OLEADAS', '$_wavesCompleted', Icons.waves)),
           ],
         ),
         const SizedBox(height: 16),
         Row(
           children: [
-            Expanded(child: _buildResultCard('PICO ENEM.', '$_peakEnemies', Icons.bug_report)),
+            Expanded(
+                child: _buildResultCard(
+                    'PICO ENEM.', '$_peakEnemies', Icons.bug_report)),
             const SizedBox(width: 16),
-            Expanded(child: _buildResultCard('PICO BALAS', '$_peakBullets', Icons.flash_on)),
+            Expanded(
+                child: _buildResultCard(
+                    'PICO BALAS', '$_peakBullets', Icons.flash_on)),
           ],
         ),
       ],
@@ -933,7 +993,8 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
 
   ({String letter, Color color}) _calculateGrade() {
     // Grade based on average FPS
-    if (_avgFps >= 55) return (letter: 'S', color: const Color(0xFFFFD700)); // Gold
+    if (_avgFps >= 55)
+      return (letter: 'S', color: const Color(0xFFFFD700)); // Gold
     if (_avgFps >= 45) return (letter: 'A', color: NeonColors.green);
     if (_avgFps >= 35) return (letter: 'B', color: NeonColors.cyan);
     if (_avgFps >= 25) return (letter: 'C', color: NeonColors.yellow);
@@ -941,4 +1002,3 @@ class _BenchmarkScreenState extends State<BenchmarkScreen> with TickerProviderSt
     return (letter: 'F', color: NeonColors.red);
   }
 }
-

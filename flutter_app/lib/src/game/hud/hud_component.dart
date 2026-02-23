@@ -120,6 +120,18 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   final Paint _overdriveDotPaint = Paint();
   final Paint _overdriveDotCorePaint = Paint();
   final Paint _costPillPaint = Paint();
+  final Paint _sideConsoleBgPaint = Paint();
+  final Paint _sideConsoleBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.2;
+  final Paint _sideConsoleInnerBorderPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1;
+  final Paint _sideConsoleGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14);
+  final Paint _sideConsoleAccentPaint = Paint()
+    ..strokeWidth = 2.2
+    ..strokeCap = StrokeCap.round;
 
   // Wave Indicator optimized paints
   static final Paint _waveIndicatorBgPaint = Paint();
@@ -480,6 +492,29 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   bool _useTwoRowLayout(double width) => width < 780;
 
+  IconData _towerIcon(TowerType type) {
+    switch (type) {
+      case TowerType.pulseArcher:
+        return Icons.gps_fixed;
+      case TowerType.circuitCannon:
+        return Icons.bolt;
+      case TowerType.phaseMage:
+        return Icons.auto_fix_high;
+      case TowerType.glimmerField:
+        return Icons.blur_on;
+      case TowerType.ionSniper:
+        return Icons.center_focus_strong;
+      case TowerType.teslaTerminal:
+        return Icons.electric_bolt;
+      case TowerType.resonanceSiphon:
+        return Icons.hub;
+      case TowerType.neuralDisruptor:
+        return Icons.memory;
+      case TowerType.plasmaBubble:
+        return Icons.bubble_chart;
+    }
+  }
+
   void _repositionButtons() {
     for (final b in [...children.whereType<HudButton>()]) {
       b.removeFromParent();
@@ -551,6 +586,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
         position: Vector2(leftPanelX, y),
         size: Vector2(leftButtonWidth, adjustedButtonHeight),
         color: type.color,
+        icon: _towerIcon(type),
         isSelected: gameRef.towerManager.selectedTowerType == type,
         reduceFlicker: reduceFlicker,
         onPressed: () => gameRef.towerManager.setSelectedTowerType(type),
@@ -569,6 +605,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(leftPanelX, actionButtonsStartY),
       size: Vector2(leftButtonWidth, adjustedButtonHeight),
       color: const Color(0xFFFFAA00),
+      icon: Icons.remove_circle_outline,
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.toggleSellMode(),
     );
@@ -579,6 +616,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
           actionButtonsStartY + adjustedButtonHeight + adjustedSpacing),
       size: Vector2(leftButtonWidth, adjustedButtonHeight),
       color: const Color(0xFF9C27B0),
+      icon: Icons.tune,
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.toggleRunUpgradeOverlay(),
     );
@@ -589,6 +627,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
           actionButtonsStartY + 2 * (adjustedButtonHeight + adjustedSpacing)),
       size: Vector2(leftButtonWidth, adjustedButtonHeight),
       color: const Color(0xFF00FF88),
+      icon: Icons.play_arrow,
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.startWave(count: 6),
       enabled: !gameRef.enemyManager.spawning,
@@ -617,6 +656,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
       position: Vector2(rightPanelX, rightAbilitiesY),
       size: Vector2(rightButtonWidth, rightButtonHeight),
       color: const Color(0xFF00FFFF),
+      icon: Icons.flash_on,
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.activateNeonPulse(),
     );
@@ -627,6 +667,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
           rightAbilitiesY + rightButtonHeight + rightButtonSpacing),
       size: Vector2(rightButtonWidth, rightButtonHeight),
       color: const Color(0xFFFF0066),
+      icon: Icons.trip_origin,
       reduceFlicker: reduceFlicker,
       onPressed: () => gameRef.deployMine(),
     );
@@ -645,6 +686,37 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _rightButtonSpacing = rightButtonSpacing;
     _currentScale = scale;
 
+    final leftButtons = <HudButton>[
+      ..._towerButtons,
+      sellButton,
+      upgradeButton,
+      waveButton,
+    ];
+    final leftBounds = _buttonsBounds(leftButtons);
+    if (leftBounds != null) {
+      _leftControlsPanelRect = Rect.fromLTRB(
+        leftBounds.left - 8 * _currentScale,
+        leftBounds.top - 8 * _currentScale,
+        leftBounds.right + 52 * _currentScale,
+        leftBounds.bottom + 8 * _currentScale,
+      );
+    } else {
+      _leftControlsPanelRect = null;
+    }
+
+    final rightBounds =
+        _buttonsBounds(<HudButton>[pulseAbilityBtn, mineAbilityBtn]);
+    if (rightBounds != null) {
+      _rightControlsPanelRect = Rect.fromLTRB(
+        rightBounds.left - 8 * _currentScale,
+        rightBounds.top - 8 * _currentScale,
+        rightBounds.right + 8 * _currentScale,
+        rightBounds.bottom + 42 * _currentScale,
+      );
+    } else {
+      _rightControlsPanelRect = null;
+    }
+
     addAll(_towerButtons);
     addAll([
       pulseAbilityBtn,
@@ -662,6 +734,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
   double _rightButtonHeight = 40;
   double _rightButtonSpacing = 6;
   double _currentScale = 1.0;
+  Rect? _leftControlsPanelRect;
+  Rect? _rightControlsPanelRect;
 
   void _invalidateLayoutCaches() {
     _topPanelRect = null;
@@ -673,6 +747,8 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     _resourceCardShaders.clear();
     _instructionPainter = null;
     _instructionText = '';
+    _leftControlsPanelRect = null;
+    _rightControlsPanelRect = null;
   }
 
   @override
@@ -747,6 +823,7 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Draw data stream effects (background layer - behind HUD panels)
     _drawDataStreamEffects(canvas, screenWidth, screenHeight);
+    _drawSideControlPanels(canvas);
 
     _drawTopPanel(canvas, screenWidth);
     _drawBottomPanel(canvas, screenWidth, screenHeight);
@@ -1814,7 +1891,6 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   void _drawTopPanel(Canvas canvas, double screenWidth) {
     final compact = _isCompactHud(screenWidth, gameRef.size.y);
-    final screenHeight = gameRef.size.y;
 
     // Modern gaming HUD - slim top bar with gradient fade
     final panelRect = Rect.fromLTWH(0, 0, screenWidth, 50);
@@ -1835,43 +1911,45 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
     canvas.drawRect(panelRect, _panelPaint);
     _panelPaint.shader = null;
 
-    // ═══ LEFT SIDE: Gold & Lives (horizontal layout) ═══
-    _drawCompactStat(
-        canvas, 16, 14, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700));
-    _drawCompactStat(
-        canvas, 110, 14, 'LIVES', '${gameRef.lives}', const Color(0xFFFF4466));
+    if (compact) {
+      _drawCompactStat(
+          canvas, 16, 14, 'GOLD', '${gameRef.gold}', const Color(0xFFFFD700));
+      _drawCompactStat(canvas, 110, 14, 'LIVES', '${gameRef.lives}',
+          const Color(0xFFFF4466));
+
+      final scoreText = '${gameRef.score}';
+      final scorePainter = _getPainter(
+        'score-modern-$scoreText',
+        scoreText,
+        const TextStyle(
+          color: Color(0xFF00FF88),
+          fontSize: 24,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+          shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 10)],
+        ),
+      );
+      scorePainter.paint(
+          canvas, Offset(screenWidth - scorePainter.width - 16, 8));
+
+      final scoreLabelPainter = _getPainter(
+        'score-label-modern',
+        'SCORE',
+        TextStyle(
+          color: Colors.white.withOpacity(0.5),
+          fontSize: 9,
+          fontWeight: FontWeight.w500,
+          letterSpacing: 2,
+        ),
+      );
+      scoreLabelPainter.paint(
+          canvas, Offset(screenWidth - scorePainter.width - 16, 32));
+    } else {
+      _drawResourcePanels(canvas, screenWidth);
+    }
 
     // ═══ CENTER: Speed controls ═══
     _drawSpeedControls(canvas, screenWidth);
-
-    // ═══ RIGHT SIDE: Score ═══
-    final scoreText = '${gameRef.score}';
-    final scorePainter = _getPainter(
-      'score-modern-$scoreText',
-      scoreText,
-      const TextStyle(
-        color: Color(0xFF00FF88),
-        fontSize: 24,
-        fontWeight: FontWeight.bold,
-        fontFamily: 'monospace',
-        shadows: [Shadow(color: Color(0xFF00FF88), blurRadius: 10)],
-      ),
-    );
-    scorePainter.paint(
-        canvas, Offset(screenWidth - scorePainter.width - 16, 8));
-
-    final scoreLabelPainter = _getPainter(
-      'score-label-modern',
-      'SCORE',
-      TextStyle(
-        color: Colors.white.withOpacity(0.5),
-        fontSize: 9,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 2,
-      ),
-    );
-    scoreLabelPainter.paint(
-        canvas, Offset(screenWidth - scorePainter.width - 16, 32));
 
     // ═══ WAVE INDICATOR - Below top bar, centered ═══
     _drawWaveIndicator(canvas, screenWidth);
@@ -3185,6 +3263,141 @@ class HudComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
 
     // Draw ability cooldowns on the right side
     _drawAbilityCooldowns(canvas, screenWidth, screenHeight);
+
+    final compact = _isCompactHud(screenWidth, screenHeight);
+    if (!compact) {
+      if (!gameRef.reduceFx) {
+        _drawTowerInfoPanel(canvas, screenHeight);
+      } else {
+        _drawSelectedTowerInfo(canvas, screenHeight);
+      }
+    }
+  }
+
+  void _drawSideControlPanels(Canvas canvas) {
+    if (_isCompactHud(gameRef.size.x, gameRef.size.y)) return;
+
+    final leftRect = _leftControlsPanelRect;
+    if (leftRect != null) {
+      _drawConsolePanel(
+        canvas,
+        leftRect,
+        accent: gameRef.towerManager.selectedTowerType.color,
+        label: 'TACTICAL LOADOUT',
+        alignRight: false,
+      );
+    }
+
+    final rightRect = _rightControlsPanelRect;
+    if (rightRect != null) {
+      _drawConsolePanel(
+        canvas,
+        rightRect,
+        accent: const Color(0xFF00FFFF),
+        label: 'ABILITY CORE',
+        alignRight: true,
+      );
+    }
+  }
+
+  Rect? _buttonsBounds(List<HudButton> buttons) {
+    if (buttons.isEmpty) return null;
+    double left = double.infinity;
+    double top = double.infinity;
+    double right = double.negativeInfinity;
+    double bottom = double.negativeInfinity;
+    for (final btn in buttons) {
+      left = math.min(left, btn.position.x);
+      top = math.min(top, btn.position.y);
+      right = math.max(right, btn.position.x + btn.size.x);
+      bottom = math.max(bottom, btn.position.y + btn.size.y);
+    }
+    if (!left.isFinite ||
+        !top.isFinite ||
+        !right.isFinite ||
+        !bottom.isFinite) {
+      return null;
+    }
+    return Rect.fromLTRB(left, top, right, bottom);
+  }
+
+  void _drawConsolePanel(
+    Canvas canvas,
+    Rect rect, {
+    required Color accent,
+    required String label,
+    required bool alignRight,
+  }) {
+    final rrect = RRect.fromRectAndRadius(rect, const Radius.circular(14));
+    final panelShader = LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        const Color(0xFF040710).withOpacity(0.88),
+        const Color(0xFF060b16).withOpacity(0.84),
+        accent.withOpacity(0.1),
+      ],
+    ).createShader(rect);
+
+    if (!gameRef.reduceFx) {
+      _sideConsoleGlowPaint.color = accent.withOpacity(0.18);
+      canvas.drawRRect(rrect.inflate(5), _sideConsoleGlowPaint);
+    }
+
+    _sideConsoleBgPaint.shader = panelShader;
+    canvas.drawRRect(rrect, _sideConsoleBgPaint);
+    _sideConsoleBgPaint.shader = null;
+
+    _sideConsoleBorderPaint.color = accent.withOpacity(0.55);
+    canvas.drawRRect(rrect, _sideConsoleBorderPaint);
+
+    _sideConsoleInnerBorderPaint.color = Colors.white.withOpacity(0.08);
+    canvas.drawRRect(rrect.deflate(4), _sideConsoleInnerBorderPaint);
+
+    final railX = alignRight ? rect.right - 6 : rect.left + 6;
+    _sideConsoleAccentPaint.color = accent.withOpacity(0.8);
+    canvas.drawLine(
+      Offset(railX, rect.top + 12),
+      Offset(railX, rect.bottom - 12),
+      _sideConsoleAccentPaint,
+    );
+
+    _sideConsoleAccentPaint.color = accent.withOpacity(0.4);
+    final yStep = (rect.height / 6).clamp(14.0, 24.0);
+    for (double y = rect.top + 16; y < rect.bottom - 12; y += yStep) {
+      if (alignRight) {
+        canvas.drawLine(
+          Offset(rect.right - 14, y),
+          Offset(rect.right - 6, y),
+          _sideConsoleAccentPaint,
+        );
+      } else {
+        canvas.drawLine(
+          Offset(rect.left + 6, y),
+          Offset(rect.left + 14, y),
+          _sideConsoleAccentPaint,
+        );
+      }
+    }
+
+    final labelPainter = _getPainter(
+      'console-$label-${accent.value}-$alignRight',
+      label,
+      TextStyle(
+        color: accent.withOpacity(0.8),
+        fontSize: 8.5,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.8,
+        fontFamily: 'monospace',
+      ),
+    );
+    labelPainter.paint(
+      canvas,
+      Offset(
+        rect.left + (rect.width - labelPainter.width) / 2,
+        rect.top - labelPainter.height * 0.55,
+      ),
+    );
   }
 
   void _drawSelectedTowerInfo(Canvas canvas, double screenHeight) {

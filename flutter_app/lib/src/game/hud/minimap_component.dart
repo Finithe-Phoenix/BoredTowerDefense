@@ -24,7 +24,8 @@ class _FastRng {
 }
 
 /// CYBERPUNK CORRUPTED MINIMAP - Extreme TRON aesthetic with glitch effects
-class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame> {
+class MinimapComponent extends PositionComponent
+    with HasGameRef<BoredGamesGame> {
   MinimapComponent() {
     anchor = Anchor.topLeft;
   }
@@ -56,6 +57,12 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   String _towerCountText = '';
   Picture? _scanlineLayer;
   double _scanlineLayerSize = -1;
+  Shader? _backgroundShader;
+  int _backgroundShaderBucket = -1;
+  double _backgroundShaderSize = -1;
+  Shader? _corruptionVignetteShader;
+  int _corruptionVignetteBucket = -1;
+  double _corruptionVignetteSize = -1;
 
   // Animation states
   double _time = 0;
@@ -75,7 +82,9 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   // ═══════════════════════════════════════════════════════════════════════════
   static final Paint _bgPaint = Paint();
   static final Paint _gridPaint = Paint()..strokeWidth = 0.5;
-  static final Paint _scanPaint = Paint()..strokeWidth = 2..strokeCap = StrokeCap.round;
+  static final Paint _scanPaint = Paint()
+    ..strokeWidth = 2
+    ..strokeCap = StrokeCap.round;
   static final Paint _glowPaint = Paint();
   static final Paint _framePaint = Paint()..style = PaintingStyle.stroke;
   static final Paint _noisePaint = Paint();
@@ -106,11 +115,107 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   static final Paint _statusPaint = Paint();
   static final Paint _glitchBarPaint = Paint();
   static final Paint _streamPaint = Paint()..strokeWidth = 1;
-  static const List<String> _glitchChars = ['#', '@', '!', '%', '&', '*', '?', '/', '\\', '|'];
+  static const List<String> _glitchChars = [
+    '#',
+    '@',
+    '!',
+    '%',
+    '&',
+    '*',
+    '?',
+    '/',
+    '\\',
+    '|'
+  ];
+  static const int _corruptionBuckets = 24;
+  static final Path _unitHexPath = _buildUnitHexPath();
 
   static int _lcgSeed(int seed, int salt) => (seed ^ salt) & 0x7fffffff;
   static int _lcgNext(int state) => (state * 1664525 + 1013904223) & 0x7fffffff;
   static double _lcgUnit(int state) => state / 0x7fffffff;
+
+  static Path _buildUnitHexPath() {
+    final path = Path();
+    for (int i = 0; i < 6; i++) {
+      final angle = (math.pi / 3) * i - math.pi / 2;
+      final x = math.cos(angle);
+      final y = math.sin(angle);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    path.close();
+    return path;
+  }
+
+  int _corruptionBucket() {
+    return (_corruptionLevel.clamp(0.0, 1.0) * _corruptionBuckets).round();
+  }
+
+  void _invalidateShaderCaches() {
+    _backgroundShader = null;
+    _backgroundShaderBucket = -1;
+    _backgroundShaderSize = -1;
+    _corruptionVignetteShader = null;
+    _corruptionVignetteBucket = -1;
+    _corruptionVignetteSize = -1;
+  }
+
+  Shader _getBackgroundShader(Rect rect) {
+    final bucket = _corruptionBucket();
+    if (_backgroundShader != null &&
+        _backgroundShaderBucket == bucket &&
+        _backgroundShaderSize == mapSize) {
+      return _backgroundShader!;
+    }
+
+    _backgroundShaderBucket = bucket;
+    _backgroundShaderSize = mapSize;
+    _backgroundShader = RadialGradient(
+      center: Alignment.center,
+      radius: 1.2,
+      colors: [
+        Color.lerp(
+          const Color(0xFF001515),
+          const Color(0xFF150505),
+          bucket / _corruptionBuckets,
+        )!
+            .withOpacity(0.95),
+        Color.lerp(
+          const Color(0xFF000a0a),
+          const Color(0xFF0a0000),
+          bucket / _corruptionBuckets,
+        )!
+            .withOpacity(0.98),
+        Colors.black.withOpacity(0.99),
+      ],
+    ).createShader(rect);
+    return _backgroundShader!;
+  }
+
+  Shader _getCorruptionVignetteShader(Rect rect) {
+    final bucket = _corruptionBucket();
+    if (_corruptionVignetteShader != null &&
+        _corruptionVignetteBucket == bucket &&
+        _corruptionVignetteSize == mapSize) {
+      return _corruptionVignetteShader!;
+    }
+
+    _corruptionVignetteBucket = bucket;
+    _corruptionVignetteSize = mapSize;
+    _corruptionVignetteShader = RadialGradient(
+      center: Alignment.center,
+      radius: 0.8,
+      colors: [
+        Colors.transparent,
+        const Color(0xFFFF0044)
+            .withOpacity(0.1 * (bucket / _corruptionBuckets)),
+      ],
+    ).createShader(rect);
+    return _corruptionVignetteShader!;
+  }
 
   @override
   void update(double dt) {
@@ -145,6 +250,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   void onRemove() {
     _scanlineLayer?.dispose();
     _scanlineLayer = null;
+    _invalidateShaderCaches();
     super.onRemove();
   }
 
@@ -204,23 +310,15 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   void _renderCorruptedBackground(Canvas canvas) {
     final rect = Rect.fromLTWH(0, 0, mapSize, mapSize);
 
-    // Multi-layer corrupted background
-    final baseGradient = RadialGradient(
-      center: Alignment.center,
-      radius: 1.2,
-      colors: [
-        Color.lerp(const Color(0xFF001515), const Color(0xFF150505), _corruptionLevel)!.withOpacity(0.95),
-        Color.lerp(const Color(0xFF000a0a), const Color(0xFF0a0000), _corruptionLevel)!.withOpacity(0.98),
-        Colors.black.withOpacity(0.99),
-      ],
-    ).createShader(rect);
-
     // Clip to hexagonal shape for cyber effect
-    final hexPath = _hexPath ?? _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
+    final hexPath = _hexPath ??
+        _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
     canvas.save();
     canvas.clipPath(hexPath);
 
-    canvas.drawRect(rect, _bgPaint..shader = baseGradient);
+    _bgPaint.shader = _getBackgroundShader(rect);
+    canvas.drawRect(rect, _bgPaint);
+    _bgPaint.shader = null;
 
     // Noise texture overlay
     _renderNoiseTexture(canvas, rect);
@@ -259,8 +357,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       state = _lcgNext(state);
       final alpha = _lcgUnit(state) * 0.3 * _glitchIntensity;
 
-      _noisePaint.color =
-          (useWhite ? Colors.white : const Color(0xFF00FFFF)).withOpacity(alpha);
+      _noisePaint.color = (useWhite ? Colors.white : const Color(0xFF00FFFF))
+          .withOpacity(alpha);
 
       canvas.drawRect(Rect.fromLTWH(x, y, size, size), _noisePaint);
     }
@@ -320,10 +418,14 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
     // Animated crosshair
     final crossSize = 10.0 + math.sin(_pulsePhase) * 2;
-    canvas.drawLine(Offset(centerX - crossSize, centerY), Offset(centerX - 4, centerY), _statusPaint);
-    canvas.drawLine(Offset(centerX + 4, centerY), Offset(centerX + crossSize, centerY), _statusPaint);
-    canvas.drawLine(Offset(centerX, centerY - crossSize), Offset(centerX, centerY - 4), _statusPaint);
-    canvas.drawLine(Offset(centerX, centerY + 4), Offset(centerX, centerY + crossSize), _statusPaint);
+    canvas.drawLine(Offset(centerX - crossSize, centerY),
+        Offset(centerX - 4, centerY), _statusPaint);
+    canvas.drawLine(Offset(centerX + 4, centerY),
+        Offset(centerX + crossSize, centerY), _statusPaint);
+    canvas.drawLine(Offset(centerX, centerY - crossSize),
+        Offset(centerX, centerY - 4), _statusPaint);
+    canvas.drawLine(Offset(centerX, centerY + 4),
+        Offset(centerX, centerY + crossSize), _statusPaint);
 
     // Center dot
     _glowPaint
@@ -409,7 +511,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   void _renderPath(Canvas canvas) {
     // Get actual path from game if available, otherwise show stylized path
     _pathPaint
-      ..color = const Color(0xFFFF6600).withOpacity(0.4 + math.sin(_pulsePhase * 0.5) * 0.1)
+      ..color = const Color(0xFFFF6600)
+          .withOpacity(0.4 + math.sin(_pulsePhase * 0.5) * 0.1)
       ..strokeWidth = 3
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
@@ -469,13 +572,17 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   void _renderTowers(Canvas canvas) {
     final towers = gameRef.towerManager.towers;
     final worldSize = gameRef.worldBounds;
+    if (worldSize.x <= 0 || worldSize.y <= 0) return;
+    final xScale = mapSize / worldSize.x;
+    final yScale = mapSize / worldSize.y;
 
-    for (final tower in towers) {
-      final mapX = (tower.position.x / worldSize.x) * mapSize;
-      final mapY = (tower.position.y / worldSize.y) * mapSize;
+    for (int i = 0; i < towers.length; i++) {
+      final tower = towers[i];
+      final mapX = tower.position.x * xScale;
+      final mapY = tower.position.y * yScale;
 
       // Tower range indicator (subtle)
-      final rangeRadius = (tower.range / worldSize.x) * mapSize * 0.3;
+      final rangeRadius = tower.range * xScale * 0.3;
       canvas.drawCircle(
         Offset(mapX, mapY),
         rangeRadius,
@@ -495,7 +602,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       _drawHexagon(canvas, mapX, mapY, 3.5, tower.color.withOpacity(0.9));
 
       // Pulse ring effect (based on animation timer)
-      final pulseProgress = (math.sin(_pulsePhase * 2 + tower.hashCode * 0.1) + 1) / 2;
+      final pulseProgress = (math.sin(_pulsePhase * 2 + i * 0.7) + 1) / 2;
       if (pulseProgress > 0.7) {
         canvas.drawCircle(
           Offset(mapX, mapY),
@@ -510,21 +617,28 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   }
 
   void _renderEnemies(Canvas canvas) {
-    final enemies = gameRef.enemyManager.activeEnemies.where((e) => e.isAlive);
+    final enemies = gameRef.enemyManager.activeEnemies;
     final worldSize = gameRef.worldBounds;
+    if (worldSize.x <= 0 || worldSize.y <= 0) return;
+    final xScale = mapSize / worldSize.x;
+    final yScale = mapSize / worldSize.y;
 
-    for (final enemy in enemies) {
-      final mapX = (enemy.position.x / worldSize.x) * mapSize;
-      final mapY = (enemy.position.y / worldSize.y) * mapSize;
+    for (int i = 0; i < enemies.length; i++) {
+      final enemy = enemies[i];
+      if (!enemy.isAlive) continue;
+      final mapX = enemy.position.x * xScale;
+      final mapY = enemy.position.y * yScale;
 
-      if (mapX < -5 || mapX > mapSize + 5 || mapY < -5 || mapY > mapSize + 5) continue;
+      if (mapX < -5 || mapX > mapSize + 5 || mapY < -5 || mapY > mapSize + 5)
+        continue;
 
       final isBoss = enemy.isBoss;
-      final baseColor = isBoss ? const Color(0xFFFF00FF) : const Color(0xFFFF4444);
+      final baseColor =
+          isBoss ? const Color(0xFFFF00FF) : const Color(0xFFFF4444);
       final size = isBoss ? 5.0 : 2.5;
 
       // Threat pulse
-      final pulse = 1.0 + math.sin(_pulsePhase * 2 + enemy.hashCode * 0.1) * 0.4;
+      final pulse = 1.0 + math.sin(_pulsePhase * 2 + i * 0.35) * 0.4;
 
       // Enemy glow (stronger for bosses)
       if (isBoss) {
@@ -556,13 +670,16 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 
       // Direction indicator for enemies (based on movement direction)
       final direction = enemy.movementDirection;
-      final angle = math.atan2(direction.y, direction.x);
       final indicatorLength = isBoss ? 8.0 : 5.0;
+      final dirLenSq =
+          (direction.x * direction.x) + (direction.y * direction.y);
+      final invLen =
+          dirLenSq > 0.0001 ? indicatorLength / math.sqrt(dirLenSq) : 0.0;
       canvas.drawLine(
         Offset(mapX, mapY),
         Offset(
-          mapX + math.cos(angle) * indicatorLength,
-          mapY + math.sin(angle) * indicatorLength,
+          mapX + direction.x * invLen,
+          mapY + direction.y * invLen,
         ),
         _enemyPaint
           ..color = baseColor.withOpacity(0.6)
@@ -599,7 +716,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           sweepColor.withOpacity(0.05),
           sweepColor.withOpacity(0.15),
         ],
-      ).createShader(Rect.fromCircle(center: Offset(centerX, centerY), radius: scanLength))
+      ).createShader(
+          Rect.fromCircle(center: Offset(centerX, centerY), radius: scanLength))
       ..style = PaintingStyle.fill;
 
     canvas.drawCircle(Offset(centerX, centerY), scanLength, _radarSweepPaint);
@@ -639,22 +757,15 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
   void _renderCorruptionOverlay(Canvas canvas) {
     if (_corruptionLevel < 0.1) return;
 
-    // Red vignette when corruption is high
-    final vignetteGradient = RadialGradient(
-      center: Alignment.center,
-      radius: 0.8,
-      colors: [
-        Colors.transparent,
-        const Color(0xFFFF0044).withOpacity(0.1 * _corruptionLevel),
-      ],
-    ).createShader(Rect.fromLTWH(0, 0, mapSize, mapSize));
-
     canvas.drawRect(
       Rect.fromLTWH(0, 0, mapSize, mapSize),
       _corruptionPaint
-        ..shader = vignetteGradient
+        ..shader = _getCorruptionVignetteShader(
+          Rect.fromLTWH(0, 0, mapSize, mapSize),
+        )
         ..style = PaintingStyle.fill,
     );
+    _corruptionPaint.shader = null;
 
     // Corruption artifacts
     if (_corruptionLevel > 0.5) {
@@ -671,7 +782,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
           Rect.fromLTWH(x, y, w, 1),
           _corruptionPaint
             ..shader = null
-            ..color = const Color(0xFFFF0044).withOpacity(0.2 * _corruptionLevel),
+            ..color =
+                const Color(0xFFFF0044).withOpacity(0.2 * _corruptionLevel),
         );
       }
     }
@@ -684,7 +796,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       _corruptionLevel * 0.5,
     )!;
 
-    final hexPath = _hexPath ?? _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
+    final hexPath = _hexPath ??
+        _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
 
     // Main frame
     _framePaint
@@ -693,8 +806,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.drawPath(hexPath, _framePaint);
 
     // Inner frame
-    final innerHex =
-        _innerHexPath ?? _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
+    final innerHex = _innerHexPath ??
+        _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
     _framePaint
       ..color = frameColor.withOpacity(0.2)
       ..strokeWidth = 1;
@@ -725,8 +838,10 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     const offset = 8.0;
 
     // Top-left
-    canvas.drawLine(Offset(offset, offset + bracketSize), Offset(offset, offset), _statusPaint);
-    canvas.drawLine(Offset(offset, offset), Offset(offset + bracketSize, offset), _statusPaint);
+    canvas.drawLine(Offset(offset, offset + bracketSize),
+        Offset(offset, offset), _statusPaint);
+    canvas.drawLine(Offset(offset, offset),
+        Offset(offset + bracketSize, offset), _statusPaint);
 
     // Top-right
     canvas.drawLine(
@@ -806,7 +921,9 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
 
     final titleColorValue = titleColor.value;
-    if (_titlePainter == null || _titleText != titleText || _titleColorValue != titleColorValue) {
+    if (_titlePainter == null ||
+        _titleText != titleText ||
+        _titleColorValue != titleColorValue) {
       _titleText = titleText;
       _titleColorValue = titleColorValue;
       _titlePainter = TextPainter(
@@ -838,8 +955,7 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     // Enemy count indicator (left side)
     final enemyCount = gameRef.enemyManager.aliveCount;
     final enemyText = enemyCount.toString().padLeft(2, '0');
-    final enemyColor =
-        _corruptionLevel > 0.5 ? const Color(0xFFFF4444) : color;
+    final enemyColor = _corruptionLevel > 0.5 ? const Color(0xFFFF4444) : color;
     final enemyColorValue = enemyColor.value;
     final shadowColorValue = color.value;
 
@@ -869,7 +985,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.save();
     canvas.translate(-12, mapSize / 2);
     canvas.rotate(-math.pi / 2);
-    _enemyCountPainter!.paint(canvas, Offset(-_enemyCountPainter!.width / 2, 0));
+    _enemyCountPainter!
+        .paint(canvas, Offset(-_enemyCountPainter!.width / 2, 0));
     canvas.restore();
 
     // Tower count (right side)
@@ -896,7 +1013,8 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     canvas.save();
     canvas.translate(mapSize + 12, mapSize / 2);
     canvas.rotate(math.pi / 2);
-    _towerCountPainter!.paint(canvas, Offset(-_towerCountPainter!.width / 2, 0));
+    _towerCountPainter!
+        .paint(canvas, Offset(-_towerCountPainter!.width / 2, 0));
     canvas.restore();
   }
 
@@ -913,7 +1031,9 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
       state = _lcgNext(state);
       final xOffset = (_lcgUnit(state) - 0.5) * 10 * _glitchIntensity;
       state = _lcgNext(state);
-      final color = (state & 0x1) == 0 ? const Color(0xFF00FFFF) : const Color(0xFFFF0044);
+      final color = (state & 0x1) == 0
+          ? const Color(0xFF00FFFF)
+          : const Color(0xFFFF0044);
 
       canvas.drawRect(
         Rect.fromLTWH(xOffset, y, mapSize, height),
@@ -928,8 +1048,10 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     }
 
     _geometryMapSize = mapSize;
+    _invalidateShaderCaches();
     _hexPath = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 2);
-    _innerHexPath = _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
+    _innerHexPath =
+        _createHexagonalPath(mapSize / 2, mapSize / 2, mapSize / 2 - 6);
 
     const offset = 8.0;
     _cornerDots = [
@@ -993,25 +1115,16 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
     return path;
   }
 
-  void _drawHexagon(Canvas canvas, double cx, double cy, double radius, Color color) {
-    final path = Path();
-    for (int i = 0; i < 6; i++) {
-      final angle = (math.pi / 3) * i - math.pi / 2;
-      final x = cx + radius * math.cos(angle);
-      final y = cy + radius * math.sin(angle);
-
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
-    }
-    path.close();
-
+  void _drawHexagon(
+      Canvas canvas, double cx, double cy, double radius, Color color) {
     _towerFillPaint
       ..color = color
       ..style = PaintingStyle.fill;
-    canvas.drawPath(path, _towerFillPaint);
+    canvas.save();
+    canvas.translate(cx, cy);
+    canvas.scale(radius, radius);
+    canvas.drawPath(_unitHexPath, _towerFillPaint);
+    canvas.restore();
   }
 
   String _corruptString(String input) {
@@ -1033,4 +1146,3 @@ class MinimapComponent extends PositionComponent with HasGameRef<BoredGamesGame>
 extension on double {
   double sin() => math.sin(this);
 }
-

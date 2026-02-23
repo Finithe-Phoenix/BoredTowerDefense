@@ -16,11 +16,13 @@ class GameEventFeed extends PositionComponent with HasGameRef<BoredGamesGame> {
   static const double eventDuration = 4.0;
 
   void addEvent(GameEventType type, String message, {Color? color}) {
-    _events.insert(0, _GameEvent(
-      type: type,
-      message: message,
-      color: color ?? _getDefaultColor(type),
-    ));
+    _events.insert(
+        0,
+        _GameEvent(
+          type: type,
+          message: message,
+          color: color ?? _getDefaultColor(type),
+        ));
 
     // Keep only recent events
     if (_events.length > maxEvents) {
@@ -33,37 +35,45 @@ class GameEventFeed extends PositionComponent with HasGameRef<BoredGamesGame> {
   }
 
   void waveComplete(int wave) {
-    addEvent(GameEventType.waveComplete, 'WAVE $wave CLEARED', color: const Color(0xFF00FF88));
+    addEvent(GameEventType.waveComplete, 'WAVE $wave CLEARED',
+        color: const Color(0xFF00FF88));
   }
 
   void bossSpawned(String bossName) {
-    addEvent(GameEventType.bossSpawn, 'BOSS: $bossName', color: const Color(0xFFFF00FF));
+    addEvent(GameEventType.bossSpawn, 'BOSS: $bossName',
+        color: const Color(0xFFFF00FF));
   }
 
   void bossDefeated(String bossName) {
-    addEvent(GameEventType.bossDefeat, '$bossName DESTROYED', color: const Color(0xFFFFD700));
+    addEvent(GameEventType.bossDefeat, '$bossName DESTROYED',
+        color: const Color(0xFFFFD700));
   }
 
   void towerBuilt(String towerName) {
-    addEvent(GameEventType.towerBuilt, '$towerName DEPLOYED', color: const Color(0xFF00FFFF));
+    addEvent(GameEventType.towerBuilt, '$towerName DEPLOYED',
+        color: const Color(0xFF00FFFF));
   }
 
   void abilityUsed(String abilityName) {
-    addEvent(GameEventType.ability, '$abilityName ACTIVATED', color: const Color(0xFFFF6600));
+    addEvent(GameEventType.ability, '$abilityName ACTIVATED',
+        color: const Color(0xFFFF6600));
   }
 
   void goldEarned(int amount) {
     if (amount >= 50) {
-      addEvent(GameEventType.gold, '+$amount GOLD', color: const Color(0xFFFFD700));
+      addEvent(GameEventType.gold, '+$amount GOLD',
+          color: const Color(0xFFFFD700));
     }
   }
 
   void lowHealth() {
-    addEvent(GameEventType.warning, 'LOW HEALTH WARNING', color: const Color(0xFFFF4444));
+    addEvent(GameEventType.warning, 'LOW HEALTH WARNING',
+        color: const Color(0xFFFF4444));
   }
 
   void timerExpired() {
-    addEvent(GameEventType.warning, 'TIME EXPIRED', color: const Color(0xFFFF0066));
+    addEvent(GameEventType.warning, 'TIME EXPIRED',
+        color: const Color(0xFFFF0066));
   }
 
   Color _getDefaultColor(GameEventType type) {
@@ -122,7 +132,9 @@ class GameEventFeed extends PositionComponent with HasGameRef<BoredGamesGame> {
     final startY = 80.0;
 
     var offsetY = 0.0;
-    for (final event in _events.take(maxEvents)) {
+    final count = _events.length < maxEvents ? _events.length : maxEvents;
+    for (int i = 0; i < count; i++) {
+      final event = _events[i];
       event.render(canvas, x, startY + offsetY, compact);
       offsetY += event.height + 4;
     }
@@ -169,7 +181,8 @@ class _GameEvent {
   static final Paint _pulseRingPaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2;
-  final TextPainter _textPainter = TextPainter(textDirection: TextDirection.ltr);
+  final TextPainter _textPainter =
+      TextPainter(textDirection: TextDirection.ltr);
   String _cachedText = '';
   int _cachedTextColorValue = 0;
   int _cachedShadowColorValue = 0;
@@ -255,7 +268,8 @@ class _GameEvent {
       _textPainter.layout();
     }
 
-    _textPainter.paint(canvas, Offset(iconSize + 8, (iconSize - _textPainter.height) / 2));
+    _textPainter.paint(
+        canvas, Offset(iconSize + 8, (iconSize - _textPainter.height) / 2));
 
     // Pulsing accent for important events
     if (type == GameEventType.bossSpawn || type == GameEventType.warning) {
@@ -296,45 +310,55 @@ class _GameEvent {
       case GameEventType.waveComplete:
         // Checkmark
         _iconPaint.strokeWidth = 2;
-        canvas.drawLine(Offset(3, centerY), Offset(centerX - 1, size - 4), _iconPaint);
+        canvas.drawLine(
+            Offset(3, centerY), Offset(centerX - 1, size - 4), _iconPaint);
         _iconPaint.strokeWidth = 1.5;
-        canvas.drawLine(Offset(centerX - 1, size - 4), Offset(size - 3, 4), _iconPaint);
+        canvas.drawLine(
+            Offset(centerX - 1, size - 4), Offset(size - 3, 4), _iconPaint);
         break;
 
       case GameEventType.bossSpawn:
       case GameEventType.bossDefeat:
         // Skull/danger icon
         canvas.drawCircle(Offset(centerX, centerY - 1), 5, _iconPaint);
-        canvas.drawLine(Offset(3, size - 3), Offset(size - 3, size - 3), _iconPaint);
+        canvas.drawLine(
+            Offset(3, size - 3), Offset(size - 3, size - 3), _iconPaint);
         break;
 
       case GameEventType.towerBuilt:
         // Tower icon (triangle pointing up)
         canvas.drawLine(Offset(centerX, 2), Offset(2, size - 2), _iconPaint);
-        canvas.drawLine(Offset(2, size - 2), Offset(size - 2, size - 2), _iconPaint);
-        canvas.drawLine(Offset(size - 2, size - 2), Offset(centerX, 2), _iconPaint);
+        canvas.drawLine(
+            Offset(2, size - 2), Offset(size - 2, size - 2), _iconPaint);
+        canvas.drawLine(
+            Offset(size - 2, size - 2), Offset(centerX, 2), _iconPaint);
         break;
 
       case GameEventType.ability:
         // Lightning bolt
         _iconPaint.strokeWidth = 2;
-        canvas.drawLine(Offset(centerX + 2, 2), Offset(centerX - 2, centerY), _iconPaint);
+        canvas.drawLine(
+            Offset(centerX + 2, 2), Offset(centerX - 2, centerY), _iconPaint);
         _iconPaint.strokeWidth = 1.5;
-        canvas.drawLine(Offset(centerX - 2, centerY), Offset(centerX + 2, centerY), _iconPaint);
-        canvas.drawLine(Offset(centerX + 2, centerY), Offset(centerX - 2, size - 2), _iconPaint);
+        canvas.drawLine(Offset(centerX - 2, centerY),
+            Offset(centerX + 2, centerY), _iconPaint);
+        canvas.drawLine(Offset(centerX + 2, centerY),
+            Offset(centerX - 2, size - 2), _iconPaint);
         break;
 
       case GameEventType.gold:
         // Coin icon
         canvas.drawCircle(Offset(centerX, centerY), 5, _iconPaint);
         _iconPaint.strokeWidth = 1.5;
-        canvas.drawLine(Offset(centerX, centerY - 3), Offset(centerX, centerY + 3), _iconPaint);
+        canvas.drawLine(Offset(centerX, centerY - 3),
+            Offset(centerX, centerY + 3), _iconPaint);
         break;
 
       case GameEventType.warning:
         // Exclamation mark
         _iconPaint.strokeWidth = 2;
-        canvas.drawLine(Offset(centerX, 3), Offset(centerX, size - 6), _iconPaint);
+        canvas.drawLine(
+            Offset(centerX, 3), Offset(centerX, size - 6), _iconPaint);
         _iconPaint.strokeWidth = 1.5;
         canvas.drawCircle(Offset(centerX, size - 3), 1.5, _iconPaint);
         break;
@@ -343,7 +367,8 @@ class _GameEvent {
         // Info icon
         canvas.drawCircle(Offset(centerX, centerY), 5, _iconPaint);
         _iconPaint.strokeWidth = 2;
-        canvas.drawLine(Offset(centerX, centerY), Offset(centerX, size - 4), _iconPaint);
+        canvas.drawLine(
+            Offset(centerX, centerY), Offset(centerX, size - 4), _iconPaint);
         _iconPaint.strokeWidth = 1.5;
         canvas.drawCircle(Offset(centerX, 4), 1.5, _iconPaint);
         break;

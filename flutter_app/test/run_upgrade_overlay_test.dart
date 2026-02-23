@@ -15,7 +15,8 @@ class _TestGame extends BoredGamesGame {
   int skipCount = 0;
 
   @override
-  List<RunUpgradeDefinition> get pendingRunUpgrades => List.unmodifiable(_pending);
+  List<RunUpgradeDefinition> get pendingRunUpgrades =>
+      List.unmodifiable(_pending);
 
   @override
   void selectRunUpgrade(String id) {
@@ -35,6 +36,9 @@ class _TestGame extends BoredGamesGame {
 
 void main() {
   testWidgets('RunUpgradeOverlay triggers game callbacks', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1600, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     final upgrades = [
       const RunUpgradeDefinition(
         id: 'alpha',
@@ -57,9 +61,11 @@ void main() {
       ),
     );
 
-    await tester.pump();
+    // Let entrance animations build interactable widgets.
+    await tester.pump(const Duration(milliseconds: 900));
 
-    await tester.tap(find.widgetWithText(EpicNeonButton, 'LOCK IN').first);
+    // Select first upgrade through the visible CTA.
+    await tester.tap(find.widgetWithText(EpicNeonButton, 'ACTIVATE').first);
     await tester.pump();
     expect(game.selectedId, 'alpha');
 
