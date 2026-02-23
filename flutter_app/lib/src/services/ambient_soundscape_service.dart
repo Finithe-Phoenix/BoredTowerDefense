@@ -24,6 +24,13 @@ class _FastRng {
   bool nextBool() => (_next() & 1) == 0;
 }
 
+enum AmbientLayerType {
+  drone,
+  texture,
+  atmosphere,
+  accent,
+}
+
 /// Ambient Soundscape Generator
 /// Creates unique, immersive ambient audio for each game world.
 ///
@@ -124,7 +131,10 @@ class AmbientSoundscapeService {
   }
 
   /// Play ambient soundscape for a specific world
-  Future<void> playWorldAmbient(int worldId) async {
+  Future<void> playWorldAmbient(
+    int worldId, {
+    double? debugDurationSeconds,
+  }) async {
     if (!_initialized) await initialize();
 
     // Don't restart if already playing this world
@@ -135,10 +145,22 @@ class AmbientSoundscapeService {
 
     try {
       // Generate all ambient layers for this world
-      final drone = _generateDroneLayer(worldId);
-      final texture = _generateTextureLayer(worldId);
-      final atmosphere = _generateAtmosphereLayer(worldId);
-      final accent = _generateAccentLayer(worldId);
+      final drone = _generateDroneLayer(
+        worldId,
+        durationSeconds: debugDurationSeconds ?? 30.0,
+      );
+      final texture = _generateTextureLayer(
+        worldId,
+        durationSeconds: debugDurationSeconds ?? 45.0,
+      );
+      final atmosphere = _generateAtmosphereLayer(
+        worldId,
+        durationSeconds: debugDurationSeconds ?? 60.0,
+      );
+      final accent = _generateAccentLayer(
+        worldId,
+        durationSeconds: debugDurationSeconds ?? 90.0,
+      );
 
       // Save to temp files
       if (_tempDir != null) {
@@ -246,6 +268,38 @@ class AmbientSoundscapeService {
 
     await stop();
     _volume = initialVolume;
+  }
+
+  /// Generate a specific ambient layer with a short duration for fast tests.
+  @visibleForTesting
+  Uint8List generateLayerForTesting({
+    required int worldId,
+    required AmbientLayerType layer,
+    double durationSeconds = 0.02,
+  }) {
+    final safeDuration = durationSeconds.clamp(0.005, 1.0).toDouble();
+    switch (layer) {
+      case AmbientLayerType.drone:
+        return _generateDroneLayer(
+          worldId,
+          durationSeconds: safeDuration,
+        );
+      case AmbientLayerType.texture:
+        return _generateTextureLayer(
+          worldId,
+          durationSeconds: safeDuration,
+        );
+      case AmbientLayerType.atmosphere:
+        return _generateAtmosphereLayer(
+          worldId,
+          durationSeconds: safeDuration,
+        );
+      case AmbientLayerType.accent:
+        return _generateAccentLayer(
+          worldId,
+          durationSeconds: safeDuration,
+        );
+    }
   }
 
   // ============================================================
@@ -753,9 +807,11 @@ class AmbientSoundscapeService {
       final huntPulse = math.sin(2 * math.pi * 0.7 * t);
       final subPulse = math.sin(2 * math.pi * 41 * t) * 0.2 * huntPulse.abs();
 
-      final sample =
-          (fundamental * 0.7 + saw * 0.2 * stalkLfo.abs() + tritone + subPulse) *
-              0.45;
+      final sample = (fundamental * 0.7 +
+              saw * 0.2 * stalkLfo.abs() +
+              tritone +
+              subPulse) *
+          0.45;
 
       // Aggressive stereo panning
       final pan = math.sin(2 * math.pi * 0.08 * t) * 0.4;
@@ -837,7 +893,8 @@ class AmbientSoundscapeService {
           (collapseLfo * 0.5 + 0.5);
 
       final sample =
-          (fundamental * 0.6 + layers * 0.25 + sub + overload * strainLfo) * 0.5;
+          (fundamental * 0.6 + layers * 0.25 + sub + overload * strainLfo) *
+              0.5;
 
       // Heavy stereo
       final pan = math.sin(2 * math.pi * 0.02 * t) * 0.3;
@@ -915,9 +972,8 @@ class AmbientSoundscapeService {
           (stormLfo2 > 0.8 ? 1.0 : 0.0);
 
       // Thunder sub-bass
-      final thunder = math.sin(2 * math.pi * 26 * t) *
-          0.25 *
-          (0.6 + stormLfo3.abs() * 0.4);
+      final thunder =
+          math.sin(2 * math.pi * 26 * t) * 0.25 * (0.6 + stormLfo3.abs() * 0.4);
 
       final sample =
           (fundamental + saw * 0.25 + lightning1 + lightning2 + thunder) * 0.5;
@@ -950,8 +1006,8 @@ class AmbientSoundscapeService {
       // Thunder rumble with decay
       final thunderLfo = math.sin(2 * math.pi * 0.06 * t);
       final thunderAmt = thunderLfo > 0.8 ? (thunderLfo - 0.8) * 5 : 0.0;
-      final thunder =
-          _pinkNoise() * 0.035 * thunderAmt + math.sin(2 * math.pi * 35 * t) * 0.025 * thunderAmt;
+      final thunder = _pinkNoise() * 0.035 * thunderAmt +
+          math.sin(2 * math.pi * 35 * t) * 0.025 * thunderAmt;
 
       final sample = wind + lightning + thunder;
 
@@ -1001,13 +1057,8 @@ class AmbientSoundscapeService {
       final decay =
           _pinkNoise() * 0.01 * (apocalypseLfo > 0.5 ? apocalypseLfo : 0);
 
-      final sample = (fundamental +
-              octave +
-              minor2nd +
-              tritone +
-              abyss +
-              decay) *
-          0.5;
+      final sample =
+          (fundamental + octave + minor2nd + tritone + abyss + decay) * 0.5;
 
       // Minimal stereo - collapsing space
       final pan = math.sin(2 * math.pi * 0.005 * t) * 0.2;
@@ -1042,9 +1093,8 @@ class AmbientSoundscapeService {
           : 0.0;
 
       // Void noise - sparse and dark
-      final voidNoise = _pinkNoise() *
-          0.015 *
-          (math.sin(2 * math.pi * 0.006 * t).abs());
+      final voidNoise =
+          _pinkNoise() * 0.015 * (math.sin(2 * math.pi * 0.006 * t).abs());
 
       // Death rattle harmonics
       final rattle = math.sin(2 * math.pi * 20 * t) *
@@ -1066,10 +1116,11 @@ class AmbientSoundscapeService {
   // LAYER GENERATION - Combines world-specific elements
   // ============================================================
 
-  Uint8List _generateDroneLayer(int worldId) {
-    // 30 seconds loop for drone layer
-    const duration = 30.0;
-    final samples = (duration * _sampleRate).toInt();
+  Uint8List _generateDroneLayer(
+    int worldId, {
+    double durationSeconds = 30.0,
+  }) {
+    final samples = (durationSeconds * _sampleRate).toInt();
     final leftChannel = Float32List(samples);
     final rightChannel = Float32List(samples);
 
@@ -1111,10 +1162,11 @@ class AmbientSoundscapeService {
     return _mixToStereoWav(leftChannel, rightChannel);
   }
 
-  Uint8List _generateTextureLayer(int worldId) {
-    // 45 seconds loop for texture (different from drone to avoid phase lock)
-    const duration = 45.0;
-    final samples = (duration * _sampleRate).toInt();
+  Uint8List _generateTextureLayer(
+    int worldId, {
+    double durationSeconds = 45.0,
+  }) {
+    final samples = (durationSeconds * _sampleRate).toInt();
     final leftChannel = Float32List(samples);
     final rightChannel = Float32List(samples);
 
@@ -1156,10 +1208,11 @@ class AmbientSoundscapeService {
     return _mixToStereoWav(leftChannel, rightChannel);
   }
 
-  Uint8List _generateAtmosphereLayer(int worldId) {
-    // 60 seconds for atmosphere - longest loop for variety
-    const duration = 60.0;
-    final samples = (duration * _sampleRate).toInt();
+  Uint8List _generateAtmosphereLayer(
+    int worldId, {
+    double durationSeconds = 60.0,
+  }) {
+    final samples = (durationSeconds * _sampleRate).toInt();
     final leftChannel = Float32List(samples);
     final rightChannel = Float32List(samples);
 
@@ -1229,21 +1282,26 @@ class AmbientSoundscapeService {
 
         case 7: // Digital hunt pulses
           final hunt = math.sin(2 * math.pi * 0.4 * t);
-          sample = hunt > 0.85 ? math.sin(2 * math.pi * 600 * t) * 0.025 * (hunt - 0.85) * 6.67 : 0;
+          sample = hunt > 0.85
+              ? math.sin(2 * math.pi * 600 * t) * 0.025 * (hunt - 0.85) * 6.67
+              : 0;
           pan = math.sin(2 * math.pi * 0.06 * t) * 0.4;
           break;
 
         case 8: // Omega grid hum
           final grid = math.sin(2 * math.pi * 0.15 * t);
           sample = math.sin(2 * math.pi * 180 * t) * 0.02 * (0.5 + grid * 0.5);
-          sample += _random.nextDouble() > 0.996 ? _random.nextDouble() * 0.08 : 0;
+          sample +=
+              _random.nextDouble() > 0.996 ? _random.nextDouble() * 0.08 : 0;
           pan = math.sin(2 * math.pi * 0.04 * t) * 0.5;
           break;
 
         case 9: // Storm chaos
           final storm = math.sin(2 * math.pi * 0.25 * t);
           sample = _pinkNoise() * 0.03 * (0.7 + storm * 0.3);
-          sample += _random.nextDouble() > 0.995 ? (_random.nextDouble() * 2 - 1) * 0.15 : 0;
+          sample += _random.nextDouble() > 0.995
+              ? (_random.nextDouble() * 2 - 1) * 0.15
+              : 0;
           pan = (_random.nextDouble() - 0.5) * 0.9;
           break;
 
@@ -1263,10 +1321,11 @@ class AmbientSoundscapeService {
     }
   }
 
-  Uint8List _generateAccentLayer(int worldId) {
-    // 90 seconds for accents - longest, most varied
-    const duration = 90.0;
-    final samples = (duration * _sampleRate).toInt();
+  Uint8List _generateAccentLayer(
+    int worldId, {
+    double durationSeconds = 90.0,
+  }) {
+    final samples = (durationSeconds * _sampleRate).toInt();
     final leftChannel = Float32List(samples);
     final rightChannel = Float32List(samples);
 
@@ -1328,8 +1387,12 @@ class AmbientSoundscapeService {
             sample = math.sin(2 * math.pi * huntSweep * t) * 0.018 * envelope;
             break;
           case 8: // Grid pulse
-            sample = math.sin(2 * math.pi * (150 + a * 30) * t) * 0.02 * envelope;
-            sample += math.sin(2 * math.pi * 900 * t) * 0.01 * envelope * (1 - progress);
+            sample =
+                math.sin(2 * math.pi * (150 + a * 30) * t) * 0.02 * envelope;
+            sample += math.sin(2 * math.pi * 900 * t) *
+                0.01 *
+                envelope *
+                (1 - progress);
             break;
           case 9: // Storm crash
             sample = _pinkNoise() * 0.04 * envelope;
@@ -1369,6 +1432,8 @@ class AmbientSoundscapeService {
   }
 
   Uint8List _mixToStereoWav(Float32List left, Float32List right) {
+    _masterAmbientStereo(left, right);
+
     // Normalize
     double maxSample = 0.0;
     for (int i = 0; i < left.length; i++) {
@@ -1388,6 +1453,98 @@ class AmbientSoundscapeService {
     }
 
     return _addWavHeader(pcm16.buffer.asUint8List());
+  }
+
+  void _masterAmbientStereo(Float32List left, Float32List right) {
+    if (left.isEmpty || right.isEmpty) return;
+
+    // Gentle width and cleanup to avoid muddy ambience.
+    const stereoWidth = 1.08;
+    for (int i = 0; i < left.length; i++) {
+      final mid = (left[i] + right[i]) * 0.5;
+      final side = (left[i] - right[i]) * 0.5 * stereoWidth;
+      left[i] = (mid + side).clamp(-1.0, 1.0);
+      right[i] = (mid - side).clamp(-1.0, 1.0);
+    }
+
+    _applyAmbientDcBlock(left, right);
+    _applyAmbientLimiter(left, right, threshold: 0.88);
+    _normalizeAmbientLoudness(left, right, targetRms: 0.2, targetPeak: 0.88);
+  }
+
+  void _applyAmbientDcBlock(Float32List left, Float32List right) {
+    const reject = 0.996;
+    var prevInL = 0.0;
+    var prevOutL = 0.0;
+    var prevInR = 0.0;
+    var prevOutR = 0.0;
+    for (int i = 0; i < left.length; i++) {
+      final l = left[i];
+      final r = right[i];
+      final lOut = l - prevInL + reject * prevOutL;
+      final rOut = r - prevInR + reject * prevOutR;
+      prevInL = l;
+      prevOutL = lOut;
+      prevInR = r;
+      prevOutR = rOut;
+      left[i] = lOut;
+      right[i] = rOut;
+    }
+  }
+
+  void _applyAmbientLimiter(
+    Float32List left,
+    Float32List right, {
+    required double threshold,
+  }) {
+    final t = threshold.clamp(0.6, 0.95);
+    const curve = 4.2;
+    for (int i = 0; i < left.length; i++) {
+      left[i] = _limitAmbientSample(left[i], threshold: t, curve: curve);
+      right[i] = _limitAmbientSample(right[i], threshold: t, curve: curve);
+    }
+  }
+
+  double _limitAmbientSample(
+    double sample, {
+    required double threshold,
+    required double curve,
+  }) {
+    final absSample = sample.abs();
+    if (absSample <= threshold) return sample;
+    final limited = threshold +
+        ((absSample - threshold) / (1.0 + (absSample - threshold) * curve));
+    return sample < 0 ? -limited : limited;
+  }
+
+  void _normalizeAmbientLoudness(
+    Float32List left,
+    Float32List right, {
+    required double targetRms,
+    required double targetPeak,
+  }) {
+    var peak = 0.0;
+    var sumSquares = 0.0;
+    final count = left.length * 2;
+    for (int i = 0; i < left.length; i++) {
+      final l = left[i];
+      final r = right[i];
+      sumSquares += l * l + r * r;
+      peak = math.max(peak, l.abs());
+      peak = math.max(peak, r.abs());
+    }
+    if (peak <= 0.000001 || count <= 0) return;
+
+    final rms = math.sqrt(sumSquares / count);
+    var gain = rms > 0.000001 ? (targetRms / rms).clamp(0.72, 1.38) : 1.0;
+    final postPeak = peak * gain;
+    if (postPeak > targetPeak) {
+      gain *= targetPeak / postPeak;
+    }
+    for (int i = 0; i < left.length; i++) {
+      left[i] = (left[i] * gain).clamp(-1.0, 1.0);
+      right[i] = (right[i] * gain).clamp(-1.0, 1.0);
+    }
   }
 
   Uint8List _addWavHeader(Uint8List pcmBytes) {

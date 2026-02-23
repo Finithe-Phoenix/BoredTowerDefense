@@ -30,11 +30,17 @@ void main() {
 
     await tester.pump(const Duration(milliseconds: 1000));
 
-    await tester.tap(find.widgetWithText(NeonButton, 'NEXT LEVEL'));
+    tester
+        .widget<NeonButton>(find.widgetWithText(NeonButton, 'NEXT LEVEL'))
+        .onPressed();
     await tester.pump();
-    await tester.tap(find.widgetWithText(NeonButton, 'PLAY AGAIN'));
+    tester
+        .widget<NeonButton>(find.widgetWithText(NeonButton, 'PLAY AGAIN'))
+        .onPressed();
     await tester.pump();
-    await tester.tap(find.widgetWithText(NeonButton, 'QUIT TO MENU'));
+    tester
+        .widget<NeonButton>(find.widgetWithText(NeonButton, 'QUIT TO MENU'))
+        .onPressed();
     await tester.pump();
 
     expect(next, 1);

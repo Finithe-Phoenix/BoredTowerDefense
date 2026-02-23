@@ -165,6 +165,7 @@ typedef TowerFireCallback = void Function(
 class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   static bool lowFx = false;
   BoredGamesGame? _cachedGame;
+  bool _isVisibleInViewport = true;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // STATIC PAINT OBJECTS FOR HYPER-OPTIMIZATION
@@ -1438,6 +1439,15 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
   void update(double dt) {
     super.update(dt);
 
+    final game = _cachedGame ?? findGame();
+    if (game is BoredGamesGame) {
+      _cachedGame = game;
+      _isVisibleInViewport =
+          game.isWorldPointVisible(centerPosition, padding: size.x);
+    } else {
+      _isVisibleInViewport = true;
+    }
+
     // Update construction animation
     if (_isConstructing) {
       _constructionProgress += dt / _constructionDuration;
@@ -1472,14 +1482,7 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
       }
     }
 
-    final game = _cachedGame ?? findGame();
-    final isVisible = game == null ||
-        (game as BoredGamesGame)
-            .isWorldPointVisible(centerPosition, padding: size.x);
-    if (game is BoredGamesGame) {
-      _cachedGame = game;
-    }
-    if (!isVisible) {
+    if (!_isVisibleInViewport) {
       if (_fireCooldown <= 0 && _chargeLevel < 1) {
         _chargeLevel = (_chargeLevel + dt * 3).clamp(0, 1);
       }
@@ -1632,19 +1635,31 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
 
   /// Update targeting and shooting
   void updateTargeting(EnemyManager enemyManager) {
-    final center = centerPosition;
-    _currentTarget = null;
-    if (_manualTargeting && _manualTarget != null) {
-      if (_isTargetValid(_manualTarget!)) {
+    final center = _centerPosition;
+
+    if (_manualTargeting) {
+      if (_manualTarget != null && _isTargetValid(_manualTarget!)) {
         _currentTarget = _manualTarget;
       } else {
         _manualTarget = null;
+        _currentTarget = null;
       }
-    }
+    } else {
+      if (_currentTarget != null && !_isTargetValid(_currentTarget!)) {
+        _currentTarget = null;
+      }
 
-    if (_currentTarget == null) {
-      enemyManager.queryEnemiesInRange(center, range, _candidateEnemies);
-      _currentTarget = _findTarget(_candidateEnemies, center);
+      // Keep a valid lock while cooling down and retarget on demand.
+      if (_currentTarget == null || _fireCooldown <= 0) {
+        enemyManager.queryEnemiesInRange(center, range, _candidateEnemies);
+        final bestTarget = _findTarget(_candidateEnemies, center);
+        if (bestTarget != null) {
+          _currentTarget = bestTarget;
+        } else if (_currentTarget == null) {
+          _candidateEnemies.clear();
+          return;
+        }
+      }
     }
 
     // Fire if ready and has target
@@ -1893,12 +1908,11 @@ class Tower extends PositionComponent with HasGameRef<BoredGamesGame> {
     super.render(canvas);
 
     final game = _cachedGame ?? findGame();
-    if (game is BoredGamesGame &&
-        !game.isWorldPointVisible(centerPosition, padding: size.x)) {
-      return;
-    }
     if (game is BoredGamesGame) {
       _cachedGame = game;
+      if (!_isVisibleInViewport) {
+        return;
+      }
     }
 
     final reduceFx = Tower.lowFx;

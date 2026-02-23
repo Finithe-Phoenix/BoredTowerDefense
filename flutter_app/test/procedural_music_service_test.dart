@@ -62,6 +62,77 @@ void main() {
     expect(service.isPlaying, isFalse);
   });
 
+  testWidgets('mix profile adapts effective layer mix', (tester) async {
+    final service = ProceduralMusicService.instance;
+
+    await tester.runAsync(() async {
+      await service.initialize();
+    });
+
+    service.setIntensity(0.75);
+    service.setMixProfile('low');
+    final lowMix = List<double>.from(service.debugLastLayerMix);
+
+    service.setMixProfile('extreme');
+    final extremeMix = List<double>.from(service.debugLastLayerMix);
+
+    expect(service.mixProfile, 'extreme');
+    expect(extremeMix[1], greaterThan(lowMix[1])); // lead
+    expect(extremeMix[3], greaterThan(lowMix[3])); // drum
+
+    service.setMixProfile('invalid');
+    expect(service.mixProfile, 'high');
+  });
+
+  testWidgets('cinematic ducking is temporary and restores mix', (tester) async {
+    final service = ProceduralMusicService.instance;
+
+    await tester.runAsync(() async {
+      await service.initialize();
+    });
+
+    service.setIntensity(0.8);
+    final baselineGlobal = service.debugLastLayerMix[5];
+
+    service.triggerCinematicDucking(
+      duration: const Duration(milliseconds: 70),
+      amount: 0.32,
+    );
+    final duckedGlobal = service.debugLastLayerMix[5];
+    expect(service.debugCinematicDuckAmount, greaterThan(0.0));
+    expect(duckedGlobal, lessThan(baselineGlobal));
+
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 110));
+    });
+
+    service.setIntensity(0.8); // Force mix refresh after duck window expiry.
+    expect(service.debugCinematicDuckAmount, 0.0);
+    expect(service.debugLastLayerMix[5], greaterThanOrEqualTo(baselineGlobal));
+  });
+
+  testWidgets('boss leitmotif scales with phase and world mood', (tester) async {
+    final service = ProceduralMusicService.instance;
+
+    await tester.runAsync(() async {
+      await service.initialize();
+    });
+
+    service.setIntensity(0.9);
+    service.setBossLeitmotif(active: false, worldId: 5, phase: 1);
+    final baselineLead = service.debugLastLayerMix[1];
+    final baselineDrum = service.debugLastLayerMix[3];
+
+    service.setBossLeitmotif(active: true, worldId: 5, phase: 3);
+    final leitLead = service.debugLastLayerMix[1];
+    final leitDrum = service.debugLastLayerMix[3];
+
+    expect(service.debugBossLeitmotifActive, isTrue);
+    expect(service.debugBossPhase, 3);
+    expect(leitLead, greaterThan(baselineLead));
+    expect(leitDrum, greaterThan(baselineDrum));
+  });
+
   testWidgets('playWorldMusic generates tracks and cleans up files', (tester) async {
     final service = ProceduralMusicService.instance;
 

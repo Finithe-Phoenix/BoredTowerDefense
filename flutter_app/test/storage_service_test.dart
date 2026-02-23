@@ -32,8 +32,9 @@ void main() {
       sfxVolume: 0.2,
       showFps: false,
       showGrid: false,
-      particlesEnabled: false,
       screenShake: false,
+      particleIntensity: 0.0,
+      graphicsQuality: 'low',
     );
     await StorageService.instance.saveQualitySettings(
       preset: 'low',
@@ -118,8 +119,9 @@ void main() {
       sfxVolume: 0.7,
       showFps: true,
       showGrid: false,
-      particlesEnabled: true,
       screenShake: true,
+      particleIntensity: 1.0,
+      graphicsQuality: 'high',
     );
     await StorageService.instance.saveQualitySettings(
       preset: 'medium',
@@ -138,6 +140,8 @@ void main() {
     final settings = StorageService.instance.loadSettings();
     expect(settings?['musicVolume'], 0.5);
     expect(settings?['screenShake'], isTrue);
+    expect(settings?['particleIntensity'], 1.0);
+    expect(settings?['graphicsQuality'], 'high');
 
     final quality = StorageService.instance.loadQualitySettings();
     expect(quality?['preset'], 'medium');
@@ -202,8 +206,9 @@ void main() {
       sfxVolume: 0.4,
       showFps: false,
       showGrid: true,
-      particlesEnabled: false,
       screenShake: false,
+      particleIntensity: 0.3,
+      graphicsQuality: 'medium',
     );
     await StorageService.instance.saveLevelProgress(
       levelId: 1,
@@ -229,5 +234,35 @@ void main() {
     expect(StorageService.instance.loadStats(), isNull);
     expect(StorageService.instance.loadLevelProgress(1), isNull);
     expect(StorageService.instance.loadUnlockedLevels(), {1});
+  });
+
+  test('tutorial completion defaults to false and can be toggled', () async {
+    expect(StorageService.instance.isTutorialCompleted(), isFalse);
+
+    await StorageService.instance.setTutorialCompleted(true);
+    expect(StorageService.instance.isTutorialCompleted(), isTrue);
+
+    await StorageService.instance.setTutorialCompleted(false);
+    expect(StorageService.instance.isTutorialCompleted(), isFalse);
+  });
+
+  test('tutorial completion methods are safe before initialization', () async {
+    StorageService.instance.resetForTesting();
+
+    await StorageService.instance.setTutorialCompleted(true);
+    expect(StorageService.instance.isTutorialCompleted(), isFalse);
+
+    SharedPreferences.setMockInitialValues({});
+    await StorageService.instance.initialize();
+  });
+
+  test('loadUnlockedLevels can exclude level 1 when include flag disabled', () async {
+    final originalFlag = StorageService.includeLevelOneAlways;
+    addTearDown(() => StorageService.includeLevelOneAlways = originalFlag);
+
+    StorageService.includeLevelOneAlways = false;
+    await StorageService.instance.saveUnlockedLevels({2, 3});
+
+    expect(StorageService.instance.loadUnlockedLevels(), {2, 3});
   });
 }

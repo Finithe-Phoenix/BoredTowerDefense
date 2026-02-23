@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
-
+import 'package:bored_games/src/bloc/settings/settings_cubit.dart';
 import 'package:bored_games/src/ui/screens/loading_screen.dart';
 import 'package:bored_games/src/ui/theme/neon_theme.dart';
 
@@ -8,6 +9,45 @@ import 'package:bored_games/src/ui/theme/neon_theme.dart';
 Future<void> disposeLoadingScreen(WidgetTester tester) async {
   await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
   await tester.pump();
+}
+
+int loadingPercent(WidgetTester tester) {
+  final percentFinder = find.textContaining('%');
+  expect(percentFinder, findsOneWidget);
+  final progressText = tester.widget<Text>(percentFinder).data ?? '0%';
+  return int.tryParse(progressText.replaceAll('%', '').trim()) ?? 0;
+}
+
+class _SlowSettingsCubit extends SettingsCubit {
+  _SlowSettingsCubit({required this.delay});
+
+  final Duration delay;
+
+  @override
+  Future<void> loadSettings() async {
+    await Future<void>.delayed(delay);
+  }
+}
+
+Widget _buildLoadingApp({
+  SettingsCubit? settingsCubit,
+  Widget? menuScreen,
+}) {
+  final app = MaterialApp(
+    routes: {
+      '/': (context) => const LoadingScreen(),
+      '/menu': (context) => menuScreen ?? const Scaffold(body: Text('MENU')),
+    },
+  );
+
+  if (settingsCubit == null) {
+    return app;
+  }
+
+  return BlocProvider<SettingsCubit>.value(
+    value: settingsCubit,
+    child: app,
+  );
 }
 
 void main() {
@@ -44,8 +84,8 @@ void main() {
       // Check for common loading-related text patterns
       final hasLoadingText =
           find.textContaining('LOADING').evaluate().isNotEmpty ||
-          find.textContaining('INITIALIZING').evaluate().isNotEmpty ||
-          find.textContaining('READY').evaluate().isNotEmpty;
+              find.textContaining('INITIALIZING').evaluate().isNotEmpty ||
+              find.textContaining('READY').evaluate().isNotEmpty;
       expect(hasLoadingText, isTrue);
 
       await disposeLoadingScreen(tester);
@@ -195,6 +235,122 @@ void main() {
       );
 
       expect(find.byType(Column), findsWidgets);
+
+      await disposeLoadingScreen(tester);
+    });
+
+    testWidgets('starts from zero percent', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          routes: {
+            '/': (context) => const LoadingScreen(),
+            '/menu': (context) => const Scaffold(body: Text('MENU')),
+          },
+        ),
+      );
+
+      expect(loadingPercent(tester), 0);
+
+      await disposeLoadingScreen(tester);
+    });
+
+    testWidgets('shows all corner status indicators', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          routes: {
+            '/': (context) => const LoadingScreen(),
+            '/menu': (context) => const Scaffold(body: Text('MENU')),
+          },
+        ),
+      );
+
+      expect(find.text('SYS'), findsOneWidget);
+      expect(find.text('NET'), findsOneWidget);
+      expect(find.text('MEM'), findsOneWidget);
+      expect(find.text('CPU'), findsOneWidget);
+      expect(find.text('OK'), findsNothing);
+
+      await disposeLoadingScreen(tester);
+    });
+
+    testWidgets('supports route target for menu transition', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          routes: {
+            '/': (context) => const LoadingScreen(),
+            '/menu': (context) => const Scaffold(body: Text('MENU')),
+          },
+        ),
+      );
+
+      expect(find.byType(LoadingScreen), findsOneWidget);
+      expect(find.text('MENU'), findsNothing);
+
+      await disposeLoadingScreen(tester);
+    });
+
+    testWidgets(
+        'updateProgress clamps values and updateLoadingText updates text',
+        (tester) async {
+      await tester.pumpWidget(_buildLoadingApp());
+
+      final dynamic state = tester.state(find.byType(LoadingScreen));
+      state.updateProgress(1.5);
+      await tester.pump();
+      expect(loadingPercent(tester), 100);
+
+      state.updateProgress(-1.0);
+      await tester.pump();
+      expect(loadingPercent(tester), 0);
+
+      state.updateLoadingText('PATCHING CACHE');
+      await tester.pump();
+      expect(find.text('PATCHING CACHE'), findsOneWidget);
+
+      await disposeLoadingScreen(tester);
+    });
+
+    testWidgets('keeps loading screen visible while settings sync is pending',
+        (tester) async {
+      final cubit = _SlowSettingsCubit(delay: const Duration(seconds: 5));
+      addTearDown(cubit.close);
+
+      await tester.pumpWidget(_buildLoadingApp(settingsCubit: cubit));
+      await tester.pump(const Duration(milliseconds: 1200));
+
+      expect(find.byType(LoadingScreen), findsOneWidget);
+      expect(find.text('MENU'), findsNothing);
+
+      await disposeLoadingScreen(tester);
+    });
+
+    testWidgets('glitch layer appears while loading is active', (tester) async {
+      final cubit = _SlowSettingsCubit(delay: const Duration(seconds: 5));
+      addTearDown(cubit.close);
+
+      await tester.pumpWidget(_buildLoadingApp(settingsCubit: cubit));
+      await tester.pump();
+
+      final baselineTransforms =
+          tester.widgetList<Transform>(find.byType(Transform)).length;
+
+      var sawGlitchTransforms = false;
+      for (int i = 0; i < 35; i++) {
+        await tester.pump(const Duration(milliseconds: 80));
+
+        if (find.byType(LoadingScreen).evaluate().isEmpty) {
+          break;
+        }
+
+        final transformCount =
+            tester.widgetList<Transform>(find.byType(Transform)).length;
+        if (transformCount > baselineTransforms) {
+          sawGlitchTransforms = true;
+          break;
+        }
+      }
+
+      expect(sawGlitchTransforms, isTrue);
 
       await disposeLoadingScreen(tester);
     });

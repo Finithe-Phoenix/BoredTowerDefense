@@ -98,7 +98,6 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
     super.dispose();
   }
 
-
   void _handleWorldSelected(int worldId) {
     setState(() {
       _selectedWorldId = worldId;
@@ -138,7 +137,6 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
     });
   }
 
-
   int _worldForLevel(int levelId) => ((levelId - 1) ~/ _levelsPerWorld) + 1;
 
   List<LevelConfig> _levelsForWorld(int worldId) {
@@ -146,9 +144,6 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
         .where((level) => _worldForLevel(level.id) == worldId)
         .toList(growable: false);
   }
-
-
-
 
   @override
   Widget build(BuildContext context) {
@@ -299,7 +294,8 @@ class _LevelSelectScreenState extends State<LevelSelectScreen>
               final horizontalPadding = screenWidth > 1000 ? 60.0 : 24.0;
 
               return GridView.builder(
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
+                padding: EdgeInsets.symmetric(
+                    horizontal: horizontalPadding, vertical: 20),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: crossAxisCount,
                   mainAxisSpacing: 16,
@@ -452,7 +448,7 @@ class _TronLevelCardState extends State<_TronLevelCard>
         },
         onTapUp: (_) {
           setState(() => _isPressed = false);
-          if (isUnlocked) widget.onTap();
+          widget.onTap();
         },
         onTapCancel: () => setState(() => _isPressed = false),
         child: AnimatedBuilder(
@@ -463,15 +459,16 @@ class _TronLevelCardState extends State<_TronLevelCard>
             _clickAnimation,
           ]),
           builder: (context, child) {
-            final progress = _materializeAnimation.value;
+            final progress = _materializeAnimation.value.clamp(0.0, 1.0);
             final pulse = _pulseAnimation.value;
             final hover = _hoverAnimation.value;
-            final click = _clickAnimation.value;
+            final click = _clickAnimation.value.clamp(0.0, 1.0);
 
             // Enhanced scale with bounce on click
             final baseScale = _isPressed ? 0.95 : 1.0;
             final hoverScale = 1.0 + (hover * 0.08);
-            final clickBounce = 1.0 + (click * 0.15 * math.sin(click * math.pi));
+            final clickBounce =
+                1.0 + (click * 0.15 * math.sin(click * math.pi));
             final totalScale = baseScale * hoverScale * clickBounce;
 
             // Rotation on hover
@@ -482,7 +479,7 @@ class _TronLevelCardState extends State<_TronLevelCard>
               child: Transform.rotate(
                 angle: rotation,
                 child: CustomPaint(
-                  painter: _EpicLevelCardPainter(
+                  painter: EpicLevelCardPainter(
                     progress: progress,
                     pulseValue: pulse,
                     primaryColor: effectiveColor,
@@ -505,8 +502,8 @@ class _TronLevelCardState extends State<_TronLevelCard>
   }
 }
 
-class _EpicLevelCardPainter extends CustomPainter {
-  _EpicLevelCardPainter({
+class EpicLevelCardPainter extends CustomPainter {
+  EpicLevelCardPainter({
     required this.progress,
     required this.pulseValue,
     required this.primaryColor,
@@ -707,7 +704,8 @@ class _EpicLevelCardPainter extends CustomPainter {
       if (progress >= line.startTime) {
         final lineProgress = progress >= line.endTime
             ? 1.0
-            : ((progress - line.startTime) / (line.endTime - line.startTime)).clamp(0.0, 1.0);
+            : ((progress - line.startTime) / (line.endTime - line.startTime))
+                .clamp(0.0, 1.0);
 
         final currentEnd = Offset.lerp(line.start, line.end, lineProgress)!;
 
@@ -727,7 +725,8 @@ class _EpicLevelCardPainter extends CustomPainter {
         if (lineProgress > 0 && lineProgress < 1) {
           const trailLength = 0.12;
           final trailStart = math.max(0.0, lineProgress - trailLength);
-          final trailStartPoint = Offset.lerp(line.start, line.end, trailStart)!;
+          final trailStartPoint =
+              Offset.lerp(line.start, line.end, trailStart)!;
 
           final dx = currentEnd.dx - trailStartPoint.dx;
           final dy = currentEnd.dy - trailStartPoint.dy;
@@ -840,11 +839,13 @@ class _EpicLevelCardPainter extends CustomPainter {
 
     for (int row = 0; row < rows; row++) {
       for (int col = 0; col < cols; col++) {
-        final offsetX = col * hexSize * 1.732 + (row.isOdd ? hexSize * 0.866 : 0);
+        final offsetX =
+            col * hexSize * 1.732 + (row.isOdd ? hexSize * 0.866 : 0);
         final offsetY = row * hexSize * 1.5;
 
         if (offsetX < size.width && offsetY < size.height) {
-          _drawHexagon(canvas, Offset(offsetX, offsetY), hexSize * 0.35, _hexGridPaint);
+          _drawHexagon(
+              canvas, Offset(offsetX, offsetY), hexSize * 0.35, _hexGridPaint);
         }
       }
     }
@@ -872,6 +873,10 @@ class _EpicLevelCardPainter extends CustomPainter {
     final hoverGlow = 1.0 + hoverProgress * 0.5;
     final clickGlow = 1.0 + clickProgress * 2.0;
     final glowIntensity = baseGlow * hoverGlow * clickGlow;
+    final borderGlowOpacity =
+        (glowIntensity * 0.4 * borderFade).clamp(0.0, 1.0).toDouble();
+    final borderOpacity =
+        (borderFade * (0.8 + hoverProgress * 0.2)).clamp(0.0, 1.0).toDouble();
 
     // Click ripple effect
     if (clickProgress > 0) {
@@ -892,14 +897,14 @@ class _EpicLevelCardPainter extends CustomPainter {
 
     // Outer glow
     _borderGlowPaint
-      ..color = primaryColor.withOpacity(glowIntensity * 0.4 * borderFade)
+      ..color = primaryColor.withOpacity(borderGlowOpacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 5 + hoverProgress * 3;
     canvas.drawRRect(rrect, _borderGlowPaint);
 
     // Main border
     _borderPaint
-      ..color = primaryColor.withOpacity(borderFade * (0.8 + hoverProgress * 0.2))
+      ..color = primaryColor.withOpacity(borderOpacity)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5 + hoverProgress * 0.5;
     canvas.drawRRect(rrect, _borderPaint);
@@ -913,28 +918,22 @@ class _EpicLevelCardPainter extends CustomPainter {
         primaryColor.withOpacity(cornerFade * (isHovered ? 1.0 : 0.8));
 
     // Top-left
-    canvas.drawLine(Offset(3, 3 + bracketSize), const Offset(3, 3), _bracketPaint);
-    canvas.drawLine(const Offset(3, 3), Offset(3 + bracketSize, 3), _bracketPaint);
+    canvas.drawLine(
+        Offset(3, 3 + bracketSize), const Offset(3, 3), _bracketPaint);
+    canvas.drawLine(
+        const Offset(3, 3), Offset(3 + bracketSize, 3), _bracketPaint);
 
     // Top-right
-    canvas.drawLine(
-        Offset(size.width - 3, 3 + bracketSize),
-        Offset(size.width - 3, 3),
-        _bracketPaint);
-    canvas.drawLine(
-        Offset(size.width - 3, 3),
-        Offset(size.width - 3 - bracketSize, 3),
-        _bracketPaint);
+    canvas.drawLine(Offset(size.width - 3, 3 + bracketSize),
+        Offset(size.width - 3, 3), _bracketPaint);
+    canvas.drawLine(Offset(size.width - 3, 3),
+        Offset(size.width - 3 - bracketSize, 3), _bracketPaint);
 
     // Bottom-left
-    canvas.drawLine(
-        Offset(3, size.height - 3 - bracketSize),
-        Offset(3, size.height - 3),
-        _bracketPaint);
-    canvas.drawLine(
-        Offset(3, size.height - 3),
-        Offset(3 + bracketSize, size.height - 3),
-        _bracketPaint);
+    canvas.drawLine(Offset(3, size.height - 3 - bracketSize),
+        Offset(3, size.height - 3), _bracketPaint);
+    canvas.drawLine(Offset(3, size.height - 3),
+        Offset(3 + bracketSize, size.height - 3), _bracketPaint);
 
     // Bottom-right
     canvas.drawLine(Offset(size.width - 3, size.height - 3 - bracketSize),
@@ -949,7 +948,8 @@ class _EpicLevelCardPainter extends CustomPainter {
       canvas.drawCircle(const Offset(3, 3), 2.5, _bracketDotPaint);
       canvas.drawCircle(Offset(size.width - 3, 3), 2.5, _bracketDotPaint);
       canvas.drawCircle(Offset(3, size.height - 3), 2.5, _bracketDotPaint);
-      canvas.drawCircle(Offset(size.width - 3, size.height - 3), 2.5, _bracketDotPaint);
+      canvas.drawCircle(
+          Offset(size.width - 3, size.height - 3), 2.5, _bracketDotPaint);
     }
   }
 
@@ -1001,7 +1001,8 @@ class _EpicLevelCardPainter extends CustomPainter {
     // Inner glow
     final coreRadiusKey = coreRadius.round();
     final opacityStep = (coreFade * 60).round();
-    final shaderKey = (coreRadiusKey << 16) ^ (opacityStep << 8) ^ primaryColor.value;
+    final shaderKey =
+        (coreRadiusKey << 16) ^ (opacityStep << 8) ^ primaryColor.value;
     final shader = _coreGlowShaders.putIfAbsent(shaderKey, () {
       final scalar = opacityStep / 60.0;
       return RadialGradient(
@@ -1010,7 +1011,8 @@ class _EpicLevelCardPainter extends CustomPainter {
           primaryColor.withOpacity(0.08 * scalar),
           Colors.transparent,
         ],
-      ).createShader(Rect.fromCircle(center: Offset.zero, radius: coreRadiusKey.toDouble()));
+      ).createShader(Rect.fromCircle(
+          center: Offset.zero, radius: coreRadiusKey.toDouble()));
     });
     _innerGlowPaint.shader = shader;
     canvas.save();
@@ -1021,14 +1023,16 @@ class _EpicLevelCardPainter extends CustomPainter {
     // Rotating segments when hovered
     if (hoverProgress > 0) {
       _segmentPaint
-        ..color = primaryColor.withOpacity((0.5 + hoverProgress * 0.3) * coreFade)
+        ..color =
+            primaryColor.withOpacity((0.5 + hoverProgress * 0.3) * coreFade)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
         ..strokeCap = StrokeCap.round;
 
       final segmentCount = 4 + (hoverProgress * 4).round();
       for (int i = 0; i < segmentCount; i++) {
-        final startAngle = (i * (360 / segmentCount) + pulseValue * 360) * math.pi / 180;
+        final startAngle =
+            (i * (360 / segmentCount) + pulseValue * 360) * math.pi / 180;
         final sweepAngle = (30 + hoverProgress * 10) * math.pi / 180;
         canvas.drawArc(
           Rect.fromCircle(center: center, radius: pulseRadius + 3),
@@ -1101,7 +1105,8 @@ class _EpicLevelCardPainter extends CustomPainter {
       if (isFilled) {
         // Glow
         _starGlowPaint.color = NeonColors.yellow.withOpacity(0.6 * starFade);
-        _drawStarShape(canvas, Offset(x, starY), starSize * 0.5, _starGlowPaint);
+        _drawStarShape(
+            canvas, Offset(x, starY), starSize * 0.5, _starGlowPaint);
 
         // Star
         _starPaint.color = NeonColors.yellow.withOpacity(starFade);
@@ -1112,12 +1117,14 @@ class _EpicLevelCardPainter extends CustomPainter {
           ..color = Colors.grey.withOpacity(0.3 * starFade)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1;
-        _drawStarShape(canvas, Offset(x, starY), starSize * 0.4, _starOutlinePaint);
+        _drawStarShape(
+            canvas, Offset(x, starY), starSize * 0.4, _starOutlinePaint);
       }
     }
   }
 
-  void _drawStarShape(Canvas canvas, Offset center, double radius, Paint paint) {
+  void _drawStarShape(
+      Canvas canvas, Offset center, double radius, Paint paint) {
     _starPath.reset();
     for (int i = 0; i < 5; i++) {
       final outerAngle = (i * 72 - 90) * math.pi / 180;
@@ -1146,7 +1153,8 @@ class _EpicLevelCardPainter extends CustomPainter {
 
     // Darken overlay
     _lockOverlayPaint.color = Colors.black.withOpacity(0.5 * lockFade);
-    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), _lockOverlayPaint);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, size.width, size.height), _lockOverlayPaint);
 
     // Lock icon
     final lockSize = size.width * 0.22;
@@ -1240,7 +1248,7 @@ class _EpicLevelCardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_EpicLevelCardPainter oldDelegate) {
+  bool shouldRepaint(EpicLevelCardPainter oldDelegate) {
     return progress != oldDelegate.progress ||
         pulseValue != oldDelegate.pulseValue ||
         isHovered != oldDelegate.isHovered ||

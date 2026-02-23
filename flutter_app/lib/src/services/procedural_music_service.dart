@@ -24,6 +24,24 @@ class _FastRng {
   bool nextBool() => (_next() & 1) == 0;
 }
 
+class _LayerMix {
+  const _LayerMix({
+    required this.bass,
+    required this.lead,
+    required this.pad,
+    required this.drum,
+    required this.arp,
+    required this.global,
+  });
+
+  final double bass;
+  final double lead;
+  final double pad;
+  final double drum;
+  final double arp;
+  final double global;
+}
+
 /// Procedural Synthwave Music Generator
 /// Inspired by TTGL, Daft Punk, and TRON soundtracks
 ///
@@ -46,7 +64,21 @@ class ProceduralMusicService {
   bool _isPlaying = false;
   double _volume = 0.7;
   int _currentWorld = 1;
+  int _leitmotifWorld = 1;
   double _intensity = 0.5; // 0.0 = calm, 1.0 = intense battle
+  String _mixProfile = 'high';
+  bool _bossLeitmotifActive = false;
+  int _bossPhase = 1;
+  double _cinematicDuckAmount = 0.0;
+  int _cinematicDuckUntilMicros = 0;
+
+  // Cached last effective mix (for testing and diagnostics)
+  double _lastBassMix = 0.0;
+  double _lastLeadMix = 0.0;
+  double _lastPadMix = 0.0;
+  double _lastDrumMix = 0.0;
+  double _lastArpMix = 0.0;
+  double _lastGlobalMix = 0.0;
 
   // Audio players for layered tracks
   AudioPlayer? _bassPlayer;
@@ -73,7 +105,13 @@ class ProceduralMusicService {
 
   // Musical scales (pentatonic and minor for synthwave feel)
   static const List<int> _minorScale = [0, 2, 3, 5, 7, 8, 10]; // Natural minor
-  static const List<int> _pentatonicMinor = [0, 3, 5, 7, 10]; // Pentatonic minor
+  static const List<int> _pentatonicMinor = [
+    0,
+    3,
+    5,
+    7,
+    10
+  ]; // Pentatonic minor
 
   // Root notes per world (in MIDI note numbers)
   static const Map<int, int> _worldRootNotes = {
@@ -86,15 +124,16 @@ class ProceduralMusicService {
 
   // World color themes (affects sound character)
   static const Map<int, WorldSoundTheme> _worldThemes = {
-    1: WorldSoundTheme.neonBlue,    // Tutorial - Clean, digital
+    1: WorldSoundTheme.neonBlue, // Tutorial - Clean, digital
     2: WorldSoundTheme.magentaPulse, // Challenge - Energetic
-    3: WorldSoundTheme.cyanStorm,    // Mid - Atmospheric
-    4: WorldSoundTheme.orangeHeat,   // Advanced - Aggressive
-    5: WorldSoundTheme.voidPurple,   // Final - Dark, epic
+    3: WorldSoundTheme.cyanStorm, // Mid - Atmospheric
+    4: WorldSoundTheme.orangeHeat, // Advanced - Aggressive
+    5: WorldSoundTheme.voidPurple, // Final - Dark, epic
   };
 
   bool get isPlaying => _isPlaying;
   double get volume => _volume;
+  String get mixProfile => _mixProfile;
 
   // Main Menu specific player
   AudioPlayer? _mainMenuPlayer;
@@ -213,14 +252,26 @@ class ProceduralMusicService {
 
   /// Deep sub-bass with sidechained pulse - the heartbeat of the menu
   void _generateMenuSubBass(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final totalBeats = bars * 4;
 
     // Epic chord progression for bass: Am - F - C - G (i - VI - III - VII)
-    final bassProgression = [0, 8, 3, 10, 0, 8, 5, 10]; // Root notes relative to A
+    final bassProgression = [
+      0,
+      8,
+      3,
+      10,
+      0,
+      8,
+      5,
+      10
+    ]; // Root notes relative to A
 
     for (int beat = 0; beat < totalBeats; beat++) {
       final bar = beat ~/ 4;
@@ -228,7 +279,8 @@ class ProceduralMusicService {
       final beatInBar = beat % 4;
 
       // Skip some beats in ambient intro for sparse feel
-      if (section == _MenuSection.ambientIntro && bar < 4 && beatInBar != 0) continue;
+      if (section == _MenuSection.ambientIntro && bar < 4 && beatInBar != 0)
+        continue;
 
       // Get bass note from progression
       final progIndex = (bar ~/ 2) % bassProgression.length;
@@ -264,22 +316,29 @@ class ProceduralMusicService {
       final startSample = (beat * beatDuration * _sampleRate).toInt();
       final noteSamples = (noteLength * beatDuration * _sampleRate).toInt();
 
-      _renderMenuBassNote(left, right, startSample, noteSamples, freq, volume, section);
+      _renderMenuBassNote(
+          left, right, startSample, noteSamples, freq, volume, section);
     }
   }
 
   void _renderMenuBassNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _MenuSection section,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _MenuSection section,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
       final progress = i / numSamples;
 
       // Smooth sidechain pump effect
-      final sidechain = section == _MenuSection.mainTheme || section == _MenuSection.reprise
-          ? (progress < 0.08 ? math.pow(progress / 0.08, 0.7) : 1.0) * 0.85 + 0.15
+      final sidechain = section == _MenuSection.mainTheme ||
+              section == _MenuSection.reprise
+          ? (progress < 0.08 ? math.pow(progress / 0.08, 0.7) : 1.0) * 0.85 +
+              0.15
           : 1.0;
 
       // Deep sub (sine) - the foundation
@@ -290,14 +349,18 @@ class ProceduralMusicService {
       final filteredSaw = saw * 0.2 * (1.0 - progress * 0.5);
 
       // Sub-octave for extra depth in main sections
-      final subOctave = section == _MenuSection.mainTheme || section == _MenuSection.reprise
-          ? math.sin(2 * math.pi * (frequency / 2) * t) * 0.25
-          : 0.0;
+      final subOctave =
+          section == _MenuSection.mainTheme || section == _MenuSection.reprise
+              ? math.sin(2 * math.pi * (frequency / 2) * t) * 0.25
+              : 0.0;
 
       // Smooth envelope
       final envelope = _smoothEnvelope(progress, 0.02, 0.25);
 
-      final sample = (sub * 0.55 + filteredSaw + subOctave) * envelope * volume * sidechain;
+      final sample = (sub * 0.55 + filteredSaw + subOctave) *
+          envelope *
+          volume *
+          sidechain;
 
       left[startSample + i] += sample;
       right[startSample + i] += sample;
@@ -306,8 +369,11 @@ class ProceduralMusicService {
 
   /// Lush atmospheric pads - the soul of the cyberpunk aesthetic
   void _generateMenuPads(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final padOctave = rootNote + 12;
@@ -315,10 +381,10 @@ class ProceduralMusicService {
     // Cinematic chord progression with extensions
     // Am9 - Fmaj7 - Cmaj9 - Gsus4
     final lushChords = [
-      [0, 3, 7, 10, 14],      // Am9
-      [8, 12, 15, 19, 20],    // Fmaj7
-      [3, 7, 10, 14, 17],     // Cmaj9
-      [10, 14, 17, 22, 15],   // Gsus4add9
+      [0, 3, 7, 10, 14], // Am9
+      [8, 12, 15, 19, 20], // Fmaj7
+      [3, 7, 10, 14, 17], // Cmaj9
+      [10, 14, 17, 22, 15], // Gsus4add9
     ];
 
     for (int bar = 0; bar < bars; bar++) {
@@ -357,15 +423,21 @@ class ProceduralMusicService {
       for (int noteIdx = 0; noteIdx < chord.length; noteIdx++) {
         final interval = chord[noteIdx];
         final freq = _midiToFreq(padOctave + interval);
-        _renderMenuPadNote(left, right, startSample, barSamples, freq, volume, section, noteIdx);
+        _renderMenuPadNote(left, right, startSample, barSamples, freq, volume,
+            section, noteIdx);
       }
     }
   }
 
   void _renderMenuPadNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _MenuSection section, int voiceIndex,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _MenuSection section,
+    int voiceIndex,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -413,8 +485,11 @@ class ProceduralMusicService {
 
   /// TRON-style arpeggio - iconic and deliberate
   void _generateMenuArpeggio(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final arpOctave = rootNote + 24;
@@ -426,7 +501,7 @@ class ProceduralMusicService {
 
     // Chord tones that shift with the progression
     final arpChords = [
-      [0, 3, 7, 12],  // Am
+      [0, 3, 7, 12], // Am
       [8, 12, 15, 20], // F
       [3, 7, 10, 15], // C
       [10, 14, 17, 22], // G
@@ -437,7 +512,8 @@ class ProceduralMusicService {
 
       // Arpeggio starts from bar 6
       if (bar < 6) continue;
-      if (section == _MenuSection.breakdown && bar < 36) continue; // Sparse in breakdown
+      if (section == _MenuSection.breakdown && bar < 36)
+        continue; // Sparse in breakdown
 
       final chordIndex = (bar ~/ 4) % arpChords.length;
       final baseChord = arpChords[chordIndex];
@@ -452,11 +528,14 @@ class ProceduralMusicService {
           // Map arpeggio to chord tones
           final chordToneIndex = arpOffset ~/ 4;
           final octaveOffset = (arpOffset ~/ 12) * 12;
-          final interval = baseChord[chordToneIndex % baseChord.length] + octaveOffset;
+          final interval =
+              baseChord[chordToneIndex % baseChord.length] + octaveOffset;
 
           final freq = _midiToFreq(arpOctave + interval - 12);
           final absoluteBeat = startBeat + beat;
-          final startSample = ((absoluteBeat * beatDuration + sub * noteLength) * _sampleRate).toInt();
+          final startSample =
+              ((absoluteBeat * beatDuration + sub * noteLength) * _sampleRate)
+                  .toInt();
           final noteSamples = (noteLength * 0.65 * _sampleRate).toInt();
 
           double volume;
@@ -482,16 +561,22 @@ class ProceduralMusicService {
           if (sub == 0) volume *= 1.2;
           if (sub == 2) volume *= 1.1;
 
-          _renderMenuArpNote(left, right, startSample, noteSamples, freq, volume, section, sub);
+          _renderMenuArpNote(left, right, startSample, noteSamples, freq,
+              volume, section, sub);
         }
       }
     }
   }
 
   void _renderMenuArpNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _MenuSection section, int subBeat,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _MenuSection section,
+    int subBeat,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -508,7 +593,8 @@ class ProceduralMusicService {
       final sample = (square * 0.85 + detunedSaw) * envelope * volume;
 
       // Ping-pong stereo based on sub-beat
-      final pan = (subBeat % 2 == 0 ? 0.35 : -0.35) * (section == _MenuSection.mainTheme ? 1.0 : 0.7);
+      final pan = (subBeat % 2 == 0 ? 0.35 : -0.35) *
+          (section == _MenuSection.mainTheme ? 1.0 : 0.7);
       left[startSample + i] += sample * (0.5 - pan);
       right[startSample + i] += sample * (0.5 + pan);
     }
@@ -516,8 +602,11 @@ class ProceduralMusicService {
 
   /// Heroic lead melody - the emotional core
   void _generateMenuLead(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final leadOctave = rootNote + 24;
@@ -557,7 +646,8 @@ class ProceduralMusicService {
           break;
       }
 
-      _renderMenuLeadNote(left, right, startSample, noteSamples, freq, volume, section);
+      _renderMenuLeadNote(
+          left, right, startSample, noteSamples, freq, volume, section);
     }
   }
 
@@ -626,9 +716,13 @@ class ProceduralMusicService {
   }
 
   void _renderMenuLeadNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _MenuSection section,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _MenuSection section,
   ) {
     // Expressive vibrato
     final vibratoRate = 5.2;
@@ -641,7 +735,9 @@ class ProceduralMusicService {
 
       // Delayed vibrato for expression
       final vibrato = progress > 0.18
-          ? math.sin(2 * math.pi * vibratoRate * t) * vibratoDepth * math.min(1.0, (progress - 0.18) * 5)
+          ? math.sin(2 * math.pi * vibratoRate * t) *
+              vibratoDepth *
+              math.min(1.0, (progress - 0.18) * 5)
           : 0.0;
 
       final freq = frequency + vibrato;
@@ -674,8 +770,10 @@ class ProceduralMusicService {
 
   /// Half-time drums for epic grandeur
   void _generateMenuDrums(
-    Float32List left, Float32List right,
-    int bpm, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final totalBeats = bars * 4;
@@ -719,7 +817,8 @@ class ProceduralMusicService {
           // Hi-hats
           _renderMenuHiHat(left, right, startSample, false, 0.22);
           // Off-beat open hat
-          final offbeat = startSample + (beatDuration / 2 * _sampleRate).toInt();
+          final offbeat =
+              startSample + (beatDuration / 2 * _sampleRate).toInt();
           if (offbeat < left.length && beatInBar % 2 == 1) {
             _renderMenuHiHat(left, right, offbeat, true, 0.25);
           }
@@ -748,7 +847,8 @@ class ProceduralMusicService {
             _renderMenuSnare(left, right, startSample, 0.6);
           }
           _renderMenuHiHat(left, right, startSample, false, 0.24);
-          final offbeat2 = startSample + (beatDuration / 2 * _sampleRate).toInt();
+          final offbeat2 =
+              startSample + (beatDuration / 2 * _sampleRate).toInt();
           if (offbeat2 < left.length) {
             _renderMenuHiHat(left, right, offbeat2, beatInBar % 2 == 1, 0.22);
           }
@@ -760,7 +860,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderMenuKick(Float32List left, Float32List right, int startSample, double volume) {
+  void _renderMenuKick(
+      Float32List left, Float32List right, int startSample, double volume) {
     final duration = 0.2;
     final samples = (duration * _sampleRate).toInt();
 
@@ -783,7 +884,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderMenuSnare(Float32List left, Float32List right, int startSample, double volume) {
+  void _renderMenuSnare(
+      Float32List left, Float32List right, int startSample, double volume) {
     final duration = 0.18;
     final samples = (duration * _sampleRate).toInt();
 
@@ -806,7 +908,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderMenuHiHat(Float32List left, Float32List right, int startSample, bool open, double volume) {
+  void _renderMenuHiHat(Float32List left, Float32List right, int startSample,
+      bool open, double volume) {
     final duration = open ? 0.18 : 0.05;
     final samples = (duration * _sampleRate).toInt();
 
@@ -821,7 +924,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderMenuCrash(Float32List left, Float32List right, int startSample, double volume) {
+  void _renderMenuCrash(
+      Float32List left, Float32List right, int startSample, double volume) {
     final duration = 2.0;
     final samples = (duration * _sampleRate).toInt();
 
@@ -833,7 +937,8 @@ class ProceduralMusicService {
       double sample = 0;
       final freqs = [2200.0, 2900.0, 3700.0, 4800.0, 6100.0];
       for (final f in freqs) {
-        sample += math.sin(2 * math.pi * f * t + _random.nextDouble() * 0.5) * 0.2;
+        sample +=
+            math.sin(2 * math.pi * f * t + _random.nextDouble() * 0.5) * 0.2;
       }
       sample += (_random.nextDouble() * 2 - 1) * 0.4;
 
@@ -847,8 +952,10 @@ class ProceduralMusicService {
 
   /// Ambient textures - the atmosphere
   void _generateMenuAmbience(
-    Float32List left, Float32List right,
-    int bpm, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final totalDuration = bars * 4 * beatDuration;
@@ -901,15 +1008,17 @@ class ProceduralMusicService {
 
   /// Risers for section transitions
   void _generateMenuRisers(
-    Float32List left, Float32List right,
-    int bpm, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
 
     // Risers before main sections
     final riserPoints = [
-      (14, 16),  // Before main theme
-      (38, 40),  // Before reprise
+      (14, 16), // Before main theme
+      (38, 40), // Before reprise
     ];
 
     for (final (startBar, endBar) in riserPoints) {
@@ -965,7 +1074,8 @@ class ProceduralMusicService {
       _tempDir = musicDir;
     } catch (e) {
       if (kDebugMode) {
-        debugPrint('ProceduralMusicService: Failed to create temp directory: $e');
+        debugPrint(
+            'ProceduralMusicService: Failed to create temp directory: $e');
       }
     }
 
@@ -983,9 +1093,11 @@ class ProceduralMusicService {
     await _arpeggioPlayer?.setReleaseMode(ReleaseMode.loop);
 
     _initialized = true;
+    _updateLayerVolumes();
 
     if (kDebugMode) {
-      debugPrint('ProceduralMusicService initialized (temp: ${_tempDir?.path})');
+      debugPrint(
+          'ProceduralMusicService initialized (temp: ${_tempDir?.path})');
     }
   }
 
@@ -1001,11 +1113,45 @@ class ProceduralMusicService {
     _updateLayerVolumes();
   }
 
+  /// Set adaptive music mix profile (`low`, `medium`, `high`, `extreme`).
+  void setMixProfile(String profile) {
+    _mixProfile = _normalizeMixProfile(profile);
+    _updateLayerVolumes();
+  }
+
+  /// Apply short musical ducking so important SFX and cues cut through.
+  void triggerCinematicDucking({
+    Duration duration = const Duration(milliseconds: 650),
+    double amount = 0.24,
+  }) {
+    final now = DateTime.now().microsecondsSinceEpoch;
+    final until = now + duration.inMicroseconds.clamp(0, 10000000);
+    _cinematicDuckUntilMicros = math.max(_cinematicDuckUntilMicros, until);
+    _cinematicDuckAmount =
+        math.max(_cinematicDuckAmount, amount.clamp(0.0, 0.7));
+    _updateLayerVolumes();
+  }
+
+  /// Enable/refresh boss leitmotif mood by world and phase.
+  void setBossLeitmotif({
+    required bool active,
+    int? worldId,
+    int phase = 1,
+  }) {
+    _bossLeitmotifActive = active;
+    if (worldId != null) {
+      _leitmotifWorld = worldId.clamp(1, 8);
+    }
+    _bossPhase = phase.clamp(1, 4);
+    _updateLayerVolumes();
+  }
+
   /// Start playing music for a specific world/level
   Future<void> playWorldMusic(int worldId) async {
     if (!_initialized) await initialize();
 
     _currentWorld = worldId.clamp(1, 5);
+    _leitmotifWorld = _currentWorld;
 
     // Stop current music AND clean up old temp files
     await stop();
@@ -1046,7 +1192,8 @@ class ProceduralMusicService {
       } catch (e) {
         // Ignore deletion errors - file may be in use
         if (kDebugMode) {
-          debugPrint('ProceduralMusicService: Failed to delete temp file $path: $e');
+          debugPrint(
+              'ProceduralMusicService: Failed to delete temp file $path: $e');
         }
       }
     }
@@ -1062,6 +1209,12 @@ class ProceduralMusicService {
   Future<void> reset() async {
     await stop();
     await cleanupTempFiles();
+    _bossLeitmotifActive = false;
+    _bossPhase = 1;
+    _leitmotifWorld = _currentWorld;
+    _cinematicDuckUntilMicros = 0;
+    _cinematicDuckAmount = 0.0;
+    _updateLayerVolumes();
   }
 
   /// Pause music
@@ -1118,7 +1271,8 @@ class ProceduralMusicService {
     if (_tempDir != null) {
       final file = File('${_tempDir!.path}/final_boss.wav');
       await file.writeAsBytes(epicTrack);
-      await _finalBossPlayer?.play(DeviceFileSource(file.path), volume: _volume);
+      await _finalBossPlayer?.play(DeviceFileSource(file.path),
+          volume: _volume);
     }
 
     _isFinalBossPlaying = true;
@@ -1133,6 +1287,7 @@ class ProceduralMusicService {
   Future<void> stopFinalBossMusic() async {
     _isFinalBossPlaying = false;
     await _finalBossPlayer?.stop();
+    _updateLayerVolumes();
   }
 
   /// Generate the epic final boss track
@@ -1166,8 +1321,11 @@ class ProceduralMusicService {
 
   /// Epic bass - Heavy sidechained pulse with octave jumps
   void _generateEpicBass(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final totalBeats = bars * 4;
@@ -1262,23 +1420,29 @@ class ProceduralMusicService {
       final startSample = (beat * beatDuration * _sampleRate).toInt();
       final noteSamples = (noteLength * beatDuration * _sampleRate).toInt();
 
-      _renderEpicBassNote(left, right, startSample, noteSamples, freq, volume, section);
+      _renderEpicBassNote(
+          left, right, startSample, noteSamples, freq, volume, section);
     }
   }
 
   void _renderEpicBassNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _EpicSection section,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _EpicSection section,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
       final progress = i / numSamples;
 
       // Sidechain compression simulation (pumping effect)
-      final sidechain = section == _EpicSection.drop || section == _EpicSection.finalDrop
-          ? (progress < 0.1 ? progress / 0.1 : 1.0) * 0.7 + 0.3
-          : 1.0;
+      final sidechain =
+          section == _EpicSection.drop || section == _EpicSection.finalDrop
+              ? (progress < 0.1 ? progress / 0.1 : 1.0) * 0.7 + 0.3
+              : 1.0;
 
       // Sub bass (sine) + distorted saw for grit
       final sub = math.sin(2 * math.pi * frequency * t);
@@ -1293,7 +1457,8 @@ class ProceduralMusicService {
       // Envelope
       final envelope = _adsrEnvelope(i, numSamples, 0.01, 0.1, 0.8, 0.15);
 
-      final sample = (sub * 0.5 + distortedSaw * 0.35) * envelope * volume * sidechain;
+      final sample =
+          (sub * 0.5 + distortedSaw * 0.35) * envelope * volume * sidechain;
 
       left[startSample + i] += sample;
       right[startSample + i] += sample;
@@ -1302,8 +1467,11 @@ class ProceduralMusicService {
 
   /// Epic lead - Soaring synth melody with "Row Row Fight the Power" energy
   void _generateEpicLead(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final leadOctave = rootNote + 24; // 2 octaves up
@@ -1326,14 +1494,19 @@ class ProceduralMusicService {
       final noteSamples = (note.duration * beatDuration * _sampleRate).toInt();
 
       final volume = section == _EpicSection.finalDrop ? 0.5 : 0.4;
-      _renderEpicLeadNote(left, right, startSample, noteSamples, freq, volume, section);
+      _renderEpicLeadNote(
+          left, right, startSample, noteSamples, freq, volume, section);
     }
   }
 
   void _renderEpicLeadNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _EpicSection section,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _EpicSection section,
   ) {
     // Vibrato and expression
     final vibratoRate = 5.5;
@@ -1375,18 +1548,21 @@ class ProceduralMusicService {
 
   /// Epic pads - Orchestral-style swells
   void _generateEpicPads(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final padOctave = rootNote + 12;
 
     // Power chord progression: i - VI - III - VII (epic minor progression)
     final epicChords = [
-      [0, 7, 12],      // Am power chord
-      [8, 12, 15],     // F major
-      [3, 7, 10],      // C major
-      [10, 14, 17],    // G major
+      [0, 7, 12], // Am power chord
+      [8, 12, 15], // F major
+      [3, 7, 10], // C major
+      [10, 14, 17], // G major
     ];
 
     for (int bar = 0; bar < bars; bar++) {
@@ -1421,15 +1597,20 @@ class ProceduralMusicService {
 
       for (final interval in chord) {
         final freq = _midiToFreq(padOctave + interval);
-        _renderEpicPadNote(left, right, startSample, barSamples, freq, volume, section);
+        _renderEpicPadNote(
+            left, right, startSample, barSamples, freq, volume, section);
       }
     }
   }
 
   void _renderEpicPadNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume, _EpicSection section,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
+    _EpicSection section,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -1466,8 +1647,10 @@ class ProceduralMusicService {
 
   /// Epic drums - Four-on-the-floor meets orchestral hits
   void _generateEpicDrums(
-    Float32List left, Float32List right,
-    int bpm, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final totalBeats = bars * 4;
@@ -1500,7 +1683,8 @@ class ProceduralMusicService {
           }
           // Hi-hats on eighths
           _renderEpicHiHat(left, right, startSample, false, 0.25);
-          final offbeatSample = startSample + (beatDuration / 2 * _sampleRate).toInt();
+          final offbeatSample =
+              startSample + (beatDuration / 2 * _sampleRate).toInt();
           if (offbeatSample < left.length) {
             _renderEpicHiHat(left, right, offbeatSample, false, 0.2);
           }
@@ -1513,7 +1697,8 @@ class ProceduralMusicService {
             _renderEpicSnare(left, right, startSample, 0.7);
           }
           // Open hi-hat on off-beats
-          final offbeat = startSample + (beatDuration / 2 * _sampleRate).toInt();
+          final offbeat =
+              startSample + (beatDuration / 2 * _sampleRate).toInt();
           if (offbeat < left.length) {
             _renderEpicHiHat(left, right, offbeat, true, 0.35);
           }
@@ -1542,7 +1727,8 @@ class ProceduralMusicService {
           // Double-time hi-hats
           final sixteenth = beatDuration / 4;
           for (int s = 0; s < 4; s++) {
-            final subSample = startSample + (s * sixteenth * _sampleRate).toInt();
+            final subSample =
+                startSample + (s * sixteenth * _sampleRate).toInt();
             if (subSample < left.length) {
               _renderEpicHiHat(left, right, subSample, s % 2 == 1, 0.3);
             }
@@ -1556,7 +1742,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderEpicKick(Float32List left, Float32List right, int startSample, double volume) {
+  void _renderEpicKick(
+      Float32List left, Float32List right, int startSample, double volume) {
     final duration = 0.18;
     final samples = (duration * _sampleRate).toInt();
 
@@ -1579,7 +1766,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderEpicSnare(Float32List left, Float32List right, int startSample, double volume) {
+  void _renderEpicSnare(
+      Float32List left, Float32List right, int startSample, double volume) {
     final duration = 0.15;
     final samples = (duration * _sampleRate).toInt();
 
@@ -1601,7 +1789,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderEpicHiHat(Float32List left, Float32List right, int startSample, bool open, double volume) {
+  void _renderEpicHiHat(Float32List left, Float32List right, int startSample,
+      bool open, double volume) {
     final duration = open ? 0.2 : 0.06;
     final samples = (duration * _sampleRate).toInt();
 
@@ -1616,7 +1805,8 @@ class ProceduralMusicService {
     }
   }
 
-  void _renderEpicCrash(Float32List left, Float32List right, int startSample, double volume) {
+  void _renderEpicCrash(
+      Float32List left, Float32List right, int startSample, double volume) {
     final duration = 1.5;
     final samples = (duration * _sampleRate).toInt();
 
@@ -1642,8 +1832,11 @@ class ProceduralMusicService {
 
   /// Epic arpeggio - TRON-style rapid sequences
   void _generateEpicArpeggio(
-    Float32List left, Float32List right,
-    int bpm, int rootNote, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int rootNote,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
     final arpOctave = rootNote + 24;
@@ -1669,7 +1862,8 @@ class ProceduralMusicService {
         final interval = arpPattern[patternIndex];
 
         final freq = _midiToFreq(arpOctave + interval);
-        final startSample = ((beat * beatDuration + sub * noteLength) * _sampleRate).toInt();
+        final startSample =
+            ((beat * beatDuration + sub * noteLength) * _sampleRate).toInt();
         final noteSamples = (noteLength * 0.6 * _sampleRate).toInt();
 
         _renderEpicArpNote(left, right, startSample, noteSamples, freq, volume);
@@ -1678,9 +1872,12 @@ class ProceduralMusicService {
   }
 
   void _renderEpicArpNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, double volume,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    double volume,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -1699,14 +1896,16 @@ class ProceduralMusicService {
 
   /// Generate risers for transitions
   void _generateEpicRiser(
-    Float32List left, Float32List right,
-    int bpm, int bars,
+    Float32List left,
+    Float32List right,
+    int bpm,
+    int bars,
   ) {
     final beatDuration = 60.0 / bpm;
 
     // Riser before drops (bars 7-8, 23-24)
     final riserBars = [
-      (6, 8),   // Before first drop
+      (6, 8), // Before first drop
       (22, 24), // Before final drop
     ];
 
@@ -1832,24 +2031,100 @@ class ProceduralMusicService {
     player.dispose();
   }
 
+  String _normalizeMixProfile(String profile) {
+    switch (profile) {
+      case 'low':
+      case 'medium':
+      case 'high':
+      case 'extreme':
+        return profile;
+      default:
+        return 'high';
+    }
+  }
+
+  double _cinematicDuckNow() {
+    if (_cinematicDuckUntilMicros <= 0 || _cinematicDuckAmount <= 0) {
+      return 0.0;
+    }
+    final now = DateTime.now().microsecondsSinceEpoch;
+    if (now >= _cinematicDuckUntilMicros) {
+      _cinematicDuckUntilMicros = 0;
+      _cinematicDuckAmount = 0.0;
+      return 0.0;
+    }
+    return _cinematicDuckAmount;
+  }
+
+  _LayerMix _calculateLayerMix() {
+    final profile = switch (_mixProfile) {
+      'low' => const [0.88, 0.84, 1.08, 0.8, 0.82],
+      'medium' => const [0.94, 0.92, 1.02, 0.9, 0.9],
+      'high' => const [1.0, 1.0, 1.0, 1.0, 1.0],
+      'extreme' => const [1.08, 1.12, 0.94, 1.14, 1.12],
+      _ => const [1.0, 1.0, 1.0, 1.0, 1.0],
+    };
+
+    var bassMix = (0.4 + (_intensity * 0.4)) * profile[0];
+    var leadMix = (0.2 + (_intensity * 0.5)) * profile[1];
+    var padMix = (0.6 - (_intensity * 0.3)) * profile[2];
+    var drumMix = (0.3 + (_intensity * 0.5)) * profile[3];
+    var arpMix = (0.3 + (_intensity * 0.3)) * profile[4];
+
+    if (_bossLeitmotifActive) {
+      final worldMood = switch (_leitmotifWorld) {
+        1 => const [0.06, 0.04, -0.02],
+        2 => const [0.08, 0.06, -0.03],
+        3 => const [0.09, 0.08, -0.04],
+        4 => const [0.11, 0.1, -0.05],
+        5 => const [0.14, 0.12, -0.08],
+        6 => const [0.12, 0.1, -0.06],
+        7 => const [0.13, 0.11, -0.07],
+        8 => const [0.15, 0.13, -0.08],
+        _ => const [0.1, 0.08, -0.04],
+      };
+      final phaseBoost = (_bossPhase - 1).clamp(0, 3) * 0.07;
+      leadMix += worldMood[0] + phaseBoost;
+      drumMix += worldMood[1] + phaseBoost;
+      arpMix += 0.05 + phaseBoost * 0.6;
+      bassMix += 0.04 + phaseBoost * 0.3;
+      padMix += worldMood[2] - phaseBoost * 0.3;
+    }
+
+    final duck = _cinematicDuckNow();
+    final global = (1.0 - duck).clamp(0.35, 1.0);
+    return _LayerMix(
+      bass: bassMix.clamp(0.12, 1.45),
+      lead: leadMix.clamp(0.1, 1.5),
+      pad: padMix.clamp(0.08, 1.25),
+      drum: drumMix.clamp(0.08, 1.55),
+      arp: arpMix.clamp(0.08, 1.5),
+      global: global,
+    );
+  }
+
   void _updateLayerVolumes() {
+    final mix = _calculateLayerMix();
+    _lastBassMix = mix.bass;
+    _lastLeadMix = mix.lead;
+    _lastPadMix = mix.pad;
+    _lastDrumMix = mix.drum;
+    _lastArpMix = mix.arp;
+    _lastGlobalMix = mix.global;
+
     if (!_initialized) return;
 
-    // Dynamic mixing based on intensity
-    // Low intensity: mostly pads and light bass
-    // High intensity: full drums, heavy bass, prominent lead
-
-    final bassMix = 0.4 + (_intensity * 0.4);
-    final leadMix = 0.2 + (_intensity * 0.5);
-    final padMix = 0.6 - (_intensity * 0.3);
-    final drumMix = 0.3 + (_intensity * 0.5);
-    final arpMix = 0.3 + (_intensity * 0.3);
-
-    _bassPlayer?.setVolume(_volume * bassMix);
-    _leadPlayer?.setVolume(_volume * leadMix);
-    _padPlayer?.setVolume(_volume * padMix);
-    _drumPlayer?.setVolume(_volume * drumMix);
-    _arpeggioPlayer?.setVolume(_volume * arpMix);
+    final base = _volume * mix.global;
+    _bassPlayer?.setVolume(base * mix.bass);
+    _leadPlayer?.setVolume(base * mix.lead);
+    _padPlayer?.setVolume(base * mix.pad);
+    _drumPlayer?.setVolume(base * mix.drum);
+    _arpeggioPlayer?.setVolume(base * mix.arp);
+    _finalBossPlayer?.setVolume(
+        (_volume * (0.9 + _intensity * 0.2) * mix.global).clamp(0.0, 1.0));
+    _mainMenuPlayer?.setVolume(
+        (_volume * (0.92 + (1.0 - _intensity) * 0.08) * mix.global)
+            .clamp(0.0, 1.0));
   }
 
   Future<void> _generateWorldTracks(int worldId) async {
@@ -1858,15 +2133,20 @@ class ProceduralMusicService {
     final theme = _worldThemes[worldId] ?? WorldSoundTheme.neonBlue;
 
     if (kDebugMode) {
-      debugPrint('Generating tracks for world $worldId (BPM: $bpm, Root: $rootNote)');
+      debugPrint(
+          'Generating tracks for world $worldId (BPM: $bpm, Root: $rootNote)');
     }
 
     // Generate each layer and save to temp files
-    await _saveTrackToFile('bass_$worldId', _generateBassTrack(bpm, rootNote, theme));
-    await _saveTrackToFile('lead_$worldId', _generateLeadTrack(bpm, rootNote, theme));
-    await _saveTrackToFile('pad_$worldId', _generatePadTrack(bpm, rootNote, theme));
+    await _saveTrackToFile(
+        'bass_$worldId', _generateBassTrack(bpm, rootNote, theme));
+    await _saveTrackToFile(
+        'lead_$worldId', _generateLeadTrack(bpm, rootNote, theme));
+    await _saveTrackToFile(
+        'pad_$worldId', _generatePadTrack(bpm, rootNote, theme));
     await _saveTrackToFile('drum_$worldId', _generateDrumTrack(bpm, theme));
-    await _saveTrackToFile('arp_$worldId', _generateArpeggioTrack(bpm, rootNote, theme));
+    await _saveTrackToFile(
+        'arp_$worldId', _generateArpeggioTrack(bpm, rootNote, theme));
 
     if (kDebugMode) {
       debugPrint('Tracks generated and saved to ${_tempDir?.path}');
@@ -1877,7 +2157,8 @@ class ProceduralMusicService {
   Future<void> _saveTrackToFile(String trackName, Uint8List wavData) async {
     if (_tempDir == null) {
       if (kDebugMode) {
-        debugPrint('ProceduralMusicService: Cannot save $trackName - temp dir is null');
+        debugPrint(
+            'ProceduralMusicService: Cannot save $trackName - temp dir is null');
       }
       return;
     }
@@ -1888,7 +2169,8 @@ class ProceduralMusicService {
       _trackFilePaths[trackName] = file.path;
 
       if (kDebugMode) {
-        debugPrint('Saved track: $trackName (${wavData.length} bytes) -> ${file.path}');
+        debugPrint(
+            'Saved track: $trackName (${wavData.length} bytes) -> ${file.path}');
       }
     } catch (e) {
       if (kDebugMode) {
@@ -1965,16 +2247,20 @@ class ProceduralMusicService {
       final patternIndex = beat % pattern.length;
       final noteOffset = pattern[patternIndex];
 
-      if (noteOffset >= -100) { // -100 = rest
+      if (noteOffset >= -100) {
+        // -100 = rest
         final noteFreq = _midiToFreq(rootNote + noteOffset);
         final startSample = (beat * beatDuration * _sampleRate).toInt();
         final noteDuration = beatDuration * 0.8;
         final noteSamples = (noteDuration * _sampleRate).toInt();
 
         _renderBassNote(
-          leftChannel, rightChannel,
-          startSample, noteSamples,
-          noteFreq, theme,
+          leftChannel,
+          rightChannel,
+          startSample,
+          noteSamples,
+          noteFreq,
+          theme,
         );
       }
     }
@@ -2001,14 +2287,20 @@ class ProceduralMusicService {
     for (int i = 0; i < melody.length; i++) {
       final note = melody[i];
       if (note.pitch >= 0) {
-        final noteFreq = _midiToFreq(leadOctave + _minorScale[note.pitch % _minorScale.length]);
-        final startSample = (note.startBeat * beatDuration * _sampleRate).toInt();
-        final noteSamples = (note.duration * beatDuration * _sampleRate).toInt();
+        final noteFreq = _midiToFreq(
+            leadOctave + _minorScale[note.pitch % _minorScale.length]);
+        final startSample =
+            (note.startBeat * beatDuration * _sampleRate).toInt();
+        final noteSamples =
+            (note.duration * beatDuration * _sampleRate).toInt();
 
         _renderLeadNote(
-          leftChannel, rightChannel,
-          startSample, noteSamples,
-          noteFreq, theme,
+          leftChannel,
+          rightChannel,
+          startSample,
+          noteSamples,
+          noteFreq,
+          theme,
         );
       }
     }
@@ -2035,16 +2327,20 @@ class ProceduralMusicService {
     for (int bar = 0; bar < bars; bar++) {
       final chordIndex = (bar ~/ 2) % chordProgression.length;
       final chord = chordProgression[chordIndex];
-      final startSample = (bar * beatsPerBar * beatDuration * _sampleRate).toInt();
+      final startSample =
+          (bar * beatsPerBar * beatDuration * _sampleRate).toInt();
       final chordSamples = (beatsPerBar * beatDuration * _sampleRate).toInt();
 
       // Render each note in the chord
       for (final interval in chord) {
         final noteFreq = _midiToFreq(padOctave + interval);
         _renderPadNote(
-          leftChannel, rightChannel,
-          startSample, chordSamples,
-          noteFreq, theme,
+          leftChannel,
+          rightChannel,
+          startSample,
+          chordSamples,
+          noteFreq,
+          theme,
         );
       }
     }
@@ -2083,16 +2379,19 @@ class ProceduralMusicService {
       // Hi-hat on every eighth note
       final eighthDuration = beatDuration / 2;
       _renderHiHat(leftChannel, rightChannel, startSample, theme);
-      final offbeatSample = startSample + (eighthDuration * _sampleRate).toInt();
+      final offbeatSample =
+          startSample + (eighthDuration * _sampleRate).toInt();
       if (offbeatSample < samples) {
-        _renderHiHat(leftChannel, rightChannel, offbeatSample, theme, open: beat % 8 == 7);
+        _renderHiHat(leftChannel, rightChannel, offbeatSample, theme,
+            open: beat % 8 == 7);
       }
     }
 
     return _mixToStereoSource(leftChannel, rightChannel);
   }
 
-  Uint8List _generateArpeggioTrack(int bpm, int rootNote, WorldSoundTheme theme) {
+  Uint8List _generateArpeggioTrack(
+      int bpm, int rootNote, WorldSoundTheme theme) {
     final beatsPerBar = 4;
     final bars = 8;
     final totalBeats = bars * beatsPerBar;
@@ -2123,13 +2422,17 @@ class ProceduralMusicService {
         if (arpNote >= 0 && arpNote < chord.length) {
           final interval = chord[arpNote % chord.length];
           final noteFreq = _midiToFreq(arpOctave + interval);
-          final startSample = ((beat * beatDuration + sub * noteLength) * _sampleRate).toInt();
+          final startSample =
+              ((beat * beatDuration + sub * noteLength) * _sampleRate).toInt();
           final noteSamples = (noteLength * 0.7 * _sampleRate).toInt();
 
           _renderArpNote(
-            leftChannel, rightChannel,
-            startSample, noteSamples,
-            noteFreq, theme,
+            leftChannel,
+            rightChannel,
+            startSample,
+            noteSamples,
+            noteFreq,
+            theme,
           );
         }
       }
@@ -2143,9 +2446,12 @@ class ProceduralMusicService {
   // ============================================================
 
   void _renderBassNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, WorldSoundTheme theme,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    WorldSoundTheme theme,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -2166,9 +2472,12 @@ class ProceduralMusicService {
   }
 
   void _renderLeadNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, WorldSoundTheme theme,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    WorldSoundTheme theme,
   ) {
     // Vibrato parameters
     final vibratoRate = 5.0;
@@ -2204,9 +2513,12 @@ class ProceduralMusicService {
   }
 
   void _renderPadNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, WorldSoundTheme theme,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    WorldSoundTheme theme,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -2233,9 +2545,12 @@ class ProceduralMusicService {
   }
 
   void _renderArpNote(
-    Float32List left, Float32List right,
-    int startSample, int numSamples,
-    double frequency, WorldSoundTheme theme,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    int numSamples,
+    double frequency,
+    WorldSoundTheme theme,
   ) {
     for (int i = 0; i < numSamples && startSample + i < left.length; i++) {
       final t = i / _sampleRate;
@@ -2254,8 +2569,10 @@ class ProceduralMusicService {
   }
 
   void _renderKick(
-    Float32List left, Float32List right,
-    int startSample, WorldSoundTheme theme,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    WorldSoundTheme theme,
   ) {
     final duration = 0.15;
     final samples = (duration * _sampleRate).toInt();
@@ -2278,8 +2595,10 @@ class ProceduralMusicService {
   }
 
   void _renderSnare(
-    Float32List left, Float32List right,
-    int startSample, WorldSoundTheme theme,
+    Float32List left,
+    Float32List right,
+    int startSample,
+    WorldSoundTheme theme,
   ) {
     final duration = 0.12;
     final samples = (duration * _sampleRate).toInt();
@@ -2303,8 +2622,10 @@ class ProceduralMusicService {
   }
 
   void _renderHiHat(
-    Float32List left, Float32List right,
-    int startSample, WorldSoundTheme theme, {
+    Float32List left,
+    Float32List right,
+    int startSample,
+    WorldSoundTheme theme, {
     bool open = false,
   }) {
     final duration = open ? 0.15 : 0.05;
@@ -2403,8 +2724,8 @@ class ProceduralMusicService {
     return 440.0 * math.pow(2, (midiNote.toDouble() - 69) / 12);
   }
 
-  double _adsrEnvelope(int sample, int totalSamples,
-      double attack, double decay, double sustain, double release) {
+  double _adsrEnvelope(int sample, int totalSamples, double attack,
+      double decay, double sustain, double release) {
     final progress = sample / totalSamples;
 
     if (progress < attack) {
@@ -2438,15 +2759,40 @@ class ProceduralMusicService {
   List<List<int>> _getChordProgression(WorldSoundTheme theme) {
     switch (theme) {
       case WorldSoundTheme.neonBlue:
-        return [[0, 3, 7], [5, 8, 12], [3, 7, 10], [7, 10, 14]]; // i - VI - iv - VII
+        return [
+          [0, 3, 7],
+          [5, 8, 12],
+          [3, 7, 10],
+          [7, 10, 14]
+        ]; // i - VI - iv - VII
       case WorldSoundTheme.magentaPulse:
-        return [[0, 3, 7], [7, 10, 14], [5, 8, 12], [3, 7, 10]]; // i - VII - VI - iv
+        return [
+          [0, 3, 7],
+          [7, 10, 14],
+          [5, 8, 12],
+          [3, 7, 10]
+        ]; // i - VII - VI - iv
       case WorldSoundTheme.cyanStorm:
-        return [[0, 3, 7], [3, 7, 10], [5, 8, 12], [0, 3, 7]]; // i - iv - VI - i
+        return [
+          [0, 3, 7],
+          [3, 7, 10],
+          [5, 8, 12],
+          [0, 3, 7]
+        ]; // i - iv - VI - i
       case WorldSoundTheme.orangeHeat:
-        return [[0, 3, 7, 10], [5, 8, 12, 15], [7, 10, 14, 17], [0, 3, 7, 10]]; // Extended chords
+        return [
+          [0, 3, 7, 10],
+          [5, 8, 12, 15],
+          [7, 10, 14, 17],
+          [0, 3, 7, 10]
+        ]; // Extended chords
       case WorldSoundTheme.voidPurple:
-        return [[0, 3, 7], [1, 4, 8], [3, 6, 10], [0, 3, 7]]; // Darker progression
+        return [
+          [0, 3, 7],
+          [1, 4, 8],
+          [3, 6, 10],
+          [0, 3, 7]
+        ]; // Darker progression
     }
   }
 
@@ -2479,9 +2825,11 @@ class ProceduralMusicService {
 
       // Sometimes rest instead
       if (_random.nextDouble() < 0.3) {
-        melody.add(_MelodyNote(pitch: -1, startBeat: currentBeat, duration: duration));
+        melody.add(
+            _MelodyNote(pitch: -1, startBeat: currentBeat, duration: duration));
       } else {
-        melody.add(_MelodyNote(pitch: pitch, startBeat: currentBeat, duration: duration));
+        melody.add(_MelodyNote(
+            pitch: pitch, startBeat: currentBeat, duration: duration));
       }
 
       currentBeat += duration;
@@ -2491,6 +2839,8 @@ class ProceduralMusicService {
   }
 
   Uint8List _mixToStereoSource(Float32List left, Float32List right) {
+    _masterStereoChannels(left, right);
+
     // Normalize and convert to 16-bit PCM
     double maxSample = 0.0;
     for (int i = 0; i < left.length; i++) {
@@ -2503,11 +2853,106 @@ class ProceduralMusicService {
     // Interleave stereo
     final pcm16 = Int16List(left.length * 2);
     for (int i = 0; i < left.length; i++) {
-      pcm16[i * 2] = ((left[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
-      pcm16[i * 2 + 1] = ((right[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
+      pcm16[i * 2] =
+          ((left[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
+      pcm16[i * 2 + 1] =
+          ((right[i] * normalize * 32767).clamp(-32768.0, 32767.0)).toInt();
     }
 
     return _addWavHeaderStereo(pcm16.buffer.asUint8List());
+  }
+
+  void _masterStereoChannels(Float32List left, Float32List right) {
+    if (left.isEmpty || right.isEmpty) return;
+
+    // Subtle M/S widening improves perceived depth without phasey artifacts.
+    const stereoWidth = 1.06;
+    for (int i = 0; i < left.length; i++) {
+      final mid = (left[i] + right[i]) * 0.5;
+      final side = (left[i] - right[i]) * 0.5 * stereoWidth;
+      left[i] = (mid + side).clamp(-1.0, 1.0);
+      right[i] = (mid - side).clamp(-1.0, 1.0);
+    }
+
+    _applyStereoDcBlock(left, right);
+    _applyStereoSoftLimiter(left, right, threshold: 0.9);
+    _normalizeStereoLoudness(left, right, targetRms: 0.24, targetPeak: 0.9);
+  }
+
+  void _applyStereoDcBlock(Float32List left, Float32List right) {
+    const reject = 0.996;
+    var prevInL = 0.0;
+    var prevOutL = 0.0;
+    var prevInR = 0.0;
+    var prevOutR = 0.0;
+    for (int i = 0; i < left.length; i++) {
+      final l = left[i];
+      final r = right[i];
+      final lOut = l - prevInL + reject * prevOutL;
+      final rOut = r - prevInR + reject * prevOutR;
+      prevInL = l;
+      prevOutL = lOut;
+      prevInR = r;
+      prevOutR = rOut;
+      left[i] = lOut;
+      right[i] = rOut;
+    }
+  }
+
+  void _applyStereoSoftLimiter(
+    Float32List left,
+    Float32List right, {
+    required double threshold,
+  }) {
+    final t = threshold.clamp(0.6, 0.96);
+    const curve = 4.2;
+    for (int i = 0; i < left.length; i++) {
+      left[i] = _softLimitedSample(left[i], threshold: t, curve: curve);
+      right[i] = _softLimitedSample(right[i], threshold: t, curve: curve);
+    }
+  }
+
+  double _softLimitedSample(
+    double sample, {
+    required double threshold,
+    required double curve,
+  }) {
+    final absSample = sample.abs();
+    if (absSample <= threshold) return sample;
+    final compressed = threshold +
+        ((absSample - threshold) / (1.0 + (absSample - threshold) * curve));
+    return sample < 0 ? -compressed : compressed;
+  }
+
+  void _normalizeStereoLoudness(
+    Float32List left,
+    Float32List right, {
+    required double targetRms,
+    required double targetPeak,
+  }) {
+    var peak = 0.0;
+    var sumSquares = 0.0;
+    final count = left.length * 2;
+    for (int i = 0; i < left.length; i++) {
+      final l = left[i];
+      final r = right[i];
+      sumSquares += l * l + r * r;
+      peak = math.max(peak, l.abs());
+      peak = math.max(peak, r.abs());
+    }
+    if (peak <= 0.000001 || count <= 0) return;
+
+    final rms = math.sqrt(sumSquares / count);
+    var gain = rms > 0.000001 ? (targetRms / rms).clamp(0.74, 1.34) : 1.0;
+    final postPeak = peak * gain;
+    if (postPeak > targetPeak) {
+      gain *= targetPeak / postPeak;
+    }
+
+    for (int i = 0; i < left.length; i++) {
+      left[i] = (left[i] * gain).clamp(-1.0, 1.0);
+      right[i] = (right[i] * gain).clamp(-1.0, 1.0);
+    }
   }
 
   Uint8List _addWavHeaderStereo(Uint8List pcmBytes) {
@@ -2540,6 +2985,25 @@ class ProceduralMusicService {
     return out;
   }
 
+  @visibleForTesting
+  bool get debugBossLeitmotifActive => _bossLeitmotifActive;
+
+  @visibleForTesting
+  int get debugBossPhase => _bossPhase;
+
+  @visibleForTesting
+  double get debugCinematicDuckAmount => _cinematicDuckNow();
+
+  @visibleForTesting
+  List<double> get debugLastLayerMix => [
+        _lastBassMix,
+        _lastLeadMix,
+        _lastPadMix,
+        _lastDrumMix,
+        _lastArpMix,
+        _lastGlobalMix
+      ];
+
   Future<void> dispose() async {
     await stop();
     await stopMainMenuMusic();
@@ -2561,6 +3025,18 @@ class ProceduralMusicService {
     _arpeggioPlayer = null;
     _finalBossPlayer = null;
     _mainMenuPlayer = null;
+    _mixProfile = 'high';
+    _bossLeitmotifActive = false;
+    _bossPhase = 1;
+    _leitmotifWorld = 1;
+    _cinematicDuckAmount = 0.0;
+    _cinematicDuckUntilMicros = 0;
+    _lastBassMix = 0.0;
+    _lastLeadMix = 0.0;
+    _lastPadMix = 0.0;
+    _lastDrumMix = 0.0;
+    _lastArpMix = 0.0;
+    _lastGlobalMix = 0.0;
     _initialized = false;
 
     if (kDebugMode) {
@@ -2580,11 +3056,11 @@ class ProceduralMusicService {
 
 /// Sound theme per world - affects all instrument characteristics
 enum WorldSoundTheme {
-  neonBlue,     // Clean, digital, tutorial vibe
+  neonBlue, // Clean, digital, tutorial vibe
   magentaPulse, // Energetic, driving
-  cyanStorm,    // Atmospheric, intense
-  orangeHeat,   // Aggressive, heavy
-  voidPurple,   // Dark, epic final boss
+  cyanStorm, // Atmospheric, intense
+  orangeHeat, // Aggressive, heavy
+  voidPurple, // Dark, epic final boss
 }
 
 /// Internal class for melody generation
@@ -2602,20 +3078,20 @@ class _MelodyNote {
 
 /// Section markers for the epic final boss track
 enum _EpicSection {
-  intro,      // Bars 0-3: Atmospheric build
-  build,      // Bars 4-7: Rising tension
-  drop,       // Bars 8-15: First climax
-  breakdown,  // Bars 16-23: Emotional respite
-  finalDrop,  // Bars 24-31: MAXIMUM POWER
+  intro, // Bars 0-3: Atmospheric build
+  build, // Bars 4-7: Rising tension
+  drop, // Bars 8-15: First climax
+  breakdown, // Bars 16-23: Emotional respite
+  finalDrop, // Bars 24-31: MAXIMUM POWER
 }
 
 /// Section markers for the main menu track "NEON HORIZON"
 enum _MenuSection {
-  ambientIntro,  // Bars 0-7: Atmospheric, sparse entry
-  build,         // Bars 8-15: Rising energy, introducing elements
-  mainTheme,     // Bars 16-31: Full epic theme with melody
-  breakdown,     // Bars 32-39: Emotional respite, sparse
-  reprise,       // Bars 40-47: Triumphant return, full power
+  ambientIntro, // Bars 0-7: Atmospheric, sparse entry
+  build, // Bars 8-15: Rising energy, introducing elements
+  mainTheme, // Bars 16-31: Full epic theme with melody
+  breakdown, // Bars 32-39: Emotional respite, sparse
+  reprise, // Bars 40-47: Triumphant return, full power
 }
 
 /// Melody note for the epic final boss track
@@ -2632,4 +3108,3 @@ class _EpicMelodyNote {
     required this.duration,
   });
 }
-

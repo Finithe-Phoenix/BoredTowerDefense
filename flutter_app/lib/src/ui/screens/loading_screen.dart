@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/neon_theme.dart';
@@ -25,6 +26,16 @@ class _FastRng {
   int nextInt(int max) => max <= 0 ? 0 : _next() % max;
 
   bool nextBool() => (_next() & 1) == 0;
+}
+
+class _PendingDelay {
+  _PendingDelay({
+    required this.timer,
+    required this.completer,
+  });
+
+  final Timer timer;
+  final Completer<void> completer;
 }
 
 /// Tech-grid loading screen with cyberpunk visual effects.
@@ -72,6 +83,8 @@ class _LoadingScreenState extends State<LoadingScreen>
   // Timers for cleanup
   Timer? _glitchDelayTimer;
   Timer? _glitchResetTimer;
+  final List<_PendingDelay> _pendingDelays = <_PendingDelay>[];
+  bool _disposed = false;
 
   @override
   void initState() {
@@ -153,7 +166,8 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   void _startGlitchEffect() {
     _glitchDelayTimer?.cancel();
-    _glitchDelayTimer = Timer(Duration(milliseconds: 500 + _random.nextInt(2000)), () {
+    _glitchDelayTimer =
+        Timer(Duration(milliseconds: 500 + _random.nextInt(2000)), () {
       if (!mounted) return;
       setState(() {
         _isGlitching = true;
@@ -186,68 +200,184 @@ class _LoadingScreenState extends State<LoadingScreen>
     });
   }
 
-  Future<void> _initializeServices() async {
-    // Stage 1: Storage
+  void _setLoadingState({
+    String? text,
+    double? progress,
+    bool? isComplete,
+  }) {
+    if (!mounted) return;
     setState(() {
-      _loadingText = 'LOADING STORAGE';
-      _progress = 0.2;
+      if (text != null) _loadingText = text;
+      if (progress != null) _progress = progress.clamp(0.0, 1.0);
+      if (isComplete != null) _isComplete = isComplete;
     });
-    await StorageService.instance.initialize();
+  }
 
-    // Load saved settings after storage is ready
-    if (mounted) {
-      await context.read<SettingsCubit>().loadSettings();
+  Future<void> _delay(Duration duration) {
+    if (_disposed || !mounted) return Future.value();
+
+    final completer = Completer<void>();
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _pendingDelays.removeWhere((entry) => identical(entry.timer, timer));
+      if (!completer.isCompleted) {
+        completer.complete();
+      }
+    });
+
+    _pendingDelays.add(_PendingDelay(timer: timer, completer: completer));
+    return completer.future;
+  }
+
+  void _cancelPendingDelays() {
+    for (final entry in _pendingDelays) {
+      entry.timer.cancel();
+      if (!entry.completer.isCompleted) {
+        entry.completer.complete();
+      }
     }
-    await Future.delayed(const Duration(milliseconds: 300));
+    _pendingDelays.clear();
+  }
 
-    // Stage 2: Level Service
-    setState(() {
-      _loadingText = 'LOADING LEVELS';
-      _progress = 0.5;
+  void _logLoading(String message) {
+    if (kDebugMode) {
+      debugPrint('[LoadingScreen] $message');
+    }
+  }
+
+  Future<void> _runInitStage({
+    required String label,
+    required double targetProgress,
+    required Future<void> Function() task,
+    Duration timeout = const Duration(seconds: 4),
+    String? degradedLabel,
+  }) async {
+    _setLoadingState(text: label);
+
+    final stageStart = _progress;
+    final stageCeiling = math.max(stageStart, targetProgress - 0.02);
+    var completed = false;
+    var failed = false;
+
+    final operation = task().then((_) {
+      completed = true;
+    }).catchError((Object error, StackTrace stackTrace) {
+      completed = true;
+      failed = true;
+      _logLoading('Stage "$label" failed: $error');
     });
-    await LevelService.instance.initialize();
-    await Future.delayed(const Duration(milliseconds: 300));
 
-    // Stage 3: Audio
-    setState(() {
-      _loadingText = 'LOADING AUDIO';
-      _progress = 0.7;
-    });
-    await AudioService.instance.initialize();
-    await Future.delayed(const Duration(milliseconds: 200));
+    final watch = Stopwatch()..start();
+    while (mounted && !completed && watch.elapsed < timeout) {
+      final t =
+          (watch.elapsedMilliseconds / timeout.inMilliseconds).clamp(0.0, 1.0);
+      final eased = Curves.easeOut.transform(t);
+      final visualProgress = stageStart + (stageCeiling - stageStart) * eased;
+      if (visualProgress > _progress) {
+        _setLoadingState(progress: visualProgress);
+      }
+      await _delay(const Duration(milliseconds: 80));
+    }
 
-    // Stage 4: Music System
-    setState(() {
-      _loadingText = 'INITIALIZING MUSIC';
-      _progress = 0.80;
-    });
-    await ProceduralMusicService.instance.initialize();
-    await Future.delayed(const Duration(milliseconds: 200));
+    final timedOut = !completed;
+    if (timedOut) {
+      _logLoading('Stage "$label" timed out after ${timeout.inMilliseconds}ms');
+      unawaited(operation);
+    } else {
+      await operation;
+    }
 
-    // Stage 5: Sprite Cache (pre-render sprites for performance)
-    setState(() {
-      _loadingText = 'PRE-RENDERING SPRITES';
-      _progress = 0.90;
-    });
-    await SpriteCacheService.instance.initialize();
-    await Future.delayed(const Duration(milliseconds: 100));
+    if (failed || timedOut) {
+      _setLoadingState(text: degradedLabel ?? '$label (SAFE MODE)');
+    }
 
-    // Stage 6: Final Assets
-    setState(() {
-      _loadingText = 'LOADING ASSETS';
-      _progress = 0.95;
-    });
-    await Future.delayed(const Duration(milliseconds: 200));
+    if (mounted && _progress < targetProgress) {
+      _setLoadingState(progress: targetProgress);
+    }
+  }
 
-    // Stage 7: Complete
-    setState(() {
-      _loadingText = 'READY';
-      _progress = 1.0;
-      _isComplete = true;
-    });
-    await Future.delayed(const Duration(milliseconds: 500));
+  Future<void> _initializeServices() async {
+    try {
+      await _runInitStage(
+        label: 'LOADING STORAGE',
+        targetProgress: 0.15,
+        timeout: const Duration(seconds: 4),
+        degradedLabel: 'STORAGE DELAYED',
+        task: () => StorageService.instance.initialize(),
+      );
 
-    // Navigate to main menu
+      SettingsCubit? settingsCubit;
+      try {
+        settingsCubit = context.read<SettingsCubit>();
+      } catch (_) {
+        settingsCubit = null;
+      }
+      if (settingsCubit != null) {
+        final activeSettingsCubit = settingsCubit;
+        await _runInitStage(
+          label: 'SYNCING SETTINGS',
+          targetProgress: 0.30,
+          timeout: const Duration(seconds: 2),
+          degradedLabel: 'SETTINGS DEFAULTED',
+          task: () => activeSettingsCubit.loadSettings(),
+        );
+
+        final quality = activeSettingsCubit.state.graphicsQuality;
+        if ((quality == 'low' || quality == 'medium') &&
+            mounted &&
+            !_reduceFx) {
+          setState(() {
+            _reduceFx = true;
+          });
+        }
+      } else {
+        _logLoading('SettingsCubit not found; using default graphics settings');
+      }
+
+      await _runInitStage(
+        label: 'LOADING LEVELS',
+        targetProgress: 0.50,
+        timeout: const Duration(seconds: 4),
+        degradedLabel: 'LEVEL CACHE DELAYED',
+        task: () => LevelService.instance.initialize(),
+      );
+
+      await _runInitStage(
+        label: 'LOADING AUDIO',
+        targetProgress: 0.70,
+        timeout: const Duration(seconds: 4),
+        degradedLabel: 'AUDIO DELAYED',
+        task: () => AudioService.instance.initialize(),
+      );
+
+      await _runInitStage(
+        label: 'WARMING MUSIC ENGINE',
+        targetProgress: 0.84,
+        timeout: const Duration(seconds: 3),
+        degradedLabel: 'MUSIC WARMUP IN BACKGROUND',
+        task: () => ProceduralMusicService.instance.initialize(),
+      );
+
+      await _runInitStage(
+        label: 'BUILDING SPRITE CACHE',
+        targetProgress: 0.96,
+        timeout: const Duration(seconds: 3),
+        degradedLabel: 'SPRITE CACHE CONTINUES IN BACKGROUND',
+        task: () => SpriteCacheService.instance.initialize(),
+      );
+    } catch (error, stackTrace) {
+      _logLoading('Unexpected initialization error: $error');
+      _logLoading('$stackTrace');
+      _setLoadingState(text: 'SAFE MODE BOOT');
+    }
+
+    _setLoadingState(
+      text: 'READY',
+      progress: 1.0,
+      isComplete: true,
+    );
+    await _delay(const Duration(milliseconds: 350));
+
     if (mounted) {
       Navigator.pushReplacementNamed(context, '/menu');
     }
@@ -255,8 +385,10 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   void dispose() {
+    _disposed = true;
     _glitchDelayTimer?.cancel();
     _glitchResetTimer?.cancel();
+    _cancelPendingDelays();
     _gridController.dispose();
     _spinController.dispose();
     _pulseController.dispose();
@@ -328,7 +460,8 @@ class _LoadingScreenState extends State<LoadingScreen>
                     width: 180,
                     height: 180,
                     child: AnimatedBuilder(
-                      animation: Listenable.merge([_spinController, _pulseController]),
+                      animation:
+                          Listenable.merge([_spinController, _pulseController]),
                       builder: (context, child) {
                         return CustomPaint(
                           painter: _TechCirclePainter(
@@ -542,8 +675,7 @@ class _HexGridPainter extends CustomPainter {
     ..style = PaintingStyle.stroke
     ..strokeWidth = 2
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-  static final Paint _gridLinePaint = Paint()
-    ..strokeWidth = 1;
+  static final Paint _gridLinePaint = Paint()..strokeWidth = 1;
   static final Path _hexPath = Path();
 
   @override
@@ -579,7 +711,8 @@ class _HexGridPainter extends CustomPainter {
         final dx = xPos - size.width / 2;
         final dy = yPos - size.height / 2;
         final dist = math.sqrt(dx * dx + dy * dy);
-        final maxDist = math.sqrt(size.width * size.width + size.height * size.height) / 2;
+        final maxDist =
+            math.sqrt(size.width * size.width + size.height * size.height) / 2;
         final fadeAlpha = (1 - (dist / maxDist)).clamp(0.0, 1.0);
 
         // Base hex color
@@ -591,8 +724,10 @@ class _HexGridPainter extends CustomPainter {
         if (!reduceFx && (row + col) % 5 == 0) {
           final pulseOffset = animation * math.pi * 2 + row + col;
           final pulse = (math.sin(pulseOffset) + 1) / 2;
-          _hexGlowPaint.color = NeonColors.cyan.withOpacity(0.1 * pulse * fadeAlpha);
-          _drawHexagon(canvas, Offset(xPos, yPos), hexSize * 0.4, _hexGlowPaint);
+          _hexGlowPaint.color =
+              NeonColors.cyan.withOpacity(0.1 * pulse * fadeAlpha);
+          _drawHexagon(
+              canvas, Offset(xPos, yPos), hexSize * 0.4, _hexGlowPaint);
         }
       }
     }
@@ -600,10 +735,14 @@ class _HexGridPainter extends CustomPainter {
     // Subtle grid lines overlay
     _gridLinePaint.color = NeonColors.gridLine.withOpacity(0.1);
     const gridSpacing = 80.0;
-    for (double x = (offset * 0.5) % gridSpacing; x < size.width; x += gridSpacing) {
+    for (double x = (offset * 0.5) % gridSpacing;
+        x < size.width;
+        x += gridSpacing) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), _gridLinePaint);
     }
-    for (double y = (offset * 0.3) % gridSpacing; y < size.height; y += gridSpacing) {
+    for (double y = (offset * 0.3) % gridSpacing;
+        y < size.height;
+        y += gridSpacing) {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), _gridLinePaint);
     }
   }
@@ -643,7 +782,8 @@ class _ScanLinePainter extends CustomPainter {
 
   // Static paints
   static final Paint _scanPaint = Paint();
-  static final Paint _subtleScanPaint = Paint()..color = const Color(0x08000000);
+  static final Paint _subtleScanPaint = Paint()
+    ..color = const Color(0x08000000);
   static final Paint _verticalScanPaint = Paint();
   static final Map<int, Shader> _scanShaderCache = {};
   static final Map<int, Shader> _verticalShaderCache = {};
@@ -666,7 +806,8 @@ class _ScanLinePainter extends CustomPainter {
       _scanShaderCache.clear();
     }
     const pulseLevels = 16;
-    final pulseLevel = (pulseAnimation * pulseLevels).round().clamp(0, pulseLevels);
+    final pulseLevel =
+        (pulseAnimation * pulseLevels).round().clamp(0, pulseLevels);
     final scanKey = (_scanShaderWidth.round() << 8) ^ pulseLevel;
     final scanShader = _scanShaderCache.putIfAbsent(scanKey, () {
       final midOpacity = 0.2 + (pulseLevel / pulseLevels) * 0.1;
@@ -712,7 +853,8 @@ class _ScanLinePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScanLinePainter oldDelegate) =>
-      oldDelegate.animation != animation || oldDelegate.pulseAnimation != pulseAnimation;
+      oldDelegate.animation != animation ||
+      oldDelegate.pulseAnimation != pulseAnimation;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -767,8 +909,7 @@ class _TechCirclePainter extends CustomPainter {
   static final Paint _tickPaint = Paint()
     ..strokeWidth = 2
     ..strokeCap = StrokeCap.round;
-  static final Paint _dataPaint = Paint()
-    ..strokeWidth = 1;
+  static final Paint _dataPaint = Paint()..strokeWidth = 1;
   static final Path _hexPath = Path();
 
   @override
@@ -780,7 +921,8 @@ class _TechCirclePainter extends CustomPainter {
 
     // Layer 1: Outer glow ring (pulsing)
     if (!reduceFx) {
-      _outerGlowPaint.color = primaryColor.withOpacity(0.15 + pulseProgress * 0.1);
+      _outerGlowPaint.color =
+          primaryColor.withOpacity(0.15 + pulseProgress * 0.1);
       canvas.drawCircle(center, radius, _outerGlowPaint);
     }
 
@@ -953,8 +1095,7 @@ class _NeonProgressBarPainter extends CustomPainter {
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
   static final Paint _shinePaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-  static final Paint _segmentPaint = Paint()
-    ..strokeWidth = 1;
+  static final Paint _segmentPaint = Paint()..strokeWidth = 1;
   static final Paint _edgeGlowPaint = Paint()
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
@@ -1288,6 +1429,6 @@ class _CornerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CornerPainter oldDelegate) =>
-      oldDelegate.pulseProgress != pulseProgress || oldDelegate.isActive != isActive;
+      oldDelegate.pulseProgress != pulseProgress ||
+      oldDelegate.isActive != isActive;
 }
-

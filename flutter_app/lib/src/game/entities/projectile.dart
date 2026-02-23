@@ -32,6 +32,7 @@ class Projectile extends PositionComponent {
   static bool lowFx = false;
   static bool allowTrails = true;
   static bool allowGlow = true;
+  static const double _screenCullPadding = 50.0;
 
   /// Nivel de estrés del sistema (0-2)
   /// 0: Full quality (<200 bullets)
@@ -51,12 +52,15 @@ class Projectile extends PositionComponent {
   // CACHED PAINT OBJECTS - Avoid per-frame allocations
   // ═══════════════════════════════════════════════════════════════════════
   static final Paint _simplePaint = Paint();
-  static final Paint _glowPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+  static final Paint _glowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
   static final Paint _strokePaint = Paint()..style = PaintingStyle.stroke;
-  static final Paint _trailGlowPaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+  static final Paint _trailGlowPaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
   static final Paint _trailCorePaint = Paint();
   static final Paint _trailLinePaint = Paint()..strokeCap = StrokeCap.round;
-  static final Paint _particlePaint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+  static final Paint _particlePaint = Paint()
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
   static final Paint _arcPaint = Paint()
     ..strokeWidth = 1.5
     ..style = PaintingStyle.stroke
@@ -149,8 +153,10 @@ class Projectile extends PositionComponent {
     const Offset(-1, 0),
     const Offset(0, -1),
   ]);
-  static final List<Offset> _unitOct = List<Offset>.unmodifiable(_buildUnitOct());
-  static final List<Offset> _unitHex = List<Offset>.unmodifiable(_buildUnitHex());
+  static final List<Offset> _unitOct =
+      List<Offset>.unmodifiable(_buildUnitOct());
+  static final List<Offset> _unitHex =
+      List<Offset>.unmodifiable(_buildUnitHex());
   static final List<Offset> _starUnitPoints = List<Offset>.unmodifiable(
     _buildStarUnitPoints(),
   );
@@ -195,7 +201,8 @@ class Projectile extends PositionComponent {
       final angle = i * math.pi / 2;
       points.add(Offset(math.cos(angle), math.sin(angle)));
       final innerAngle = angle + math.pi / 4;
-      points.add(Offset(math.cos(innerAngle) * 0.4, math.sin(innerAngle) * 0.4));
+      points
+          .add(Offset(math.cos(innerAngle) * 0.4, math.sin(innerAngle) * 0.4));
     }
     return points;
   }
@@ -255,8 +262,8 @@ class Projectile extends PositionComponent {
     this.slowAmount = 0,
     this.slowDuration = 0,
     this.towerType = TowerType.pulseArcher,
-  }) : _active = true,
-       _random = _FastRng() {
+  })  : _active = true,
+        _random = _FastRng() {
     position.setFrom(startPosition);
     size = Vector2.all(6);
     anchor = Anchor.center;
@@ -276,6 +283,7 @@ class Projectile extends PositionComponent {
   Enemy? target;
 
   bool _active;
+  bool _isVisibleOnScreen = true;
   double _time = 0;
   double _rotationAngle = 0;
   final _FastRng _random;
@@ -286,15 +294,16 @@ class Projectile extends PositionComponent {
   late Color _hslPinkColor;
   late Color _hslPurpleColor;
   late Color _hslBrightColor;
-  late Color _hslSecondaryColor;  // hue + 30
-  late Color _hslTertiaryColor;   // hue + 60
+  late Color _hslSecondaryColor; // hue + 30
+  late Color _hslTertiaryColor; // hue + 60
   late Color _hslComplementColor; // hue + 180
 
   void _cacheHSLColors() {
     final hsl = HSLColor.fromColor(color);
     _hslPinkColor = hsl.withHue((hsl.hue + 20) % 360).toColor();
     _hslPurpleColor = hsl.withHue((hsl.hue - 30) % 360).toColor();
-    _hslBrightColor = hsl.withLightness((hsl.lightness + 0.2).clamp(0.0, 1.0)).toColor();
+    _hslBrightColor =
+        hsl.withLightness((hsl.lightness + 0.2).clamp(0.0, 1.0)).toColor();
     _hslSecondaryColor = hsl.withHue((hsl.hue + 30) % 360).toColor();
     _hslTertiaryColor = hsl.withHue((hsl.hue + 60) % 360).toColor();
     _hslComplementColor = hsl.withHue((hsl.hue + 180) % 360).toColor();
@@ -432,7 +441,8 @@ class Projectile extends PositionComponent {
   }
 
   void _ensureTrailCapacity(int length) {
-    if (_trailPositions.length == length && _trailAlphas.length == length) return;
+    if (_trailPositions.length == length && _trailAlphas.length == length)
+      return;
     if (_trailPositions.length < length) {
       for (int i = _trailPositions.length; i < length; i++) {
         _trailPositions.add(position.clone());
@@ -524,6 +534,7 @@ class Projectile extends PositionComponent {
     this.target = target;
     this.onHit = onHit;
     _active = true;
+    _isVisibleOnScreen = true;
     _time = 0;
     _rotationAngle = 0;
     _spiralPhase = 0;
@@ -560,8 +571,10 @@ class Projectile extends PositionComponent {
     // Bounds check - elimina balas fuera del mundo
     const maxBound = 1200.0;
     const minBound = -100.0;
-    if (position.x < minBound || position.x > maxBound ||
-        position.y < minBound || position.y > maxBound) {
+    if (position.x < minBound ||
+        position.x > maxBound ||
+        position.y < minBound ||
+        position.y > maxBound) {
       deactivate();
       return;
     }
@@ -570,9 +583,9 @@ class Projectile extends PositionComponent {
     _spiralPhase += dt * 8;
     _pulsePhase += dt * 15;
 
-    // Skip expensive visual updates for off-screen projectiles
-    final isOnScreen = position.x > -50 && position.x < Enemy.screenSize.x + 50 &&
-                       position.y > -50 && position.y < Enemy.screenSize.y + 50;
+    // Skip expensive visual updates for off-screen projectiles.
+    final isOnScreen = _isOnScreen();
+    _isVisibleOnScreen = isOnScreen;
 
     // Update trail (only if on-screen)
     if (allowTrails && !lowFx && isOnScreen) {
@@ -581,15 +594,15 @@ class Projectile extends PositionComponent {
 
     // Update particles (only if on-screen)
     if (!lowFx && isOnScreen) {
-      for (final particle in _particles) {
-        particle.update(dt);
+      for (int i = 0; i < _particles.length; i++) {
+        _particles[i].update(dt);
       }
     }
 
     // Update electric segments for Phase Mage (only if on-screen)
     if (!lowFx && isOnScreen) {
-      for (final segment in _electricSegments) {
-        segment.update(dt, _random);
+      for (int i = 0; i < _electricSegments.length; i++) {
+        _electricSegments[i].update(dt, _random);
       }
     }
 
@@ -663,23 +676,25 @@ class Projectile extends PositionComponent {
     _trailAlphas[_trailHead] = 1.0;
   }
 
+  bool _isOnScreen() {
+    if (Enemy.screenSize.isZero()) return true;
+    if (Enemy.screenScale <= 0) return true;
+    final screenX = Enemy.screenOffset.x + position.x * Enemy.screenScale;
+    final screenY = Enemy.screenOffset.y + position.y * Enemy.screenScale;
+    final padding = _screenCullPadding + size.x;
+    return screenX >= -padding &&
+        screenX <= Enemy.screenSize.x + padding &&
+        screenY >= -padding &&
+        screenY <= Enemy.screenSize.y + padding;
+  }
+
   @override
   void render(Canvas canvas) {
     if (!_active) return;
 
     // OFF-SCREEN CULLING - Skip rendering projectiles outside visible area
     // This saves significant GPU time when many projectiles are off-screen
-    final parent = this.parent;
-    if (parent != null && parent is PositionComponent) {
-      final screenPos = parent.position + position;
-      const cullPadding = 50.0; // Extra padding for trails
-      if (screenPos.x < -cullPadding ||
-          screenPos.y < -cullPadding ||
-          screenPos.x > Enemy.screenSize.x + cullPadding ||
-          screenPos.y > Enemy.screenSize.y + cullPadding) {
-        return; // Skip rendering - off-screen
-      }
-    }
+    if (!_isVisibleOnScreen) return;
 
     super.render(canvas);
 
@@ -793,7 +808,8 @@ class Projectile extends PositionComponent {
 
     // Bright tip
     _glowPaint.color = const Color(0xFFFFFFFF);
-    canvas.drawCircle(Offset(size.x * 0.6, 0), size.x * 0.2 * pulseScale, _glowPaint);
+    canvas.drawCircle(
+        Offset(size.x * 0.6, 0), size.x * 0.2 * pulseScale, _glowPaint);
 
     canvas.restore();
 
@@ -875,8 +891,10 @@ class Projectile extends PositionComponent {
       const steps = 4;
       for (int i = 1; i <= steps; i++) {
         final progress = i / steps;
-        final baseX = startX + (segment.endDirX * segment.length - startX) * progress;
-        final baseY = startY + (segment.endDirY * segment.length - startY) * progress;
+        final baseX =
+            startX + (segment.endDirX * segment.length - startX) * progress;
+        final baseY =
+            startY + (segment.endDirY * segment.length - startY) * progress;
 
         final jitter = math.sin(_time * 20 + i * 2) * 3;
         final jitterX = segment.perpX * jitter;
@@ -961,7 +979,8 @@ class Projectile extends PositionComponent {
       if (sparkAlpha > 0.2) {
         _tempOffset1 = Offset(sparkX, sparkY);
         _sparkPaint.color = color.withOpacity(sparkAlpha);
-        _drawStar(canvas, _tempOffset1, 2, _sparkPaint.color, spiralCos, spiralSin);
+        _drawStar(
+            canvas, _tempOffset1, 2, _sparkPaint.color, spiralCos, spiralSin);
       }
     }
 
@@ -1022,12 +1041,14 @@ class Projectile extends PositionComponent {
 
         _tempOffset1 = Offset(trailOffset.x - wobbleX, trailOffset.y - wobbleY);
         _bubbleDistortionPaint.color = purpleColor.withOpacity(alpha * 0.25);
-        canvas.drawCircle(_tempOffset1, distortRadius * rippleScale, _bubbleDistortionPaint);
+        canvas.drawCircle(
+            _tempOffset1, distortRadius * rippleScale, _bubbleDistortionPaint);
 
         // Secondary pink distortion
         if (alpha > 0.3) {
           _bubbleDistortionPaint.color = pinkColor.withOpacity(alpha * 0.15);
-          canvas.drawCircle(_tempOffset1, distortRadius * 0.7 * rippleScale, _bubbleDistortionPaint);
+          canvas.drawCircle(_tempOffset1, distortRadius * 0.7 * rippleScale,
+              _bubbleDistortionPaint);
         }
       }
     }
@@ -1040,11 +1061,13 @@ class Projectile extends PositionComponent {
     // Outer glow for bubble membrane
     if (allowGlow) {
       _bubbleMembraneGlowPaint.color = palette.o40;
-      canvas.drawCircle(Offset.zero, membraneRadius * 1.2, _bubbleMembraneGlowPaint);
+      canvas.drawCircle(
+          Offset.zero, membraneRadius * 1.2, _bubbleMembraneGlowPaint);
 
       // Secondary pink glow
       _bubbleMembraneGlowPaint.color = pinkPalette.o25;
-      canvas.drawCircle(Offset.zero, membraneRadius * 1.4, _bubbleMembraneGlowPaint);
+      canvas.drawCircle(
+          Offset.zero, membraneRadius * 1.4, _bubbleMembraneGlowPaint);
     }
 
     // Main membrane outline with varying thickness
@@ -1074,7 +1097,8 @@ class Projectile extends PositionComponent {
       // Create spiral from center outward
       for (int i = 0; i < 20; i++) {
         final progress = i / 20;
-        final spiralRadius = membraneRadius * 0.15 + progress * membraneRadius * 0.65;
+        final spiralRadius =
+            membraneRadius * 0.15 + progress * membraneRadius * 0.65;
         final spiralAngle = armAngle + progress * math.pi * 2;
 
         // Add wobble to spiral
@@ -1095,7 +1119,8 @@ class Projectile extends PositionComponent {
       final swirlColor = Color.lerp(purpleColor, pinkColor, arm / 3)!;
       _bubbleSwirlPaint.color = swirlColor.withOpacity(0.6);
       if (allowGlow) {
-        _bubbleSwirlPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+        _bubbleSwirlPaint.maskFilter =
+            const MaskFilter.blur(BlurStyle.normal, 2);
       } else {
         _bubbleSwirlPaint.maskFilter = null;
       }
@@ -1122,11 +1147,14 @@ class Projectile extends PositionComponent {
         final shimmerSize = 2.0 + shimmerPhase * 1.5;
 
         _bubbleShimmerPaint.color = brightColor.withOpacity(shimmerPhase * 0.7);
-        canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize, _bubbleShimmerPaint);
+        canvas.drawCircle(
+            Offset(shimmerX, shimmerY), shimmerSize, _bubbleShimmerPaint);
 
         // White highlight core
-        _bubbleHighlightPaint.color = const Color(0xFFFFFFFF).withOpacity(shimmerPhase * 0.5);
-        canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize * 0.5, _bubbleHighlightPaint);
+        _bubbleHighlightPaint.color =
+            const Color(0xFFFFFFFF).withOpacity(shimmerPhase * 0.5);
+        canvas.drawCircle(Offset(shimmerX, shimmerY), shimmerSize * 0.5,
+            _bubbleHighlightPaint);
       }
     }
 
@@ -1135,11 +1163,15 @@ class Projectile extends PositionComponent {
     final mainHighlightY = -membraneRadius * 0.35;
     final highlightPulse = 0.6 + math.sin(_time * 5) * 0.2;
 
-    _bubbleShimmerPaint.color = const Color(0xFFFFFFFF).withOpacity(highlightPulse * 0.6);
-    canvas.drawCircle(Offset(mainHighlightX, mainHighlightY), membraneRadius * 0.25, _bubbleShimmerPaint);
+    _bubbleShimmerPaint.color =
+        const Color(0xFFFFFFFF).withOpacity(highlightPulse * 0.6);
+    canvas.drawCircle(Offset(mainHighlightX, mainHighlightY),
+        membraneRadius * 0.25, _bubbleShimmerPaint);
 
-    _bubbleHighlightPaint.color = const Color(0xFFFFFFFF).withOpacity(highlightPulse * 0.8);
-    canvas.drawCircle(Offset(mainHighlightX, mainHighlightY), membraneRadius * 0.12, _bubbleHighlightPaint);
+    _bubbleHighlightPaint.color =
+        const Color(0xFFFFFFFF).withOpacity(highlightPulse * 0.8);
+    canvas.drawCircle(Offset(mainHighlightX, mainHighlightY),
+        membraneRadius * 0.12, _bubbleHighlightPaint);
 
     // ═══════════════════════════════════════════════════════════════════════
     // LAYER 4: ENERGY CORE GLOW AT CENTER
@@ -1150,10 +1182,12 @@ class Projectile extends PositionComponent {
     // Outer core glow
     if (allowGlow) {
       _bubbleEnergyCorePaint.color = pinkPalette.o50;
-      canvas.drawCircle(Offset.zero, coreRadius * 1.8 * corePulse, _bubbleEnergyCorePaint);
+      canvas.drawCircle(
+          Offset.zero, coreRadius * 1.8 * corePulse, _bubbleEnergyCorePaint);
 
       _bubbleEnergyCorePaint.color = palette.o60;
-      canvas.drawCircle(Offset.zero, coreRadius * 1.3 * corePulse, _bubbleEnergyCorePaint);
+      canvas.drawCircle(
+          Offset.zero, coreRadius * 1.3 * corePulse, _bubbleEnergyCorePaint);
     }
 
     // Core - layered circles (avoids per-frame RadialGradient allocation)
@@ -1175,7 +1209,8 @@ class Projectile extends PositionComponent {
     // ═══════════════════════════════════════════════════════════════════════
     for (int i = 0; i < 6; i++) {
       final orbitAngle = _time * 5 + i * math.pi / 3;
-      final orbitRadius = membraneRadius * (1.1 + math.sin(_time * 3 + i) * 0.15);
+      final orbitRadius =
+          membraneRadius * (1.1 + math.sin(_time * 3 + i) * 0.15);
       final particleX = math.cos(orbitAngle) * orbitRadius;
       final particleY = math.sin(orbitAngle) * orbitRadius;
 
@@ -1186,11 +1221,13 @@ class Projectile extends PositionComponent {
       // Particle glow
       final particleColor = Color.lerp(pinkColor, purpleColor, i / 6)!;
       _bubbleOrbitPaint.color = particleColor.withOpacity(particleAlpha * 0.7);
-      canvas.drawCircle(Offset(particleX, particleY), particleSize * 2, _bubbleOrbitPaint);
+      canvas.drawCircle(
+          Offset(particleX, particleY), particleSize * 2, _bubbleOrbitPaint);
 
       // Bright particle core
       _bubbleHighlightPaint.color = brightColor.withOpacity(particleAlpha);
-      canvas.drawCircle(Offset(particleX, particleY), particleSize, _bubbleHighlightPaint);
+      canvas.drawCircle(
+          Offset(particleX, particleY), particleSize, _bubbleHighlightPaint);
     }
 
     // Inner orbiting particles (smaller, faster)
@@ -1203,7 +1240,8 @@ class Projectile extends PositionComponent {
       final innerSize = 1.0 + math.sin(_time * 12 + i) * 0.3;
 
       _bubbleHighlightPaint.color = const Color(0x99FFFFFF);
-      canvas.drawCircle(Offset(innerParticleX, innerParticleY), innerSize, _bubbleHighlightPaint);
+      canvas.drawCircle(Offset(innerParticleX, innerParticleY), innerSize,
+          _bubbleHighlightPaint);
     }
 
     canvas.restore();
@@ -1300,13 +1338,14 @@ class Projectile extends PositionComponent {
       for (int ring = 0; ring < 3; ring++) {
         final ringPhase = _time * 8 + ring * 0.5 + i * 0.2;
         final ringPulse = (math.sin(ringPhase) * 0.5 + 0.5);
-        final ringRadius = size.x * (0.4 + ring * 0.25 + ringPulse * 0.3) * (1 - progress * 0.5);
+        final ringRadius = size.x *
+            (0.4 + ring * 0.25 + ringPulse * 0.3) *
+            (1 - progress * 0.5);
         final ringAlpha = alpha * (0.4 - ring * 0.1) * (1 - ringPulse * 0.3);
 
         if (ringAlpha > 0.05) {
-          final ringColor = ring == 0
-              ? ringColor0
-              : (ring == 1 ? ringColor1 : ringColor2);
+          final ringColor =
+              ring == 0 ? ringColor0 : (ring == 1 ? ringColor1 : ringColor2);
           _plasmaRingPaint
             ..color = ringColor.withOpacity(ringAlpha)
             ..strokeWidth = 1.5 - ring * 0.3;
@@ -1335,7 +1374,8 @@ class Projectile extends PositionComponent {
           final wispAngle = tendrilAngle + i * 0.3;
           final wispRadius = (3 + math.sin(_time * 6 + i * 0.5) * 2) * alpha;
 
-          final wx = trailOffset.x + math.cos(wispAngle) * wispRadius + tendrilOffset;
+          final wx =
+              trailOffset.x + math.cos(wispAngle) * wispRadius + tendrilOffset;
           final wy = trailOffset.y + math.sin(wispAngle) * wispRadius;
 
           if (!started) {
@@ -1356,7 +1396,8 @@ class Projectile extends PositionComponent {
             ..color = tendrilColor.withOpacity(0.4)
             ..strokeWidth = 2 - tendril * 0.3;
           if (allowGlow) {
-            _plasmaWispPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 3);
+            _plasmaWispPaint.maskFilter =
+                const MaskFilter.blur(BlurStyle.normal, 3);
           }
           canvas.drawPath(_reusablePlasmaWispPath, _plasmaWispPaint);
         }
@@ -1385,7 +1426,8 @@ class Projectile extends PositionComponent {
                 ? Color.fromARGB((alpha * 180).toInt(), 100, 255, 100)
                 : Color.fromARGB((alpha * 180).toInt(), 100, 100, 255);
 
-        _tempOffset1 = Offset(trailOffset.x + bandOffset, trailOffset.y + bandOffset * 0.5);
+        _tempOffset1 = Offset(
+            trailOffset.x + bandOffset, trailOffset.y + bandOffset * 0.5);
         _plasmaChromaPaint.color = chromaColor;
         canvas.drawCircle(_tempOffset1, trailSize, _plasmaChromaPaint);
       }
@@ -1424,7 +1466,8 @@ class Projectile extends PositionComponent {
     if (vortexStarted) {
       _plasmaVortexPaint.color = secondaryColor.withOpacity(0.35);
       if (allowGlow) {
-        _plasmaVortexPaint.maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+        _plasmaVortexPaint.maskFilter =
+            const MaskFilter.blur(BlurStyle.normal, 2);
       }
       canvas.drawPath(_reusablePlasmaVortexPath, _plasmaVortexPaint);
     }
@@ -1452,7 +1495,8 @@ class Projectile extends PositionComponent {
         final baseY = start.y + (end.y - start.y) * progress;
 
         // Add jitter perpendicular to line
-        final perpAngle = math.atan2(end.y - start.y, end.x - start.x) + math.pi / 2;
+        final perpAngle =
+            math.atan2(end.y - start.y, end.x - start.x) + math.pi / 2;
         final jitter = math.sin(_time * 25 + i * 3 + seg * 2) * 2 * alpha;
 
         _reusablePlasmaPath.lineTo(
@@ -1511,9 +1555,8 @@ class Projectile extends PositionComponent {
         final sparkX = trailOffset.x + math.cos(sparkAngle) * sparkDist;
         final sparkY = trailOffset.y + math.sin(sparkAngle) * sparkDist;
 
-        final sparkColor = spark == 0
-            ? sparkColor0
-            : (spark == 1 ? sparkColor1 : sparkColor2);
+        final sparkColor =
+            spark == 0 ? sparkColor0 : (spark == 1 ? sparkColor1 : sparkColor2);
         _plasmaSparkPaint.color = sparkColor.withOpacity(alpha * 0.7);
         canvas.drawCircle(Offset(sparkX, sparkY), sparkSize, _plasmaSparkPaint);
       }
@@ -1583,12 +1626,14 @@ class Projectile extends PositionComponent {
     _trailLinePaint
       ..color = color.withOpacity(0.5)
       ..strokeWidth = 2.5
-      ..maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
+      ..maskFilter =
+          allowGlow ? const MaskFilter.blur(BlurStyle.normal, 3) : null;
 
     for (int i = 0; i < _trailPositions.length - 1; i++) {
       final physIdxStart = _getTrailPhysicalIndex(i);
       final physIdxEnd = _getTrailPhysicalIndex(i + 1);
-      if (_trailAlphas[physIdxStart] < 0.1 || _trailAlphas[physIdxEnd] < 0.1) continue;
+      if (_trailAlphas[physIdxStart] < 0.1 || _trailAlphas[physIdxEnd] < 0.1)
+        continue;
 
       final start = _trailPositions[physIdxStart] - position;
       final end = _trailPositions[physIdxEnd] - position;
@@ -1607,14 +1652,18 @@ class Projectile extends PositionComponent {
 
   void _drawParticles(Canvas canvas) {
     // Set up paint once before loop - no per-particle MaskFilter allocation
-    _particlePaint.maskFilter = allowGlow ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
+    _particlePaint.maskFilter =
+        allowGlow ? const MaskFilter.blur(BlurStyle.normal, 2) : null;
 
-    for (final particle in _particles) {
+    for (int i = 0; i < _particles.length; i++) {
+      final particle = _particles[i];
       final phase = _time * particle.speed * 0.1;
       final phaseSin = math.sin(phase);
       final phaseCos = math.cos(phase);
-      final px = (particle.baseCos * phaseCos - particle.baseSin * phaseSin) * particle.offset.x;
-      final py = (particle.baseSin * phaseCos + particle.baseCos * phaseSin) * particle.offset.y;
+      final px = (particle.baseCos * phaseCos - particle.baseSin * phaseSin) *
+          particle.offset.x;
+      final py = (particle.baseSin * phaseCos + particle.baseCos * phaseSin) *
+          particle.offset.y;
 
       _particlePaint.color = color.withOpacity(
         particle.alpha * (0.5 + math.sin(_time * 5 + particle.angle) * 0.3),
@@ -1632,8 +1681,8 @@ class _ProjectileParticle {
     required this.angle,
     required this.size,
     required this.alpha,
-  }) : baseCos = math.cos(angle),
-       baseSin = math.sin(angle);
+  })  : baseCos = math.cos(angle),
+        baseSin = math.sin(angle);
 
   Vector2 offset;
   double speed;
@@ -1752,4 +1801,3 @@ class _ColorPalette {
   final Color o85;
   final Color o90;
 }
-

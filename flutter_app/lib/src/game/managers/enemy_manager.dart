@@ -72,6 +72,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
   bool _bossSpawned = false;
   int _totalWavesInLevel = 0;
   bool _spatialIndexDirty = false;
+  final List<EnemyType> _waveEnemyPool = [];
+  EnemyType? _waveModifierEnemyType;
 
   /// Base stats for wave scaling
   static const double baseHealth = 100;
@@ -350,22 +352,27 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     EnemyType enemyType;
     switch (_currentModifier) {
       case WaveModifier.overload:
-        enemyType = _getModifierEnemyType(WaveModifier.overload);
+        enemyType = _waveModifierEnemyType ??
+            _getModifierEnemyType(WaveModifier.overload);
         break;
       case WaveModifier.juggernaut:
-        enemyType = _getModifierEnemyType(WaveModifier.juggernaut);
+        enemyType = _waveModifierEnemyType ??
+            _getModifierEnemyType(WaveModifier.juggernaut);
         break;
       case WaveModifier.phantom:
-        enemyType = _getModifierEnemyType(WaveModifier.phantom);
+        enemyType = _waveModifierEnemyType ??
+            _getModifierEnemyType(WaveModifier.phantom);
         break;
       case WaveModifier.mixed:
         // Alternate between all available world-specific types
-        final pool = _getAvailableTypes();
+        final pool =
+            _waveEnemyPool.isEmpty ? _getAvailableTypes() : _waveEnemyPool;
         enemyType = pool[_spawnIndex % pool.length];
         break;
       case WaveModifier.normal:
         // Use progressive pool for normal waves with world-specific enemies
-        final pool = _getAvailableTypes();
+        final pool =
+            _waveEnemyPool.isEmpty ? _getAvailableTypes() : _waveEnemyPool;
         enemyType = pool[_spawnIndex % pool.length];
     }
 
@@ -595,9 +602,13 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     }
 
     double maxProgress = 0.0;
-    for (final enemy in _activeEnemies) {
+    for (int i = 0; i < _activeEnemies.length; i++) {
+      final enemy = _activeEnemies[i];
       if (!enemy.isAlive) continue;
-      maxProgress = max(maxProgress, enemy.pathProgress);
+      if (enemy.pathProgress > maxProgress) {
+        maxProgress = enemy.pathProgress;
+        if (maxProgress >= 1.0) break;
+      }
     }
 
     if (maxProgress >= _nearBaseThreshold) {
@@ -606,6 +617,9 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
               .clamp(0.0, 1.0);
       gameRef.triggerBaseThreat(intensity);
       _threatPulseTimer = _threatPulseInterval;
+    } else {
+      // Throttle the expensive scan when enemies are far from base.
+      _threatPulseTimer = _threatPulseInterval * 0.35;
     }
   }
 
@@ -623,6 +637,13 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
     // Determine wave modifier
     _currentModifier = _selectModifierForWave(_currentWave);
+    _waveEnemyPool
+      ..clear()
+      ..addAll(_getAvailableTypes());
+    _waveModifierEnemyType = _currentModifier == WaveModifier.normal ||
+            _currentModifier == WaveModifier.mixed
+        ? null
+        : _resolveModifierEnemyType(_waveEnemyPool, _currentModifier);
 
     // More enemies each wave, special waves have different counts
     var enemyCount = DifficultyCurve.enemyCount(
@@ -680,6 +701,8 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
     _bossSpawned = false;
     _currentBoss = null;
     _activeEnemies.clear();
+    _waveEnemyPool.clear();
+    _waveModifierEnemyType = null;
     _clearSpatialIndex();
     _spatialIndexDirty = false;
 
@@ -839,6 +862,24 @@ class EnemyManager extends Component with HasGameRef<BoredGamesGame> {
 
       default:
         return worldEnemies.first;
+    }
+  }
+
+  EnemyType _resolveModifierEnemyType(
+      List<EnemyType> pool, WaveModifier modifier) {
+    if (pool.isEmpty) return _getModifierEnemyType(modifier);
+    switch (modifier) {
+      case WaveModifier.overload:
+        return pool.reduce((a, b) => a.speedMult > b.speedMult ? a : b);
+      case WaveModifier.juggernaut:
+        return pool.reduce((a, b) => a.healthMult > b.healthMult ? a : b);
+      case WaveModifier.phantom:
+        for (final enemy in pool) {
+          if (enemy.isPhantom) return enemy;
+        }
+        return pool.reduce((a, b) => a.speedMult > b.speedMult ? a : b);
+      default:
+        return pool.first;
     }
   }
 

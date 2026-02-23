@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:bored_games/src/bloc/settings/settings_cubit.dart';
 import 'package:bored_games/src/bloc/settings/settings_state.dart';
+import 'package:bored_games/src/services/storage_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -315,6 +317,82 @@ void main() {
       final cubit = SettingsCubit();
       cubit.setGraphicsQuality('auto');
       expect(cubit.state.graphicsQuality, 'high');
+    });
+  });
+
+  group('SettingsCubit loadSettings', () {
+    setUp(() async {
+      SharedPreferences.setMockInitialValues({});
+      StorageService.instance.resetForTesting();
+      await StorageService.instance.initialize();
+    });
+
+    test('loadSettings applies persisted values', () async {
+      await StorageService.instance.saveSettings(
+        musicVolume: 0.35,
+        sfxVolume: 0.45,
+        showFps: false,
+        showGrid: false,
+        screenShake: false,
+        particleIntensity: 0.6,
+        graphicsQuality: 'medium',
+      );
+
+      final cubit = SettingsCubit();
+      addTearDown(cubit.close);
+      await cubit.loadSettings();
+
+      expect(cubit.state.musicVolume, 0.35);
+      expect(cubit.state.sfxVolume, 0.45);
+      expect(cubit.state.showFps, isFalse);
+      expect(cubit.state.showGrid, isFalse);
+      expect(cubit.state.screenShake, isFalse);
+      expect(cubit.state.particleIntensity, 0.6);
+      expect(cubit.state.graphicsQuality, 'medium');
+    });
+
+    test('loadSettings migrates legacy auto quality to high', () async {
+      await StorageService.instance.saveSettings(
+        musicVolume: 0.7,
+        sfxVolume: 0.8,
+        showFps: true,
+        showGrid: true,
+        screenShake: true,
+        particleIntensity: 1.0,
+        graphicsQuality: 'auto',
+      );
+
+      final cubit = SettingsCubit();
+      addTearDown(cubit.close);
+      await cubit.loadSettings();
+
+      expect(cubit.state.graphicsQuality, 'high');
+    });
+
+    test('loadSettings defaults invalid quality to high', () async {
+      await StorageService.instance.saveSettings(
+        musicVolume: 0.7,
+        sfxVolume: 0.8,
+        showFps: true,
+        showGrid: true,
+        screenShake: true,
+        particleIntensity: 1.0,
+        graphicsQuality: 'ultra',
+      );
+
+      final cubit = SettingsCubit();
+      addTearDown(cubit.close);
+      await cubit.loadSettings();
+
+      expect(cubit.state.graphicsQuality, 'high');
+    });
+
+    test('loadSettings keeps defaults when storage is empty', () async {
+      final cubit = SettingsCubit();
+      addTearDown(cubit.close);
+      await cubit.loadSettings();
+
+      expect(cubit.state, const SettingsState());
     });
   });
 

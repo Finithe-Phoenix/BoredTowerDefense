@@ -273,7 +273,8 @@ class _HexagonRevealPainter extends CustomPainter {
     for (int row = 0; row < rows; row++) {
       for (int col = 0; col < cols; col++) {
         final x = col * hexSize * 1.5;
-        final y = row * hexSize * math.sqrt(3) + (col.isOdd ? hexSize * math.sqrt(3) / 2 : 0);
+        final y = row * hexSize * math.sqrt(3) +
+            (col.isOdd ? hexSize * math.sqrt(3) / 2 : 0);
 
         final distance = math.sqrt(
           (x - centerX) * (x - centerX) + (y - centerY) * (y - centerY),
@@ -281,7 +282,8 @@ class _HexagonRevealPainter extends CustomPainter {
         final normalizedDistance = distance / maxDistance;
 
         // Hexagons expand from center
-        final hexProgress = ((progress * 1.5) - normalizedDistance).clamp(0.0, 1.0);
+        final hexProgress =
+            ((progress * 1.5) - normalizedDistance).clamp(0.0, 1.0);
         if (hexProgress <= 0) continue;
 
         final hexAlpha = (1.0 - hexProgress).clamp(0.0, 1.0);
@@ -366,7 +368,8 @@ class _EnergyBurstPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final maxRadius = math.sqrt(size.width * size.width + size.height * size.height) / 2;
+    final maxRadius =
+        math.sqrt(size.width * size.width + size.height * size.height) / 2;
 
     final paint = Paint()..style = PaintingStyle.fill;
 
@@ -383,7 +386,8 @@ class _EnergyBurstPainter extends CustomPainter {
     const ringCount = 5;
     for (int i = 0; i < ringCount; i++) {
       final ringDelay = i * 0.1;
-      final ringProgress = ((progress - ringDelay) / (1.0 - ringDelay)).clamp(0.0, 1.0);
+      final ringProgress =
+          ((progress - ringDelay) / (1.0 - ringDelay)).clamp(0.0, 1.0);
       if (ringProgress <= 0) continue;
 
       final radius = maxRadius * ringProgress;
@@ -399,10 +403,13 @@ class _EnergyBurstPainter extends CustomPainter {
     paint.style = PaintingStyle.fill;
     const particleCount = 40;
     for (int i = 0; i < particleCount; i++) {
-      final angle = (math.pi * 2 / particleCount) * i + _random.nextDouble() * 0.2;
-      final particleProgress = (progress * (1.0 + _random.nextDouble() * 0.3)).clamp(0.0, 1.0);
+      final angle =
+          (math.pi * 2 / particleCount) * i + _random.nextDouble() * 0.2;
+      final particleProgress =
+          (progress * (1.0 + _random.nextDouble() * 0.3)).clamp(0.0, 1.0);
 
-      final distance = maxRadius * particleProgress * (0.5 + _random.nextDouble() * 0.5);
+      final distance =
+          maxRadius * particleProgress * (0.5 + _random.nextDouble() * 0.5);
       final x = center.dx + math.cos(angle) * distance;
       final y = center.dy + math.sin(angle) * distance;
 
@@ -453,16 +460,26 @@ class _GlitchDistortionTransition extends StatelessWidget {
             if (glitchIntensity > 0) ...[
               // Red channel shift
               Positioned.fill(
-                child: FractionalTranslation(
-                  translation: Offset(-glitchIntensity * 0.02, 0),
-                  child: Opacity(
-                    opacity: glitchIntensity * 0.5,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.mode(
-                        Color(0xFFFF0000),
-                        BlendMode.screen,
+                child: IgnorePointer(
+                  child: FractionalTranslation(
+                    translation: Offset(-glitchIntensity * 0.02, 0),
+                    child: Opacity(
+                      opacity: glitchIntensity * 0.28,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              Colors.transparent,
+                              Color(0x55FF0000),
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.45, 1.0],
+                          ),
+                        ),
+                        child: const SizedBox.expand(),
                       ),
-                      child: child,
                     ),
                   ),
                 ),
@@ -470,16 +487,26 @@ class _GlitchDistortionTransition extends StatelessWidget {
 
               // Blue channel shift
               Positioned.fill(
-                child: FractionalTranslation(
-                  translation: Offset(glitchIntensity * 0.02, 0),
-                  child: Opacity(
-                    opacity: glitchIntensity * 0.5,
-                    child: ColorFiltered(
-                      colorFilter: const ColorFilter.mode(
-                        Color(0xFF0000FF),
-                        BlendMode.screen,
+                child: IgnorePointer(
+                  child: FractionalTranslation(
+                    translation: Offset(glitchIntensity * 0.02, 0),
+                    child: Opacity(
+                      opacity: glitchIntensity * 0.28,
+                      child: DecoratedBox(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [
+                              Colors.transparent,
+                              Color(0x550000FF),
+                              Colors.transparent,
+                            ],
+                            stops: [0.0, 0.55, 1.0],
+                          ),
+                        ),
+                        child: const SizedBox.expand(),
                       ),
-                      child: child,
                     ),
                   ),
                 ),

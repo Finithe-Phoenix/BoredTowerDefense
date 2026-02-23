@@ -99,7 +99,7 @@ void main() {
     test('reset resets volume to default', () async {
       await AmbientSoundscapeService.instance.setVolume(0.1);
       await AmbientSoundscapeService.instance.reset();
-      expect(AmbientSoundscapeService.instance.volume, 0.5);
+      expect(AmbientSoundscapeService.instance.volume, 0.65);
     });
 
     test('reset can be called multiple times', () async {

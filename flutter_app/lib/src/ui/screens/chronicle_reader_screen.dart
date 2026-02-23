@@ -56,6 +56,7 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
     _rngState = (1664525 * _rngState + 1013904223) & 0x7fffffff;
     return _rngState;
   }
+
   double _nextUnit() => _lcgNext() / 0x7fffffff;
   int _nextInt(int max) => max <= 0 ? 0 : _lcgNext() % max;
 
@@ -77,6 +78,52 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
       _currentChapterIndex >= widget.chronicle.chapters.length - 1;
 
   bool get _isFullyRevealed => _revealedCharacters >= _currentParagraph.length;
+
+  int get _totalParagraphs => widget.chronicle.chapters.fold<int>(
+        0,
+        (sum, chapter) => sum + chapter.paragraphs.length,
+      );
+
+  int get _currentParagraphGlobalIndex {
+    var progress = 0;
+    for (int i = 0; i < _currentChapterIndex; i++) {
+      progress += widget.chronicle.chapters[i].paragraphs.length;
+    }
+    progress += _currentParagraphIndex + 1;
+    return progress;
+  }
+
+  double get _overallProgress => _totalParagraphs == 0
+      ? 0
+      : _currentParagraphGlobalIndex / _totalParagraphs;
+
+  int get _estimatedReadMinutes {
+    final wordCount = widget.chronicle.chapters.fold<int>(0, (sum, chapter) {
+      final chapterWords = chapter.paragraphs.fold<int>(
+        0,
+        (localSum, paragraph) =>
+            localSum +
+            paragraph.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length,
+      );
+      return sum + chapterWords;
+    });
+    return math.max(1, (wordCount / 185).ceil());
+  }
+
+  String _moodLabel(ChapterMood mood) {
+    return switch (mood) {
+      ChapterMood.epic => 'ÉPICO',
+      ChapterMood.mysterious => 'MISTERIO',
+      ChapterMood.dark => 'OSCURO',
+      ChapterMood.hopeful => 'ESPERANZA',
+      ChapterMood.tragic => 'TRÁGICO',
+      ChapterMood.revelation => 'REVELACIÓN',
+      ChapterMood.action => 'ACCIÓN',
+      ChapterMood.philosophical => 'FILOSÓFICO',
+      ChapterMood.horror => 'HORROR',
+      ChapterMood.triumphant => 'TRIUNFO',
+    };
+  }
 
   @override
   void initState() {
@@ -316,9 +363,8 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
             AnimatedBuilder(
               animation: _transitionController,
               builder: (context, child) {
-                final opacity = _isTransitioning
-                    ? 1.0 - _transitionController.value
-                    : 1.0;
+                final opacity =
+                    _isTransitioning ? 1.0 - _transitionController.value : 1.0;
                 return Opacity(
                   opacity: opacity,
                   child: child,
@@ -387,15 +433,18 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
             // Chapter header
             _buildChapterHeader(),
 
+            const SizedBox(height: 16),
+
+            // Narrative metadata strip
+            _buildChapterMetaStrip(),
+
             const SizedBox(height: 40),
 
             // Speaker indicator (if any)
             if (_currentChapter.speaker != null) _buildSpeakerIndicator(),
 
             // Main text or interlude
-            _showInterlude
-                ? _buildInterlude()
-                : _buildParagraphText(),
+            _showInterlude ? _buildInterlude() : _buildParagraphText(),
 
             const SizedBox(height: 60),
 
@@ -469,6 +518,47 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildChapterMetaStrip() {
+    final mood = _moodLabel(_currentChapter.mood);
+    final accent = widget.chronicle.accentColor;
+
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        _buildMetaChip('CODENAME ${widget.chronicle.codename}', accent),
+        _buildMetaChip(widget.chronicle.epoch, accent.withOpacity(0.85)),
+        _buildMetaChip('TONO $mood', accent.withOpacity(0.8)),
+        _buildMetaChip('LECTURA ~$_estimatedReadMinutes MIN', Colors.white70),
+        _buildMetaChip(
+          'PÁRRAFO $_currentParagraphGlobalIndex/$_totalParagraphs',
+          Colors.white70,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetaChip(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color.withOpacity(0.9),
+          fontSize: 10,
+          fontFamily: 'monospace',
+          letterSpacing: 1.0,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
     );
   }
 
@@ -577,7 +667,9 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
         builder: (context, child) {
           final opacity = 0.3 + _pulseController.value * 0.3;
           return Text(
-            _isFullyRevealed ? 'Toca para continuar ▸' : 'Toca para saltar ▸▸',
+            _isFullyRevealed
+                ? 'Toca para continuar ▸  |  Desliza para retroceder'
+                : 'Toca para saltar texto ▸▸',
             style: TextStyle(
               color: Colors.white.withOpacity(opacity),
               fontSize: 12,
@@ -633,15 +725,30 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
                 onPressed: () => Navigator.of(context).pop(),
               ),
 
-              // World name
-              Text(
-                widget.chronicle.name,
-                style: TextStyle(
-                  color: widget.chronicle.accentColor.withOpacity(0.8),
-                  fontSize: 14,
-                  fontFamily: 'monospace',
-                  letterSpacing: 2,
-                ),
+              // World name + chapter progress
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.chronicle.name,
+                    style: TextStyle(
+                      color: widget.chronicle.accentColor.withOpacity(0.8),
+                      fontSize: 14,
+                      fontFamily: 'monospace',
+                      letterSpacing: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'CH ${_currentChapterIndex + 1}/${widget.chronicle.chapters.length}',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.5),
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
               ),
 
               // Pause/menu button
@@ -662,15 +769,7 @@ class _ChronicleReaderScreenState extends State<ChronicleReaderScreen>
   }
 
   Widget _buildProgressIndicator() {
-    final totalParagraphs = widget.chronicle.chapters
-        .fold<int>(0, (sum, ch) => sum + ch.paragraphs.length);
-    var currentProgress = 0;
-    for (int i = 0; i < _currentChapterIndex; i++) {
-      currentProgress += widget.chronicle.chapters[i].paragraphs.length;
-    }
-    currentProgress += _currentParagraphIndex + 1;
-
-    final progress = currentProgress / totalParagraphs;
+    final progress = _overallProgress;
 
     return Positioned(
       bottom: 0,
