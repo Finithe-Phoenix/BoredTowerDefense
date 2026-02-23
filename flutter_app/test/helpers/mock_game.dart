@@ -127,6 +127,6 @@ Future<T> createComponentWithMockGame<T extends Component>(
   T component,
   MockBoredGamesGame game,
 ) async {
-  await game.ensureAdd(component);
+  await game.add(component);
   return component;
 }
