@@ -13,6 +13,11 @@ Desktop.ini
 tmpclaude-*
 temp_tower.txt
 nul
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
 
 # Logs
 *.log
@@ -36,7 +41,9 @@ coverage/
 *.keystore
 **/upload-keystore.jks
 
-# CI/CD secrets (IMPORTANT: Never commit these!)
+# Local env + CI/CD secrets (IMPORTANT: Never commit these!)
+.env
+.env.local
 service-account.json
 *-service-account.json
 *.base64.txt
@@ -49,3 +56,8 @@ flutter_app/build/
 flutter_app/build-output/
 flutter_test_output.txt
 flutter_test_output_after.txt
+
+# Generated indexes / graphs (regenerable)
+docs/index.bleve/
+docs/migration/.tmp/
+flutter_app/scripts/.codegraph/
