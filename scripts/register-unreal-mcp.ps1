@@ -17,5 +17,11 @@ if (-not (Test-Path $python)) {
 
 & $python -c "import unreal_mcp.server; print('unreal_mcp import: OK')"
 
-claude mcp add unreal -- $python -m unreal_mcp
+# Re-register cleanly (idempotent). The native 'claude' exit code does not trip
+# $ErrorActionPreference, so a missing prior registration here is harmless.
+claude mcp remove unreal -s local
+
+# UNREAL_RC_TIMEOUT=60: heavier tools (e.g. unreal_inventory, which loads data
+# assets) can exceed the 15s default Remote Control timeout.
+claude mcp add unreal -e UNREAL_RC_TIMEOUT=60 -- $python -m unreal_mcp
 claude mcp get unreal
