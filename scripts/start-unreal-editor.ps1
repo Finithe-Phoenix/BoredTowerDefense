@@ -35,10 +35,14 @@ if ($running -and $ForceRestart) {
     Start-Sleep -Seconds 3
 }
 
+# Only -RCWebControlEnable is needed: it starts the Remote Control HTTP API on
+# :30010 that the unreal MCP talks to. We deliberately do NOT pass
+# -RCWebInterfaceEnable (the optional Node.js web panel on :30000) because it
+# throws "Cannot find module 'jsesc'" unless the engine WebApp has had npm
+# install run, and we never use that panel.
 $args = @(
     "`"$Project`"",
-    "-RCWebControlEnable",
-    "-RCWebInterfaceEnable"
+    "-RCWebControlEnable"
 )
 
 Start-Process -FilePath $UnrealEditor -ArgumentList $args
