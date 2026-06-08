@@ -1218,6 +1218,90 @@ _mcp_result = {{
     return result
 
 
+_RENDER_VIEW_BODY = '''
+import unreal
+
+ues = unreal.get_editor_subsystem(unreal.UnrealEditorSubsystem)
+world = ues.get_editor_world()
+sub = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+
+loc = None
+rot = None
+if camera_label:
+    for a in sub.get_all_level_actors():
+        if a and a.get_actor_label() == camera_label:
+            loc = a.get_actor_location()
+            rot = a.get_actor_rotation()
+            break
+if loc is None:
+    loc = unreal.Vector(location[0], location[1], location[2])
+    rot = unreal.Rotator(rotation[0], rotation[1], rotation[2])
+
+rt = unreal.RenderingLibrary.create_render_target2d(world, width, height, unreal.TextureRenderTargetFormat.RTF_RGBA8)
+
+for a in list(sub.get_all_level_actors()):
+    if a and a.get_actor_label() == "BTD_MCPCapture":
+        sub.destroy_actor(a)
+cap = sub.spawn_actor_from_class(unreal.SceneCapture2D, loc, rot)
+cap.set_actor_label("BTD_MCPCapture")
+c = cap.get_component_by_class(unreal.SceneCaptureComponent2D)
+c.set_editor_property("texture_target", rt)
+c.set_editor_property("capture_source", unreal.SceneCaptureSource.SCS_FINAL_COLOR_LDR)
+c.set_editor_property("fov_angle", fov)
+c.set_editor_property("capture_every_frame", False)
+c.set_editor_property("capture_on_movement", False)
+c.capture_scene()
+
+import os
+out_dir = os.path.dirname(out_path) or "."
+out_name = os.path.basename(out_path)
+unreal.RenderingLibrary.export_render_target(world, rt, out_dir, out_name)
+sub.destroy_actor(cap)
+
+_mcp_result = {"output_path": out_path, "camera_label": camera_label, "resolution": [width, height]}
+'''
+
+
+@mcp.tool()
+def unreal_render_view(
+    out_path: str,
+    camera_label: str = "BTD_HeroCam",
+    location: list[float] | None = None,
+    rotation: list[float] | None = None,
+    width: int = 1280,
+    height: int = 720,
+    fov: float = 70.0,
+) -> dict[str, Any]:
+    """Render the editor scene OFF-SCREEN to a PNG via a SceneCapture2D + render
+    target, then return the saved path. Unlike unreal_take_screenshot this works
+    regardless of editor window focus/minimize state and includes post-process
+    (bloom/exposure/tonemap). Captures from a named camera actor (default
+    BTD_HeroCam) or an explicit location + rotation.
+
+    Args:
+        out_path: Absolute PNG path to write.
+        camera_label: Actor label to capture from; pass "" to use location/rotation.
+        location: [x, y, z] used when camera_label is empty.
+        rotation: [pitch, yaw, roll] used when camera_label is empty.
+        width: Render width in pixels.
+        height: Render height in pixels.
+        fov: Horizontal field of view in degrees.
+    """
+
+    loc = location or [0.0, 0.0, 1500.0]
+    rotn = rotation or [-60.0, 0.0, 0.0]
+    code = (
+        "camera_label = " + json.dumps(camera_label or "") + "\n"
+        "location = " + json.dumps([float(v) for v in loc]) + "\n"
+        "rotation = " + json.dumps([float(v) for v in rotn]) + "\n"
+        "width = " + str(int(width)) + "\n"
+        "height = " + str(int(height)) + "\n"
+        "fov = " + str(float(fov)) + "\n"
+        + _RENDER_VIEW_BODY
+    )
+    return _run_structured_python(code)
+
+
 @mcp.tool()
 def unreal_save_all() -> dict[str, Any]:
     """Save all dirty map and content packages in the editor."""
