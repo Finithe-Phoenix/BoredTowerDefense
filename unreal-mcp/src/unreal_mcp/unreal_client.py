@@ -174,6 +174,19 @@ class UnrealRemoteClient:
         }
         return self._request("PUT", "/remote/object/property", json_body=body)
 
+    def describe(self, object_path: str) -> dict[str, Any]:
+        """Describe a UObject through PUT /remote/object/describe.
+
+        Returns the object's name, class, full property list (name/type/
+        container) and callable functions. This is the fastest way to discover
+        an object's complete reflected surface without loading it editor-side.
+        """
+
+        if not object_path:
+            raise UnrealRemoteError("object_path is required.")
+
+        return self._request("PUT", "/remote/object/describe", json_body={"objectPath": object_path})
+
     def run_python(self, code: str) -> dict[str, Any]:
         """Execute Python in the Unreal Editor and return structured output.
 

@@ -630,6 +630,234 @@ _mcp_result = {{
     return _run_structured_python(code)
 
 
+# --- Introspection helpers (plain strings, no f-string brace escaping) ---
+
+_DESCRIBE_ASSET_BODY = '''
+import unreal
+
+asset = unreal.load_asset(path)
+if asset is None:
+    raise RuntimeError("Could not load asset: " + path)
+
+def py_name(n):
+    # PascalCase UPROPERTY -> Python get_editor_property name; strip bool 'b' prefix.
+    if len(n) >= 2 and n[0] == "b" and n[1].isupper():
+        n = n[1:]
+    out = []
+    for i, ch in enumerate(n):
+        if ch.isupper() and i > 0 and not n[i - 1].isupper():
+            out.append("_")
+        out.append(ch.lower())
+    return "".join(out)
+
+def prim(v):
+    if v is None or isinstance(v, (int, float, bool, str)):
+        return v
+    try:
+        return v.get_path_name()
+    except Exception:
+        return str(v)
+
+values = {}
+for n in names:
+    got = False
+    for cand in (py_name(n), n):
+        try:
+            values[n] = prim(asset.get_editor_property(cand))
+            got = True
+            break
+        except Exception:
+            continue
+    if not got:
+        values[n] = "__unreadable__"
+
+_mcp_result = {"path": path, "values": values}
+'''
+
+
+_INVENTORY_BODY = '''
+import unreal
+
+reg = unreal.AssetRegistryHelpers.get_asset_registry()
+try:
+    reg.wait_for_completion()
+except Exception:
+    pass
+
+def prim(v):
+    if v is None or isinstance(v, (int, float, bool, str)):
+        return v
+    try:
+        return v.get_path_name()
+    except Exception:
+        return str(v)
+
+def safe(o, n):
+    try:
+        return prim(o.get_editor_property(n))
+    except Exception:
+        return None
+
+assets = reg.get_assets_by_path(directory, recursive=True)
+by_class = {}
+by_folder = {}
+total = 0
+data_assets = []
+for a in assets:
+    total += 1
+    try:
+        cls = str(a.asset_class_path.asset_name)
+    except Exception:
+        cls = str(getattr(a, "asset_class", ""))
+    pkg = str(a.package_name)
+    folder = pkg.rsplit("/", 1)[0]
+    by_class[cls] = by_class.get(cls, 0) + 1
+    by_folder[folder] = by_folder.get(folder, 0) + 1
+    if cls in ("BTDTowerDataAsset", "BTDEnemyDataAsset", "BTDWaveDataAsset"):
+        data_assets.append((cls, pkg, str(a.asset_name)))
+
+tower_fields = ["display_name", "cost", "damage", "range", "fire_interval", "projectile_speed",
+                "targeting_mode", "slow_amount", "slow_duration", "splash_radius",
+                "can_detect_phantom", "chain_count", "chain_radius", "chain_falloff"]
+enemy_fields = ["display_name", "max_health", "move_speed", "body_scale", "gold_reward",
+                "is_phantom", "is_boss", "minion_spawn_interval", "minions_per_spawn", "minion_data"]
+
+towers, enemies, waves = [], [], []
+for cls, pkg, nm in data_assets:
+    obj = unreal.load_asset(pkg + "." + nm)
+    if obj is None:
+        continue
+    if cls == "BTDTowerDataAsset":
+        d = {"asset": nm}
+        for f in tower_fields:
+            v = safe(obj, f)
+            if v is not None:
+                d[f] = v
+        towers.append(d)
+    elif cls == "BTDEnemyDataAsset":
+        d = {"asset": nm}
+        for f in enemy_fields:
+            v = safe(obj, f)
+            if v is not None:
+                d[f] = v
+        enemies.append(d)
+    else:
+        w = {"asset": nm, "wave_number": safe(obj, "wave_number"), "groups": []}
+        try:
+            for g in obj.get_editor_property("enemy_groups"):
+                grp = {}
+                for gf in ("enemy_data", "count", "spawn_interval", "start_delay"):
+                    try:
+                        grp[gf] = prim(g.get_editor_property(gf))
+                    except Exception:
+                        pass
+                w["groups"].append(grp)
+        except Exception:
+            pass
+        waves.append(w)
+
+_mcp_result = {
+    "directory": directory,
+    "asset_total": total,
+    "by_class": dict(sorted(by_class.items(), key=lambda kv: -kv[1])),
+    "by_folder": dict(sorted(by_folder.items())),
+    "tower_count": len(towers),
+    "towers": towers,
+    "enemy_count": len(enemies),
+    "enemies": enemies,
+    "wave_count": len(waves),
+    "waves": waves,
+}
+'''
+
+
+@mcp.tool()
+def unreal_describe_object(object_path: str) -> dict[str, Any]:
+    """Describe any UObject (asset or actor): its class, every reflected property
+    (name, type, container) and every callable function, via Remote Control
+    /remote/object/describe. The fastest way to discover an object's full
+    surface before reading or writing it.
+
+    Args:
+        object_path: Full object path, e.g.
+            /Game/NeonDefense/Data/DA_Tower_Basic.DA_Tower_Basic or an actor path.
+    """
+
+    try:
+        client = _client()
+        resp = client.describe(object_path)
+    except UnrealRemoteError as exc:
+        return _tool_error(exc)
+
+    props = resp.get("Properties") or []
+    funcs = resp.get("Functions") or []
+    return {
+        "ok": True,
+        "object_path": object_path,
+        "name": resp.get("Name"),
+        "class": resp.get("Class"),
+        "property_count": len(props),
+        "function_count": len(funcs),
+        "properties": props,
+        "functions": funcs,
+    }
+
+
+@mcp.tool()
+def unreal_describe_asset(object_path: str) -> dict[str, Any]:
+    """Load an asset and dump every editor property NAME, TYPE and live VALUE in
+    one call. Combines /remote/object/describe (names + types) with editor-side
+    value reads. The most complete single-call view of any asset.
+
+    Args:
+        object_path: Full asset path, e.g.
+            /Game/NeonDefense/Data/DA_Tower_PulseArcher.DA_Tower_PulseArcher.
+    """
+
+    try:
+        client = _client()
+        described = client.describe(object_path)
+    except UnrealRemoteError as exc:
+        return _tool_error(exc)
+
+    props = described.get("Properties") or []
+    names = [p.get("Name") for p in props if p.get("Name")]
+
+    code = (
+        "path = " + json.dumps(object_path) + "\n"
+        "names = " + json.dumps(names) + "\n"
+        + _DESCRIBE_ASSET_BODY
+    )
+    value_result = _run_structured_python(code)
+
+    return {
+        "ok": value_result.get("ok", False),
+        "object_path": object_path,
+        "name": described.get("Name"),
+        "class": described.get("Class"),
+        "property_count": len(props),
+        "function_count": len(described.get("Functions") or []),
+        "properties": props,
+        "values": value_result.get("values"),
+        "value_error": value_result.get("error"),
+    }
+
+
+@mcp.tool()
+def unreal_inventory(directory: str = "/Game") -> dict[str, Any]:
+    """Full project census in one call: total asset count, counts by class and by
+    folder, plus detailed gameplay properties for every BTD tower, enemy and
+    wave data asset found under the directory. Built for 'see everything'
+    overviews. Loads data assets, so it benefits from a higher UNREAL_RC_TIMEOUT.
+
+    Args:
+        directory: Content root to scan, e.g. /Game or /Game/NeonDefense.
+    """
+
+    code = "directory = " + json.dumps(directory or "/Game") + "\n" + _INVENTORY_BODY
+    return _run_structured_python(code)
+
+
 @mcp.tool()
 def unreal_take_screenshot(
     filename: str = "mcp_shot.png",
